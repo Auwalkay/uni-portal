@@ -10,6 +10,25 @@ import { Spinner } from '@/components/ui/spinner';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { login } from '@/routes';
 import { store } from '@/routes/register';
+import { usePage } from '@inertiajs/vue3';
+import { watch } from 'vue';
+import Swal from 'sweetalert2';
+
+const page = usePage();
+
+watch(() => page.props.errors, (errors) => {
+    if (Object.keys(errors).length > 0) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Registration Failed',
+            text: 'Please check the inputs.',
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 4000
+        });
+    }
+}, { deep: true });
 </script>
 
 <template>
