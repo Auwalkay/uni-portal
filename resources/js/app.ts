@@ -1,6 +1,6 @@
 import '../css/app.css';
 
-// Trigger rebuild
+// Trigger rebuild - new file added
 import { createInertiaApp } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import type { DefineComponent } from 'vue';

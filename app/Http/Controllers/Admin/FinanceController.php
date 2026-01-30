@@ -17,12 +17,13 @@ class FinanceController extends Controller
 {
     public function index()
     {
+
         return Inertia::render('Admin/Finance/Index', [
             'feeTypes' => FeeType::withCount('configurations')->get(),
-            'configurations' => FeeConfiguration::with(['feeType', 'session', 'faculty', 'department', 'program'])
-                ->latest()
+            'sessions' => Session::with(['feeConfigurations.feeType', 'feeConfigurations.faculty', 'feeConfigurations.department', 'feeConfigurations.program'])
+                ->withCount('feeConfigurations')
+                ->orderBy('start_date', 'desc')
                 ->get(),
-            'sessions' => Session::orderBy('start_date', 'desc')->get(),
             'faculties' => Faculty::orderBy('name')->get(),
             'departments' => Department::orderBy('name')->get(),
             'programs' => Programme::orderBy('name')->get(),
@@ -108,5 +109,16 @@ class FinanceController extends Controller
     {
         $config->delete();
         return back()->with('success', 'Fee Configuration removed.');
+    }
+
+    public function manageSessionFees(Session $session)
+    {
+        return Inertia::render('Admin/Finance/SessionFees', [
+            'session' => $session->load(['feeConfigurations.feeType', 'feeConfigurations.faculty', 'feeConfigurations.department', 'feeConfigurations.program']),
+            'feeTypes' => FeeType::all(),
+            'faculties' => Faculty::orderBy('name')->get(),
+            'departments' => Department::orderBy('name')->get(),
+            'programs' => Programme::orderBy('name')->get(),
+        ]);
     }
 }

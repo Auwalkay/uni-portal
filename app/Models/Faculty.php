@@ -12,6 +12,10 @@ class Faculty extends Model
 
     protected $guarded = [];
 
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
+
     public function departments(): HasMany
     {
         return $this->hasMany(Department::class);

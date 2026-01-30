@@ -10,7 +10,27 @@ class Student extends Model
 {
     use HasUuids;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'user_id',
+        'matric_number',
+        'department_id',
+        'admitted_session_id',
+        'program_duration',
+        'level',
+        'status',
+        'gender',
+        'dob',
+        'phone_number',
+        'address',
+        'state_id',
+        'lga_id',
+        'passport_photo_path',
+        'indigene_letter_path',
+        'next_of_kin_name',
+        'next_of_kin_phone',
+        'next_of_kin_address',
+        'next_of_kin_relationship',
+    ];
 
     protected $casts = [
         'program_duration' => 'integer',
@@ -29,5 +49,20 @@ class Student extends Model
     public function academicDepartment(): BelongsTo
     {
         return $this->belongsTo(Department::class, 'department_id');
+    }
+
+    public function registrations()
+    {
+        return $this->hasMany(CourseRegistration::class);
+    }
+
+    public function state()
+    {
+        return $this->belongsTo(State::class);
+    }
+
+    public function lga()
+    {
+        return $this->belongsTo(Lga::class);
     }
 }

@@ -11,7 +11,7 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('students', function (Blueprint $table) {
-            $table->foreignUuid('admitted_session_id')->nullable()->constrained('sessions')->nullOnDelete();
+            $table->foreignUuid('admitted_session_id')->nullable()->constrained('academic_sessions')->nullOnDelete();
             $table->integer('program_duration')->default(4)->after('entry_mode');
         });
     }

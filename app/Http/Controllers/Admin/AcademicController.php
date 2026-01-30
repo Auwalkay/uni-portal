@@ -12,13 +12,50 @@ use Inertia\Inertia;
 
 class AcademicController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $search = $request->input('search');
+        $facultyId = $request->input('faculty_id');
+        $departmentId = $request->input('department_id');
+
+        $faculties = Faculty::withCount('departments')
+            ->when($search, fn($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
+            ->orderBy('name')
+            ->get();
+
+        $departments = Department::with('faculty')
+            ->withCount('programmes')
+            ->when($search, fn($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
+            ->when($facultyId, fn($q) => $q->where('faculty_id', $facultyId))
+            ->orderBy('name')
+            ->paginate(15, ['*'], 'dept_page')
+            ->withQueryString();
+
+        $programmes = Programme::with('department.faculty')
+            ->when($search, fn($q) => $q->where('name', 'like', "%{$search}%"))
+            ->when($facultyId, fn($q) => $q->whereHas('department', fn($d) => $d->where('faculty_id', $facultyId)))
+            ->when($departmentId, fn($q) => $q->where('department_id', $departmentId))
+            ->orderBy('name')
+            ->paginate(15, ['*'], 'prog_page')
+            ->withQueryString();
+
+        $courses = Course::with('department', 'programme')
+            ->when($search, fn($q) => $q->where('title', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
+            ->when($facultyId, fn($q) => $q->whereHas('department', fn($d) => $d->where('faculty_id', $facultyId)))
+            ->when($departmentId, fn($q) => $q->where('department_id', $departmentId))
+            ->orderBy('code')
+            ->paginate(20, ['*'], 'page')
+            ->withQueryString();
+
         return Inertia::render('Admin/Academic/Index', [
-            'faculties' => Faculty::withCount('departments')->orderBy('name')->get(),
-            'departments' => Department::with('faculty')->withCount('programmes')->orderBy('name')->get(),
-            'programmes' => Programme::with('department.faculty')->orderBy('name')->get(),
-            'courses' => Course::with('department')->orderBy('code')->paginate(50), // Standard pagination for courses
+            'faculties' => $faculties,
+            'departments' => $departments,
+            'programmes' => $programmes,
+            'courses' => $courses,
+            'allFaculties' => Faculty::orderBy('name')->get(),
+            'allDepartments' => Department::orderBy('name')->get(),
+            'allProgrammes' => Programme::orderBy('name')->get(),
+            'filters' => $request->only(['search', 'faculty_id', 'department_id']),
         ]);
     }
 
@@ -77,6 +114,7 @@ class AcademicController extends Controller
                 'level' => 'required|integer',
                 'semester' => 'required|string', // '1' or '2'
                 'department_id' => 'required|exists:departments,id',
+                'programme_id' => 'required|exists:programmes,id',
             ]);
             Course::create($data);
         }
@@ -123,6 +161,7 @@ class AcademicController extends Controller
                 'level' => 'required|integer',
                 'semester' => 'required|string',
                 'department_id' => 'required|exists:departments,id',
+                'programme_id' => 'required|exists:programmes,id',
             ]);
             $course->update($data);
         }

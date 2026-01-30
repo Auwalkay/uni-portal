@@ -18,10 +18,33 @@ const props = defineProps<{
         status: string;
         created_at: string;
         application_mode: string;
-        user: {
-            name: string;
-            email: string;
+        
+        // New Fields
+        first_name?: string;
+        last_name?: string;
+        phone?: string;
+        address?: string;
+        dob?: string;
+        gender?: string;
+        jamb_score?: string;
+        previous_institution?: string;
+        
+        // Relationships
+        user: { name: string; email: string; avatar_url?: string };
+        state?: { id: number; name: string };
+        lga?: { id: number; name: string };
+        programme?: { 
+            name: string; 
+            department?: { 
+                faculty?: { name: string } 
+            } 
         };
+        
+        // NOK
+        next_of_kin_name?: string;
+        next_of_kin_phone?: string;
+        next_of_kin_relationship?: string;
+        
         documents: Array<{
             id: string;
             type: string;
@@ -48,89 +71,179 @@ const updateStatus = () => {
     <Head :title="`Application: ${applicant.user.name}`" />
 
     <AdminLayout>
-        <div class="space-y-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h2 class="text-3xl font-bold tracking-tight">{{ applicant.user.name }}</h2>
-                    <p class="text-muted-foreground">Application ID: {{ applicant.id }}</p>
-                </div>
-                <div class="flex items-center gap-2">
-                    <a v-if="applicant.status === 'admitted'" :href="route('admin.admissions.letter', applicant.id)" target="_blank">
-                        <Button variant="outline" class="mr-2">
-                            <Download class="h-4 w-4 mr-2" />
-                            Admission Letter
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Column: Actions & Key Status -->
+            <div class="space-y-6">
+                <!-- User Profile Card -->
+                <Card class="text-center overflow-hidden">
+                    <div class="bg-primary/10 h-24"></div>
+                    <div class="px-6 pb-6 -mt-12">
+                        <div class="relative w-24 h-24 mx-auto rounded-full border-4 border-background bg-muted flex items-center justify-center overflow-hidden">
+                            <span v-if="!applicant.user.avatar_url" class="text-3xl">👤</span>
+                             <img v-else :src="applicant.user.avatar_url" class="object-cover w-full h-full" />
+                        </div>
+                        <h2 class="mt-4 text-xl font-bold">{{ applicant.user.name }}</h2>
+                        <p class="text-muted-foreground text-sm">{{ applicant.user.email }}</p>
+                        
+                        <div class="mt-4 flex justify-center">
+                            <Badge variant="outline" class="uppercase tracking-wider px-3 py-1" :class="{
+                                'bg-yellow-100 text-yellow-800 border-yellow-200': applicant.status === 'draft',
+                                'bg-blue-100 text-blue-800 border-blue-200': applicant.status === 'submitted',
+                                'bg-purple-100 text-purple-800 border-purple-200': applicant.status === 'screening',
+                                'bg-green-100 text-green-800 border-green-200': applicant.status === 'admitted',
+                                'bg-red-100 text-red-800 border-red-200': applicant.status === 'rejected',
+                            }">
+                                {{ applicant.status }}
+                            </Badge>
+                        </div>
+                    </div>
+                </Card>
+
+                <!-- Action Panel -->
+                <Card>
+                    <CardHeader>
+                        <CardTitle class="text-lg">Actions</CardTitle>
+                    </CardHeader>
+                    <CardContent class="grid gap-3">
+                        <Select v-model="form.status">
+                            <SelectTrigger>
+                                <SelectValue placeholder="Change Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="draft">Draft (Incomplete)</SelectItem>
+                                <SelectItem value="submitted">Submitted</SelectItem>
+                                <SelectItem value="screening">Under Screening</SelectItem>
+                                <SelectItem value="admitted">Admit Student</SelectItem>
+                                <SelectItem value="rejected">Reject Application</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        
+                        <Button @click="updateStatus" :disabled="form.processing" class="w-full">
+                            Update Status
                         </Button>
-                    </a>
-                    
-                    <Select v-model="form.status">
-                        <SelectTrigger class="w-[180px]">
-                            <SelectValue placeholder="Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="draft">Draft</SelectItem>
-                            <SelectItem value="submitted">Submitted</SelectItem>
-                            <SelectItem value="screening">In Screening</SelectItem>
-                            <SelectItem value="admitted">Admitted</SelectItem>
-                            <SelectItem value="rejected">Rejected</SelectItem>
-                        </SelectContent>
-                    </Select>
-                    <Button @click="updateStatus" :disabled="form.processing">Update Status</Button>
-                </div>
+
+                         <a v-if="applicant.status === 'admitted'" :href="route('admin.admissions.letter', applicant.id)" target="_blank" class="w-full">
+                            <Button variant="outline" class="w-full">
+                                <Download class="h-4 w-4 mr-2" />
+                                Download Letter
+                            </Button>
+                        </a>
+                    </CardContent>
+                </Card>
+
+                <!-- Contact Info -->
+                <Card>
+                    <CardHeader><CardTitle class="text-lg">Contact Info</CardTitle></CardHeader>
+                    <CardContent class="space-y-4 text-sm">
+                        <div>
+                            <span class="block text-muted-foreground text-xs uppercase">Phone</span>
+                            <span class="font-medium">{{ applicant.phone || 'N/A' }}</span>
+                        </div>
+                        <div>
+                            <span class="block text-muted-foreground text-xs uppercase">Address</span>
+                            <span class="font-medium">{{ applicant.address || 'N/A' }}</span>
+                        </div>
+                        <div>
+                            <span class="block text-muted-foreground text-xs uppercase">Next of Kin</span>
+                            <span class="font-medium">{{ applicant.next_of_kin_name }} ({{ applicant.next_of_kin_relationship }})</span>
+                            <span class="block text-xs text-muted-foreground">{{ applicant.next_of_kin_phone }}</span>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <!-- Applicant Details -->
-                <Card class="md:col-span-2">
+            <!-- Right Column: Detailed Information -->
+            <div class="lg:col-span-2 space-y-6">
+                
+                <!-- Academic Profile -->
+                <Card>
                     <CardHeader>
-                        <CardTitle>Application Details</CardTitle>
+                        <CardTitle>Academic Profile</CardTitle>
+                        <CardDescription>JAMB and Educational background</CardDescription>
                     </CardHeader>
-                    <CardContent class="grid grid-cols-2 gap-4">
-                        <div>
-                            <Label class="text-muted-foreground">Full Name</Label>
-                            <p class="font-medium">{{ applicant.user.name }}</p>
+                    <CardContent class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-muted/30 p-4 rounded-lg border">
+                            <h4 class="text-sm font-semibold uppercase text-muted-foreground mb-2">JAMB DETAILS</h4>
+                            <div class="space-y-2">
+                                <div class="flex justify-between">
+                                    <span>Reg. Number</span>
+                                    <span class="font-mono font-bold">{{ applicant.jamb_registration_number }}</span>
+                                </div>
+                                <Separator />
+                                <div class="flex justify-between items-center text-lg">
+                                    <span>Score</span>
+                                    <Badge :variant="Number(applicant.jamb_score) >= 200 ? 'default' : 'destructive'">
+                                        {{ applicant.jamb_score || 'N/A' }}
+                                    </Badge>
+                                </div>
+                            </div>
                         </div>
-                         <div>
-                            <Label class="text-muted-foreground">Email</Label>
-                            <p class="font-medium">{{ applicant.user.email }}</p>
-                        </div>
-                        <div>
-                            <Label class="text-muted-foreground">JAMB Reg. No</Label>
-                            <p class="font-medium">{{ applicant.jamb_registration_number || 'N/A' }}</p>
-                        </div>
-                        <div>
-                            <Label class="text-muted-foreground">Mode</Label>
-                            <p class="font-medium">{{ applicant.application_mode }}</p>
-                        </div>
-                         <div>
-                            <Label class="text-muted-foreground">Date Submitted</Label>
-                            <p class="font-medium">{{ format(new Date(applicant.created_at), 'PPP') }}</p>
+
+                        <div class="bg-muted/30 p-4 rounded-lg border">
+                            <h4 class="text-sm font-semibold uppercase text-muted-foreground mb-2">Applied Programme</h4>
+                            <div class="space-y-1">
+                                <p class="text-lg font-bold text-primary">{{ applicant.programme?.name || 'N/A' }}</p>
+                                <p class="text-sm text-muted-foreground">{{ applicant.programme?.department?.faculty?.name }}</p>
+                                <Badge variant="secondary" class="mt-2">{{ applicant.application_mode }}</Badge>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
 
-                <!-- Documents Side Panel -->
+                <!-- Personal Information -->
+                <Card>
+                    <CardHeader><CardTitle>Personal Details</CardTitle></CardHeader>
+                    <CardContent class="grid grid-cols-2 lg:grid-cols-3 gap-6">
+                         <div>
+                            <Label class="text-muted-foreground">Date of Birth</Label>
+                            <p class="font-medium">{{ applicant.dob ? format(new Date(applicant.dob), 'PPP') : 'N/A' }}</p>
+                        </div>
+                        <div>
+                            <Label class="text-muted-foreground">Gender</Label>
+                            <p class="font-medium">{{ applicant.gender || 'N/A' }}</p>
+                        </div>
+                        <div>
+                            <Label class="text-muted-foreground">State of Origin</Label>
+                            <p class="font-medium">{{ applicant.state?.name || 'N/A' }}</p>
+                        </div>
+                        <div>
+                            <Label class="text-muted-foreground">LGA</Label>
+                            <p class="font-medium">{{ applicant.lga?.name || 'N/A' }}</p>
+                        </div>
+                         <div>
+                            <Label class="text-muted-foreground">Previous Institution</Label>
+                            <p class="font-medium">{{ applicant.previous_institution || 'N/A' }}</p>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <!-- Documents Gallery -->
                 <Card>
                     <CardHeader>
                         <CardTitle>Submitted Documents</CardTitle>
-                        <CardDescription>Review uploaded files</CardDescription>
+                        <CardDescription>Review credentials and uploads</CardDescription>
                     </CardHeader>
-                    <CardContent class="space-y-4">
-                        <div v-if="applicant.documents.length === 0" class="text-sm text-muted-foreground italic">
-                            No documents uploaded yet.
+                    <CardContent>
+                        <div v-if="applicant.documents.length === 0" class="flex flex-col items-center justify-center py-12 text-muted-foreground border-2 border-dashed rounded-lg bg-muted/20">
+                            <FileText class="w-10 h-10 mb-2 opacity-20" />
+                            <p>No documents uploaded yet</p>
                         </div>
-                        <div v-for="doc in applicant.documents" :key="doc.id" class="flex items-center justify-between p-2 border rounded hover:bg-muted/50 transition">
-                            <div class="flex items-center gap-3 overflow-hidden">
-                                <FileText class="h-4 w-4 text-primary shrink-0" />
-                                <div class="truncate">
-                                    <p class="text-sm font-medium truncate">{{ doc.type }}</p>
+                        
+                        <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div v-for="doc in applicant.documents" :key="doc.id" class="group relative flex items-center gap-4 p-4 border rounded-xl hover:shadow-md transition bg-card">
+                                <div class="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                                    <FileText class="h-6 w-6 text-primary" />
+                                </div>
+                                <div class="overflow-hidden">
+                                    <p class="font-semibold truncate">{{ doc.type.replace('_', ' ').toUpperCase() }}</p>
                                     <p class="text-xs text-muted-foreground truncate">{{ doc.original_name }}</p>
                                 </div>
+                                <a :href="route('admin.documents.show', doc.id)" target="_blank" class="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition rounded-xl">
+                                    <Button variant="secondary" size="sm">
+                                        <Download class="w-4 h-4 mr-2" /> View
+                                    </Button>
+                                </a>
                             </div>
-                            <a :href="route('admin.documents.show', doc.id)" target="_blank">
-                                <Button variant="ghost" size="icon" class="h-8 w-8">
-                                    <Download class="h-4 w-4" />
-                                </Button>
-                            </a>
                         </div>
                     </CardContent>
                 </Card>

@@ -14,18 +14,50 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Swal from 'sweetalert2';
 import { Plus, Pencil } from 'lucide-vue-next';
 import { ref } from 'vue';
-import { route } from 'ziggy-js'; // Fixing route import
+import { route } from 'ziggy-js'; 
+import FacultiesTab from './Partials/FacultiesTab.vue';
+import DepartmentsTab from './Partials/DepartmentsTab.vue';
+import ProgrammesTab from './Partials/ProgrammesTab.vue';
+import CoursesTab from './Partials/CoursesTab.vue';
 
 const props = defineProps<{
     faculties: any[];
-    departments: any[];
-    programmes: any[];
-    courses: any; // Fixing type to any to avoid property access errors
+    departments: any; // Updated for pagination
+    programmes: any; // Updated for pagination
+    courses: any; 
+    allFaculties: any[];
+    allDepartments: any[];
+    allProgrammes: any[];
+    filters: any;
 }>();
 
 const isModalOpen = ref(false);
 const modalMode = ref<'create' | 'edit'>('create');
 const activeType = ref<'faculty' | 'department' | 'programme' | 'course'>('faculty');
+
+// Filter State
+import { watch } from 'vue';
+import { debounce } from 'lodash';
+
+const filterForm = ref({
+    search: props.filters?.search || '',
+    faculty_id: props.filters?.faculty_id || '',
+    department_id: props.filters?.department_id || '',
+});
+
+const filterDepartments = computed(() => {
+    if (!filterForm.value.faculty_id) return props.allDepartments;
+    return props.allDepartments.filter((dept: any) => dept.faculty_id === filterForm.value.faculty_id);
+});
+
+watch(filterForm, debounce(() => {
+    router.get(route('admin.academics.index'), filterForm.value, {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
+}, 300), { deep: true });
+
 
 const form = useForm({
     id: '',
@@ -38,10 +70,26 @@ const form = useForm({
     semester: '1',
     faculty_id: '',
     department_id: '',
+    programme_id: '',
     program_type: 'UG',
 });
 
+// Computed properties for filtering
+import { computed } from 'vue';
+
+const filteredDepartments = computed(() => {
+    if (!form.faculty_id) return props.allDepartments;
+    return props.allDepartments.filter((dept: any) => dept.faculty_id === form.faculty_id);
+});
+
+const filteredProgrammes = computed(() => {
+    if (!form.department_id) return props.allProgrammes;
+    return props.allProgrammes.filter((prog: any) => prog.department_id === form.department_id);
+});
+
+
 const openCreate = (type: 'faculty' | 'department' | 'programme' | 'course') => {
+    // ... function content
     modalMode.value = 'create';
     activeType.value = type;
     form.reset();
@@ -50,6 +98,7 @@ const openCreate = (type: 'faculty' | 'department' | 'programme' | 'course') => 
 };
 
 const openEdit = (type: 'faculty' | 'department' | 'programme' | 'course', item: any) => {
+    // ... function content
     modalMode.value = 'edit';
     activeType.value = type;
     form.reset();
@@ -61,14 +110,24 @@ const openEdit = (type: 'faculty' | 'department' | 'programme' | 'course', item:
     form.units = item.units || 2;
     form.level = item.level ? String(item.level) : '100';
     form.semester = item.semester || '1';
-    form.faculty_id = item.faculty_id || item.department?.faculty_id || '';
-    form.department_id = item.department_id || '';
+    
+    // Logic to set relationships
+    if (type === 'course') {
+         form.faculty_id = item.department?.faculty_id || '';
+         form.department_id = item.department_id || '';
+         form.programme_id = item.programme_id || '';
+    } else {
+         form.faculty_id = item.faculty_id || item.department?.faculty_id || '';
+         form.department_id = item.department_id || '';
+    }
+   
     form.program_type = item.type || 'UG';
     isModalOpen.value = true;
 };
 
 const submitForm = () => {
-    const url = modalMode.value === 'create' ? route('admin.academics.store') : route('admin.academics.update');
+    // ... function content
+     const url = modalMode.value === 'create' ? route('admin.academics.store') : route('admin.academics.update');
     
     form.post(url, {
         onSuccess: () => {
@@ -96,6 +155,7 @@ const submitForm = () => {
 };
 
 const toggleActive = (type: string, id: string, currentState: boolean) => {
+    // ... function content
     router.post(route('admin.academics.toggle'), {
         type,
         id,
@@ -135,6 +195,42 @@ const toggleActive = (type: string, id: string, currentState: boolean) => {
                 </div>
             </div>
 
+            <!-- FILTER BAR -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="relative">
+                     <Input v-model="filterForm.search" placeholder="Search by name or code..." class="pl-8" />
+                     <span class="absolute left-2.5 top-2.5 text-muted-foreground">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-search"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                     </span>
+                </div>
+                <div>
+                     <Select v-model="filterForm.faculty_id" @update:model-value="filterForm.department_id = ''">
+                        <SelectTrigger>
+                            <SelectValue placeholder="All Faculties" />
+                        </SelectTrigger>
+                        <SelectContent>
+                             <SelectItem value="ALL">All Faculties</SelectItem>
+                             <SelectItem v-for="fac in allFaculties" :key="fac.id" :value="fac.id">
+                                {{ fac.name }}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                 <div>
+                     <Select v-model="filterForm.department_id">
+                        <SelectTrigger>
+                            <SelectValue placeholder="All Departments" />
+                        </SelectTrigger>
+                        <SelectContent>
+                             <SelectItem value="ALL">All Departments</SelectItem>
+                             <SelectItem v-for="dept in filterDepartments" :key="dept.id" :value="dept.id">
+                                {{ dept.name }}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
             <Tabs defaultValue="faculties" class="space-y-4">
                 <TabsList>
                     <TabsTrigger value="faculties">Faculties</TabsTrigger>
@@ -143,192 +239,40 @@ const toggleActive = (type: string, id: string, currentState: boolean) => {
                     <TabsTrigger value="courses">Courses</TabsTrigger>
                 </TabsList>
 
-                <!-- FACULTIES TAB -->
                 <TabsContent value="faculties" class="space-y-4">
-                    <Card>
-                        <CardHeader class="flex flex-row items-center justify-between">
-                            <div>
-                                <CardTitle>Faculties</CardTitle>
-                                <CardDescription>Manage university faculties.</CardDescription>
-                            </div>
-                            <Button @click="openCreate('faculty')"><Plus class="mr-2 h-4 w-4" /> Add Faculty</Button>
-                        </CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Code</TableHead>
-                                        <TableHead>Name</TableHead>
-                                        <TableHead>Departments</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead class="text-right">Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    <TableRow v-for="faculty in faculties" :key="faculty.id">
-                                        <TableCell class="font-mono font-medium">{{ faculty.code }}</TableCell>
-                                        <TableCell>{{ faculty.name }}</TableCell>
-                                        <TableCell>{{ faculty.departments_count }}</TableCell>
-                                        <TableCell>
-                                            <div class="flex items-center space-x-2">
-                                                <Switch :checked="faculty.is_active" @update:checked="toggleActive('faculty', faculty.id, faculty.is_active)" />
-                                            </div>
-                                        </TableCell>
-                                        <TableCell class="text-right">
-                                            <Button variant="ghost" size="icon" @click="openEdit('faculty', faculty)">
-                                                <Pencil class="h-4 w-4" />
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
+                    <FacultiesTab 
+                        :faculties="faculties" 
+                        @create="openCreate('faculty')" 
+                        @edit="(item) => openEdit('faculty', item)"
+                        @toggle="(id, state) => toggleActive('faculty', id, state)"
+                    />
                 </TabsContent>
 
-                <!-- DEPARTMENTS TAB -->
                 <TabsContent value="departments" class="space-y-4">
-                    <Card>
-                        <CardHeader class="flex flex-row items-center justify-between">
-                            <div>
-                                <CardTitle>Departments</CardTitle>
-                                <CardDescription>Manage departments within faculties.</CardDescription>
-                            </div>
-                            <Button @click="openCreate('department')"><Plus class="mr-2 h-4 w-4" /> Add Department</Button>
-                        </CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Code</TableHead>
-                                        <TableHead>Name</TableHead>
-                                        <TableHead>Faculty</TableHead>
-                                        <TableHead>Programmes</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead class="text-right">Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    <TableRow v-for="dept in departments" :key="dept.id">
-                                        <TableCell class="font-mono font-medium">{{ dept.code }}</TableCell>
-                                        <TableCell>{{ dept.name }}</TableCell>
-                                        <TableCell>{{ dept.faculty?.name }}</TableCell>
-                                        <TableCell>{{ dept.programmes_count }}</TableCell>
-                                        <TableCell>
-                                             <Switch :checked="dept.is_active" @update:checked="toggleActive('department', dept.id, dept.is_active)" />
-                                        </TableCell>
-                                        <TableCell class="text-right">
-                                            <Button variant="ghost" size="icon" @click="openEdit('department', dept)">
-                                                <Pencil class="h-4 w-4" />
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
+                    <DepartmentsTab 
+                        :departments="departments" 
+                        @create="openCreate('department')" 
+                        @edit="(item) => openEdit('department', item)"
+                         @toggle="(id, state) => toggleActive('department', id, state)"
+                    />
                 </TabsContent>
 
-                <!-- PROGRAMMES TAB -->
-                 <TabsContent value="programmes" class="space-y-4">
-                    <Card>
-                        <CardHeader class="flex flex-row items-center justify-between">
-                             <div>
-                                <CardTitle>Programmes</CardTitle>
-                                <CardDescription>Manage degree programmes.</CardDescription>
-                            </div>
-                            <Button @click="openCreate('programme')"><Plus class="mr-2 h-4 w-4" /> Add Programme</Button>
-                        </CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Name</TableHead>
-                                        <TableHead>Type</TableHead>
-                                        <TableHead>Department</TableHead>
-                                        <TableHead>Faculty</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead class="text-right">Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    <TableRow v-for="prog in programmes" :key="prog.id">
-                                        <TableCell class="font-medium">{{ prog.name }}</TableCell>
-                                        <TableCell><Badge variant="outline">{{ prog.type }}</Badge></TableCell>
-                                        <TableCell>{{ prog.department?.name }}</TableCell>
-                                        <TableCell>{{ prog.department?.faculty?.name }}</TableCell>
-                                        <TableCell>
-                                             <Switch :checked="prog.is_active" @update:checked="toggleActive('programme', prog.id, prog.is_active)" />
-                                        </TableCell>
-                                        <TableCell class="text-right">
-                                            <Button variant="ghost" size="icon" @click="openEdit('programme', prog)">
-                                                <Pencil class="h-4 w-4" />
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
+                <TabsContent value="programmes" class="space-y-4">
+                    <ProgrammesTab 
+                        :programmes="programmes" 
+                        @create="openCreate('programme')" 
+                        @edit="(item) => openEdit('programme', item)"
+                         @toggle="(id, state) => toggleActive('programme', id, state)"
+                    />
                 </TabsContent>
 
-                <!-- COURSES TAB -->
-                 <TabsContent value="courses" class="space-y-4">
-                    <Card>
-                        <CardHeader class="flex flex-row items-center justify-between">
-                            <div>
-                                <CardTitle>Courses</CardTitle>
-                                <CardDescription>Manage all courses.</CardDescription>
-                            </div>
-                             <Button @click="openCreate('course')"><Plus class="mr-2 h-4 w-4" /> Add Course</Button>
-                        </CardHeader>
-                        <CardContent>
-                             <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Code</TableHead>
-                                        <TableHead>Title</TableHead>
-                                        <TableHead>Units</TableHead>
-                                        <TableHead>Department</TableHead>
-                                        <TableHead>Level</TableHead>
-                                        <TableHead>Sem</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead class="text-right">Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    <TableRow v-for="course in courses.data" :key="course.id">
-                                        <TableCell class="font-mono font-medium">{{ course.code }}</TableCell>
-                                        <TableCell>{{ course.title }}</TableCell>
-                                        <TableCell>{{ course.units }}</TableCell>
-                                        <TableCell>{{ course.department?.name }}</TableCell>
-                                         <TableCell>{{ course.level }}</TableCell>
-                                          <TableCell>{{ course.semester }}</TableCell>
-                                        <TableCell>
-                                              <Switch :checked="course.is_active" @update:checked="toggleActive('course', course.id, course.is_active)" />
-                                        </TableCell>
-                                        <TableCell class="text-right">
-                                            <Button variant="ghost" size="icon" @click="openEdit('course', course)">
-                                                <Pencil class="h-4 w-4" />
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                </TableBody>
-                            </Table>
-                             <div class="flex justify-center mt-4 space-x-2" v-if="courses.links">
-                                <Button 
-                                    v-for="(link, i) in courses.links" 
-                                    :key="i"
-                                    :variant="link.active ? 'default' : 'outline'"
-                                    :disabled="!link.url"
-                                    size="sm"
-                                    as-child
-                                >
-                                <a :href="link.url" v-html="link.label"></a>
-                                </Button>
-                             </div>
-                        </CardContent>
-                    </Card>
+                <TabsContent value="courses" class="space-y-4">
+                    <CoursesTab 
+                        :courses="courses" 
+                        @create="openCreate('course')" 
+                        @edit="(item) => openEdit('course', item)"
+                         @toggle="(id, state) => toggleActive('course', id, state)"
+                    />
                 </TabsContent>
             </Tabs>
 
@@ -372,7 +316,7 @@ const toggleActive = (type: string, id: string, currentState: boolean) => {
                                         <SelectValue placeholder="Select Faculty" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem v-for="fac in faculties" :key="fac.id" :value="fac.id">
+                                        <SelectItem v-for="fac in allFaculties" :key="fac.id" :value="fac.id">
                                             {{ fac.name }}
                                         </SelectItem>
                                     </SelectContent>
@@ -400,13 +344,26 @@ const toggleActive = (type: string, id: string, currentState: boolean) => {
                                 </Select>
                             </div>
                             <div class="space-y-1">
+                                <Label>Faculty</Label>
+                                <Select v-model="form.faculty_id">
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Faculty" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem v-for="fac in allFaculties" :key="fac.id" :value="fac.id">
+                                            {{ fac.name }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div class="space-y-1">
                                 <Label>Department</Label>
                                  <Select v-model="form.department_id">
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select Department" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem v-for="dept in departments" :key="dept.id" :value="dept.id">
+                                        <SelectItem v-for="dept in filteredDepartments" :key="dept.id" :value="dept.id">
                                             {{ dept.name }}
                                         </SelectItem>
                                     </SelectContent>
@@ -455,14 +412,43 @@ const toggleActive = (type: string, id: string, currentState: boolean) => {
                                     </Select>
                                 </div>
                                  <div class="space-y-1">
+                                    <Label>Faculty</Label>
+                                    <Select v-model="form.faculty_id">
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Faculty" class="truncate" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                             <SelectItem v-for="fac in allFaculties" :key="fac.id" :value="fac.id">
+                                                {{ fac.name }}
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                             </div>
+                             
+                             <div class="grid grid-cols-2 gap-4">
+                                <div class="space-y-1">
                                     <Label>Department</Label>
                                      <Select v-model="form.department_id">
                                         <SelectTrigger>
                                             <SelectValue placeholder="Dept" class="truncate" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                             <SelectItem v-for="dept in departments" :key="dept.id" :value="dept.id">
+                                             <SelectItem v-for="dept in filteredDepartments" :key="dept.id" :value="dept.id">
                                                 {{ dept.code }} - {{ dept.name }}
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div class="space-y-1">
+                                    <Label>Programme</Label>
+                                     <Select v-model="form.programme_id">
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Programme" class="truncate" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                             <SelectItem v-for="prog in filteredProgrammes" :key="prog.id" :value="prog.id">
+                                                {{ prog.name }}
                                             </SelectItem>
                                         </SelectContent>
                                     </Select>

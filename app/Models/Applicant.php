@@ -27,5 +27,15 @@ class Applicant extends Model
         return $this->hasMany(ApplicantDocument::class);
     }
 
+    public function state(): BelongsTo
+    {
+        return $this->belongsTo(State::class);
+    }
+
+    public function lga(): BelongsTo
+    {
+        return $this->belongsTo(Lga::class);
+    }
+
 
 }

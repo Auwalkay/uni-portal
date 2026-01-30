@@ -27,6 +27,11 @@ class Session extends Model
         return $this->hasMany(Semester::class);
     }
 
+    public function feeConfigurations()
+    {
+        return $this->hasMany(FeeConfiguration::class);
+    }
+
     public static function current()
     {
         return \Illuminate\Support\Facades\Cache::remember('current_session', 3600, function () {

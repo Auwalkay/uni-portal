@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import ApplicantLayout from '@/layouts/ApplicantLayout.vue';
 import { Button } from '@/components/ui/button';
@@ -8,12 +8,20 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import FileUploader from '@/components/FileUploader.vue';
 import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import axios from 'axios';
 import { route } from 'ziggy-js';
 
 const props = defineProps<{
     mode?: string;
     programme_id?: string;
+    states?: Array<{ id: number; name: string; lgas: Array<{ id: number; name: string }> }>;
 }>();
 
 const steps = ['JAMB Details', 'Personal Info', 'Academic History', 'Document Uploads', 'Review'];
@@ -30,6 +38,12 @@ const form = useForm({
     last_name: '',
     dob: '',
     phone: '',
+    address: '',
+    state_id: '',
+    lga_id: '',
+    next_of_kin_name: '',
+    next_of_kin_phone: '',
+    next_of_kin_relationship: '',
     jamb_score: '',
     previous_institution: '',
     mode: props.mode || 'UTME',
@@ -37,6 +51,12 @@ const form = useForm({
     jamb_number: '',
     passport_photo: null as File | null,
     waec_result: null as File | null,
+});
+
+const filteredLgas = computed(() => {
+    if (!form.state_id) return [];
+    const state = props.states?.find(s => s.id === Number(form.state_id));
+    return state ? state.lgas : [];
 });
 
 const fetchJambDetails = async () => {
@@ -200,6 +220,77 @@ const submitApplication = () => {
                         <div class="space-y-2">
                             <Label>Phone Number</Label>
                             <Input type="tel" v-model="form.phone" placeholder="+234..." />
+                        </div>
+                         
+                        <div class="space-y-2 md:col-span-2">
+                            <Label>Residential Address</Label>
+                             <textarea 
+                                v-model="form.address" 
+                                class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                placeholder="Full address"
+                            ></textarea>
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label>State of Origin</Label>
+                            <Select v-model="form.state_id">
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select State" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="state in states" :key="state.id" :value="String(state.id)">
+                                        {{ state.name }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label>LGA of Origin</Label>
+                            <Select v-model="form.lga_id" :disabled="!form.state_id">
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select LGA" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="lga in filteredLgas" :key="lga.id" :value="String(lga.id)">
+                                        {{ lga.name }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div class="col-span-full py-4">
+                            <h4 class="font-medium text-primary flex items-center gap-2">
+                                <span class="i-lucide-users w-4 h-4"></span> Next of Kin Details
+                            </h4>
+                            <Separator class="mt-2" />
+                        </div>
+
+                         <div class="space-y-2">
+                            <Label>Full Name</Label>
+                            <Input v-model="form.next_of_kin_name" placeholder="Name of next of kin" />
+                        </div>
+
+                         <div class="space-y-2">
+                            <Label>Phone Number</Label>
+                            <Input v-model="form.next_of_kin_phone" placeholder="Phone number" />
+                        </div>
+
+                         <div class="space-y-2">
+                            <Label>Relationship</Label>
+                             <Select v-model="form.next_of_kin_relationship">
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select Relationship" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Father">Father</SelectItem>
+                                    <SelectItem value="Mother">Mother</SelectItem>
+                                    <SelectItem value="Slbling">Sibling</SelectItem>
+                                    <SelectItem value="Spouse">Spouse</SelectItem>
+                                    <SelectItem value="Guardian">Guardian</SelectItem>
+                                    <SelectItem value="Other">Other</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
 

@@ -25,32 +25,63 @@ class ResultController extends Controller
     {
         $student = Student::where('user_id', Auth::id())->firstOrFail();
 
-        // Get all sessions/semesters student has registered for
-        // Group by Session, then Semester
-        $registrations = CourseRegistration::where('student_id', $student->id)
-            ->with(['course', 'session', 'semester'])
-            ->get()
-            ->groupBy(['session.name', 'semester.name']);
+        // 1. Get all unique sessions the student has registered for
+        // We can do this by getting distinct session_ids via registrations
+        $sessionIds = CourseRegistration::where('student_id', $student->id)
+            ->distinct()
+            ->pluck('session_id');
 
-        // Calculate GPA per semester
-        $results = [];
+        $sessions = Session::whereIn('id', $sessionIds)
+            ->orderBy('start_date', 'desc') // Latest session first
+            ->get();
 
-        foreach ($registrations as $sessionName => $semesters) {
-            foreach ($semesters as $semesterName => $regs) {
+        // 2. Build the History Structure
+        $history = [];
+
+        foreach ($sessions as $session) {
+            $sessionData = [
+                'id' => $session->id,
+                'name' => $session->name,
+                'is_current' => $session->is_current,
+                'semesters' => []
+            ];
+
+            // Get semesters for this session (that have registrations)
+            $registrationsInSession = CourseRegistration::where('student_id', $student->id)
+                ->where('session_id', $session->id)
+                ->with(['course', 'semester'])
+                ->get()
+                ->groupBy('semester.name'); // Group by Semester Name (First/Second)
+
+            // We want to order semesters logically (First then Second)
+            // But groupBy returns a collection keyed by name.
+            // Let's iterate and calculate GPA
+
+            foreach ($registrationsInSession as $semesterName => $regs) {
+                // Calculate GPA
                 $gpa = $this->gradingService->calculateGPA($regs);
-                $results[$sessionName][$semesterName] = [
+
+                $sessionData['semesters'][] = [
+                    'name' => $semesterName,
                     'gpa' => $gpa,
                     'courses' => $regs
                 ];
             }
+
+            // Sort semesters (First before Second) - Optional but good for display
+            usort($sessionData['semesters'], function ($a, $b) {
+                return strpos($a['name'], 'Second') !== false ? 1 : -1;
+            });
+
+            $history[] = $sessionData;
         }
 
-        // CGPA Calculation (All registrations)
+        // 3. CGPA Calculation (All registrations)
         $allRegs = CourseRegistration::where('student_id', $student->id)->with('course')->get();
         $cgpa = $this->gradingService->calculateGPA($allRegs);
 
         return Inertia::render('Student/Results/Index', [
-            'results' => $results,
+            'history' => $history,
             'cgpa' => $cgpa
         ]);
     }

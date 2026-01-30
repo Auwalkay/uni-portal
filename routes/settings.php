@@ -102,11 +102,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 }
             }
 
-            // Check School Fee status
-            $hasPaidSchoolFee = \App\Models\Invoice::where('user_id', auth()->id())
-                ->where('type', 'school_fee')
-                ->where('status', 'paid')
-                ->exists();
+            // Check School Fee status for CURRENT session
+            $hasPaidSchoolFee = false;
+            if ($currentSession) {
+                $hasPaidSchoolFee = \App\Models\Invoice::where('user_id', auth()->id())
+                    ->where('type', 'school_fee')
+                    ->where('session_id', $currentSession->id)
+                    ->where('status', 'paid')
+                    ->exists();
+            }
 
             return Inertia::render('Student/Dashboard', [
                 'student' => $student,
@@ -140,13 +144,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/courses/form', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'downloadForm'])->name('courses.form');
 
         Route::get('/results', [\App\Http\Controllers\Student\ResultController::class, 'index'])->name('results.index');
+
+        Route::get('/id-card', [\App\Http\Controllers\Student\IdCardController::class, 'show'])->name('id_card.show');
     });
 
     // ADMIN ROUTES
     Route::prefix('admin')->name('admin.')->group(function () {
-        Route::get('/dashboard', function () {
-            return Inertia::render('Admin/Dashboard');
-        })->name('dashboard');
+        Route::get('/dashboard', [\App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
 
         Route::get('/admissions', [\App\Http\Controllers\Admin\AdmissionController::class, 'index'])->name('admissions.index');
         Route::get('/admissions/{applicant}', [\App\Http\Controllers\Admin\AdmissionController::class, 'show'])->name('admissions.show');
@@ -161,12 +165,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Students
         Route::get('/students', [\App\Http\Controllers\Admin\StudentController::class, 'index'])->name('students.index');
+        Route::get('/students/create', [\App\Http\Controllers\Admin\StudentController::class, 'create'])->name('students.create');
+        Route::post('/students', [\App\Http\Controllers\Admin\StudentController::class, 'store'])->name('students.store');
+        Route::get('/students/{student}', [\App\Http\Controllers\Admin\StudentController::class, 'show'])->name('students.show');
 
         // Staff & Users
         Route::get('/users', [\App\Http\Controllers\Admin\UserController::class, 'index'])->name('users.index');
 
         // Payments
         Route::get('/payments', [\App\Http\Controllers\Admin\PaymentController::class, 'index'])->name('payments.index');
+        Route::get('/payments/{payment}', [\App\Http\Controllers\Admin\PaymentController::class, 'show'])->name('payments.show');
 
         // Finance Management
         Route::get('/finance', [\App\Http\Controllers\Admin\FinanceController::class, 'index'])->name('finance.index');
@@ -177,6 +185,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/finance/configurations', [\App\Http\Controllers\Admin\FinanceController::class, 'storeFeeConfiguration'])->name('finance.configurations.store');
         Route::put('/finance/configurations/{config}', [\App\Http\Controllers\Admin\FinanceController::class, 'updateFeeConfiguration'])->name('finance.configurations.update');
         Route::delete('/finance/configurations/{config}', [\App\Http\Controllers\Admin\FinanceController::class, 'destroyFeeConfiguration'])->name('finance.configurations.destroy');
+        Route::get('/finance/sessions/{session}/fees', [\App\Http\Controllers\Admin\FinanceController::class, 'manageSessionFees'])->name('finance.session.fees');
 
         // Academics
         Route::get('/academics', [\App\Http\Controllers\Admin\AcademicController::class, 'index'])->name('academics.index');

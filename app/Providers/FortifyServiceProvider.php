@@ -33,6 +33,34 @@ class FortifyServiceProvider extends ServiceProvider
             \App\Http\Responses\RegisterResponse::class
         );
 
+        Fortify::authenticateUsing(function (Request $request) {
+            $validated = $request->validate([
+                Fortify::username() => 'required|string',
+                'password' => 'required|string',
+            ]);
+
+            $username = $validated[Fortify::username()];
+            $password = $validated['password'];
+
+            // 1. Try Email Login
+            if (filter_var($username, FILTER_VALIDATE_EMAIL)) {
+                $user = \App\Models\User::where('email', $username)->first();
+            } else {
+                // 2. Try Matriculation Login
+                // Remove any whitespace
+                $username = trim($username);
+                $student = \App\Models\Student::where('matriculation_number', $username)->first();
+                $user = $student ? $student->user : null;
+            }
+
+            if ($user && \Illuminate\Support\Facades\Hash::check($password, $user->password)) {
+                return $user;
+            }
+
+            // Return failure (let Fortify handle the response usually, or returning null/false)
+            return null;
+        });
+
         $this->configureActions();
         $this->configureViews();
         $this->configureRateLimiting();

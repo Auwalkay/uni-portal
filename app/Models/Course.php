@@ -11,8 +11,17 @@ class Course extends Model
 
     protected $guarded = [];
 
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
+
     public function department()
     {
         return $this->belongsTo(Department::class);
+    }
+
+    public function programme()
+    {
+        return $this->belongsTo(Programme::class);
     }
 }

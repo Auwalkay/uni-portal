@@ -9,16 +9,56 @@ use Inertia\Inertia;
 
 class AdmissionController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $query = Applicant::with(['user', 'programme']);
+
+        // Stats
+        $stats = [
+            'total' => Applicant::count(),
+            'admitted' => Applicant::where('status', 'admitted')->count(),
+            'rejected' => Applicant::where('status', 'rejected')->count(),
+            'pending' => Applicant::where('status', 'pending')->count(),
+        ];
+
+        // Filters
+        if ($request->filled('search')) {
+            $query->whereHas('user', function ($q) use ($request) {
+                $q->where('name', 'like', '%' . $request->search . '%')
+                    ->orWhere('email', 'like', '%' . $request->search . '%');
+            })->orWhere('jamb_registration_number', 'like', '%' . $request->search . '%');
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('programme_id')) {
+            $query->where('programme_id', $request->programme_id);
+        }
+
+        $applicants = $query->latest()->paginate(10)->withQueryString();
+
+        $programmes = \App\Models\Programme::select('id', 'name')->orderBy('name')->get();
+
         return Inertia::render('Admin/Admissions/Index', [
-            'applicants' => Applicant::with('user')->latest()->paginate(10)
+            'applicants' => $applicants,
+            'stats' => $stats,
+            'filters' => $request->only(['search', 'status', 'programme_id']),
+            'programmes' => $programmes,
         ]);
     }
 
     public function show(Applicant $applicant)
     {
-        $applicant->load(['user', 'documents']);
+        $applicant->load([
+            'user',
+            'documents',
+            'state',
+            'lga',
+            'programme.department.faculty'
+        ]);
+
         return Inertia::render('Admin/Admissions/Show', [
             'applicant' => $applicant
         ]);

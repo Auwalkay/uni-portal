@@ -46,6 +46,7 @@ class ApplicationController extends Controller
         return Inertia::render('Applicant/Application/FormWizard', [
             'mode' => $request->query('mode', 'UTME'),
             'programme_id' => $request->query('programme_id'),
+            'states' => \App\Models\State::with('lgas')->get(),
         ]);
     }
 
@@ -60,6 +61,11 @@ class ApplicationController extends Controller
             'previous_institution' => 'nullable|string',
             'programme_id' => 'required|exists:programmes,id',
             'mode' => 'required|string',
+            'state_id' => 'required|exists:states,id',
+            'lga_id' => 'required|exists:lgas,id',
+            'next_of_kin_name' => 'required|string',
+            'next_of_kin_phone' => 'required|string',
+            'next_of_kin_relationship' => 'required|string',
             'passport_photo' => 'nullable|file|mimes:jpeg,png,jpg|max:2048',
             'waec_result' => 'nullable|file|mimes:pdf,jpeg,png,jpg|max:2048',
         ]);
@@ -76,8 +82,26 @@ class ApplicationController extends Controller
             [
                 'jamb_registration_number' => $request->input('jamb_number', 'PENDING-' . time()),
                 'application_mode' => $request->input('mode'),
-                'program_choice_1' => $request->input('programme_id'), // Use program choice 1 for now
+                'program_choice_1' => $request->input('programme_id'),
                 'status' => 'submitted',
+
+                // Personal
+                'first_name' => $request->first_name,
+                'last_name' => $request->last_name,
+                'dob' => $request->dob,
+                'phone' => $request->phone,
+
+                // Origin
+                'state_id' => $request->state_id,
+                'lga_id' => $request->lga_id,
+
+                // Academic
+                'jamb_score' => $request->jamb_score,
+
+                // NOK
+                'next_of_kin_name' => $request->next_of_kin_name,
+                'next_of_kin_phone' => $request->next_of_kin_phone,
+                'next_of_kin_relationship' => $request->next_of_kin_relationship,
             ]
         );
 
@@ -99,6 +123,9 @@ class ApplicationController extends Controller
                 'status' => 'uploaded'
             ]);
         }
+
+        // Notify User
+        $user->notify(new \App\Notifications\ApplicationSubmitted($applicant));
 
         return redirect()->route('applicant.dashboard')->with('success', 'Application submitted successfully!');
     }

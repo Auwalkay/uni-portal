@@ -54,7 +54,7 @@
     <div class="header">
         <h2>UNIVERSITY PORTAL</h2>
         <h3>Course Registration Form</h3>
-        <p>{{ $session->name }} - {{ $semester->name }}</p>
+        <p>{{ $session->name }} {{ $semester ? '- ' . $semester->name : '' }}</p>
     </div>
 
     <div>

@@ -3,7 +3,7 @@ import { Head, Link } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import StudentLayout from '@/layouts/StudentLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle } from 'lucide-vue-next';
+import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard } from 'lucide-vue-next';
 
 defineProps<{
     student?: any;
@@ -44,14 +44,21 @@ const greeting = () => {
         <div class="flex-1 space-y-6 p-6">
             <!-- Welcome Banner -->
             <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 p-8 shadow-lg">
-                <div class="relative z-10 text-white">
-                    <h1 class="text-3xl font-bold tracking-tight">{{ greeting() }}, {{ user?.name.split(' ')[0] }}!</h1>
-                    <p class="mt-2 text-blue-100">
-                        {{ student?.matriculation_number || 'Matriculation Pending' }} &bull; {{ student?.program || 'Program N/A' }}
-                    </p>
-                    <div class="mt-4 inline-flex items-center rounded-full bg-white/20 px-3 py-1 text-sm backdrop-blur-sm">
-                        <CalendarDays class="mr-2 h-4 w-4" />
-                        {{ stats?.session }} Session &bull; {{ stats?.semester }}
+                <div class="relative z-10 flex items-center gap-6 text-white">
+                    <img 
+                        :src="student?.passport_photo_path ? `/storage/${student.passport_photo_path}` : `https://ui-avatars.com/api/?name=${user?.name}&background=random`" 
+                        alt="Profile Photo" 
+                        class="h-20 w-20 rounded-full border-4 border-white/30 object-cover shadow-md"
+                    />
+                    <div>
+                        <h1 class="text-3xl font-bold tracking-tight">{{ greeting() }}, {{ user?.name.split(' ')[0] }}!</h1>
+                        <p class="mt-2 text-blue-100">
+                            {{ student?.matriculation_number || 'Matriculation Pending' }} &bull; {{ student?.program || 'Program N/A' }}
+                        </p>
+                        <div class="mt-4 inline-flex items-center rounded-full bg-white/20 px-3 py-1 text-sm backdrop-blur-sm">
+                            <CalendarDays class="mr-2 h-4 w-4" />
+                            {{ stats?.session }} Session &bull; {{ stats?.semester }}
+                        </div>
                     </div>
                 </div>
                 <!-- Decorative Circle -->
@@ -181,6 +188,41 @@ const greeting = () => {
                             <Link :href="route('student.results.index')" class="mt-4 text-sm font-medium text-primary underline-offset-4 hover:underline">
                                 View Results &rarr;
                             </Link>
+                        </div>
+
+                        <!-- ID Card Action -->
+                        <div class="group relative flex flex-col justify-between rounded-lg border p-4 hover:bg-accent/50 transition-colors">
+                            <div>
+                                <h4 class="font-medium flex items-center gap-2">
+                                    <IdCard class="h-4 w-4 text-muted-foreground" />
+                                    Vehicle / ID Card
+                                </h4>
+                                <p v-if="hasPaidSchoolFee && student?.passport_photo_path" class="text-sm text-muted-foreground mt-1">
+                                    View and print your Student ID Card.
+                                </p>
+                                <p v-else-if="!hasPaidSchoolFee" class="text-sm text-red-500 mt-1">
+                                    Pay School Fees to access ID Card.
+                                </p>
+                                <p v-else class="text-sm text-yellow-600 mt-1">
+                                    Upload Passport Photo to access ID Card.
+                                </p>
+                            </div>
+                            
+                            <div v-if="hasPaidSchoolFee && student?.passport_photo_path">
+                                <a :href="route('student.id_card.show')" target="_blank" class="mt-4 block text-sm font-medium text-primary underline-offset-4 hover:underline">
+                                    View ID Card &rarr;
+                                </a>
+                            </div>
+                             <div v-else-if="!hasPaidSchoolFee">
+                                <Link :href="route('student.payments.index')" class="mt-4 text-sm font-medium text-red-600 underline-offset-4 hover:underline">
+                                    Pay Now &rarr;
+                                </Link>
+                            </div>
+                             <div v-else>
+                                <Link :href="route('student.profile.edit')" class="mt-4 text-sm font-medium text-yellow-600 underline-offset-4 hover:underline">
+                                    Upload Photo &rarr;
+                                </Link>
+                            </div>
                         </div>
                     </div>
                 </div>
