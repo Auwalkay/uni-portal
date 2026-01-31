@@ -60,34 +60,42 @@
     <div>
         <p><strong>Name:</strong> {{ $student->user->name }} {{ $student->user->last_name }}</p>
         <p><strong>Matric No:</strong> {{ $student->matriculation_number }}</p>
-        <p><strong>Department:</strong> {{ $student->department }}</p>
+        <p><strong>Department:</strong> {{ $student->department_id }}</p>
         <p><strong>Level:</strong> {{ $student->current_level }}</p>
     </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Code</th>
-                <th>Course Title</th>
-                <th>Units</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($registrations as $reg)
+    @foreach($registrations as $index => $semester)
+
+        <table>
+            <caption>
+                {{ $index }}
+            </caption>
+            <thead>
                 <tr>
-                    <td>{{ $reg->course->code }}</td>
-                    <td>{{ $reg->course->title }}</td>
-                    <td>{{ $reg->course->units }}</td>
-                    <td>Registered</td>
+                    <th>Code</th>
+                    <th>Course Title</th>
+                    <th>Units</th>
+                    <th>Status</th>
                 </tr>
-            @endforeach
-            <tr>
-                <td colspan="2" style="text-align: right; font-weight: bold;">Total Units</td>
-                <td colspan="2" style="font-weight: bold;">{{ $total_units }}</td>
-            </tr>
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+
+                @foreach($semester as $courses)
+                    <tr>
+                        <td>{{ $courses->course->code }}</td>
+                        <td>{{ $courses->course->title }}</td>
+                        <td>{{ $courses->course->units }}</td>
+                        <td>Registered</td>
+                    </tr>
+                @endforeach
+
+                <tr>
+                    <td colspan="2" style="text-align: right; font-weight: bold;">Total Units</td>
+                    <td colspan="2" style="font-weight: bold;">{{ $total_units }}</td>
+                </tr>
+            </tbody>
+        </table>
+    @endforeach
 
     <div class="footer">
         <br><br><br>

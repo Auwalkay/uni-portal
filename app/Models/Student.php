@@ -12,16 +12,19 @@ class Student extends Model
 
     protected $fillable = [
         'user_id',
-        'matric_number',
+        'matriculation_number',
         'department_id',
+        'faculty_id',
+        'program_id',
         'admitted_session_id',
         'program_duration',
-        'level',
+        'current_level',
         'status',
         'gender',
         'dob',
         'phone_number',
         'address',
+        'entry_mode',
         'state_id',
         'lga_id',
         'passport_photo_path',
@@ -49,6 +52,11 @@ class Student extends Model
     public function academicDepartment(): BelongsTo
     {
         return $this->belongsTo(Department::class, 'department_id');
+    }
+
+    public function program()
+    {
+        return $this->belongsTo(Programme::class, 'program_id');
     }
 
     public function registrations()

@@ -30,7 +30,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('two-factor.show');
 
     // APPLICANT ROUTES
-    Route::prefix('applicant')->name('applicant.')->group(function () {
+    Route::prefix('applicant')->name('applicant.')->middleware(['role:applicant'])->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Applicant\ApplicationController::class, 'index'])->name('dashboard');
         Route::get('/apply/start', [\App\Http\Controllers\Applicant\ApplicationController::class, 'create'])->name('apply.start');
         Route::get('/apply/form', [\App\Http\Controllers\Applicant\ApplicationController::class, 'form'])->name('apply.form');
@@ -44,7 +44,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // STUDENT Routes
-    Route::prefix('student')->name('student.')->group(function () {
+    Route::prefix('student')->name('student.')->middleware('role:student')->group(function () {
         Route::get('/dashboard', function () {
             $student = \App\Models\Student::where('user_id', auth()->id())->with('user')->first();
 
@@ -113,7 +113,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             }
 
             return Inertia::render('Student/Dashboard', [
-                'student' => $student,
+                'student' => $student->load(['program']),
                 'user' => $student ? $student->user : auth()->user(),
                 'isProfileComplete' => $isProfileComplete,
                 'hasPaidSchoolFee' => $hasPaidSchoolFee,
@@ -149,7 +149,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // ADMIN ROUTES
-    Route::prefix('admin')->name('admin.')->group(function () {
+    Route::prefix('admin')->name('admin.')->middleware('role:admin')->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
 
         Route::get('/admissions', [\App\Http\Controllers\Admin\AdmissionController::class, 'index'])->name('admissions.index');

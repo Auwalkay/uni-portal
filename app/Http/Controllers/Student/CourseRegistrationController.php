@@ -296,9 +296,8 @@ class CourseRegistrationController extends Controller
             ->where('session_id', $session->id)
             ->with('course', 'semester')
             ->get()
-            ->sortBy(function ($reg) {
-                return $reg->semester->name . $reg->course->code;
-            });
+            ->groupBy(fn($reg) => $reg->semester->name);
+
 
         if ($registrations->isEmpty()) {
             return response("No course registration records found for this session ({$session->name}). Please ensure you have registered courses.", 404);
@@ -312,7 +311,7 @@ class CourseRegistrationController extends Controller
             'total_units' => $registrations->sum('course.units'),
         ]);
 
-        $safeSessionName = str_replace(['/', '\\'], '-', $session->name);
-        return $pdf->download("Course_Form_{$student->matriculation_number}_{$safeSessionName}.pdf");
+        // $safeSessionName = str_replace(['/', '\\'], '-', $session->name);
+        return $pdf->download("Course_Form.pdf");
     }
 }

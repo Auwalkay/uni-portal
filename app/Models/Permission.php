@@ -6,14 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-class Permission extends Model
+class Permission extends \Spatie\Permission\Models\Permission
 {
-    use HasUuids;
+    // use HasUuids;
 
     protected $guarded = [];
-
-    public function roles(): BelongsToMany
-    {
-        return $this->belongsToMany(Role::class, 'role_has_permissions');
-    }
 }

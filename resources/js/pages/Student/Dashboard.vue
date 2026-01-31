@@ -5,7 +5,7 @@ import StudentLayout from '@/layouts/StudentLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard } from 'lucide-vue-next';
 
-defineProps<{
+const props = defineProps<{
     student?: any;
     user?: any;
     isProfileComplete?: boolean;
@@ -21,6 +21,8 @@ defineProps<{
         semester: string;
     };
 }>();
+
+console.log('Student', props.student?.program)
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -53,7 +55,7 @@ const greeting = () => {
                     <div>
                         <h1 class="text-3xl font-bold tracking-tight">{{ greeting() }}, {{ user?.name.split(' ')[0] }}!</h1>
                         <p class="mt-2 text-blue-100">
-                            {{ student?.matriculation_number || 'Matriculation Pending' }} &bull; {{ student?.program || 'Program N/A' }}
+                            {{ student?.matriculation_number || 'Matriculation Pending' }} &bull; {{ student?.program?.name || 'Program N/A' }}
                         </p>
                         <div class="mt-4 inline-flex items-center rounded-full bg-white/20 px-3 py-1 text-sm backdrop-blur-sm">
                             <CalendarDays class="mr-2 h-4 w-4" />
@@ -195,7 +197,7 @@ const greeting = () => {
                             <div>
                                 <h4 class="font-medium flex items-center gap-2">
                                     <IdCard class="h-4 w-4 text-muted-foreground" />
-                                    Vehicle / ID Card
+                                    Student ID Card
                                 </h4>
                                 <p v-if="hasPaidSchoolFee && student?.passport_photo_path" class="text-sm text-muted-foreground mt-1">
                                     View and print your Student ID Card.

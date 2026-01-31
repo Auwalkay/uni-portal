@@ -27,8 +27,8 @@ const props = defineProps<{
         next_of_kin_address: string;
         passport_photo_path?: string;
         indigene_letter_path?: string;
-        matric_number: string;
-        level: string;
+        matriculation_number: string;
+        current_level: string;
         program_duration: string;
         user: {
             name: string;
@@ -121,9 +121,9 @@ const updateProfile = () => {
                                 
                                 <div>
                                     <h2 class="text-xl font-bold text-foreground">{{ student.user.name }}</h2>
-                                    <p class="text-sm text-muted-foreground">{{ student.matric_number }}</p>
+                                    <p class="text-sm text-muted-foreground">{{ student.matriculation_number }}</p>
                                     <div class="flex justify-center gap-2 mt-2">
-                                         <Badge variant="secondary" class="text-xs">{{ student.level || '100' }} Level</Badge>
+                                         <Badge variant="secondary" class="text-xs">{{ student.current_level || '100' }} Level</Badge>
                                          <Badge variant="outline" class="text-xs">{{ student.user.email }}</Badge>
                                     </div>
                                 </div>

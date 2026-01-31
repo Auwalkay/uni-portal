@@ -61,8 +61,11 @@ const getStatusBadgeClass = (status) => {
                 <!-- Profile Header -->
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
                     <div class="p-6 bg-white border-b border-gray-200 flex flex-col md:flex-row items-center md:items-start space-y-4 md:space-y-0 md:space-x-6">
-                        <img class="h-24 w-24 rounded-full ring-4 ring-gray-50" :src="`https://ui-avatars.com/api/?name=${student.user.name}&size=128`" alt="" />
-                        
+                    <img 
+                        :src="student?.passport_photo_path ? `/storage/${student.passport_photo_path}` : `https://ui-avatars.com/api/?name=${user?.name}&background=random`" 
+                        alt="Profile Photo" 
+                        class="h-20 w-20 rounded-full border-4 border-white/30 object-cover shadow-md"
+                    />                        
                         <div class="text-center md:text-left flex-1">
                             <h1 class="text-2xl font-bold text-gray-900">{{ student.user.name }}</h1>
                             <p class="text-gray-500">{{ student.department || 'No Department' }} &bull; {{ student.current_level }} Level</p>

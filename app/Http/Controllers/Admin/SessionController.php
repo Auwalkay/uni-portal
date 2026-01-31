@@ -96,16 +96,18 @@ class SessionController extends Controller
             // Based on grep earlier: $student->current_level.
 
             // Use query update for efficiency
-            Student::query()->each(function ($student) {
-                // If level is numeric-ish
-                $currentLevel = intval($student->current_level); // "100" -> 100
-                if ($currentLevel > 0) {
-                    $newLevel = $currentLevel + 100;
-                    // Optional: Cap at some point? 
-                    // Let's just increment.
-                    $student->update(['current_level' => $newLevel]);
-                }
-            });
+            // Student::query()->each(function ($student) {
+            //     // If level is numeric-ish
+            //     $currentLevel = intval($student->current_level); // "100" -> 100
+            //     if ($currentLevel > 0) {
+            //         $newLevel = $currentLevel + 100;
+            //         // Optional: Cap at some point? 
+            //         // Let's just increment.
+            //         $student->update(['current_level' => $newLevel]);
+            //     }
+            // });
+
+            Student::query()->increment('current_level', 100);
         });
 
         return back()->with('success', "Session activated and students promoted to next level.");

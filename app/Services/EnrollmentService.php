@@ -14,7 +14,7 @@ class EnrollmentService
             return;
         }
 
-        $year = date('Y');
+        $year = date('y');
         $facCode = $applicant->programme->department->faculty->code ?? 'GEN';
         $deptCode = $applicant->programme->department->code ?? 'GEN';
 
@@ -25,13 +25,21 @@ class EnrollmentService
 
         $currentSession = \App\Models\Session::current();
 
+        $currentLevel = 100;
+
+        if ($applicant->application_mode == 'DE') {
+            $currentLevel = 200;
+        }
+
         Student::create([
             'user_id' => $userId,
             'matriculation_number' => $matricNo,
-            'program' => $applicant->programme->name ?? 'N/A',
+            'program_id' => $applicant->programme->id ?? 'N/A',
             'department_id' => $applicant->programme->department->id,
             'faculty_id' => $applicant->programme->department->faculty->id,
-            'current_level' => 100,
+            'state_id' => $applicant->state_id,
+            'lga_id' => $applicant->lga_id,
+            'current_level' => $currentLevel,
             'entry_mode' => $applicant->application_mode,
             'admitted_session_id' => $currentSession?->id,
             'program_duration' => $applicant->programme->duration ?? 4,
@@ -40,6 +48,8 @@ class EnrollmentService
         $user = User::find($userId);
         if ($user) {
             $user->assignRole('student');
+
+            $user->removeRole('applicant');
         }
 
         $applicant->update(['status' => 'enrolled']);
