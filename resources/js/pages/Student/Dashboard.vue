@@ -226,6 +226,21 @@ const greeting = () => {
                                 </Link>
                             </div>
                         </div>
+                         <!-- Admission Letter Action -->
+                         <div class="group relative flex flex-col justify-between rounded-lg border p-4 hover:bg-accent/50 transition-colors">
+                            <div>
+                                <h4 class="font-medium flex items-center gap-2">
+                                    <FileText class="h-4 w-4 text-muted-foreground" />
+                                    Admission Letter
+                                </h4>
+                                <p class="text-sm text-muted-foreground mt-1">
+                                    Download your official admission letter.
+                                </p>
+                            </div>
+                            <a :href="route('student.admission_letter.download')" target="_blank" class="mt-4 text-sm font-medium text-primary underline-offset-4 hover:underline">
+                                Download PDF &rarr;
+                            </a>
+                        </div>
                     </div>
                 </div>
 

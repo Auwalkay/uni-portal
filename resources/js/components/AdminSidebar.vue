@@ -40,7 +40,12 @@ const mainNavItems: NavItem[] = [
         icon: GraduationCap,
     },
     {
-        title: 'Staff & Users',
+        title: 'Staff Only',
+        href: '/admin/staff',
+        icon: Users,
+    },
+    {
+        title: 'Users',
         href: '/admin/users',
         icon: Users,
     },
@@ -48,6 +53,11 @@ const mainNavItems: NavItem[] = [
         title: 'Payments',
         href: '/admin/payments',
         icon: CreditCard,
+    },
+    {
+        title: 'Finance Dashboard',
+        href: '/admin/finance/dashboard',
+        icon: Banknote,
     },
     {
         title: 'Finance Config',

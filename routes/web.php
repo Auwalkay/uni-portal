@@ -1,8 +1,17 @@
 <?php
 
+use App\Http\Controllers\Admin\StaffController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
+
+Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('finance/dashboard', [\App\Http\Controllers\Admin\FinanceController::class, 'dashboard'])->name('finance.dashboard');
+    Route::resource('staff', StaffController::class);
+});
+
+
+
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [

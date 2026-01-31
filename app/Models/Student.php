@@ -73,4 +73,9 @@ class Student extends Model
     {
         return $this->belongsTo(Lga::class);
     }
+
+    public function oLevelResults()
+    {
+        return $this->hasMany(OLevelResult::class);
+    }
 }

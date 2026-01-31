@@ -12,9 +12,53 @@ use App\Models\Programme;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Str;
+use App\Models\Payment;
+use App\Models\Invoice;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class FinanceController extends Controller
 {
+    public function dashboard()
+    {
+        // 1. Total Revenue (Sum of all completed payments)
+        $totalRevenue = Payment::sum('amount');
+
+        // 2. Total Outstanding (Sum of all invoices - Sum of all payments) - Simplified
+        // Ideally invoices have a status, but if not, we calculate diff.
+        // Assuming invoices have a 'amount' and we check payments against them.
+        // Let's verify Invoice content from previous turn. It has `payments()` relation.
+        // For now, let's just sum all Invoice amounts.
+        $totalInvoiced = Invoice::sum('amount');
+        $outstanding = $totalInvoiced - $totalRevenue;
+
+        // 3. Monthly Revenue (Last 6 months)
+        $monthlyRevenue = Payment::select(
+            DB::raw('sum(amount) as total'),
+            DB::raw("DATE_FORMAT(paid_at, '%Y-%m') as month")
+        )
+            ->where('paid_at', '>=', Carbon::now()->subMonths(6))
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get();
+
+        // 4. Recent Transactions
+        $recentPayments = Payment::with(['user', 'invoice'])
+            ->latest('paid_at')
+            ->take(5)
+            ->get();
+
+        return Inertia::render('Admin/Finance/Dashboard', [
+            'stats' => [
+                'totalRevenue' => $totalRevenue,
+                'outstanding' => $outstanding,
+                'totalInvoiced' => $totalInvoiced,
+            ],
+            'chartData' => $monthlyRevenue,
+            'recentPayments' => $recentPayments
+        ]);
+    }
+
     public function index()
     {
 

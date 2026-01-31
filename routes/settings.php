@@ -146,6 +146,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/results', [\App\Http\Controllers\Student\ResultController::class, 'index'])->name('results.index');
 
         Route::get('/id-card', [\App\Http\Controllers\Student\IdCardController::class, 'show'])->name('id_card.show');
+        Route::get('/admission-letter', [\App\Http\Controllers\Student\ProfileController::class, 'downloadAdmissionLetter'])->name('admission_letter.download');
     });
 
     // ADMIN ROUTES

@@ -91,7 +91,7 @@ class StudentController extends Controller
     public function index(Request $request)
     {
         $query = \App\Models\Student::query()
-            ->with(['user', 'academicDepartment.faculty', 'admittedSession']);
+            ->with(['user', 'academicDepartment.faculty', 'admittedSession', 'program']);
 
         // Search Filter
         if ($request->filled('search')) {
@@ -128,35 +128,64 @@ class StudentController extends Controller
         }
 
         // Program Filter
-        if ($request->filled('program')) {
-            $query->where('program', 'like', "%{$request->program}%");
+        if ($request->filled('program_id')) {
+            $query->where('program_id', $request->program_id);
+        } elseif ($request->filled('program')) {
+            // Fallback for string search if needed, or legacy
+            $query->whereHas('program', function ($q) use ($request) {
+                $q->where('name', 'like', "%{$request->program}%");
+            });
         }
 
         $students = $query->latest()->paginate(15)->withQueryString();
 
         return \Inertia\Inertia::render('Admin/Students/Index', [
             'students' => $students,
-            'filters' => $request->only(['search', 'session_id', 'faculty_id', 'department_id', 'level', 'program']),
+            'filters' => $request->only(['search', 'session_id', 'faculty_id', 'department_id', 'level', 'program_id', 'program']),
             'sessions' => \App\Models\Session::latest()->get(['id', 'name']),
             'faculties' => \App\Models\Faculty::with('departments:id,name,faculty_id')->get(['id', 'name']),
             'departments' => \App\Models\Department::get(['id', 'name', 'faculty_id']),
+            'programmes' => \App\Models\Programme::orderBy('name')->get(['id', 'name']),
             'stats' => [
                 'total' => \App\Models\Student::count(),
-                'active' => \App\Models\Student::count(), // Placeholder logic for now
+                // Assuming 'new' means admitted in the latest session. 
+                // We'll dynamically determine the latest session or just check created_at for this year if session isn't reliable yet.
+                // Using latest session is safer for academic context.
+                'new' => \App\Models\Student::where('admitted_session_id', \App\Models\Session::latest('start_date')->value('id'))->count(),
+                // Assuming graduating levels are 400, 500, 600
+                'graduating' => \App\Models\Student::whereIn('current_level', ['400', '500', '600'])->count(),
             ]
         ]);
     }
 
     public function show(\App\Models\Student $student)
     {
-        $student->load(['user.invoices.session', 'user.payments', 'academicDepartment.faculty', 'admittedSession', 'registrations.course']);
+        $student->load([
+            'user.invoices.session',
+            'user.payments',
+            'academicDepartment.faculty',
+            'admittedSession',
+            'registrations.course',
+            'registrations.session',
+            'program',
+            'state',
+            'lga',
+            'registrations.semester'
+        ]);
+
+        $academicHistory = $student->registrations
+            ->sortByDesc('session.start_date')
+            ->groupBy(fn($reg) => $reg->session->name)
+            ->map(function ($sessionRegs) {
+                return $sessionRegs->groupBy(fn($reg) => $reg->semester ? $reg->semester->name : 'Unknown Semester');
+            });
 
         return \Inertia\Inertia::render('Admin/Students/Show', [
             'student' => $student,
-            'academicHistory' => $student->registrations->groupBy('session_id'), // Group by session later in frontend or here
+            'academicHistory' => $academicHistory,
             'financialHistory' => [
-                'invoices' => $student->user->invoices,
-                'payments' => $student->user->payments
+                'invoices' => $student->user->invoices->sortByDesc('created_at')->values(),
+                'payments' => $student->user->payments->sortByDesc('paid_at')->values()
             ]
         ]);
     }
