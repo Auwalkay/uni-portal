@@ -281,7 +281,7 @@ class CourseRegistrationController extends Controller
     public function downloadForm(Request $request)
     {
         $student = Student::where('user_id', Auth::id())
-            ->with(['user', 'academicDepartment'])
+            ->with(['user', 'department.faculty', 'program'])
             ->firstOrFail();
 
         $sessionId = $request->query('session_id');
@@ -313,5 +313,43 @@ class CourseRegistrationController extends Controller
 
         // $safeSessionName = str_replace(['/', '\\'], '-', $session->name);
         return $pdf->download("Course_Form.pdf");
+    }
+
+    public function downloadExamCard(Request $request)
+    {
+        $student = Student::where('user_id', Auth::id())
+            ->with(['user', 'department.faculty', 'program'])
+            ->firstOrFail();
+
+        $sessionId = $request->query('session_id');
+        $semesterId = $request->query('semester_id');
+
+        if ($semesterId) {
+            $semester = Semester::findOrFail($semesterId);
+            $session = $semester->session;
+        } else {
+            $session = $sessionId ? Session::findOrFail($sessionId) : Session::query()->where('is_current', true)->firstOrFail();
+            $semester = Semester::query()->where('session_id', $session->id)->where('is_current', true)->first()
+                ?? Semester::query()->where('session_id', $session->id)->firstOrFail();
+        }
+
+        $registrations = CourseRegistration::where('student_id', $student->id)
+            ->where('session_id', $session->id)
+            ->where('semester_id', $semester->id)
+            ->with('course')
+            ->get();
+
+        if ($registrations->isEmpty()) {
+            return response("No registered courses found for {$semester->name} semester, {$session->name} session.", 404);
+        }
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.exam_card', [
+            'student' => $student,
+            'registrations' => $registrations,
+            'session' => $session,
+            'semester' => $semester,
+        ]);
+
+        return $pdf->download("Exam_Card_{$semester->name}.pdf");
     }
 }

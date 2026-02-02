@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
-Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'verified', 'role:admin|registrar'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('finance/dashboard', [\App\Http\Controllers\Admin\FinanceController::class, 'dashboard'])->name('finance.dashboard');
     Route::resource('staff', StaffController::class);
 });
@@ -22,7 +22,7 @@ Route::get('/', function () {
 Route::get('dashboard', function () {
     $user = auth()->user();
 
-    if ($user->hasRole('admin')) {
+    if ($user->hasAnyRole(['admin', 'registrar', 'dean', 'hod', 'course_coordinator', 'lecturer', 'admissions_manager', 'admissions_officer', 'admissions_clerk', 'bursar', 'finance_officer', 'finance_clerk'])) {
         return redirect()->route('admin.dashboard');
     }
 

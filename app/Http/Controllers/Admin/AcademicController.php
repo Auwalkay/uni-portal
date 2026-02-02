@@ -17,45 +17,60 @@ class AcademicController extends Controller
         $search = $request->input('search');
         $facultyId = $request->input('faculty_id');
         $departmentId = $request->input('department_id');
+        $tab = $request->input('tab', 'faculties'); // Default tab
 
-        $faculties = Faculty::withCount('departments')
-            ->when($search, fn($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
-            ->orderBy('name')
-            ->get();
+        $faculties = $departments = $programmes = $courses = null;
 
-        $departments = Department::with('faculty')
-            ->withCount('programmes')
-            ->when($search, fn($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
-            ->when($facultyId, fn($q) => $q->where('faculty_id', $facultyId))
-            ->orderBy('name')
-            ->paginate(15, ['*'], 'dept_page')
-            ->withQueryString();
+        if ($tab === 'faculties') {
+            $faculties = Faculty::withCount('departments')
+                ->when($search, fn($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
+                ->orderBy('name')
+                ->paginate(15, ['*'], 'page')
+                ->withQueryString();
+        }
 
-        $programmes = Programme::with('department.faculty')
-            ->when($search, fn($q) => $q->where('name', 'like', "%{$search}%"))
-            ->when($facultyId, fn($q) => $q->whereHas('department', fn($d) => $d->where('faculty_id', $facultyId)))
-            ->when($departmentId, fn($q) => $q->where('department_id', $departmentId))
-            ->orderBy('name')
-            ->paginate(15, ['*'], 'prog_page')
-            ->withQueryString();
+        if ($tab === 'departments') {
+            $departments = Department::with('faculty')
+                ->withCount('programmes')
+                ->when($search, fn($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
+                ->when($facultyId, fn($q) => $q->where('faculty_id', $facultyId))
+                ->orderBy('name')
+                ->paginate(15, ['*'], 'page')
+                ->withQueryString();
+        }
 
-        $courses = Course::with('department', 'programme')
-            ->when($search, fn($q) => $q->where('title', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
-            ->when($facultyId, fn($q) => $q->whereHas('department', fn($d) => $d->where('faculty_id', $facultyId)))
-            ->when($departmentId, fn($q) => $q->where('department_id', $departmentId))
-            ->orderBy('code')
-            ->paginate(20, ['*'], 'page')
-            ->withQueryString();
+        if ($tab === 'programmes') {
+            $programmes = Programme::with('department.faculty')
+                ->when($search, fn($q) => $q->where('name', 'like', "%{$search}%"))
+                ->when($facultyId, fn($q) => $q->whereHas('department', fn($d) => $d->where('faculty_id', $facultyId)))
+                ->when($departmentId, fn($q) => $q->where('department_id', $departmentId))
+                ->orderBy('name')
+                ->paginate(15, ['*'], 'page')
+                ->withQueryString();
+        }
+
+        if ($tab === 'courses') {
+            $courses = Course::with('department', 'programme')
+                ->when($search, fn($q) => $q->where('title', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
+                ->when($facultyId, fn($q) => $q->whereHas('department', fn($d) => $d->where('faculty_id', $facultyId)))
+                ->when($departmentId, fn($q) => $q->where('department_id', $departmentId))
+                ->orderBy('code')
+                ->paginate(20, ['*'], 'page')
+                ->withQueryString();
+        }
+
+        // Helper to return empty pagination result if null
+        $empty = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 15);
 
         return Inertia::render('Admin/Academic/Index', [
-            'faculties' => $faculties,
-            'departments' => $departments,
-            'programmes' => $programmes,
-            'courses' => $courses,
+            'faculties' => $faculties ?? $empty,
+            'departments' => $departments ?? $empty,
+            'programmes' => $programmes ?? $empty,
+            'courses' => $courses ?? $empty,
             'allFaculties' => Faculty::orderBy('name')->get(),
             'allDepartments' => Department::orderBy('name')->get(),
             'allProgrammes' => Programme::orderBy('name')->get(),
-            'filters' => $request->only(['search', 'faculty_id', 'department_id']),
+            'filters' => $request->only(['search', 'faculty_id', 'department_id', 'tab']),
         ]);
     }
 

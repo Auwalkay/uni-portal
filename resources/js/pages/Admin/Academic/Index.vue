@@ -21,7 +21,7 @@ import ProgrammesTab from './Partials/ProgrammesTab.vue';
 import CoursesTab from './Partials/CoursesTab.vue';
 
 const props = defineProps<{
-    faculties: any[];
+    faculties: any;
     departments: any; // Updated for pagination
     programmes: any; // Updated for pagination
     courses: any; 
@@ -43,6 +43,7 @@ const filterForm = ref({
     search: props.filters?.search || '',
     faculty_id: props.filters?.faculty_id || '',
     department_id: props.filters?.department_id || '',
+    tab: props.filters?.tab || 'faculties',
 });
 
 const filterDepartments = computed(() => {
@@ -203,7 +204,8 @@ const toggleActive = (type: string, id: string, currentState: boolean) => {
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-search"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                      </span>
                 </div>
-                <div>
+                <!-- Faculty Filter - Hidden on Faculties tab, visible on others -->
+                <div v-if="filterForm.tab !== 'faculties'">
                      <Select v-model="filterForm.faculty_id" @update:model-value="filterForm.department_id = ''">
                         <SelectTrigger>
                             <SelectValue placeholder="All Faculties" />
@@ -216,7 +218,8 @@ const toggleActive = (type: string, id: string, currentState: boolean) => {
                         </SelectContent>
                     </Select>
                 </div>
-                 <div>
+                 <!-- Department Filter - Visible on Programmes and Courses tabs -->
+                 <div v-if="['programmes', 'courses'].includes(filterForm.tab)">
                      <Select v-model="filterForm.department_id">
                         <SelectTrigger>
                             <SelectValue placeholder="All Departments" />
@@ -231,7 +234,7 @@ const toggleActive = (type: string, id: string, currentState: boolean) => {
                 </div>
             </div>
 
-            <Tabs defaultValue="faculties" class="space-y-4">
+            <Tabs v-model="filterForm.tab" class="space-y-4">
                 <TabsList>
                     <TabsTrigger value="faculties">Faculties</TabsTrigger>
                     <TabsTrigger value="departments">Departments</TabsTrigger>

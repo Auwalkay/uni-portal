@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Staff;
 use App\Models\Faculty;
+use App\Models\Role;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class StaffController extends Controller
@@ -44,15 +46,62 @@ class StaffController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $staff = User::role('staff')
-            ->with(['staff.department'])
-            ->latest()
-            ->paginate(10);
+        $query = User::role('staff')
+            ->with(['staff.department.faculty', 'roles']);
+
+        // Search Filter
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhereHas('staff', function ($sq) use ($search) {
+                        $sq->where('staff_number', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        // Role Filter
+        if ($request->filled('role_id')) {
+            $role = \App\Models\Role::find($request->role_id);
+            if ($role) {
+                $query->role($role->name);
+            }
+        }
+
+        // Department/Faculty Filter
+        if ($request->filled('faculty_id')) {
+            $query->whereHas('staff.department', function ($q) use ($request) {
+                $q->where('faculty_id', $request->faculty_id);
+            });
+        }
+
+        if ($request->filled('department_id')) {
+            $query->whereHas('staff', function ($q) use ($request) {
+                $q->where('department_id', $request->department_id);
+            });
+        }
+
+        $staff = $query->latest()->paginate(15)->withQueryString();
 
         return Inertia::render('Admin/Staff/Index', [
             'staff' => $staff,
+            'filters' => $request->only(['search', 'role_id', 'faculty_id', 'department_id']),
+            'faculties' => Faculty::with('departments:id,name,faculty_id')->get(['id', 'name']),
+            'roles' => \App\Models\Role::whereNotIn('name', ['admin', 'student', 'applicant', 'staff'])->get(['id', 'name']),
+            'stats' => [
+                'total' => User::role('staff')->count(),
+                'academic' => Staff::where('is_academic', true)->count(),
+                'non_academic' => Staff::where('is_academic', false)->count(),
+                'roles_count' => DB::table('model_has_roles')
+                    ->join('roles', 'model_has_roles.role_id', '=', 'roles.id')
+                    ->whereNotIn('roles.name', ['admin', 'student', 'applicant', 'staff'])
+                    ->groupBy('roles.name')
+                    ->select('roles.name', DB::raw('count(*) as count'))
+                    ->get(),
+            ]
         ]);
     }
 
@@ -64,6 +113,7 @@ class StaffController extends Controller
         return Inertia::render('Admin/Staff/Create', [
             'faculties' => Faculty::with('departments')->get(),
             'designations' => $this->getDesignations(),
+            'roles' => Role::whereNotIn('name', ['admin', 'student', 'applicant', 'staff'])->get(['id', 'name']),
         ]);
     }
 
@@ -80,6 +130,7 @@ class StaffController extends Controller
             'designation' => ['nullable', 'string', Rule::in($this->getDesignations())],
             'department_id' => 'nullable|exists:departments,id',
             'is_academic' => 'boolean',
+            'role_id' => 'required|exists:roles,id',
         ]);
 
         $user = User::create([
@@ -89,6 +140,11 @@ class StaffController extends Controller
         ]);
 
         $user->assignRole('staff');
+
+        $role = Role::find($request->role_id);
+        if ($role) {
+            $user->assignRole($role->name);
+        }
 
         $user->staff()->create([
             'staff_number' => $request->staff_number,
@@ -104,9 +160,17 @@ class StaffController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show(User $staff)
     {
-        //
+        if (!$staff->hasRole('staff')) {
+            abort(404);
+        }
+
+        $staff->load(['staff.department.faculty', 'roles']);
+
+        return Inertia::render('Admin/Staff/Show', [
+            'staff' => $staff,
+        ]);
     }
 
     /**

@@ -14,6 +14,8 @@ import {
     Briefcase
 } from 'lucide-vue-next';
 
+import { route } from 'ziggy-js';
+
 defineProps({
     payment: Object,
 });

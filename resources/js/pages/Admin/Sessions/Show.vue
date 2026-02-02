@@ -145,6 +145,22 @@ const activateSession = () => {
     });
 };
 
+const activateSemester = (semester: any) => {
+    if (semester.is_current) return;
+
+    Swal.fire({
+        title: `Activate ${semester.name}?`,
+        text: `Switching active semester for ${props.session.name}.`,
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, Switch',
+    }).then((result) => {
+        if (result.isConfirmed) {
+             router.post(route('admin.sessions.semesters.activate', [props.session.id, semester.id]));
+        }
+    });
+};
+
 const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(val);
 };
@@ -344,9 +360,20 @@ if (typeof route !== 'function') {
                                             </div>
                                         </div>
                                     </div>
-                                    <Button variant="outline" size="sm" @click="openSemesterModal(semester)">
-                                        <Edit class="h-4 w-4 mr-2" /> Edit Dates
-                                    </Button>
+                                    <div class="flex items-center gap-2">
+                                        <Button 
+                                            v-if="!semester.is_current" 
+                                            size="sm" 
+                                            variant="secondary"
+                                            class="bg-green-100 text-green-700 hover:bg-green-200"
+                                            @click="activateSemester(semester)"
+                                        >
+                                            Activate
+                                        </Button>
+                                        <Button variant="outline" size="sm" @click="openSemesterModal(semester)">
+                                            <Edit class="h-4 w-4 mr-2" /> Edit Dates
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
                         </CardContent>

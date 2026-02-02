@@ -26,22 +26,31 @@ class SessionController extends Controller
             'name' => 'required|string|unique:academic_sessions,name',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after:start_date',
+            'type' => 'required|string|in:regular,summer',
         ]);
 
         $session = Session::create($validated);
 
-        // Auto-create Semesters
-        \App\Models\Semester::create([
-            'session_id' => $session->id,
-            'name' => 'First Semester',
-            'is_current' => false,
-        ]);
+        // Auto-create Semesters based on Type
+        if ($session->type === 'summer') {
+            \App\Models\Semester::create([
+                'session_id' => $session->id,
+                'name' => 'Summer Semester',
+                'is_current' => false,
+            ]);
+        } else {
+            \App\Models\Semester::create([
+                'session_id' => $session->id,
+                'name' => 'First Semester',
+                'is_current' => false,
+            ]);
 
-        \App\Models\Semester::create([
-            'session_id' => $session->id,
-            'name' => 'Second Semester',
-            'is_current' => false,
-        ]);
+            \App\Models\Semester::create([
+                'session_id' => $session->id,
+                'name' => 'Second Semester',
+                'is_current' => false,
+            ]);
+        }
 
         return to_route('admin.sessions.show', $session)->with('success', 'Session created. Please configure dates.');
     }
@@ -107,7 +116,9 @@ class SessionController extends Controller
             //     }
             // });
 
-            Student::query()->increment('current_level', 100);
+            if ($session->type === 'regular') {
+                Student::query()->increment('current_level', 100);
+            }
         });
 
         return back()->with('success', "Session activated and students promoted to next level.");

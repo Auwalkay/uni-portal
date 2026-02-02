@@ -194,7 +194,17 @@ const selectSession = (sessionId: number) => {
                                                 </span>
                                             </div>
                                         </div>
-                                        <div class="flex-shrink-0 relative z-10">
+                                        <div class="flex-shrink-0 relative z-10 flex gap-2">
+                                             <a 
+                                                v-if="selectedSessionRecord.id"
+                                                :href="route('student.courses.exam_card', { session_id: selectedSessionRecord.id })" 
+                                                target="_blank"
+                                             > 
+                                                <Button variant="default" class="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all h-10 px-4 group/btn">
+                                                    <FileText class="w-4 h-4 text-emerald-100 group-hover/btn:text-white transition-colors" />
+                                                    Exam Card
+                                                </Button>
+                                             </a>
                                              <a 
                                                 v-if="selectedSessionRecord.id"
                                                 :href="route('student.courses.form', { session_id: selectedSessionRecord.id })" 
@@ -206,6 +216,7 @@ const selectSession = (sessionId: number) => {
                                                 </Button>
                                              </a>
                                         </div>
+
                                     </div>
                                 </div>
 

@@ -157,7 +157,7 @@ const facultyChartData = {
             <!-- Main Stats Grid -->
             <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <!-- Total Students Card -->
-                <Card class="hover:shadow-md transition-shadow duration-200">
+                <Card v-if="stats.total_students !== null" class="hover:shadow-md transition-shadow duration-200">
                     <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle class="text-sm font-medium text-muted-foreground">Total Students</CardTitle>
                         <Users class="h-4 w-4 text-primary" />
@@ -174,7 +174,7 @@ const facultyChartData = {
                 </Card>
 
                 <!-- Fresh Intake Card -->
-                <Card class="hover:shadow-md transition-shadow duration-200">
+                <Card v-if="stats.fresh_students !== null" class="hover:shadow-md transition-shadow duration-200">
                     <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
                          <CardTitle class="text-sm font-medium text-muted-foreground">Fresh Intake</CardTitle>
                         <UserPlus class="h-4 w-4 text-blue-600" />
@@ -194,7 +194,7 @@ const facultyChartData = {
                 </Card>
                 
                  <!-- Revenue Card -->
-                <Card class="hover:shadow-md transition-shadow duration-200">
+                <Card v-if="stats.revenue !== null" class="hover:shadow-md transition-shadow duration-200">
                     <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle class="text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
                         <CreditCard class="h-4 w-4 text-emerald-600" />
@@ -214,7 +214,7 @@ const facultyChartData = {
                 </Card>
 
                  <!-- Applications Card -->
-                 <Card class="hover:shadow-md transition-shadow duration-200">
+                 <Card v-if="stats.applications !== null" class="hover:shadow-md transition-shadow duration-200">
                     <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle class="text-sm font-medium text-muted-foreground">Pending Applications</CardTitle>
                         <FileText class="h-4 w-4 text-amber-600" />
@@ -229,9 +229,9 @@ const facultyChartData = {
             </div>
 
             <!-- Charts Section -->
-            <div class="grid gap-6 md:grid-cols-7">
+            <div v-if="charts.revenue.data.length > 0 || charts.faculty.data.length > 0" class="grid gap-6 md:grid-cols-7">
                 <!-- Revenue Chart (Larger) -->
-                <Card class="md:col-span-4 lg:col-span-5 hover:shadow-md transition-shadow duration-200">
+                <Card v-if="charts.revenue.data.length > 0" class="md:col-span-4 lg:col-span-5 hover:shadow-md transition-shadow duration-200">
                     <CardHeader>
                         <CardTitle class="text-lg">Financial Overview</CardTitle>
                     </CardHeader>
@@ -241,9 +241,9 @@ const facultyChartData = {
                         </div>
                     </CardContent>
                 </Card>
-
+ 
                 <!-- Distribution Chart (Smaller) -->
-                <Card class="md:col-span-3 lg:col-span-2 hover:shadow-md transition-shadow duration-200">
+                <Card v-if="charts.faculty.data.length > 0" :class="charts.revenue.data.length > 0 ? 'md:col-span-3 lg:col-span-2' : 'md:col-span-7 lg:col-span-7'" class="hover:shadow-md transition-shadow duration-200">
                     <CardHeader>
                          <CardTitle class="text-lg">Student Distribution</CardTitle>
                     </CardHeader>
@@ -294,17 +294,17 @@ const facultyChartData = {
 
                 <!-- Quick Actions / Quick Links -->
                 <div class="space-y-6">
-                     <Card class="bg-gradient-to-br from-primary to-primary/90 text-primary-foreground border-none">
+                     <Card v-if="stats.total_students !== null || stats.revenue !== null" class="bg-gradient-to-br from-primary to-primary/90 text-primary-foreground border-none">
                         <CardHeader>
                             <CardTitle class="text-lg">Quick Actions</CardTitle>
                         </CardHeader>
                         <CardContent class="grid gap-2">
-                             <Button variant="secondary" class="w-full justify-start text-primary hover:bg-white/95" as-child>
+                             <Button v-if="stats.total_students !== null" variant="secondary" class="w-full justify-start text-primary hover:bg-white/95" as-child>
                                 <a :href="route('admin.students.create')">
                                     <UserPlus class="mr-2 h-4 w-4" /> Enroll New Student
                                 </a>
                             </Button>
-                            <Button variant="secondary" class="w-full justify-start text-primary hover:bg-white/95" as-child>
+                            <Button v-if="stats.revenue !== null" variant="secondary" class="w-full justify-start text-primary hover:bg-white/95" as-child>
                                 <a :href="route('admin.finance.index')">
                                     <CreditCard class="mr-2 h-4 w-4" /> Manage Fees
                                 </a>

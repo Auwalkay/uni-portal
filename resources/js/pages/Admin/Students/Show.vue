@@ -68,14 +68,18 @@ const props = defineProps<{
     financialHistory: {
         invoices: Array<any>;
         payments: Array<any>;
+    } | null;
+    permissions: {
+        can_view_finance: boolean;
+        can_view_academics: boolean;
     };
 }>();
 
 const printOpen = ref(false);
 const printOptions = ref({
     personal: true,
-    academic: true,
-    financial: true,
+    academic: props.permissions.can_view_academics,
+    financial: props.permissions.can_view_finance,
 });
 
 const handlePrint = () => {
@@ -174,15 +178,15 @@ const getStatusClass = (status: string) => {
                                         </DialogHeader>
                                         <div class="grid gap-4 py-4">
                                             <div class="flex items-center space-x-2">
-                                                <Checkbox id="print-personal" :checked="printOptions.personal" @update:checked="(v) => printOptions.personal = v" />
+                                                <Checkbox id="print-personal" :checked="printOptions.personal" @update:checked="(v: boolean) => printOptions.personal = v" />
                                                 <Label htmlFor="print-personal">Personal Information</Label>
                                             </div>
-                                            <div class="flex items-center space-x-2">
-                                                <Checkbox id="print-academic" :checked="printOptions.academic" @update:checked="(v) => printOptions.academic = v" />
+                                            <div v-if="permissions.can_view_academics" class="flex items-center space-x-2">
+                                                <Checkbox id="print-academic" :checked="printOptions.academic" @update:checked="(v: boolean) => printOptions.academic = v" />
                                                 <Label htmlFor="print-academic">Academic History</Label>
                                             </div>
-                                            <div class="flex items-center space-x-2">
-                                                <Checkbox id="print-financial" :checked="printOptions.financial" @update:checked="(v) => printOptions.financial = v" />
+                                            <div v-if="permissions.can_view_finance" class="flex items-center space-x-2">
+                                                <Checkbox id="print-financial" :checked="printOptions.financial" @update:checked="(v: boolean) => printOptions.financial = v" />
                                                 <Label htmlFor="print-financial">Financial History</Label>
                                             </div>
                                         </div>
@@ -203,10 +207,10 @@ const getStatusClass = (status: string) => {
                 </Card>
 
                 <Tabs default-value="overview" class="w-full">
-                    <TabsList class="grid w-full grid-cols-3 lg:w-[400px]">
+                    <TabsList class="grid w-full grid-cols-1 lg:grid-cols-3 lg:w-[400px]">
                         <TabsTrigger value="overview">Overview</TabsTrigger>
-                        <TabsTrigger value="academic">Academics</TabsTrigger>
-                        <TabsTrigger value="finance">Financials</TabsTrigger>
+                        <TabsTrigger v-if="permissions.can_view_academics" value="academic">Academics</TabsTrigger>
+                        <TabsTrigger v-if="permissions.can_view_finance" value="finance">Financials</TabsTrigger>
                     </TabsList>
                     
                     <!-- Overview Tab -->
@@ -355,7 +359,7 @@ const getStatusClass = (status: string) => {
                     </TabsContent>
 
                     <!-- Academics Tab -->
-                    <TabsContent value="academic" class="space-y-6 mt-6">
+                    <TabsContent v-if="permissions.can_view_academics" value="academic" class="space-y-6 mt-6">
                         <Card v-if="!academicHistory || Object.keys(academicHistory).length === 0">
                             <CardContent class="py-12 flex flex-col items-center justify-center text-muted-foreground">
                                 <GraduationCap class="h-10 w-10 mb-4 opacity-50" />
@@ -365,13 +369,13 @@ const getStatusClass = (status: string) => {
 
                         <div v-else class="space-y-6">
                             <Accordion type="single" collapsible class="w-full space-y-4">
-                                <AccordionItem v-for="(semesters, sessionName) in academicHistory" :key="sessionName" :value="sessionName" class="border rounded-lg px-4">
+                                <AccordionItem v-for="(semesters, sessionName) in academicHistory" :key="sessionName" :value="String(sessionName)" class="border rounded-lg px-4">
                                     <AccordionTrigger class="hover:no-underline">
                                         <div class="flex flex-1 items-center justify-between mr-4">
                                             <span class="text-base font-medium">{{ sessionName }} Session</span>
                                                  <!-- Count total courses in this session -->
                                             <Badge variant="outline">
-                                                {{ Object.values(semesters).flat().length }} Courses
+                                                {{ (Object.values(semesters) as any[]).flat().length }} Courses
                                             </Badge>
                                         </div>
                                     </AccordionTrigger>
@@ -414,8 +418,8 @@ const getStatusClass = (status: string) => {
                         </div>
                     </TabsContent>
 
-                     <!-- Financials Tab -->
-                    <TabsContent value="finance" class="space-y-6 mt-6">
+                    <!-- Financials Tab -->
+                    <TabsContent v-if="permissions.can_view_finance" value="finance" class="space-y-6 mt-6">
                          <div class="grid gap-6 md:grid-cols-2">
                             <!-- Invoices -->
                              <Card class="flex flex-col h-full">
@@ -432,15 +436,15 @@ const getStatusClass = (status: string) => {
                                                 <TableHead class="text-right">Status</TableHead>
                                             </TableRow>
                                         </TableHeader>
-                                        <TableBody>
-                                            <TableRow v-for="invoice in financialHistory.invoices" :key="invoice.id">
+                                        <TableBody v-if="financialHistory">
+                                            <TableRow v-for="invoice in (financialHistory.invoices as any[])" :key="invoice.id">
                                                 <TableCell class="font-mono text-xs">{{ invoice.reference }}</TableCell>
                                                 <TableCell class="font-medium">{{ formatCurrency(invoice.amount) }}</TableCell>
                                                 <TableCell class="text-right">
                                                     <Badge :class="getStatusClass(invoice.status)" variant="outline">{{ invoice.status }}</Badge>
                                                 </TableCell>
                                             </TableRow>
-                                             <TableRow v-if="financialHistory.invoices.length === 0">
+                                              <TableRow v-if="financialHistory?.invoices.length === 0">
                                                 <TableCell colspan="3" class="text-center py-6 text-muted-foreground">No invoices generated.</TableCell>
                                             </TableRow>
                                         </TableBody>
@@ -463,15 +467,15 @@ const getStatusClass = (status: string) => {
                                                 <TableHead class="text-right">Status</TableHead>
                                             </TableRow>
                                         </TableHeader>
-                                        <TableBody>
-                                            <TableRow v-for="payment in financialHistory.payments" :key="payment.id">
+                                        <TableBody v-if="financialHistory">
+                                            <TableRow v-for="payment in (financialHistory.payments as any[])" :key="payment.id">
                                                 <TableCell class="text-xs">{{ formatDate(payment.paid_at) }}</TableCell>
                                                 <TableCell class="font-medium">{{ formatCurrency(payment.amount) }}</TableCell>
                                                 <TableCell class="text-right">
                                                     <Badge :class="getStatusClass(payment.status)" variant="outline">{{ payment.status }}</Badge>
                                                 </TableCell>
                                             </TableRow>
-                                            <TableRow v-if="financialHistory.payments.length === 0">
+                                            <TableRow v-if="financialHistory?.payments.length === 0">
                                                 <TableCell colspan="3" class="text-center py-6 text-muted-foreground">No payments recorded.</TableCell>
                                             </TableRow>
                                         </TableBody>
@@ -575,8 +579,8 @@ const getStatusClass = (status: string) => {
             </div>
         </div>
 
-        <!-- Financial History Section -->
-        <div v-if="printOptions.financial" class="space-y-4 mt-8 break-inside-avoid">
+         <!-- Financial History Section -->
+        <div v-if="printOptions.financial && financialHistory" class="space-y-4 mt-8 break-inside-avoid">
              <h2 class="text-xl font-bold border-b border-gray-300 pb-2 flex items-center gap-2">
                 <Banknote class="w-5 h-5" /> Financial Summary
             </h2>
@@ -592,8 +596,8 @@ const getStatusClass = (status: string) => {
                                 <th class="py-1 text-right">Status</th>
                            </tr>
                         </thead>
-                        <tbody>
-                            <tr v-for="inv in financialHistory.invoices" :key="inv.id" class="border-b border-gray-100">
+                        <tbody v-if="financialHistory">
+                            <tr v-for="inv in (financialHistory.invoices as any[])" :key="inv.id" class="border-b border-gray-100">
                                 <td class="py-1 font-mono text-xs">{{ inv.reference }}</td>
                                 <td class="py-1 text-right">{{ formatCurrency(inv.amount) }}</td>
                                 <td class="py-1 text-right uppercase text-xs">{{ inv.status }}</td>

@@ -14,8 +14,15 @@ export function useActiveUrl() {
         urlToCheck: NonNullable<InertiaLinkProps['href']>,
         currentUrl?: string,
     ) {
-        const urlToCompare = currentUrl ?? currentUrlReactive.value;
-        return toUrl(urlToCheck) === urlToCompare;
+        const checkPath = toUrl(urlToCheck);
+        const currentPath = currentUrl ?? currentUrlReactive.value;
+
+        if (checkPath === currentPath) {
+            return true;
+        }
+
+        // Allow partial match for sub-pages (ensure it matches complete segment)
+        return currentPath.startsWith(checkPath + '/');
     }
 
     return {

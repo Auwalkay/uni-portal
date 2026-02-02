@@ -6,7 +6,10 @@ import { Switch } from '@/components/ui/switch';
 import { Plus, Pencil } from 'lucide-vue-next';
 
 defineProps<{
-    faculties: Array<any>;
+    faculties: {
+        data: Array<any>;
+        links: Array<any>;
+    };
 }>();
 
 const emit = defineEmits(['create', 'edit', 'toggle']);
@@ -33,7 +36,7 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    <TableRow v-for="faculty in faculties" :key="faculty.id">
+                    <TableRow v-for="faculty in faculties.data" :key="faculty.id">
                         <TableCell class="font-mono font-medium">{{ faculty.code }}</TableCell>
                         <TableCell>{{ faculty.name }}</TableCell>
                         <TableCell>{{ faculty.departments_count }}</TableCell>
@@ -50,6 +53,18 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                     </TableRow>
                 </TableBody>
             </Table>
+             <div class="flex justify-center mt-4 space-x-2" v-if="faculties.links">
+                <Button 
+                    v-for="(link, i) in faculties.links" 
+                    :key="i"
+                    :variant="link.active ? 'default' : 'outline'"
+                    :disabled="!link.url"
+                    size="sm"
+                    as-child
+                >
+                <a :href="link.url" v-html="link.label"></a>
+                </Button>
+            </div>
         </CardContent>
     </Card>
 </template>

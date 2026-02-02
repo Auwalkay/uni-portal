@@ -130,8 +130,7 @@ class DashboardController extends Controller
         $recentActivity = $payments->concat($registrations)
             ->sortByDesc('timestamp')
             ->take(6)
-            ->values()
-            ->all();
+            ->values();
 
 
         // 5. Chart Data
@@ -163,26 +162,44 @@ class DashboardController extends Controller
         ];
 
 
-        // 6. View Data
+        // 6. Access Control Filtering
+        $user = $request->user();
+        $canViewFinance = $user->hasAnyPermission(['manage_payments', 'verify_payments', 'view_payments']) || $user->hasRole('admin');
+        $canViewAdmissions = $user->hasAnyPermission(['admit_students', 'review_applications', 'view_applications']) || $user->hasRole('admin');
+        $canViewResults = $user->hasAnyPermission(['manage_results', 'approve_results', 'view_results', 'manage_courses']) || $user->hasRole('admin');
+
+        // Filter Recent Activity
+        $recentActivity = $recentActivity->filter(function ($item) use ($canViewFinance, $canViewAdmissions, $canViewResults) {
+            if ($item['type'] === 'payment')
+                return $canViewFinance;
+            if ($item['type'] === 'student')
+                return $canViewAdmissions || $canViewResults;
+            return true;
+        })->values()->all();
+
+        // Stats Object with sensitivity filtering
+        $dashboardStats = [
+            'total_students' => $canViewResults ? $totalStudents : null,
+            'fresh_students' => $canViewResults ? $freshStudents : null,
+            'applications' => $canViewAdmissions ? $applicationsCount : null,
+            'revenue' => $canViewFinance ? $revenue : null,
+            'active_courses' => $canViewResults ? $activeCoursesCount : null,
+            'revenue_growth' => $canViewFinance ? round($revenueGrowth, 1) : null,
+            'student_growth' => $canViewResults ? round($studentGrowth, 1) : null,
+        ];
+
+        // 7. View Data
         $sessions = Session::orderBy('start_date', 'desc')->get(['id', 'name']);
 
         return Inertia::render('Admin/Dashboard', [
             'currentSessionName' => $selectedSession->name,
             'filters' => ['session_id' => $sessionId],
             'sessions' => $sessions,
-            'stats' => [
-                'total_students' => $totalStudents,
-                'fresh_students' => $freshStudents,
-                'applications' => $applicationsCount,
-                'revenue' => $revenue,
-                'active_courses' => $activeCoursesCount,
-                'revenue_growth' => round($revenueGrowth, 1),
-                'student_growth' => round($studentGrowth, 1),
-            ],
+            'stats' => $dashboardStats,
             'recentActivity' => $recentActivity,
             'charts' => [
-                'revenue' => $revenueChart,
-                'faculty' => $facultyChart,
+                'revenue' => $canViewFinance ? $revenueChart : ['labels' => [], 'data' => []],
+                'faculty' => $canViewResults ? $facultyChart : ['labels' => [], 'data' => []],
             ]
         ]);
     }

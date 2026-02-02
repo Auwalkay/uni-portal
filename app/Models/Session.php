@@ -20,6 +20,7 @@ class Session extends Model
         'registration_enabled' => 'boolean',
         'applications_enabled' => 'boolean',
         'admissions_enabled' => 'boolean',
+        'type' => 'string',
     ];
 
     public function semesters()

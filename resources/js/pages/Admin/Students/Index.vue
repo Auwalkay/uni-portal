@@ -11,9 +11,23 @@ import {
     UserPlus,
     GraduationCap,
     Award,
-    Sparkles
+    Sparkles,
+    Upload,
+    Download,
+    FileSpreadsheet
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
+import { useForm } from '@inertiajs/vue3';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 
 // Shadcn UI Components
 import { Button } from '@/components/ui/button';
@@ -119,6 +133,21 @@ const clearFilters = () => {
     selectedLevel.value = '';
     selectedProgram.value = '';
 };
+
+const showImportModal = ref(false);
+
+const importForm = useForm({
+    file: null as File | null,
+});
+
+const submitImport = () => {
+    importForm.post(route('admin.students.import'), {
+        onSuccess: () => {
+            showImportModal.value = false;
+            importForm.reset();
+        },
+    });
+};
 </script>
 
 <template>
@@ -135,11 +164,70 @@ const clearFilters = () => {
                         <p class="text-muted-foreground mt-1">Directory and profiles of all registered students.</p>
                     </div>
 
-                    <Button as-child>
-                        <Link :href="route('admin.students.create')">
-                            <UserPlus class="w-4 h-4 mr-2" /> Add Student
-                        </Link>
-                    </Button>
+                    <div class="flex gap-2">
+                        <Dialog v-model:open="showImportModal">
+                            <DialogTrigger as-child>
+                                <Button variant="outline">
+                                    <Upload class="w-4 h-4 mr-2" /> Import
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent class="sm:max-w-[425px]">
+                                <DialogHeader>
+                                    <DialogTitle>Import Students</DialogTitle>
+                                    <DialogDescription>
+                                        Upload a CSV file containing legacy student records.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div class="grid gap-4 py-4">
+                                    <div class="flex flex-col gap-2">
+                                        <Label for="csv_file">CSV File</Label>
+                                        <Input 
+                                            id="csv_file" 
+                                            type="file" 
+                                            accept=".csv" 
+                                            @input="importForm.file = $event.target.files[0]"
+                                        />
+                                        <p v-if="importForm.errors.file" class="text-xs text-destructive">{{ importForm.errors.file }}</p>
+                                    </div>
+                                    <div class="bg-muted p-3 rounded-md text-xs space-y-2">
+                                        <p class="font-bold flex items-center gap-1 text-foreground">
+                                            <FileSpreadsheet class="w-3 h-3 text-primary" /> CSV Format Requirements:
+                                        </p>
+                                        <ul class="list-disc list-inside space-y-1 text-muted-foreground font-medium">
+                                            <li>Standard headers: first_name, last_name, email</li>
+                                            <li>Must include faculty, department, programme, session</li>
+                                            <li>Faculty/Dept/Program names must match system</li>
+                                        </ul>
+                                        <div class="pt-2">
+                                            <a 
+                                                :href="route('admin.students.template')" 
+                                                class="text-primary hover:underline inline-flex items-center gap-1 font-semibold"
+                                                target="_blank"
+                                            >
+                                                <Download class="w-3 h-3" /> Download CSV Template
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <Button 
+                                        type="submit" 
+                                        @click="submitImport" 
+                                        :disabled="importForm.processing || !importForm.file"
+                                        class="w-full"
+                                    >
+                                        {{ importForm.processing ? 'Importing...' : 'Start Import' }}
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+
+                        <Button as-child shadow="md">
+                            <Link :href="route('admin.students.create')">
+                                <UserPlus class="w-4 h-4 mr-2" /> Add Student
+                            </Link>
+                        </Button>
+                    </div>
                 </div>
 
                 <div class="grid gap-4 md:grid-cols-3">

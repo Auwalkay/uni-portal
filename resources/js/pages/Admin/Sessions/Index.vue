@@ -26,6 +26,7 @@ interface Session {
     end_date: string;
     is_current: boolean;
     registration_enabled: boolean;
+    type?: string;
     semesters?: Semester[]; // Optional if not loaded initially, but we should eager load
 }
 
@@ -41,6 +42,7 @@ const form = useForm({
     name: '',
     start_date: '',
     end_date: '',
+    type: 'regular',
 });
 
 const openCreate = () => {
@@ -54,6 +56,7 @@ const openEdit = (session: Session) => {
     form.name = session.name;
     form.start_date = session.start_date.split('T')[0];
     form.end_date = session.end_date.split('T')[0];
+    form.type = session.type || 'regular'; // Handle existing sessions
     isModalOpen.value = true;
 };
 
@@ -228,6 +231,21 @@ const activateSemester = (session: Session, semester: Semester) => {
                             <Input id="name" v-model="form.name" placeholder="2024/2025" />
                             <span v-if="form.errors.name" class="text-xs text-destructive">{{ form.errors.name }}</span>
                         </div>
+                        
+                        <div class="grid gap-2">
+                            <Label for="type">Session Type</Label>
+                            <select 
+                                id="type" 
+                                v-model="form.type" 
+                                :disabled="!!editingSession"
+                                class="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <option value="regular">Regular Session (2 Semesters)</option>
+                                <option value="summer">Summer Session (1 Semester)</option>
+                            </select>
+                            <span v-if="form.errors.type" class="text-xs text-destructive">{{ form.errors.type }}</span>
+                        </div>
+                        
                         <div class="grid grid-cols-2 gap-4">
                             <div class="grid gap-2">
                                 <Label for="start">Start Date</Label>

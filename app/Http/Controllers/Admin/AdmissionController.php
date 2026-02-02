@@ -90,6 +90,10 @@ class AdmissionController extends Controller
                     'due_date' => now()->addWeeks(2),
                 ]
             );
+
+            // Send Admission Email
+            \Illuminate\Support\Facades\Mail::to($applicant->user->email)->send(new \App\Mail\StudentAdmitted($applicant));
+            \Illuminate\Support\Facades\Log::info("Admission email queued for applicant: {$applicant->jamb_registration_number}");
         }
 
         return back()->with('success', 'Applicant status updated successfully.');

@@ -25,6 +25,9 @@ class Student extends Model
         'phone_number',
         'address',
         'entry_mode',
+        'jamb_registration_number',
+        'jamb_score',
+        'previous_institution',
         'state_id',
         'lga_id',
         'passport_photo_path',
@@ -50,6 +53,11 @@ class Student extends Model
     }
 
     public function academicDepartment(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'department_id');
+    }
+
+    public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class, 'department_id');
     }

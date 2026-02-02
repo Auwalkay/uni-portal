@@ -114,6 +114,14 @@ class PaymentController extends Controller
                         app(\App\Services\EnrollmentService::class)->enroll($applicant, $payment->user_id);
                     }
                 }
+
+                // Send Receipt Email
+                try {
+                    \Illuminate\Support\Facades\Mail::to(Auth::user()->email)->send(new \App\Mail\FeeReceipt($payment, $payment->invoice, Auth::user()));
+                    \Illuminate\Support\Facades\Log::info("Fee receipt email queued for payment: {$payment->gateway_reference}");
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Failed to send receipt email: ' . $e->getMessage());
+                }
             }
 
             return redirect()->route('student.payments.index')->with('success', 'Payment successful! Welcome to the University.');
