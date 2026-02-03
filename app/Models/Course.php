@@ -35,4 +35,9 @@ class Course extends Model
     {
         return $this->hasMany(CourseRegistration::class);
     }
+
+    public function allocations()
+    {
+        return $this->hasMany(CourseAllocation::class);
+    }
 }

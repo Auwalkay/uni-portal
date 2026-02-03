@@ -1,8 +1,11 @@
 <?php
 
+use App\Http\Controllers\Admin\CourseRegistrationController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
+use App\Http\Controllers\Staff\CourseController;
+use App\Http\Controllers\Student\PaymentController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -35,6 +38,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/apply/start', [\App\Http\Controllers\Applicant\ApplicationController::class, 'create'])->name('apply.start');
         Route::get('/apply/form', [\App\Http\Controllers\Applicant\ApplicationController::class, 'form'])->name('apply.form');
         Route::post('/apply', [\App\Http\Controllers\Applicant\ApplicationController::class, 'store'])->name('apply.store');
+        Route::get('/application/preview', [\App\Http\Controllers\Applicant\ApplicationController::class, 'show'])->name('apply.show');
+
+        Route::get('/payment', [\App\Http\Controllers\Applicant\PaymentController::class, 'index'])->name('payment.index');
+        Route::post('/payment/pay', [\App\Http\Controllers\Applicant\PaymentController::class, 'pay'])->name('payment.pay');
+        Route::get('/payment/callback', [\App\Http\Controllers\Applicant\PaymentController::class, 'callback'])->name('payment.callback');
+
         Route::post('/accept-offer', [\App\Http\Controllers\Applicant\ApplicationController::class, 'acceptOffer'])->name('accept.offer');
     });
 
@@ -45,95 +54,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // STUDENT Routes
     Route::prefix('student')->name('student.')->middleware('role:student')->group(function () {
-        Route::get('/dashboard', function () {
-            $student = \App\Models\Student::where('user_id', auth()->id())->with('user')->first();
+        Route::get('/dashboard', [\App\Http\Controllers\Student\ProfileController::class, 'dashboard'])->name('dashboard');
 
-            // Simple check: if key fields are present
-            $isProfileComplete = $student && $student->phone_number && $student->address && $student->next_of_kin_name;
-
-            // Calculate registered units for current session
-            $currentSession = \App\Models\Session::current();
-            $currentSemester = \App\Models\Semester::current();
-
-            // Stats Calculations
-            $cgpa = 0.00; // Placeholder for now
-            $totalUnits = 0;
-            $level = $student->current_level ?? '100';
-            $academicStatus = 'Good Standing';
-            $showRegistrationNotification = false;
-            $registrationMessage = '';
-
-            if ($student && $currentSession) {
-                // Assuming we have a relation or through model. 
-                // Let's use CourseRegistration model directly for now.
-                $totalUnits = \App\Models\CourseRegistration::where('student_id', $student->id)
-                    ->where('session_id', $currentSession->id)
-                    ->join('courses', 'course_registrations.course_id', '=', 'courses.id')
-                    ->sum('courses.units');
-
-                // Check for Registration Notification
-                if ($currentSemester && $currentSession->registration_enabled) {
-                    $now = now();
-                    $start = $currentSemester->registration_starts_at;
-                    $end = $currentSemester->registration_ends_at;
-
-                    $isOpen = true;
-                    if ($start && $now->lt($start))
-                        $isOpen = false;
-                    if ($end && $now->gt($end))
-                        $isOpen = false;
-
-                    if ($isOpen) {
-                        // Check if already registered
-                        $hasRegistered = \App\Models\CourseRegistration::where('student_id', $student->id)
-                            ->where('session_id', $currentSession->id)
-                            ->where('semester_id', $currentSemester->id)
-                            ->exists();
-
-                        if (!$hasRegistered) {
-                            $showRegistrationNotification = true;
-                            if ($end) {
-                                $registrationMessage = "Registration for {$currentSemester->name} closes on " . $end->format('M d, Y') . ". Register now to avoid penalties.";
-                            } else {
-                                $registrationMessage = "Registration for {$currentSemester->name} is now open.";
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Check School Fee status for CURRENT session
-            $hasPaidSchoolFee = false;
-            if ($currentSession) {
-                $hasPaidSchoolFee = \App\Models\Invoice::where('user_id', auth()->id())
-                    ->where('type', 'school_fee')
-                    ->where('session_id', $currentSession->id)
-                    ->where('status', 'paid')
-                    ->exists();
-            }
-
-            return Inertia::render('Student/Dashboard', [
-                'student' => $student->load(['program']),
-                'user' => $student ? $student->user : auth()->user(),
-                'isProfileComplete' => $isProfileComplete,
-                'hasPaidSchoolFee' => $hasPaidSchoolFee,
-                'showRegistrationNotification' => $showRegistrationNotification,
-                'registrationMessage' => $registrationMessage,
-                'stats' => [
-                    'cgpa' => $cgpa,
-                    'totalUnits' => $totalUnits,
-                    'level' => $level,
-                    'status' => $academicStatus,
-                    'session' => $currentSession->name ?? 'N/A',
-                    'semester' => $currentSemester->name ?? 'N/A',
-                ]
-            ]);
-        })->name('dashboard');
-
-        Route::get('/payments', [\App\Http\Controllers\Student\PaymentController::class, 'index'])->name('payments.index');
-        Route::post('/payments/create-school-fee', [\App\Http\Controllers\Student\PaymentController::class, 'createSchoolFeeInvoice'])->name('payments.create_school_fee');
-        Route::post('/payments/{invoice}/pay', [\App\Http\Controllers\Student\PaymentController::class, 'pay'])->name('payments.pay');
-        Route::get('/payments/callback', [\App\Http\Controllers\Student\PaymentController::class, 'callback'])->name('payments.callback');
+        Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
+        Route::post('/payments/create-school-fee', [PaymentController::class, 'createSchoolFeeInvoice'])->name('payments.create_school_fee');
+        Route::post('/payments/{invoice}/pay', [PaymentController::class, 'pay'])->name('payments.pay');
+        Route::get('/payments/callback', [PaymentController::class, 'callback'])->name('payments.callback');
 
         Route::get('/profile', [\App\Http\Controllers\Student\ProfileController::class, 'edit'])->name('profile.edit');
         Route::patch('/profile', [\App\Http\Controllers\Student\ProfileController::class, 'update'])->name('profile.update');
@@ -144,6 +70,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/courses/form', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'downloadForm'])->name('courses.form');
         Route::get('/courses/exam-card', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'downloadExamCard'])->name('courses.exam_card');
 
+        Route::get('/timetable', [\App\Http\Controllers\Student\TimetableController::class, 'index'])->name('timetable.index');
 
         Route::get('/results', [\App\Http\Controllers\Student\ResultController::class, 'index'])->name('results.index');
 
@@ -190,10 +117,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Course Registrations & Academic Management
         Route::middleware(['role:admin|registrar|dean|hod'])->group(function () {
-            Route::get('/courses/{course}/registrations', [\App\Http\Controllers\Admin\CourseRegistrationController::class, 'index'])->name('courses.registrations.index');
-            Route::get('/courses/{course}/registrations/export', [\App\Http\Controllers\Admin\CourseRegistrationController::class, 'export'])->name('courses.registrations.export');
+            Route::get('/courses/{course}/registrations', [CourseRegistrationController::class, 'index'])->name('courses.registrations.index');
+            Route::get('/courses/{course}/registrations/export', [CourseRegistrationController::class, 'export'])->name('courses.registrations.export');
 
             // Moved user management to system settings group
+        });
+
+        // Staff Course Management (Teaching)
+        Route::middleware(['role:admin|lecturer|course_coordinator'])->prefix('teaching')->name('teaching.')->group(function () {
+            Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
+            Route::get('/courses/{course}', [CourseController::class, 'show'])->name('courses.show');
         });
 
         // Finance & Payments
@@ -226,6 +159,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             Route::get('/sessions', [\App\Http\Controllers\Admin\SessionController::class, 'index'])->name('sessions.index');
             Route::get('/sessions/{session}', [\App\Http\Controllers\Admin\SessionController::class, 'show'])->name('sessions.show');
+
+            // Timetable Management
+            Route::post('timetables/import', [\App\Http\Controllers\Admin\TimetableController::class, 'import'])->name('timetables.import');
+            Route::get('timetables/template', [\App\Http\Controllers\Admin\TimetableController::class, 'template'])->name('timetables.template');
+            Route::resource('timetables', \App\Http\Controllers\Admin\TimetableController::class)->only(['index', 'store', 'destroy']);
 
             // Restricted Session Management
             Route::middleware(['role:admin|registrar'])->group(function () {

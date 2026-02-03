@@ -33,6 +33,11 @@ class FortifyServiceProvider extends ServiceProvider
             \App\Http\Responses\RegisterResponse::class
         );
 
+        $this->app->singleton(
+            \Laravel\Fortify\Contracts\LoginResponse::class,
+            \App\Http\Responses\LoginResponse::class
+        );
+
         Fortify::authenticateUsing(function (Request $request) {
             $validated = $request->validate([
                 Fortify::username() => 'required|string',
@@ -49,7 +54,14 @@ class FortifyServiceProvider extends ServiceProvider
                 // 2. Try Matriculation Login
                 // Remove any whitespace
                 $username = trim($username);
-                $student = \App\Models\Student::where('matriculation_number', $username)->first();
+
+                // Try case-insensitive search for matriculation number
+                $student = \App\Models\Student::where(function ($query) use ($username) {
+                    $query->where('matriculation_number', $username)
+                        ->orWhere('matriculation_number', strtoupper($username))
+                        ->orWhere('matriculation_number', strtolower($username));
+                })->first();
+
                 $user = $student ? $student->user : null;
             }
 

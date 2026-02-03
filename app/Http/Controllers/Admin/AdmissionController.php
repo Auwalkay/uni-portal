@@ -24,9 +24,9 @@ class AdmissionController extends Controller
         // Filters
         if ($request->filled('search')) {
             $query->whereHas('user', function ($q) use ($request) {
-                $q->where('name', 'like', '%' . $request->search . '%')
-                    ->orWhere('email', 'like', '%' . $request->search . '%');
-            })->orWhere('jamb_registration_number', 'like', '%' . $request->search . '%');
+                $q->where('name', 'like', '%'.$request->search.'%')
+                    ->orWhere('email', 'like', '%'.$request->search.'%');
+            })->orWhere('jamb_registration_number', 'like', '%'.$request->search.'%');
         }
 
         if ($request->filled('status')) {
@@ -56,22 +56,28 @@ class AdmissionController extends Controller
             'documents',
             'state',
             'lga',
-            'programme.department.faculty'
+            'programme.department.faculty',
         ]);
 
+        $paymentInfo = \App\Models\Invoice::where('user_id', $applicant->user_id)
+            ->where('type', 'application_fee')
+            ->with('payments') // Load successful payments check?
+            ->first();
+
         return Inertia::render('Admin/Admissions/Show', [
-            'applicant' => $applicant
+            'applicant' => $applicant,
+            'payment_info' => $paymentInfo,
         ]);
     }
 
     public function update(Request $request, Applicant $applicant)
     {
         $request->validate([
-            'status' => 'required|string|in:draft,submitted,screening,admitted,rejected'
+            'status' => 'required|string|in:draft,submitted,screening,admitted,rejected',
         ]);
 
         $applicant->update([
-            'status' => $request->status
+            'status' => $request->status,
         ]);
 
         // Optional: acceptance fee generation
@@ -84,7 +90,7 @@ class AdmissionController extends Controller
                     'type' => 'acceptance_fee',
                 ],
                 [
-                    'reference' => 'ACC-' . strtoupper(uniqid()),
+                    'reference' => 'ACC-'.strtoupper(uniqid()),
                     'amount' => 50000.00,
                     'status' => 'pending',
                     'due_date' => now()->addWeeks(2),
@@ -98,6 +104,7 @@ class AdmissionController extends Controller
 
         return back()->with('success', 'Applicant status updated successfully.');
     }
+
     public function downloadLetter(Applicant $applicant)
     {
         if ($applicant->status !== 'admitted') {

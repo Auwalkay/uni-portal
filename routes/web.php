@@ -5,9 +5,16 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
-Route::middleware(['auth', 'verified', 'role:admin|registrar'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'verified', 'role:admin|registrar|bursar|finance_officer'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('finance/dashboard', [\App\Http\Controllers\Admin\FinanceController::class, 'dashboard'])->name('finance.dashboard');
     Route::resource('staff', StaffController::class);
+    Route::post('course-allocations/import', [\App\Http\Controllers\Admin\CourseAllocationController::class, 'import'])->name('course-allocations.import');
+    Route::get('course-allocations/template', [\App\Http\Controllers\Admin\CourseAllocationController::class, 'downloadTemplate'])->name('course-allocations.template');
+    Route::resource('course-allocations', \App\Http\Controllers\Admin\CourseAllocationController::class);
+    Route::get('invoices/search-students', [\App\Http\Controllers\Admin\InvoiceController::class, 'searchStudents'])->name('invoices.search-students');
+    Route::resource('invoices', \App\Http\Controllers\Admin\InvoiceController::class)->only(['index', 'show', 'create', 'store']);
+    Route::post('invoices/{invoice}/mark-as-paid', [\App\Http\Controllers\Admin\InvoiceController::class, 'markAsPaid'])->name('invoices.mark-as-paid');
+    Route::post('payments/{payment}/verify', [\App\Http\Controllers\Admin\InvoiceController::class, 'verifyPayment'])->name('payments.verify');
 });
 
 

@@ -3,7 +3,18 @@ import { Head, Link } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import StudentLayout from '@/layouts/StudentLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard } from 'lucide-vue-next';
+import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard, Calendar, CalendarClock, MapPin } from 'lucide-vue-next';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 const props = defineProps<{
     student?: any;
@@ -20,7 +31,22 @@ const props = defineProps<{
         session: string;
         semester: string;
     };
+    timetable?: Array<any>;
 }>();
+
+const formatTime = (time: string) => {
+    return time.substring(0, 5);
+};
+
+const getClassesForDay = (day: string) => {
+    if (!props.timetable) return [];
+    return props.timetable.filter((t: any) => t.day === day);
+};
+
+const getTodaysClasses = () => {
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    return getClassesForDay(today);
+};
 
 console.log('Student', props.student?.program)
 
@@ -245,7 +271,56 @@ const greeting = () => {
                 </div>
 
                 <!-- Recent Activity / Notifications -->
-                <div class="col-span-3 rounded-xl border bg-card shadow-sm">
+                <!-- Recent Activity / Notifications -->
+                <div class="col-span-3 space-y-6">
+                     <!-- Today's Schedule (Mini) -->
+                     <!-- Today's Schedule (Mini) -->
+                     <Card class="bg-indigo-900 text-white border-0 shadow-lg relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-32 h-32 bg-indigo-800/50 rounded-full blur-3xl -mr-10 -mt-10"></div>
+                        <div class="absolute bottom-0 left-0 w-24 h-24 bg-purple-600/30 rounded-full blur-2xl -ml-5 -mb-5"></div>
+                        
+                        <CardHeader>
+                            <div class="flex items-center justify-between">
+                                <CardTitle class="flex items-center gap-2 text-indigo-100 relative z-10">
+                                    <CalendarClock class="w-5 h-5" /> Today's Schedule
+                                </CardTitle>
+                                <!-- View Full Button will go here -->
+                            </div>
+                        </CardHeader>
+                        <CardContent class="relative z-10 space-y-3">
+                             <div v-if="getTodaysClasses().length === 0" class="text-center py-6 text-indigo-200/60">
+                                <div class="bg-indigo-800/50 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <Calendar class="w-6 h-6" />
+                                </div>
+                                <p class="text-sm">No classes scheduled for today.</p>
+                            </div>
+
+                            <div v-else class="space-y-3">
+                                <div v-for="(cls, index) in getTodaysClasses()" :key="cls.id" 
+                                    class="group flex items-start gap-3 bg-white/10 p-3 rounded-lg border border-indigo-400/20 hover:bg-white/20 transition-colors"
+                                >
+                                    <div class="flex flex-col items-center bg-indigo-950/50 rounded p-2 min-w-[3.5rem] border border-indigo-400/10">
+                                        <span class="text-xs font-bold">{{ formatTime(cls.start_time) }}</span>
+                                        <div class="w-px h-2 bg-indigo-400/30 my-0.5"></div>
+                                        <span class="text-[10px] opacity-70">{{ formatTime(cls.end_time) }}</span>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex justify-between items-start">
+                                            <h4 class="font-bold text-white truncate pr-2">{{ cls.course.title }}</h4>
+                                            <Badge variant="outline" class="text-[10px] h-5 border-indigo-300/30 text-indigo-100 bg-indigo-500/20">
+                                                {{ cls.course.code }}
+                                            </Badge>
+                                        </div>
+                                        <div class="flex items-center gap-3 mt-1.5 text-xs text-indigo-200">
+                                            <span class="flex items-center gap-1"><MapPin class="w-3 h-3 opacity-70" /> {{ cls.venue }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <div class="rounded-xl border bg-card shadow-sm">
                     <div class="p-6 border-b">
                         <h3 class="font-semibold text-lg">Notifications</h3>
                     </div>
@@ -269,6 +344,7 @@ const greeting = () => {
                             </div>
                         </div>
                     </div>
+                </div>
                 </div>
             </div>
         </div>

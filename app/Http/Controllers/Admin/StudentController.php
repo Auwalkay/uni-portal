@@ -3,13 +3,17 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Imports\StudentImport;
+use App\Models\Student;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Maatwebsite\Excel\Facades\Excel;
 
 class StudentController extends Controller
 {
     public function create()
     {
-        return \Inertia\Inertia::render('Admin/Students/Create', [
+        return Inertia::render('Admin/Students/Create', [
             'sessions' => \App\Models\Session::latest()->get(['id', 'name']),
             'faculties' => \App\Models\Faculty::with('departments:id,name,faculty_id')->get(['id', 'name']),
             'programmes' => \App\Models\Programme::orderBy('name')->get(['id', 'name']),
@@ -59,14 +63,7 @@ class StudentController extends Controller
             $user->assignRole('student');
 
             // Generate Matric Number
-            $year = date('Y');
-            $random = str_pad(mt_rand(1, 9999), 4, '0', STR_PAD_LEFT);
-            $matricNumber = "UNI/{$year}/{$random}";
-
-            while (\App\Models\Student::where('matriculation_number', $matricNumber)->exists()) {
-                $random = str_pad(mt_rand(1, 9999), 4, '0', STR_PAD_LEFT);
-                $matricNumber = "UNI/{$year}/{$random}";
-            }
+            $matricNumber = \App\Helpers\MatriculationNumberHelper::generate();
 
             // Handle Passport
             $passportPath = null;
@@ -75,7 +72,7 @@ class StudentController extends Controller
             }
 
             // Create Student Profile
-            $student = \App\Models\Student::create([
+            $student = Student::create([
                 'user_id' => $user->id,
                 'matriculation_number' => $matricNumber,
                 'gender' => $validated['gender'],
@@ -104,7 +101,7 @@ class StudentController extends Controller
                 $waecPath = $request->file('waec_result')->store('documents/waec', 'public');
                 $student->oLevelResults()->create([
                     'exam_type' => 'WAEC/NECO',
-                    'exam_year' => $year, // Default to current year for admin onboarding
+                    'exam_year' => date('Y'), // Default to current year for admin onboarding
                     'scanned_copy_path' => $waecPath,
                     'subjects' => [], // Empty subjects as we're just uploading the doc
                 ]);
@@ -116,7 +113,7 @@ class StudentController extends Controller
 
     public function index(Request $request)
     {
-        $query = \App\Models\Student::query()
+        $query = Student::query()
             ->with(['user', 'academicDepartment.faculty', 'admittedSession', 'program']);
 
         // Search Filter
@@ -165,7 +162,7 @@ class StudentController extends Controller
 
         $students = $query->latest()->paginate(15)->withQueryString();
 
-        return \Inertia\Inertia::render('Admin/Students/Index', [
+        return Inertia::render('Admin/Students/Index', [
             'students' => $students,
             'filters' => $request->only(['search', 'session_id', 'faculty_id', 'department_id', 'level', 'program_id', 'program']),
             'sessions' => \App\Models\Session::latest()->get(['id', 'name']),
@@ -173,18 +170,18 @@ class StudentController extends Controller
             'departments' => \App\Models\Department::get(['id', 'name', 'faculty_id']),
             'programmes' => \App\Models\Programme::orderBy('name')->get(['id', 'name']),
             'stats' => [
-                'total' => \App\Models\Student::count(),
-                // Assuming 'new' means admitted in the latest session. 
+                'total' => Student::count(),
+                // Assuming 'new' means admitted in the latest session.
                 // We'll dynamically determine the latest session or just check created_at for this year if session isn't reliable yet.
                 // Using latest session is safer for academic context.
-                'new' => \App\Models\Student::where('admitted_session_id', \App\Models\Session::latest('start_date')->value('id'))->count(),
+                'new' => Student::where('admitted_session_id', \App\Models\Session::latest('start_date')->value('id'))->count(),
                 // Assuming graduating levels are 400, 500, 600
-                'graduating' => \App\Models\Student::whereIn('current_level', ['400', '500', '600'])->count(),
+                'graduating' => Student::whereIn('current_level', ['400', '500', '600'])->count(),
             ]
         ]);
     }
 
-    public function show(\App\Models\Student $student)
+    public function show(Student $student)
     {
         $user = auth()->user();
         $canViewFinance = $user->hasAnyPermission(['manage_payments', 'verify_payments', 'view_payments']) || $user->hasRole('admin');
@@ -217,7 +214,7 @@ class StudentController extends Controller
                 return $sessionRegs->groupBy(fn($reg) => $reg->semester ? $reg->semester->name : 'Unknown Semester');
             }) : null;
 
-        return \Inertia\Inertia::render('Admin/Students/Show', [
+        return Inertia::render('Admin/Students/Show', [
             'student' => $student,
             'academicHistory' => $academicHistory,
             'financialHistory' => $canViewFinance ? [
@@ -237,8 +234,8 @@ class StudentController extends Controller
         ]);
 
         try {
-            $import = new \App\Imports\StudentImport;
-            \Maatwebsite\Excel\Facades\Excel::import($import, $request->file('file'));
+            $import = new StudentImport;
+            Excel::import($import, $request->file('file'));
 
             return redirect()->route('admin.students.index')->with('success', $import->getProcessedCount() . ' students imported successfully.');
         } catch (\Exception $e) {

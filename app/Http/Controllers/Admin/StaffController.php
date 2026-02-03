@@ -166,10 +166,24 @@ class StaffController extends Controller
             abort(404);
         }
 
-        $staff->load(['staff.department.faculty', 'roles']);
+        $staff->load(['staff.department.faculty', 'roles', 'staff.allocations.course', 'staff.allocations.session']);
+
+        $timetable = [];
+        if ($staff->staff && $staff->staff->is_academic) {
+            $currentSession = \App\Models\Session::current();
+            if ($currentSession) {
+                $courseIds = $staff->staff->allocations->where('session_id', $currentSession->id)->pluck('course_id');
+
+                $timetable = \App\Models\Timetable::whereIn('course_id', $courseIds)
+                    ->where('session_id', $currentSession->id)
+                    ->with(['course'])
+                    ->get();
+            }
+        }
 
         return Inertia::render('Admin/Staff/Show', [
             'staff' => $staff,
+            'timetable' => $timetable,
         ]);
     }
 

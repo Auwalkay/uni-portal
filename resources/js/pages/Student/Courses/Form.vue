@@ -438,6 +438,7 @@ const getSemesterCourses = (semesterCode: string) => {
                                             <TableHead class="w-[60px] text-center py-4">Select</TableHead>
                                             <TableHead class="w-[100px] py-4">Code</TableHead>
                                             <TableHead class="py-4">Course Title</TableHead>
+                                            <TableHead class="py-4 w-[180px]">Lecturer</TableHead>
                                             <TableHead class="w-[80px] text-center py-4">Units</TableHead>
                                             <TableHead class="w-[100px] text-center py-4">Type</TableHead>
                                             <TableHead class="w-[120px] text-center py-4">Status</TableHead>
@@ -483,6 +484,12 @@ const getSemesterCourses = (semesterCode: string) => {
                                                 <div class="text-[11px] text-gray-400 mt-0.5 font-medium flex items-center gap-1" v-if="course.department">
                                                     <span class="w-1 h-1 rounded-full bg-gray-300"></span> {{ course.department.name }}
                                                 </div>
+                                            </TableCell>
+                                            <TableCell class="py-4">
+                                                <div v-if="course.allocations && course.allocations.length > 0" class="flex flex-col">
+                                                    <span class="text-xs font-medium text-gray-700">{{ course.allocations[0].staff?.user?.name }}</span>
+                                                </div>
+                                                <span v-else class="text-[10px] text-gray-400 italic">Unassigned</span>
                                             </TableCell>
                                             <TableCell class="text-center font-mono text-gray-600 font-medium bg-gray-50/50 group-hover:bg-transparent transition-colors">
                                                 {{ course.units }}

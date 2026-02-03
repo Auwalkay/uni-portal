@@ -18,6 +18,7 @@ const props = defineProps<{
         status: string;
         created_at: string;
         application_mode: string;
+        application_number?: string;
         
         // New Fields
         first_name?: string;
@@ -52,6 +53,11 @@ const props = defineProps<{
             path: string;
         }>;
     };
+    payment_info?: {
+        amount: number;
+        status: string;
+        reference: string;
+    };
 }>();
 
 const form = useForm({
@@ -65,6 +71,13 @@ const updateStatus = () => {
         }
     });
 };
+
+import { computed } from 'vue';
+
+const passportUrl = computed(() => {
+    const doc = props.applicant.documents.find(d => d.type === 'passport_photo');
+    return doc ? `/storage/${doc.path}` : null;
+});
 </script>
 
 <template>
@@ -78,8 +91,14 @@ const updateStatus = () => {
                 <Card class="text-center overflow-hidden">
                     <div class="bg-primary/10 h-24"></div>
                     <div class="px-6 pb-6 -mt-12">
-                        <div class="relative w-24 h-24 mx-auto rounded-full border-4 border-background bg-muted flex items-center justify-center overflow-hidden">
-                            <span v-if="!applicant.user.avatar_url" class="text-3xl">👤</span>
+                        <div class="relative w-32 h-32 mx-auto rounded-full border-4 border-background bg-muted flex items-center justify-center overflow-hidden">
+                             <img 
+                                v-if="passportUrl" 
+                                :src="passportUrl" 
+                                class="object-cover w-full h-full"
+                                alt="Applicant Photo" 
+                            />
+                            <span v-else-if="!applicant.user.avatar_url" class="text-4xl">👤</span>
                              <img v-else :src="applicant.user.avatar_url" class="object-cover w-full h-full" />
                         </div>
                         <h2 class="mt-4 text-xl font-bold">{{ applicant.user.name }}</h2>
@@ -106,7 +125,7 @@ const updateStatus = () => {
                     </CardHeader>
                     <CardContent class="grid gap-3">
                         <Select v-model="form.status">
-                            <SelectTrigger>
+                            <SelectTrigger :disabled="applicant.status === 'admitted'">
                                 <SelectValue placeholder="Change Status" />
                             </SelectTrigger>
                             <SelectContent>
@@ -118,7 +137,7 @@ const updateStatus = () => {
                             </SelectContent>
                         </Select>
                         
-                        <Button @click="updateStatus" :disabled="form.processing" class="w-full">
+                        <Button @click="updateStatus" :disabled="form.processing || applicant.status === 'admitted'" class="w-full">
                             Update Status
                         </Button>
 
@@ -128,6 +147,27 @@ const updateStatus = () => {
                                 Download Letter
                             </Button>
                         </a>
+                    </CardContent>
+                </Card>
+
+                <!-- Payment Info -->
+                <Card v-if="payment_info">
+                    <CardHeader><CardTitle class="text-lg">Application Fee</CardTitle></CardHeader>
+                    <CardContent class="space-y-4 text-sm">
+                        <div class="flex justify-between items-center border-b pb-2">
+                            <span class="text-muted-foreground">Amount</span>
+                            <span class="font-bold">₦{{ Number(payment_info.amount).toLocaleString() }}</span>
+                        </div>
+                        <div class="flex justify-between items-center border-b pb-2">
+                            <span class="text-muted-foreground">Status</span>
+                            <Badge :variant="payment_info.status === 'paid' ? 'default' : 'destructive'" class="capitalize">
+                                {{ payment_info.status }}
+                            </Badge>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-muted-foreground">Reference</span>
+                            <span class="font-mono text-xs">{{ payment_info.reference }}</span>
+                        </div>
                     </CardContent>
                 </Card>
 
@@ -165,6 +205,11 @@ const updateStatus = () => {
                         <div class="bg-muted/30 p-4 rounded-lg border">
                             <h4 class="text-sm font-semibold uppercase text-muted-foreground mb-2">JAMB DETAILS</h4>
                             <div class="space-y-2">
+                                <div class="flex justify-between">
+                                    <span>App. Number</span>
+                                    <span class="font-mono font-bold text-blue-600">{{ applicant.application_number || 'N/A' }}</span>
+                                </div>
+                                <Separator />
                                 <div class="flex justify-between">
                                     <span>Reg. Number</span>
                                     <span class="font-mono font-bold">{{ applicant.jamb_registration_number }}</span>

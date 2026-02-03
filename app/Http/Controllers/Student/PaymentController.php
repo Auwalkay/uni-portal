@@ -50,17 +50,46 @@ class PaymentController extends Controller
         ]);
     }
 
-    public function pay(Invoice $invoice)
+    public function pay(Request $request, Invoice $invoice)
     {
         if ($invoice->status === 'paid') {
             return back()->with('error', 'Invoice already paid.');
+        }
+
+        $request->validate([
+            'amount' => 'required|numeric|min:1',
+        ]);
+
+        $balance = $invoice->amount - $invoice->paid_amount;
+        $amountToPay = (float) $request->input('amount');
+
+        // Strict Validation Rules
+        $isFullPayment = abs($amountToPay - $balance) < 1; // Allow small float diff
+
+        $halfAmount = $invoice->amount / 2;
+        $isHalfPayment = abs($amountToPay - $halfAmount) < 1;
+
+        if ($invoice->paid_amount == 0) {
+            // First payment: Can be Full or Half
+            if (!$isFullPayment && !$isHalfPayment) {
+                return back()->with('error', 'You can only pay the full amount (' . number_format($balance) . ') or a 50% installment (' . number_format($halfAmount) . ').');
+            }
+        } else {
+            // Subsequent payments: Must be Full Balance
+            if (!$isFullPayment) {
+                return back()->with('error', 'You must pay the remaining balance of ' . number_format($balance, 2));
+            }
+        }
+
+        if ($amountToPay > $balance) {
+            return back()->with('error', 'Amount exceeds remaining balance.');
         }
 
         $payment = Payment::create([
             'invoice_id' => $invoice->id,
             'user_id' => Auth::id(),
             'gateway_reference' => 'TEMP-' . uniqid(), // Temporary ref
-            'amount' => $invoice->amount,
+            'amount' => $amountToPay,
             'status' => 'pending',
         ]);
 
@@ -72,7 +101,7 @@ class PaymentController extends Controller
 
         $data = $this->paystack->initializeTransaction(
             Auth::user()->email,
-            $invoice->amount,
+            $amountToPay,
             $reference,
             route('student.payments.callback')
         );
@@ -103,7 +132,18 @@ class PaymentController extends Controller
                     'paid_at' => now(),
                 ]);
 
-                $payment->invoice->update(['status' => 'paid']);
+                // Increment paid amount
+                $payment->invoice->increment('paid_amount', $payment->amount);
+
+                // Refresh invoice
+                $payment->invoice->refresh();
+
+                // Check if fully paid (allow small float diff)
+                if ($payment->invoice->paid_amount >= $payment->invoice->amount) {
+                    $payment->invoice->update(['status' => 'paid']);
+                } else {
+                    $payment->invoice->update(['status' => 'partial']);
+                }
 
                 if ($payment->invoice->type === 'acceptance_fee') {
                     $applicant = \App\Models\Applicant::where('user_id', $payment->user_id)

@@ -80,10 +80,11 @@ class ApplicationController extends Controller
         $applicant = Applicant::updateOrCreate(
             ['user_id' => $user->id],
             [
+                // 'application_number' => ... // Generated after payment
                 'jamb_registration_number' => $request->input('jamb_number', 'PENDING-' . time()),
                 'application_mode' => $request->input('mode'),
                 'program_choice_1' => $request->input('programme_id'),
-                'status' => 'submitted',
+                'status' => 'pending_payment', // Changed from submitted
 
                 // Personal
                 'first_name' => $request->first_name,
@@ -124,26 +125,73 @@ class ApplicationController extends Controller
             ]);
         }
 
-        // Notify User
-        $user->notify(new \App\Notifications\ApplicationSubmitted($applicant));
+        // Generate Invoice for Application Fee
+        $currentSession = \App\Models\Session::current();
+        if (!$currentSession) {
+            return back()->with('error', 'No active academic session found.');
+        }
 
-        return redirect()->route('applicant.dashboard')->with('success', 'Application submitted successfully!');
+        $invoice = \App\Models\Invoice::firstOrCreate(
+            [
+                'user_id' => $user->id,
+                'type' => 'application_fee',
+                'session_id' => $currentSession->id,
+            ],
+            [
+                'reference' => 'APP-' . strtoupper(uniqid()),
+                'amount' => 50000,
+                'paid_amount' => 0,
+                'status' => 'pending',
+                'due_date' => now()->addDays(7),
+            ]
+        );
+
+        // Ensure Invoice Item exists
+        if ($invoice->items()->count() === 0) {
+            $invoice->items()->create([
+                'description' => 'Application Fee',
+                'amount' => 50000,
+                'quantity' => 1,
+            ]);
+        }
+
+        return redirect()->route('applicant.payment.index')->with('success', 'Application saved. Please pay the application fee to complete submission.');
     }
 
     public function acceptOffer(Request $request)
     {
+        \Illuminate\Support\Facades\Log::info("Accept Offer Hit by User: " . $request->user()->id);
         $user = $request->user();
+
+        // Check if already a student
+        if ($user->hasRole('student')) {
+            return redirect()->route('student.dashboard')->with('info', 'You have already accepted the offer.');
+        }
+
         $applicant = Applicant::where('user_id', $user->id)->first();
 
         if (!$applicant || $applicant->status !== 'admitted') {
-            return back()->with('error', 'Invalid request.');
+            return back()->with('error', 'Invalid request. You must be admitted to accept.');
         }
 
-        // Check if invoice exists (if they need to pay, they shouldn't use this route)
-        // But for flexibility, we proceed if configured to allow direct acceptance
+        try {
+            app(\App\Services\EnrollmentService::class)->enroll($applicant, $user->id);
+            return redirect()->route('student.dashboard')->with('success', 'Admission accepted! Welcome to the university.');
+        } catch (\Exception $e) {
+            Log::error("Enrollment failed: " . $e->getMessage());
+            return back()->with('error', 'An error occurred while processing acceptance.');
+        }
+    }
 
-        app(\App\Services\EnrollmentService::class)->enroll($applicant, $user->id);
+    public function show(Request $request)
+    {
+        $user = $request->user();
+        $applicant = Applicant::where('user_id', $user->id)
+            ->with(['programme', 'state', 'lga', 'documents'])
+            ->firstOrFail();
 
-        return redirect()->route('student.dashboard')->with('success', 'Admission accepted! Welcome to the University.');
+        return Inertia::render('Applicant/Application/Show', [
+            'applicant' => $applicant
+        ]);
     }
 }

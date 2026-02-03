@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -72,6 +72,12 @@ const mainNavItems = computed(() => {
             show: isAdmin.value || userPermissions.value.includes('view_payments'),
         },
         {
+            title: 'Invoices',
+            href: route('admin.invoices.index'),
+            icon: FileText,
+            show: isAdmin.value || userPermissions.value.includes('view_payments'),
+        },
+        {
             title: 'Finance Dashboard',
             href: route('admin.finance.dashboard'),
             icon: Banknote,
@@ -90,10 +96,28 @@ const mainNavItems = computed(() => {
             show: isAdmin.value || userPermissions.value.includes('manage_courses'),
         },
         {
+            title: 'Allocations',
+            href: route('admin.course-allocations.index'),
+            icon: BookOpen,
+            show: isAdmin.value || userPermissions.value.includes('manage_courses'),
+        },
+        {
             title: 'Sessions',
             href: '/admin/sessions',
             icon: Calendar,
             show: isAdmin.value || userPermissions.value.includes('manage_courses'),
+        },
+        {
+            title: 'Timetables',
+            href: route('admin.timetables.index'),
+            icon: CalendarRange,
+            show: isAdmin.value || userPermissions.value.includes('manage_courses'),
+        },
+        {
+            title: 'My Courses',
+            href: route('admin.teaching.courses.index'),
+            icon: BookOpen,
+            show: ['lecturer', 'course_coordinator', 'dean', 'hod'].some(role => (page.props.auth.user as any)?.roles?.includes(role)) || userPermissions.value.includes('manage_courses'),
         },
     ];
 

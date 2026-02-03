@@ -3,10 +3,114 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\Invoice;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class ProfileController extends Controller
 {
+    public function dashboard()
+    {
+        $student = \App\Models\Student::where('user_id', auth()->id())->with('user')->first();
+
+        // Simple check: if key fields are present
+        $isProfileComplete = $student && $student->phone_number && $student->address && $student->next_of_kin_name;
+
+        // Calculate registered units for current session
+        $currentSession = \App\Models\Session::current();
+        $currentSemester = \App\Models\Semester::current();
+
+        // Stats Calculations
+        $cgpa = 0.00; // Placeholder for now
+        $totalUnits = 0;
+        $level = $student->current_level ?? '100';
+        $academicStatus = 'Good Standing';
+        $showRegistrationNotification = false;
+        $registrationMessage = '';
+
+        if ($student && $currentSession) {
+            // Assuming we have a relation or through model.
+            // Let's use CourseRegistration model directly for now.
+            $totalUnits = \App\Models\CourseRegistration::where('student_id', $student->id)
+                ->where('session_id', $currentSession->id)
+                ->join('courses', 'course_registrations.course_id', '=', 'courses.id')
+                ->sum('courses.units');
+
+            // Check for Registration Notification
+            if ($currentSemester && $currentSession->registration_enabled) {
+                $now = now();
+                $start = $currentSemester->registration_starts_at;
+                $end = $currentSemester->registration_ends_at;
+
+                $isOpen = true;
+                if ($start && $now->lt($start)) {
+                    $isOpen = false;
+                }
+                if ($end && $now->gt($end)) {
+                    $isOpen = false;
+                }
+
+                if ($isOpen) {
+                    // Check if already registered
+                    $hasRegistered = \App\Models\CourseRegistration::where('student_id', $student->id)
+                        ->where('session_id', $currentSession->id)
+                        ->where('semester_id', $currentSemester->id)
+                        ->exists();
+
+                    if (!$hasRegistered) {
+                        $showRegistrationNotification = true;
+                        if ($end) {
+                            $registrationMessage = "Registration for {$currentSemester->name} closes on " . $end->format('M d, Y') . '. Register now to avoid penalties.';
+                        } else {
+                            $registrationMessage = "Registration for {$currentSemester->name} is now open.";
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fetch Timetable for Registered Courses
+        $timetable = [];
+        if ($student && $currentSession) {
+            $registeredCourseIds = \App\Models\CourseRegistration::where('student_id', $student->id)
+                ->where('session_id', $currentSession->id)
+                ->pluck('course_id');
+
+            $timetable = \App\Models\Timetable::whereIn('course_id', $registeredCourseIds)
+                ->where('session_id', $currentSession->id)
+                ->with(['course'])
+                ->get();
+        }
+
+        // Check School Fee status for CURRENT session
+        $hasPaidSchoolFee = false;
+        if ($currentSession) {
+            $hasPaidSchoolFee = Invoice::where('user_id', auth()->id())
+                ->where('type', 'school_fee')
+                ->where('session_id', $currentSession->id)
+                ->whereIn('status', ['paid'])
+                ->exists();
+        }
+
+        return Inertia::render('Student/Dashboard', [
+            'student' => $student->load(['program']),
+            'user' => $student ? $student->user : auth()->user(),
+            'isProfileComplete' => $isProfileComplete,
+            'hasPaidSchoolFee' => $hasPaidSchoolFee,
+            'showRegistrationNotification' => $showRegistrationNotification,
+            'registrationMessage' => $registrationMessage,
+            'stats' => [
+                'cgpa' => $cgpa,
+                'totalUnits' => $totalUnits,
+                'level' => $level,
+                'status' => $academicStatus,
+                'session' => $currentSession->name ?? 'N/A',
+                'semester' => $currentSemester->name ?? 'N/A',
+            ],
+            'timetable' => $timetable,
+        ]);
+    }
+
     public function edit(Request $request)
     {
         $student = \App\Models\Student::where('user_id', $request->user()->id)
@@ -108,8 +212,9 @@ class ProfileController extends Controller
         if ($canEditProfile && $request->filled('o_level_sittings')) {
             foreach ($request->o_level_sittings as $index => $sitting) {
                 // Skip empty rows if needed, mainly checking exam_type
-                if (empty($sitting['exam_type']))
+                if (empty($sitting['exam_type'])) {
                     continue;
+                }
 
                 $oLevelData = [
                     'exam_type' => $sitting['exam_type'],
@@ -140,11 +245,11 @@ class ProfileController extends Controller
 
         // Delete removed sittings (results that belong to student but were not in the submitted list)
         // If the user submitted empty array or no valid sittings, this might delete all if we intended to clear.
-        // But logic above ($request->filled) keeps old ones if empty. 
-        // Better logic: Only delete if $request->o_level_sittings was actually sent (even empty). 
+        // But logic above ($request->filled) keeps old ones if empty.
+        // Better logic: Only delete if $request->o_level_sittings was actually sent (even empty).
         // Since frontend sends the array, we can safely delete except processed.
         // However, we should be careful. If $processedIds is empty but sittings were sent (e.g. user deleted all in UI), we delete all.
-        // If sittings were NOT sent (e.g. unrelated update), we shouldn't delete. 
+        // If sittings were NOT sent (e.g. unrelated update), we shouldn't delete.
         // But Edit form sends everything. So safe to deleteNotIn.
 
         if ($canEditProfile && $request->has('o_level_sittings')) {

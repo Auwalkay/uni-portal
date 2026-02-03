@@ -23,4 +23,9 @@ class Staff extends Model
     {
         return $this->belongsTo(Department::class);
     }
+
+    public function allocations()
+    {
+        return $this->hasMany(CourseAllocation::class);
+    }
 }

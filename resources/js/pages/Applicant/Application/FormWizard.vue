@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import axios from 'axios';
 import { route } from 'ziggy-js';
+import Swal from 'sweetalert2';
 
 const props = defineProps<{
     mode?: string;
@@ -104,6 +105,17 @@ const submitApplication = () => {
         onSuccess: () => {
     alert('Submitting application...');
         },
+        onError: (error) => {
+            Swal.fire({
+                icon: 'error',
+                title: 'Registration Failed',
+                text: 'An error occurred during registration.',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
+            });
+        }
     });
 };
 </script>
@@ -121,17 +133,17 @@ const submitApplication = () => {
                          <!-- Vertical Line -->
                         <div class="absolute left-[15px] top-4 bottom-4 w-0.5 bg-muted"></div>
 
-                        <div 
-                            v-for="(step, index) in steps" 
+                        <div
+                            v-for="(step, index) in steps"
                             :key="index"
                             class="relative flex items-center gap-4 group cursor-pointer"
                             @click="index < currentStep ? currentStep = index : null"
                         >
-                             <div 
+                             <div
                                 class="z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all duration-300"
                                 :class="[
-                                    index <= currentStep 
-                                        ? 'border-primary bg-primary text-primary-foreground' 
+                                    index <= currentStep
+                                        ? 'border-primary bg-primary text-primary-foreground'
                                         : 'border-muted-foreground/30 bg-background text-muted-foreground'
                                 ]"
                             >
@@ -139,7 +151,7 @@ const submitApplication = () => {
                                 <span v-else class="text-xs font-medium">{{ index + 1 }}</span>
                             </div>
                             <div class="flex flex-col">
-                                <span 
+                                <span
                                     class="text-sm font-medium transition-colors"
                                     :class="index === currentStep ? 'text-foreground' : 'text-muted-foreground'"
                                 >
@@ -158,9 +170,9 @@ const submitApplication = () => {
                     <CardTitle class="font-serif text-2xl text-primary">{{ steps[currentStep] }}</CardTitle>
                     <p class="text-sm text-muted-foreground">Please provide accurate information for your application.</p>
                 </CardHeader>
-                
+
                 <CardContent class="p-8 space-y-8 min-h-[500px]">
-                    
+
                      <!-- Step 0: JAMB Check (New Step) -->
                     <div v-if="currentStep === 0" class="space-y-6 max-w-md mx-auto py-10">
                         <div class="text-center space-y-2">
@@ -194,12 +206,12 @@ const submitApplication = () => {
                                 <Button class="w-full" variant="secondary" @click="confirmJambData">Continue with these details</Button>
                             </div>
                         </div>
-                        
+
                          <div class="relative">
                             <div class="absolute inset-0 flex items-center"><span class="w-full border-t"></span></div>
                             <div class="relative flex justify-center text-xs uppercase"><span class="bg-background px-2 text-muted-foreground">Or fill manually</span></div>
                         </div>
-                        
+
                         <Button variant="outline" class="w-full" @click="currentStep++">Skip & Fill Manually</Button>
                     </div>
 
@@ -221,11 +233,11 @@ const submitApplication = () => {
                             <Label>Phone Number</Label>
                             <Input type="tel" v-model="form.phone" placeholder="+234..." />
                         </div>
-                         
+
                         <div class="space-y-2 md:col-span-2">
                             <Label>Residential Address</Label>
-                             <textarea 
-                                v-model="form.address" 
+                             <textarea
+                                v-model="form.address"
                                 class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                 placeholder="Full address"
                             ></textarea>
@@ -308,14 +320,14 @@ const submitApplication = () => {
 
                     <!-- Step 3: Uploads -->
                     <div v-if="currentStep === 3" class="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-                        <FileUploader 
-                            label="Passport Photograph" 
+                        <FileUploader
+                            label="Passport Photograph"
                             accept="image/*"
                             @update:file="(file) => form.passport_photo = file"
                         />
                         <Separator />
-                        <FileUploader 
-                            label="O'Level Result (WAEC/NECO)" 
+                        <FileUploader
+                            label="O'Level Result (WAEC/NECO)"
                             accept=".pdf,image/*"
                             @update:file="(file) => form.waec_result = file"
                         />
@@ -344,7 +356,7 @@ const submitApplication = () => {
                         <div class="flex items-start gap-3 p-4 bg-yellow-50 text-yellow-800 rounded-lg border border-yellow-200">
                             <span class="text-xl">⚠️</span>
                              <p class="text-sm">
-                                By submitting this application, I solemnly declare that all information provided is true. 
+                                By submitting this application, I solemnly declare that all information provided is true.
                                 I understand that any false declaration will result in immediate disqualification and possible prosecution.
                             </p>
                         </div>
@@ -355,11 +367,11 @@ const submitApplication = () => {
                     <Button variant="outline" @click="prevStep" :disabled="currentStep === 0" class="w-32">
                         Previous
                     </Button>
-                    
+
                     <Button v-if="currentStep < steps.length - 1" @click="nextStep" class="w-32 shadow-lg hover:shadow-xl transition-all">
                         Next Step
                     </Button>
-                    
+
                     <Button v-else @click="submitApplication" :disabled="form.processing" class="w-48 bg-primary text-primary-foreground shadow-lg hover:shadow-xl transition-all">
                         Submit Application
                     </Button>

@@ -141,7 +141,12 @@ defineProps<{
                                 <p class="text-sm text-gray-500">Your application is currently under review.</p>
                             </div>
                         </div>
-                         <Button variant="outline" disabled>Under Review</Button>
+                         <div class="flex gap-2">
+                             <Link :href="route('applicant.apply.show')">
+                                <Button variant="outline">View Application</Button>
+                             </Link>
+                             <Button variant="ghost" disabled class="text-yellow-600 bg-yellow-50">Under Review</Button>
+                         </div>
                     </div>
 
                     <!-- START NEW -->
