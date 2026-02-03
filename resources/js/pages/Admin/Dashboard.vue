@@ -4,7 +4,7 @@ import { ref, watch, onMounted } from 'vue';
 import { route } from 'ziggy-js';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { BookOpen, CreditCard, Users, GraduationCap, TrendingUp, Calendar, ArrowRight, UserPlus, FileText, ArrowUpRight, ArrowDownRight, Activity, CalendarClock, MapPin, Building2, Library, School } from 'lucide-vue-next';
+import { BookOpen, CreditCard, Users, GraduationCap, TrendingUp, Calendar, ArrowRight, UserPlus, FileText, ArrowUpRight, ArrowDownRight, Activity, CalendarClock, MapPin, Building2, Library, School, Building, LineChart } from 'lucide-vue-next';
 import StatsCard from '@/components/StatsCard.vue';
 import BarChart from '@/components/Charts/BarChart.vue';
 import DoughnutChart from '@/components/Charts/DoughnutChart.vue';
@@ -43,6 +43,14 @@ const props = defineProps<{
             academic_staff: number;
             non_academic_staff: number;
         };
+        total_outflow?: number | null;
+        net_cash_flow?: number | null;
+        active_students?: number | null;
+        admissions_funnel?: {
+            total_applicants: number;
+            screened_applicants: number;
+            pending_screening: number;
+        } | null;
     };
     recentActivity: Array<{
         id: string;
@@ -56,12 +64,20 @@ const props = defineProps<{
     sessions: Array<{ id: string; name: string }>;
     filters: { session_id: string };
     currentSessionName: string;
+    auth: {
+        user: {
+            name: string;
+            role?: string;
+        }
+    };
     charts: {
         revenue: { labels: string[]; data: number[] };
         faculty: { labels: string[]; data: number[] };
         level: { labels: string[]; data: number[] };
         program: { labels: string[]; data: number[] };
         staff_department: { labels: string[]; data: number[] };
+        financial_trend: { labels: string[]; inflow: number[]; outflow: number[] };
+        expense_categories: { labels: string[]; data: number[] };
     };
     myAllocations?: Array<{
         id: string;
@@ -78,7 +94,23 @@ const props = defineProps<{
         total_courses: number;
         classes_today: number;
     } | null;
-}>();
+    userRole: string;
+ }>();
+
+const user = props.auth?.user;
+const roleColorMap: Record<string, string> = {
+    admin: 'from-slate-800 to-slate-900',
+    finance: 'from-emerald-800 to-emerald-900',
+    academic: 'from-indigo-800 to-indigo-900',
+    admissions: 'from-amber-800 to-amber-900',
+};
+
+const roleLabelMap: Record<string, string> = {
+    admin: 'Administrator',
+    finance: 'Finance Officer',
+    academic: 'Academic Staff',
+    admissions: 'Admissions Officer',
+};
 
 const formatTime = (time: string) => {
     return time.substring(0, 5);
@@ -117,17 +149,17 @@ const barOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-        legend: { display: false },
+        legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
         tooltip: {
             backgroundColor: '#1e293b',
             padding: 12,
             cornerRadius: 8,
             titleFont: { size: 13, family: "'Inter', sans-serif" },
             bodyFont: { size: 13, family: "'Inter', sans-serif" },
-            displayColors: false,
+            displayColors: true,
             callbacks: {
                 label: (context: any) => {
-                    return formatCurrency(context.raw);
+                    return context.dataset.label + ': ' + formatCurrency(context.raw);
                 }
             }
         }
@@ -165,20 +197,38 @@ const doughnutOptions = {
     maintainAspectRatio: false,
     cutout: '65%',
     plugins: {
-        legend: { position: 'right' as const, labels: { boxWidth: 12, usePointStyle: true, font: { size: 11 } } },
+        legend: { position: 'bottom' as const, labels: { boxWidth: 12, usePointStyle: true, font: { size: 11 } } },
     }
 };
 
-const revenueChartData = {
-    labels: props.charts.revenue.labels,
+const financialTrendChartData = {
+    labels: props.charts.financial_trend.labels,
+    datasets: [
+        {
+            label: 'Inflow',
+            backgroundColor: '#10b981',
+            borderRadius: 6,
+            barPercentage: 0.6,
+            categoryPercentage: 0.8,
+            data: props.charts.financial_trend.inflow
+        },
+        {
+            label: 'Outflow',
+            backgroundColor: '#ef4444',
+            borderRadius: 6,
+            barPercentage: 0.6,
+            categoryPercentage: 0.8,
+            data: props.charts.financial_trend.outflow
+        }
+    ]
+};
+
+const expenseCategoryChartData = {
+    labels: props.charts.expense_categories.labels,
     datasets: [{
-        label: 'Revenue',
-        backgroundColor: '#4f46e5',
-        hoverBackgroundColor: '#4338ca',
-        borderRadius: 8,
-        barPercentage: 0.6,
-        categoryPercentage: 0.8,
-        data: props.charts.revenue.data
+        backgroundColor: ['#6366f1', '#ec4899', '#14b8a6', '#f97316', '#8b5cf6', '#3b82f6'],
+        borderWidth: 0,
+        data: props.charts.expense_categories.data
     }]
 };
 
@@ -236,291 +286,384 @@ const staffChartData = {
 
     <AdminLayout :breadcrumbs="breadcrumbs">
         <div class="flex flex-col gap-6 p-6">
-            <!-- Header Section -->
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6">
-                 <div>
-                    <h1 class="text-3xl font-bold tracking-tight text-gray-900">Dashboard</h1>
-                    <p class="text-muted-foreground mt-1 text-lg">
-                        Overview for <span class="font-semibold text-primary">{{ currentSessionName }} Session</span>
-                    </p>
-                </div>
+            <!-- Personalized Welcome Banner -->
+            <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r p-8 text-white shadow-xl mb-2" :class="roleColorMap[userRole] || 'from-slate-800 to-slate-900'">
+                <div class="absolute right-0 top-0 h-full w-1/3 bg-white/5 backdrop-blur-3xl -mr-20 transform skew-x-12"></div>
+                <div class="absolute left-0 bottom-0 h-32 w-32 bg-white/5 rounded-full blur-3xl -ml-16 -mb-16"></div>
                 
-                <div class="flex items-center gap-3">
-                    <div class="hidden md:flex items-center gap-2 px-3 py-1.5 bg-secondary/50 rounded-md text-sm font-medium text-secondary-foreground">
-                        <Calendar class="w-4 h-4" />
-                        <span>Today: {{ new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric'}) }}</span>
+                <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div class="space-y-2">
+                        <Badge variant="secondary" class="bg-white/20 text-white border-0 hover:bg-white/30 px-3 py-1 mb-2">
+                            {{ roleLabelMap[userRole] }} Dashboard
+                        </Badge>
+                        <h1 class="text-4xl font-extrabold tracking-tight">
+                            Welcome back, <span class="text-primary-foreground underline decoration-primary-foreground/30">{{ user?.name.split(' ')[0] }}</span>!
+                        </h1>
+                        <p class="text-white/80 text-lg max-w-2xl font-medium">
+                            Here's what's happening at Auwalkay University for the <span class="font-bold underline">{{ currentSessionName }}</span> session.
+                        </p>
                     </div>
-                     <Select v-model="selectedSession">
-                        <SelectTrigger class="w-[180px] h-10">
-                            <SelectValue placeholder="Select Session" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem v-for="session in sessions" :key="session.id" :value="session.id">
-                                {{ session.name }} Session
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
+
+                    <div class="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/10 min-w-[240px]">
+                         <div class="flex items-center justify-between mb-4">
+                            <span class="text-sm font-semibold text-white/70 uppercase tracking-widest">Selected Session</span>
+                            <Calendar class="w-4 h-4 text-white/50" />
+                        </div>
+                         <Select v-model="selectedSession">
+                            <SelectTrigger class="w-full h-11 bg-white/20 border-0 text-white focus:ring-offset-slate-900">
+                                <SelectValue placeholder="Select Session" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem v-for="session in sessions" :key="session.id" :value="session.id">
+                                    {{ session.name }} Session
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                         <p class="text-[10px] text-white/50 mt-3 flex items-center gap-1.5 font-mono">
+                            <Activity class="w-3 h-3" /> System Status: Optimal Performance
+                        </p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Structural Stats (Faculties/Departments/etc) -->
-            <div>
-                <h2 class="text-xl font-semibold tracking-tight text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
-                    <Building class="w-5 h-5 text-indigo-500" />
-                    Institutional Structure
-                </h2>
-                <div v-if="stats.structural" class="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <Card class="bg-indigo-50 dark:bg-slate-900/50 border-indigo-100 dark:border-indigo-900">
-                    <CardContent class="p-4 flex items-center justify-between">
-                         <div>
-                             <p class="text-xs font-medium text-indigo-500 uppercase tracking-wider">Faculties</p>
-                             <div class="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{{ stats.structural.faculties }}</div>
-                         </div>
-                         <div class="h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
-                             <Building2 class="w-5 h-5" />
-                         </div>
-                    </CardContent>
-                </Card>
-                 <Card class="bg-violet-50 dark:bg-slate-900/50 border-violet-100 dark:border-violet-900">
-                    <CardContent class="p-4 flex items-center justify-between">
-                         <div>
-                             <p class="text-xs font-medium text-violet-500 uppercase tracking-wider">Departments</p>
-                             <div class="text-2xl font-bold text-violet-700 dark:text-violet-300">{{ stats.structural.departments }}</div>
-                         </div>
-                         <div class="h-10 w-10 bg-violet-100 rounded-full flex items-center justify-center text-violet-600">
-                             <Library class="w-5 h-5" />
-                         </div>
-                    </CardContent>
-                </Card>
-                 <Card class="bg-fuchsia-50 dark:bg-slate-900/50 border-fuchsia-100 dark:border-fuchsia-900">
-                    <CardContent class="p-4 flex items-center justify-between">
-                         <div>
-                             <p class="text-xs font-medium text-fuchsia-500 uppercase tracking-wider">Programs</p>
-                             <div class="text-2xl font-bold text-fuchsia-700 dark:text-fuchsia-300">{{ stats.structural.programs }}</div>
-                         </div>
-                         <div class="h-10 w-10 bg-fuchsia-100 rounded-full flex items-center justify-center text-fuchsia-600">
-                             <GraduationCap class="w-5 h-5" />
-                         </div>
-                    </CardContent>
-                </Card>
-                 <Card class="bg-cyan-50 dark:bg-slate-900/50 border-cyan-100 dark:border-cyan-900">
-                    <CardContent class="p-4 flex items-center justify-between">
-                         <div>
-                             <p class="text-xs font-medium text-cyan-500 uppercase tracking-wider">Sessions</p>
-                             <div class="text-2xl font-bold text-cyan-700 dark:text-cyan-300">{{ stats.structural.sessions }}</div>
-                         </div>
-                         <div class="h-10 w-10 bg-cyan-100 rounded-full flex items-center justify-center text-cyan-600">
-                             <School class="w-5 h-5" />
-                         </div>
-                    </CardContent>
-                </Card>
-
-                 <!-- Staff Card -->
-                 <Card class="bg-emerald-50 dark:bg-slate-900/50 border-emerald-100 dark:border-emerald-900">
-                    <CardContent class="p-4">
-                        <div class="flex items-center justify-between mb-2">
-                             <div>
-                                 <p class="text-xs font-medium text-emerald-500 uppercase tracking-wider">Total Staff</p>
-                                 <div class="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{{ stats.structural.staff }}</div>
-                             </div>
-                             <div class="h-10 w-10 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600">
-                                 <Users class="w-5 h-5" />
-                             </div>
-                        </div>
-                        
-                        <div class="flex items-center gap-2 pt-2 border-t border-emerald-100 dark:border-emerald-900/50 mt-1">
-                            <div class="flex-1">
-                                <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium uppercase tracking-wide">Academic</span>
-                                <div class="text-sm font-bold text-emerald-800 dark:text-emerald-200">{{ stats.structural.academic_staff }}</div>
-                            </div>
-                            <div class="w-px h-6 bg-emerald-200 dark:bg-emerald-800"></div>
-                            <div class="flex-1 text-right">
-                                <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium uppercase tracking-wide">Non-Academic</span>
-                                <div class="text-sm font-bold text-emerald-800 dark:text-emerald-200">{{ stats.structural.non_academic_staff }}</div>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-
-
-            </div>
-
-            <!-- Main Stats Grid -->
-
-            <!-- Student Insights -->
-            <div>
-                 <h2 class="text-xl font-semibold tracking-tight text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
-                    <Users class="w-5 h-5 text-blue-500" />
-                    Student Insights
-                </h2>
-                <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <!-- Total Students Card -->
-                    <Card v-if="stats.total_students !== null" class="overflow-hidden relative group hover:shadow-lg transition-all duration-300 border-l-4 border-l-primary/80">
-                        <div class="absolute right-0 top-0 h-24 w-24 bg-primary/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-                        <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2 relative">
-                            <CardTitle class="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Students</CardTitle>
-                            <div class="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
-                                <Users class="h-4 w-4" />
-                            </div>
+            <!-- Role-Centric "Hero" Metrics -->
+            <div class="grid gap-6">
+                <!-- FINANCE HERO -->
+                <div v-if="userRole === 'finance'" class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <Card class="bg-emerald-600 text-white border-0 shadow-lg relative overflow-hidden group">
+                        <div class="absolute right-0 top-0 h-full w-24 bg-white/10 -mr-12 transform skew-x-12 transition-transform group-hover:translate-x-4"></div>
+                        <CardHeader class="pb-2">
+                            <CardTitle class="text-xs font-medium text-emerald-100 uppercase tracking-wider">Net Cash Flow</CardTitle>
                         </CardHeader>
-                        <CardContent class="relative">
-                            <div class="text-3xl font-extrabold tracking-tight mt-1">{{ stats.total_students.toLocaleString() }}</div>
-                            <p class="text-xs text-muted-foreground mt-2 flex items-center gap-1.5 font-medium">
-                                 <span class="inline-flex items-center text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-100">
-                                    <ArrowUpRight class="w-3 h-3 mr-0.5" /> +2.5%
-                                 </span>
-                                 <span class="opacity-75">vs last month</span>
-                            </p>
+                        <CardContent>
+                            <div class="text-3xl font-bold">{{ formatCurrency(stats.net_cash_flow || 0) }}</div>
+                            <div class="mt-2 flex items-center gap-1.5 text-xs text-emerald-200">
+                                <TrendingUp class="w-3 h-3" /> Inflow - Outflow
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-emerald-500 shadow-sm">
+                        <CardHeader class="pb-2">
+                            <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Revenue</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ formatCurrency(stats.revenue || 0) }}</div>
+                            <div class="mt-2 flex items-center gap-1.5 text-xs text-emerald-600 font-bold">
+                                <ArrowUpRight class="w-3 h-3" /> {{ stats.revenue_growth }}% <span class="text-muted-foreground font-normal">vs last session</span>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-rose-500 shadow-sm">
+                        <CardHeader class="pb-2">
+                            <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Outflow</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ formatCurrency(stats.total_outflow || 0) }}</div>
+                             <p class="text-xs text-muted-foreground mt-2">Expenses & Payroll</p>
+                        </CardContent>
+                    </Card>
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-amber-500 shadow-sm">
+                        <CardHeader class="pb-2">
+                            <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Outstanding Fees</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div class="text-3xl font-bold text-amber-600">{{ formatCurrency(stats.outstanding_fees || 0) }}</div>
+                             <div class="h-1.5 w-full bg-amber-100 dark:bg-amber-900/30 rounded-full mt-3 overflow-hidden">
+                                <div class="h-full bg-amber-500 rounded-full" style="width: 45%"></div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <!-- ACADEMIC HERO -->
+                <div v-if="userRole === 'academic'" class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <Card class="bg-indigo-600 text-white border-0 shadow-lg relative overflow-hidden group">
+                        <div class="absolute right-0 top-0 h-full w-24 bg-white/10 -mr-12 transform skew-x-12 transition-transform group-hover:translate-x-4"></div>
+                        <CardHeader class="pb-2">
+                            <CardTitle class="text-xs font-medium text-indigo-100 uppercase tracking-wider">Classes Today</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div class="text-4xl font-bold">{{ lecturerStats?.classes_today || 0 }}</div>
+                            <div class="mt-2 flex items-center gap-1.5 text-xs text-indigo-200">
+                                <Calendar class="w-3 h-3" /> {{ new Date().toLocaleDateString('en-GB', { weekday: 'long' }) }}
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-indigo-500 shadow-sm">
+                        <CardHeader class="pb-2">
+                            <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Active Students</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ lecturerStats?.total_students || 0 }}</div>
+                             <p class="text-xs text-muted-foreground mt-2">Across all your courses</p>
+                        </CardContent>
+                    </Card>
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-violet-500 shadow-sm">
+                        <CardHeader class="pb-2">
+                            <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Allocated Courses</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ lecturerStats?.total_courses || 0 }}</div>
+                             <p class="text-xs text-muted-foreground mt-2">This academic session</p>
+                        </CardContent>
+                    </Card>
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-emerald-500 shadow-sm">
+                        <CardHeader class="pb-2">
+                            <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Portal Access</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div class="flex items-center gap-2 text-emerald-600 font-bold text-lg py-1">
+                                <div class="h-2.5 w-2.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                                LIVE & ONLINE
+                            </div>
+                            <p class="text-xs text-muted-foreground mt-1.5">No maintenance scheduled.</p>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <!-- ADMISSIONS HERO -->
+                <div v-if="userRole === 'admissions'" class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <Card class="bg-amber-600 text-white border-0 shadow-lg relative overflow-hidden group">
+                        <div class="absolute right-0 top-0 h-full w-24 bg-white/10 -mr-12 transform skew-x-12 transition-transform group-hover:translate-x-4"></div>
+                        <CardHeader class="pb-2">
+                            <CardTitle class="text-xs font-medium text-amber-100 uppercase tracking-wider">Incoming Apps</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div class="text-4xl font-bold">{{ stats.admissions_funnel?.total_applicants || 0 }}</div>
+                            <div class="mt-2 flex items-center gap-1.5 text-xs text-amber-200">
+                                <FileText class="w-3 h-3" /> All applicants
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-amber-500 shadow-sm transition-all hover:shadow-md cursor-pointer">
+                        <CardHeader class="pb-2">
+                            <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Admitted (Proxy)</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ stats.admissions_funnel?.screened_applicants || 0 }}</div>
+                             <p class="text-xs text-muted-foreground mt-2">Applicants with records</p>
+                        </CardContent>
+                    </Card>
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-primary shadow-sm">
+                        <CardHeader class="pb-2">
+                            <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Pending Review</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div class="text-3xl font-bold text-rose-600">{{ stats.admissions_funnel?.pending_screening || 0 }}</div>
+                             <p class="text-xs text-muted-foreground mt-2 font-medium">Action required</p>
+                        </CardContent>
+                    </Card>
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-indigo-500 shadow-sm">
+                        <CardHeader class="pb-2">
+                            <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Compliance</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                             <div class="text-3xl font-bold text-indigo-700">{{ stats.registration_compliance }}%</div>
+                             <div class="h-1.5 w-full bg-indigo-100 rounded-full mt-3 overflow-hidden">
+                                <div class="h-full bg-indigo-600 rounded-full" :style="{ width: `${stats.registration_compliance}%` }"></div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <!-- ADMIN HERO -->
+                <div v-if="userRole === 'admin'" class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <Card class="bg-slate-900 dark:bg-slate-950 text-white border-0 shadow-xl relative overflow-hidden group">
+                        <div class="absolute right-0 top-0 h-full w-24 bg-white/5 -mr-12 transform skew-x-12"></div>
+                        <CardHeader class="pb-2">
+                            <CardTitle class="text-xs font-medium text-slate-400 uppercase tracking-wider">Institutional Scale</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div class="text-4xl font-extrabold">{{ (stats.total_students || 0).toLocaleString() }}</div>
+                            <div class="mt-2 flex items-center gap-1.5 text-xs text-emerald-400 font-bold">
+                                <Users class="w-3 h-3" /> Total Enrolled Students
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-indigo-500 shadow-sm">
+                        <CardHeader class="pb-2">
+                            <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Active Programs</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ stats.structural?.programs || 0 }}</div>
+                             <p class="text-xs text-muted-foreground mt-2">Across {{ stats.structural?.faculties }} Faculties</p>
+                        </CardContent>
+                    </Card>
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-emerald-500 shadow-sm">
+                        <CardHeader class="pb-2">
+                            <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Human Resources</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ stats.structural?.staff || 0 }}</div>
+                             <p class="text-xs text-muted-foreground mt-2">Academic & Non-Academic</p>
+                        </CardContent>
+                    </Card>
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-primary shadow-sm">
+                        <CardHeader class="pb-2">
+                            <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Session Revenue</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div class="text-3xl font-bold text-primary">{{ formatCurrency(stats.revenue || 0) }}</div>
+                             <p class="text-xs text-muted-foreground mt-2 font-medium">Current session performance</p>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+
+            <!-- Secondary Insights Section (Pulse) -->
+             <div class="grid md:grid-cols-2 gap-6" :style="{ order: userRole === 'admin' ? 3 : 5 }">
+                <!-- Institutional Structure -->
+                <Card class="border-0 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+                    <CardHeader class="border-b bg-slate-50/50 dark:bg-slate-800/50">
+                        <CardTitle class="text-lg flex items-center gap-2">
+                             <Building2 class="w-5 h-5 text-indigo-500" /> University Infrastructure
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent class="p-6">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="space-y-1">
+                                <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Faculties</span>
+                                <div class="text-2xl font-bold">{{ stats.structural?.faculties }}</div>
+                            </div>
+                            <div class="space-y-1">
+                                <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Departments</span>
+                                <div class="text-2xl font-bold">{{ stats.structural?.departments }}</div>
+                            </div>
+                            <div class="space-y-1">
+                                <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Academic Staff</span>
+                                <div class="text-xl font-bold text-emerald-600">{{ stats.structural?.academic_staff }}</div>
+                            </div>
+                             <div class="space-y-1">
+                                <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Non-Academic</span>
+                                <div class="text-xl font-bold text-indigo-600">{{ stats.structural?.non_academic_staff }}</div>
+                            </div>
+                        </div>
+                        <div class="mt-6 pt-4 border-t flex items-center justify-between text-xs text-muted-foreground">
+                             <div class="flex items-center gap-1.5">
+                                <School class="w-3.5 h-3.5" /> Total Programs: <span class="font-bold text-slate-900 dark:text-white">{{ stats.structural?.programs }}</span>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <!-- Student Demographics & Compliance -->
+                <Card class="border-0 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+                    <CardHeader class="border-b bg-slate-50/50 dark:bg-slate-800/50">
+                        <CardTitle class="text-lg flex items-center gap-2">
+                             <Users class="w-5 h-5 text-blue-500" /> Student Population
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent class="p-6">
+                         <div v-if="stats.gender_distribution" class="mb-6">
+                             <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Gender Ratio</span>
+                                <span class="text-xs font-mono">{{ stats.gender_distribution.male }}% M / {{ stats.gender_distribution.female }}% F</span>
+                             </div>
+                            <div class="flex h-2.5 w-full rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800">
+                                <div class="bg-blue-500 h-full transition-all duration-1000" :style="{ width: `${stats.gender_distribution.male}%` }"></div>
+                                <div class="bg-pink-500 h-full transition-all duration-1000" :style="{ width: `${stats.gender_distribution.female}%` }"></div>
+                            </div>
+                         </div>
+
+                         <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                     <div class="h-8 w-8 rounded bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600">
+                                        <BookOpen class="w-4 h-4" />
+                                     </div>
+                                     <div>
+                                        <p class="text-xs font-bold text-slate-500">Course Registration</p>
+                                        <p class="text-sm font-bold text-slate-900 dark:text-slate-100">{{ stats.registration_compliance }}% Compliance</p>
+                                     </div>
+                                </div>
+                                <div class="h-10 w-10 flex items-center justify-center relative">
+                                     <svg class="h-10 w-10 transform -rotate-90">
+                                        <circle cx="20" cy="20" r="16" stroke="currentColor" stroke-width="4" fill="transparent" class="text-slate-100 dark:text-slate-800" />
+                                        <circle cx="20" cy="20" r="16" stroke="currentColor" stroke-width="4" fill="transparent" :stroke-dasharray="100.5" :stroke-dashoffset="100.5 - (stats.registration_compliance || 0)" class="text-indigo-600" />
+                                     </svg>
+                                </div>
+                            </div>
+                         </div>
+                    </CardContent>
+                </Card>
+             </div>
+
+            <!-- Analytics Hub -->
+            <div class="space-y-6" :style="{ order: 8 }">
+                <div class="flex items-center justify-between border-b pb-2">
+                     <h2 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-3">
+                        <div class="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600">
+                            <LineChart class="w-6 h-6" />
+                        </div>
+                        Analytics Hub
+                    </h2>
+                </div>
+
+                <div class="grid lg:grid-cols-3 gap-6">
+                    <!-- Main Financial/Admissions Trend -->
+                    <Card class="lg:col-span-2 border-0 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+                        <CardHeader class="flex flex-row items-center justify-between pb-4">
+                            <div>
+                                <CardTitle class="text-lg">Financial Performance</CardTitle>
+                                <p class="text-xs text-muted-foreground">Monthly Inflow vs Outflow</p>
+                            </div>
+                             <Badge variant="outline" class="font-mono text-[10px] text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20">LIVE DATA</Badge>
+                        </CardHeader>
+                        <CardContent class="h-[350px]">
+                            <BarChart v-if="charts.financial_trend.inflow.length > 0 || charts.financial_trend.labels.length > 0" :chart-data="financialTrendChartData" :options="barOptions" />
+                             <div v-else class="h-full flex items-center justify-center text-muted-foreground">
+                                <p>No financial trend data available for this session.</p>
+                            </div>
                         </CardContent>
                     </Card>
 
-                    <!-- Fresh Intake Card -->
-                    <Card v-if="stats.fresh_students !== null" class="overflow-hidden relative group hover:shadow-lg transition-all duration-300 border-l-4 border-l-blue-500/80">
-                        <div class="absolute right-0 top-0 h-24 w-24 bg-blue-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-                        <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2 relative">
-                             <CardTitle class="text-sm font-medium text-muted-foreground uppercase tracking-wider">Fresh Intake</CardTitle>
-                             <div class="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                 <UserPlus class="h-4 w-4" />
-                             </div>
+                    <!-- Distribution -->
+                    <Card class="border-0 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+                        <CardHeader class="pb-4">
+                            <CardTitle class="text-lg">Expense Breakdown</CardTitle>
+                            <p class="text-xs text-muted-foreground">By category distribution</p>
                         </CardHeader>
-                        <CardContent class="relative">
-                             <div class="text-3xl font-extrabold tracking-tight mt-1">{{ stats.fresh_students.toLocaleString() }}</div>
-                            <p class="text-xs text-muted-foreground mt-2 flex items-center gap-1.5 font-medium">
-                                <span v-if="stats.student_growth >= 0" class="inline-flex items-center text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-100">
-                                    <ArrowUpRight class="w-3 h-3 mr-0.5" /> {{ stats.student_growth }}%
-                                </span>
-                                 <span v-else class="inline-flex items-center text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-full border border-rose-100">
-                                    <ArrowDownRight class="w-3 h-3 mr-0.5" /> {{ stats.student_growth }}%
-                                </span>
-                                <span class="opacity-75">vs last session</span>
-                            </p>
+                        <CardContent class="h-[350px]">
+                            <DoughnutChart v-if="charts.expense_categories.data.length > 0" :chart-data="expenseCategoryChartData" :options="doughnutOptions" />
+                             <div v-else class="h-full flex items-center justify-center text-muted-foreground">
+                                <p>No expense data available.</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                 <div class="grid md:grid-cols-3 gap-6">
+                    <Card class="md:col-span-1 border-0 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+                        <CardHeader class="pb-2">
+                            <CardTitle class="text-md">Faculty Distribution</CardTitle>
+                        </CardHeader>
+                        <CardContent class="h-[250px]">
+                            <DoughnutChart :chart-data="facultyChartData" :options="doughnutOptions" />
                         </CardContent>
                     </Card>
 
-                    <!-- Registration Compliance -->
-                    <Card v-if="stats.registration_compliance !== null" class="border-l-4 border-l-indigo-500 hover:shadow-md transition-shadow">
+                    <Card class="md:col-span-1 border-0 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
                         <CardHeader class="pb-2">
-                            <CardTitle class="text-sm font-medium text-muted-foreground uppercase tracking-wider">Registration Compliance</CardTitle>
+                             <CardTitle class="text-md">Enrollment by Level</CardTitle>
                         </CardHeader>
-                        <CardContent>
-                            <div class="flex items-end justify-between">
-                                <div class="text-2xl font-bold text-indigo-700">{{ stats.registration_compliance }}%</div>
-                                <span class="text-xs text-indigo-500 font-medium mb-1">Target: 95%</span>
-                            </div>
-                             <div class="h-2 w-full bg-indigo-100 rounded-full mt-2 overflow-hidden">
-                                <div class="h-full bg-indigo-600 rounded-full transition-all duration-1000" :style="{ width: `${stats.registration_compliance}%` }"></div>
-                            </div>
-                             <p class="text-xs text-muted-foreground mt-2">Students registered for courses</p>
+                        <CardContent class="h-[250px]">
+                            <BarChart :chart-data="levelChartData" :options="{ ...barOptions, plugins: { ...barOptions.plugins, legend: { display: false } } }" />
                         </CardContent>
-                     </Card>
+                    </Card>
 
-                     <!-- Demographics -->
-                      <Card v-if="stats.gender_distribution" class="border-l-4 border-l-pink-500 hover:shadow-md transition-shadow">
+                    <Card class="md:col-span-1 border-0 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
                         <CardHeader class="pb-2">
-                            <CardTitle class="text-sm font-medium text-muted-foreground uppercase tracking-wider">Demographics</CardTitle>
+                             <CardTitle class="text-md">Top Programs</CardTitle>
                         </CardHeader>
-                        <CardContent>
-                            <div class="flex items-center justify-between mt-1">
-                                <div class="text-center">
-                                    <span class="block text-xl font-bold text-blue-600">{{ stats.gender_distribution.male }}%</span>
-                                    <span class="text-[10px] uppercase text-muted-foreground">Male</span>
-                                </div>
-                                <div class="h-8 w-px bg-slate-200"></div>
-                                <div class="text-center">
-                                    <span class="block text-xl font-bold text-pink-600">{{ stats.gender_distribution.female }}%</span>
-                                    <span class="text-[10px] uppercase text-muted-foreground">Female</span>
-                                </div>
-                            </div>
-                            <div class="flex h-1.5 w-full rounded-full mt-3 overflow-hidden">
-                                <div class="bg-blue-500 h-full" :style="{ width: `${stats.gender_distribution.male}%` }"></div>
-                                <div class="bg-pink-500 h-full" :style="{ width: `${stats.gender_distribution.female}%` }"></div>
-                            </div>
+                        <CardContent class="h-[250px]">
+                            <DoughnutChart :chart-data="programChartData" :options="doughnutOptions" />
                         </CardContent>
-                     </Card>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Financial Overview -->
-                <div>
-                     <h2 class="text-xl font-semibold tracking-tight text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
-                        <CreditCard class="w-5 h-5 text-emerald-500" />
-                        Financial Overview
-                    </h2>
-                    <div class="grid gap-4 md:grid-cols-2">
-                         <!-- Revenue Card -->
-                        <Card v-if="stats.revenue !== null" class="overflow-hidden relative group hover:shadow-lg transition-all duration-300 border-l-4 border-l-emerald-500/80">
-                            <div class="absolute right-0 top-0 h-24 w-24 bg-emerald-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-                            <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2 relative">
-                                <CardTitle class="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Revenue</CardTitle>
-                                <div class="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                                     <CreditCard class="h-4 w-4" />
-                                </div>
-                            </CardHeader>
-                            <CardContent class="relative">
-                                <div class="text-3xl font-extrabold tracking-tight mt-1">{{ formatCurrency(stats.revenue) }}</div>
-                                 <p class="text-xs text-muted-foreground mt-2 flex items-center gap-1.5 font-medium">
-                                     <span v-if="stats.revenue_growth >= 0" class="inline-flex items-center text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-100">
-                                        <ArrowUpRight class="w-3 h-3 mr-0.5" /> {{ stats.revenue_growth }}%
-                                    </span>
-                                    <span v-else class="inline-flex items-center text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-full border border-rose-100">
-                                        <ArrowDownRight class="w-3 h-3 mr-0.5" /> {{ stats.revenue_growth }}%
-                                    </span>
-                                    <span class="opacity-75">vs last session</span>
-                                </p>
-                            </CardContent>
-                        </Card>
-
-                        <!-- Outstanding Fees -->
-                         <Card v-if="stats.outstanding_fees !== null" class="border-l-4 border-l-orange-500 hover:shadow-md transition-shadow">
-                            <CardHeader class="pb-2">
-                                <CardTitle class="text-sm font-medium text-muted-foreground uppercase tracking-wider">Outstanding Fees</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div class="text-2xl font-bold text-orange-600">{{ formatCurrency(stats.outstanding_fees ?? 0) }}</div>
-                                <p class="text-xs text-muted-foreground mt-1">Pending payments this session</p>
-                                <div class="h-1.5 w-full bg-orange-100 rounded-full mt-3 overflow-hidden">
-                                    <div class="h-full bg-orange-500 rounded-full" style="width: 45%"></div>
-                                </div>
-                            </CardContent>
-                         </Card>
-                    </div>
-                </div>
-
-                <!-- Applications -->
-                <div>
-                     <h2 class="text-xl font-semibold tracking-tight text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
-                        <FileText class="w-5 h-5 text-amber-500" />
-                        Admissions
-                    </h2>
-                    <div class="grid gap-4">
-                         <!-- Applications Card -->
-                         <Card v-if="stats.applications !== null" class="overflow-hidden relative group hover:shadow-lg transition-all duration-300 border-l-4 border-l-amber-500/80">
-                             <div class="absolute right-0 top-0 h-24 w-24 bg-amber-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-                            <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2 relative">
-                                <CardTitle class="text-sm font-medium text-muted-foreground uppercase tracking-wider">Pending Apps</CardTitle>
-                                <div class="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors">
-                                     <FileText class="h-4 w-4" />
-                                </div>
-                            </CardHeader>
-                            <CardContent class="relative">
-                                <div class="text-3xl font-extrabold tracking-tight mt-1">{{ stats.applications.toLocaleString() }}</div>
-                                 <p class="text-xs text-muted-foreground mt-2 flex items-center gap-1.5 font-medium">
-                                    <span class="inline-flex items-center text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-100">
-                                        <FileText class="w-3 h-3 mr-0.5" /> Pending
-                                    </span>
-                                    <span class="opacity-75">needs attention</span>
-                                </p>
-                            </CardContent>
-                        </Card>
-                    </div>
+                    </Card>
                 </div>
             </div>
 
             <!-- Lecturer Dashboard Section -->
-            <div v-if="lecturerStats" class="space-y-6">
+            <div v-if="lecturerStats" :style="{ order: userRole === 'academic' ? 1 : 10 }">
                 <h2 class="text-xl font-semibold tracking-tight text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
                     <GraduationCap class="w-5 h-5 text-indigo-500" />
                     Academic Overview
@@ -593,7 +736,7 @@ const staffChartData = {
                         </div>
                     </div>
 
-                    <!-- Today's Schedule (Mini) -->
+                     <!-- Today's Schedule (Mini) -->
                      <Card class="bg-indigo-900 text-white border-0 shadow-lg relative overflow-hidden">
                         <div class="absolute top-0 right-0 w-32 h-32 bg-indigo-800/50 rounded-full blur-3xl -mr-10 -mt-10"></div>
                         <div class="absolute bottom-0 left-0 w-24 h-24 bg-purple-600/30 rounded-full blur-2xl -ml-5 -mb-5"></div>
@@ -624,43 +767,43 @@ const staffChartData = {
                                         <div class="flex-1 overflow-y-auto min-h-0 mt-4 pr-1">
                                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                                                 <div v-for="day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']" :key="day" 
-                                                class="bg-gray-50 dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 overflow-hidden flex flex-col min-h-[200px]"
-                                            >
-                                                <div class="bg-indigo-50/50 dark:bg-indigo-950/20 p-3 border-b border-indigo-100 dark:border-indigo-900 flex items-center justify-between">
-                                                    <span class="font-bold text-indigo-900 dark:text-indigo-400 uppercase text-xs tracking-wider">{{ day }}</span>
-                                                    <span class="text-[10px] font-semibold text-indigo-400 dark:text-indigo-300 bg-white dark:bg-slate-800 px-2 py-0.5 rounded-full shadow-sm">
-                                                        {{ getClassesForDay(day).length }}
-                                                    </span>
-                                                </div>
-                                                
-                                                <div class="p-2 space-y-2 flex-1">
-                                                    <div v-if="getClassesForDay(day).length === 0" class="h-full flex flex-col items-center justify-center text-gray-400 dark:text-slate-600 opacity-60">
-                                                        <span class="text-xs">No classes</span>
+                                                    class="bg-gray-50 dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 overflow-hidden flex flex-col min-h-[200px]"
+                                                >
+                                                    <div class="bg-indigo-50/50 dark:bg-indigo-950/20 p-3 border-b border-indigo-100 dark:border-indigo-900 flex items-center justify-between">
+                                                        <span class="font-bold text-indigo-900 dark:text-indigo-400 uppercase text-xs tracking-wider">{{ day }}</span>
+                                                        <span class="text-[10px] font-semibold text-indigo-400 dark:text-indigo-300 bg-white dark:bg-slate-800 px-2 py-0.5 rounded-full shadow-sm">
+                                                            {{ getClassesForDay(day).length }}
+                                                        </span>
                                                     </div>
                                                     
-                                                    <div v-for="cls in getClassesForDay(day)" :key="cls.id" 
-                                                        class="bg-white dark:bg-slate-950 rounded-lg p-3 shadow-sm border-l-4 border-indigo-500 hover:shadow-md transition-all group"
-                                                    >
-                                                        <div class="flex justify-between items-start mb-1">
-                                                            <Badge variant="secondary" class="font-mono text-[10px] bg-indigo-50 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-100">
-                                                                {{ formatTime(cls.start_time) }} - {{ formatTime(cls.end_time) }}
-                                                            </Badge>
+                                                    <div class="p-2 space-y-2 flex-1">
+                                                        <div v-if="getClassesForDay(day).length === 0" class="h-full flex flex-col items-center justify-center text-gray-400 dark:text-slate-600 opacity-60">
+                                                            <span class="text-xs">No classes</span>
                                                         </div>
                                                         
-                                                        <h4 class="font-bold text-slate-800 dark:text-slate-200 text-xs mb-0.5 group-hover:text-indigo-600 transition-colors">
-                                                            {{ cls.course.code }}
-                                                        </h4>
-                                                        <p class="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1 mb-1">{{ cls.course.title }}</p>
-                                                        
-                                                        <div class="space-y-1 pt-1 border-t border-slate-50 dark:border-slate-900">
-                                                            <div class="flex items-center gap-1.5 text-[10px] text-slate-600 dark:text-slate-400">
-                                                                <MapPin class="w-2.5 h-2.5 text-slate-400" />
-                                                                <span class="font-medium">{{ cls.venue || 'TBA' }}</span>
+                                                        <div v-for="cls in getClassesForDay(day)" :key="cls.id" 
+                                                            class="bg-white dark:bg-slate-950 rounded-lg p-3 shadow-sm border-l-4 border-indigo-500 hover:shadow-md transition-all group"
+                                                        >
+                                                            <div class="flex justify-between items-start mb-1">
+                                                                <Badge variant="secondary" class="font-mono text-[10px] bg-indigo-50 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-100">
+                                                                    {{ formatTime(cls.start_time) }} - {{ formatTime(cls.end_time) }}
+                                                                </Badge>
+                                                            </div>
+                                                            
+                                                            <h4 class="font-bold text-slate-800 dark:text-slate-200 text-xs mb-0.5 group-hover:text-indigo-600 transition-colors">
+                                                                {{ cls.course.code }}
+                                                            </h4>
+                                                            <p class="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1 mb-1">{{ cls.course.title }}</p>
+                                                            
+                                                            <div class="space-y-1 pt-1 border-t border-slate-50 dark:border-slate-900">
+                                                                <div class="flex items-center gap-1.5 text-[10px] text-slate-600 dark:text-slate-400">
+                                                                    <MapPin class="w-2.5 h-2.5 text-slate-400" />
+                                                                    <span class="font-medium">{{ cls.venue || 'TBA' }}</span>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
                                             </div>
                                         </div>
                                     </DialogContent>
@@ -693,13 +836,8 @@ const staffChartData = {
                 </div>
             </div>
 
-            <!-- Original Timetable Widget (Now only shown if NOT lecturerStats to avoid duplication, or could remain) -->
-            <!-- Actually, user might want full week view too. Let's keep it but maybe below. -->
-            <div v-if="myTimetable && !lecturerStats" class="w-full">
-            <!-- ... existing content ... -->
-
             <!-- My Timetable Widget (Staff) -->
-            <div v-if="myTimetable" class="w-full">
+            <div v-if="myTimetable" class="w-full" :style="{ order: userRole === 'academic' ? 2 : 11 }">
                 <Card class="hover:shadow-md transition-shadow duration-200 border-indigo-100 bg-white dark:bg-slate-900">
                     <CardHeader>
                         <CardTitle class="text-lg flex items-center gap-2 text-indigo-900 dark:text-indigo-400">
@@ -756,81 +894,7 @@ const staffChartData = {
                     </CardContent>
                 </Card>
             </div>
-            </div>
 
-            <!-- Charts Section -->
-            <div v-if="charts.revenue.data.length > 0 || charts.faculty.data.length > 0">
-                 <h2 class="text-xl font-semibold tracking-tight text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
-                    <LineChart class="w-5 h-5 text-emerald-500" />
-                    Analytics & Trends
-                </h2>
-                <div class="grid gap-6 md:grid-cols-7">
-                <!-- Revenue Chart (Larger) -->
-                <Card v-if="charts.revenue.data.length > 0" class="md:col-span-4 lg:col-span-5 hover:shadow-md transition-shadow duration-200">
-                    <CardHeader>
-                        <CardTitle class="text-lg">Financial Overview</CardTitle>
-                    </CardHeader>
-                    <CardContent class="pl-2">
-                        <div class="h-[350px] w-full">
-                            <BarChart :chart-data="revenueChartData" :chart-options="barOptions" />
-                        </div>
-                    </CardContent>
-                </Card>
- 
-                <!-- Distribution Chart (Smaller) -->
-                <Card v-if="charts.faculty.data.length > 0" :class="charts.revenue.data.length > 0 ? 'md:col-span-3 lg:col-span-2' : 'md:col-span-7 lg:col-span-7'" class="hover:shadow-md transition-shadow duration-200">
-                    <CardHeader>
-                         <CardTitle class="text-lg">Student Distribution</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div class="h-[350px] w-full flex items-center justify-center">
-                            <DoughnutChart :chart-data="facultyChartData" :chart-options="doughnutOptions" />
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            <!-- Additional Charts Section (Levels / Programs) -->
-            <div v-if="charts.level.data.length > 0 || charts.program.data.length > 0" class="grid gap-6 md:grid-cols-2 mb-6">
-                 <!-- Level Distribution -->
-                <Card v-if="charts.level.data.length > 0" class="hover:shadow-md transition-shadow">
-                    <CardHeader>
-                        <CardTitle class="text-lg">Students by Level</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div class="h-[300px] w-full">
-                            <BarChart :chart-data="levelChartData" :chart-options="barOptions" />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <!-- Program Distribution -->
-                <Card v-if="charts.program.data.length > 0" class="hover:shadow-md transition-shadow">
-                    <CardHeader>
-                        <CardTitle class="text-lg">Top Programs</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                         <div class="h-[300px] w-full flex items-center justify-center">
-                            <DoughnutChart :chart-data="programChartData" :chart-options="doughnutOptions" />
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            <!-- Staff Chart -->
-             <div v-if="charts.staff_department.data.length > 0" class="mb-6">
-                <Card class="hover:shadow-md transition-shadow">
-                    <CardHeader>
-                        <CardTitle class="text-lg">Staff by Department</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div class="h-[300px] w-full">
-                            <BarChart :chart-data="staffChartData" :chart-options="barOptions" />
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-            </div>
 
             <!-- System Activity -->
             <div>
@@ -936,7 +1000,7 @@ const staffChartData = {
                     </Card>
                 </div>
             </div>
-            </div>
         </div>
-    </AdminLayout>
+    </div>
+</AdminLayout>
 </template>

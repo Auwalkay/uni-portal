@@ -5,7 +5,7 @@ import { computed } from 'vue';
 import { 
     User, Mail, Building2, Briefcase, GraduationCap, Shield, ArrowLeft, 
     Calendar, Pencil, ShieldCheck, UserCircle, Building, Hash, BookOpen, 
-    BarChart3, Clock, AlertCircle, CalendarClock, MapPin
+    BarChart3, Clock, AlertCircle, CalendarClock, MapPin, Download
 } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -48,10 +48,22 @@ const props = defineProps<{
         } | null;
     };
     timetable?: Array<any>;
+    payslips?: Array<any>;
 }>();
 
 const formatTime = (time: string) => {
     return time.substring(0, 5);
+};
+
+const formatCurrency = (amount: number | string) => {
+    return new Intl.NumberFormat('en-NG', {
+        style: 'currency',
+        currency: 'NGN',
+    }).format(Number(amount));
+};
+
+const getMonthName = (month: number) => {
+    return new Date(2000, month - 1).toLocaleString('default', { month: 'long' });
 };
 
 const getClassesForDay = (day: string) => {
@@ -189,6 +201,9 @@ const breadcrumbs = [
                             </TabsTrigger>
                             <TabsTrigger value="academic" class="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-12 px-2 text-base" v-if="staff.staff?.is_academic">
                                 Teaching & Research
+                            </TabsTrigger>
+                            <TabsTrigger value="payslips" class="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-12 px-2 text-base">
+                                Payslips
                             </TabsTrigger>
                             <TabsTrigger value="activity" class="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-12 px-2 text-base">
                                 Activity Log
@@ -328,6 +343,59 @@ const breadcrumbs = [
                                             </div>
                                         </div>
                                     </div>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+
+                        <TabsContent value="payslips" class="space-y-6">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Payslip History</CardTitle>
+                                    <CardDescription>View and manage staff payment records.</CardDescription>
+                                </CardHeader>
+                                <CardContent class="p-0">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Period</TableHead>
+                                                <TableHead>Basic Salary</TableHead>
+                                                <TableHead>Allowances</TableHead>
+                                                <TableHead>Deductions</TableHead>
+                                                <TableHead>Net Salary</TableHead>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead class="text-right">Actions</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            <TableRow v-for="payslip in payslips" :key="payslip.id">
+                                                <TableCell class="font-medium">
+                                                    {{ getMonthName(payslip.payroll.month) }} {{ payslip.payroll.year }}
+                                                </TableCell>
+                                                <TableCell>{{ formatCurrency(payslip.basic_salary) }}</TableCell>
+                                                <TableCell class="text-green-600">+ {{ formatCurrency(payslip.total_allowances) }}</TableCell>
+                                                <TableCell class="text-red-600">- {{ formatCurrency(payslip.total_deductions) }}</TableCell>
+                                                <TableCell class="font-bold">{{ formatCurrency(payslip.net_salary) }}</TableCell>
+                                                <TableCell>
+                                                    <Badge :variant="payslip.payroll.paid_at ? 'default' : 'secondary'">
+                                                        {{ payslip.payroll.paid_at ? 'Paid' : 'Pending' }}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell class="text-right">
+                                                    <a :href="route('admin.finance.payroll.payslip.download', { payroll: payslip.payroll.id, payrollItem: payslip.id })" target="_blank">
+                                                        <Button variant="ghost" size="sm">
+                                                            <Download class="w-4 h-4 mr-1" />
+                                                            Download
+                                                        </Button>
+                                                    </a>
+                                                </TableCell>
+                                            </TableRow>
+                                            <TableRow v-if="!payslips?.length">
+                                                <TableCell colspan="7" class="h-24 text-center text-muted-foreground">
+                                                    No payslips found for this staff member.
+                                                </TableCell>
+                                            </TableRow>
+                                        </TableBody>
+                                    </Table>
                                 </CardContent>
                             </Card>
                         </TabsContent>

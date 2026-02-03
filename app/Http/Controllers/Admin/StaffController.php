@@ -181,9 +181,21 @@ class StaffController extends Controller
             }
         }
 
+        $payslips = [];
+        if ($staff->staff) {
+            $payslips = \App\Models\PayrollItem::where('staff_id', $staff->staff->id)
+                ->with(['payroll'])
+                ->join('payrolls', 'payroll_items.payroll_id', '=', 'payrolls.id')
+                ->orderBy('payrolls.month', 'desc')
+                ->orderBy('payrolls.year', 'desc')
+                ->select('payroll_items.*')
+                ->get();
+        }
+
         return Inertia::render('Admin/Staff/Show', [
             'staff' => $staff,
             'timetable' => $timetable,
+            'payslips' => $payslips,
         ]);
     }
 

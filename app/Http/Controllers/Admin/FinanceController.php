@@ -16,54 +16,94 @@ use App\Models\Payment;
 use App\Models\Invoice;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use App\Models\Expense;
+use App\Models\Payroll;
+use App\Models\ExpenseCategory;
 
 class FinanceController extends Controller
 {
     public function dashboard()
     {
-        // 1. Total Revenue (Sum of all completed payments)
-        $totalRevenue = Payment::sum('amount');
+        // 1. Total Inflow (All successful payments)
+        $totalInflow = Payment::where('status', 'success')->sum('amount');
 
-        // 2. Total Outstanding (Sum of all invoices - Sum of all payments) - Simplified
-        // Ideally invoices have a status, but if not, we calculate diff.
-        // Assuming invoices have a 'amount' and we check payments against them.
-        // Let's verify Invoice content from previous turn. It has `payments()` relation.
-        // For now, let's just sum all Invoice amounts.
-        $totalInvoiced = Invoice::sum('amount');
-        $outstanding = $totalInvoiced - $totalRevenue;
+        // 2. Total Outflow (Approved Expenses + Paid Payrolls)
+        $totalExpenses = Expense::where('status', 'approved')->sum('amount');
+        $totalPayroll = Payroll::where('status', 'paid')->sum('total_amount');
+        $totalOutflow = $totalExpenses + $totalPayroll;
 
-        // 3. Monthly Revenue (Last 6 months)
-        $monthlyRevenue = Payment::select(
-            DB::raw('sum(amount) as total'),
-            DB::raw("DATE_FORMAT(paid_at, '%Y-%m') as month")
-        )
-            ->where('paid_at', '>=', Carbon::now()->subMonths(6))
-            ->groupBy('month')
-            ->orderBy('month')
-            ->get();
+        // 3. Net Balance
+        $netBalance = $totalInflow - $totalOutflow;
 
-        // 4. Recent Transactions
-        $recentPayments = Payment::with(['user', 'invoice'])
-            ->latest('paid_at')
-            ->take(5)
-            ->get();
+        // 4. Monthly Cash Flow (Last 6 months)
+        $data = collect();
+        for ($i = 5; $i >= 0; $i--) {
+            $date = Carbon::now()->subMonths($i);
+            $month = $date->format('Y-m');
+            $label = $date->format('M Y');
+
+            $inflow = Payment::where('status', 'success')
+                ->whereYear('paid_at', $date->year)
+                ->whereMonth('paid_at', $date->month)
+                ->sum('amount');
+
+            $outflowExpenses = Expense::where('status', 'approved')
+                ->whereYear('date', $date->year)
+                ->whereMonth('date', $date->month) // Assuming 'date' is when expense incurred
+                ->sum('amount');
+
+            // For payroll, we can use generated_at or paid_at
+            $outflowPayroll = Payroll::where('status', 'paid')
+                ->whereYear('paid_at', $date->year)
+                ->whereMonth('paid_at', $date->month)
+                ->sum('total_amount');
+
+            $data->push([
+                'month' => $label,
+                'inflow' => $inflow,
+                'outflow' => $outflowExpenses + $outflowPayroll,
+            ]);
+        }
+
+        // 5. Recent Transactions (Mixed Payments and Expenses)
+        $recentPayments = Payment::with('user')->latest('paid_at')->take(5)->get()->map(function ($p) {
+            return [
+                'type' => 'inflow',
+                'description' => 'Payment from ' . $p->user->name,
+                'amount' => $p->amount,
+                'date' => $p->paid_at,
+                'status' => 'success'
+            ];
+        });
+
+        $recentExpenses = Expense::with('user')->latest('date')->take(5)->get()->map(function ($e) {
+            return [
+                'type' => 'outflow',
+                'description' => $e->title . ' (' . $e->user->name . ')',
+                'amount' => $e->amount,
+                'date' => $e->date,
+                'status' => $e->status
+            ];
+        });
+
+        $recentTransactions = $recentPayments->concat($recentExpenses)->sortByDesc('date')->take(10)->values();
 
         return Inertia::render('Admin/Finance/Dashboard', [
             'stats' => [
-                'totalRevenue' => $totalRevenue,
-                'outstanding' => $outstanding,
-                'totalInvoiced' => $totalInvoiced,
+                'totalInflow' => $totalInflow,
+                'totalOutflow' => $totalOutflow,
+                'netBalance' => $netBalance,
             ],
-            'chartData' => $monthlyRevenue,
-            'recentPayments' => $recentPayments
+            'chartData' => $data,
+            'recentTransactions' => $recentTransactions
         ]);
     }
 
     public function index()
     {
-
         return Inertia::render('Admin/Finance/Index', [
             'feeTypes' => FeeType::withCount('configurations')->get(),
+            'expenseCategories' => ExpenseCategory::withCount('expenses')->get(),
             'sessions' => Session::with(['feeConfigurations.feeType', 'feeConfigurations.faculty', 'feeConfigurations.department', 'feeConfigurations.program'])
                 ->withCount('feeConfigurations')
                 ->orderBy('start_date', 'desc')
@@ -74,6 +114,41 @@ class FinanceController extends Controller
         ]);
     }
 
+    // ... Fee Type methods ...
+
+    // Expense Category Methods
+    public function storeExpenseCategory(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|unique:expense_categories',
+            'description' => 'nullable|string',
+        ]);
+
+        ExpenseCategory::create($validated);
+        return back()->with('success', 'Expense Category created.');
+    }
+
+    public function updateExpenseCategory(Request $request, ExpenseCategory $category)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|unique:expense_categories,name,' . $category->id,
+            'description' => 'nullable|string',
+        ]);
+
+        $category->update($validated);
+        return back()->with('success', 'Expense Category updated.');
+    }
+
+    public function destroyExpenseCategory(ExpenseCategory $category)
+    {
+        if ($category->expenses()->exists()) {
+            return back()->with('error', 'Cannot delete category with associated expenses.');
+        }
+        $category->delete();
+        return back()->with('success', 'Expense Category deleted.');
+    }
+
+    // ... (Keep existing Fee Configuration methods: storeFeeType, updateFeeType, destroyFeeType, storeFeeConfiguration, etc.)
     public function storeFeeType(Request $request)
     {
         $validated = $request->validate([

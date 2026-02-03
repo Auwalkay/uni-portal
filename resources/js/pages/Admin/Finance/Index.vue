@@ -65,6 +65,7 @@ interface FeeConfiguration {
 
 const props = defineProps<{
     feeTypes: FeeType[];
+    expenseCategories: any[]; // New Prop
     sessions: any[]; // Now includes feeConfigurations
     faculties: any[];
     departments: any[];
@@ -125,7 +126,59 @@ const deleteFeeType = (type: FeeType) => {
     }
 };
 
+// Expense Category Logic
+const expenseCategoryForm = useForm({
+    id: null as string | null,
+    name: '',
+    description: '',
+});
 
+const isExpenseCategoryModalOpen = ref(false);
+const editingExpenseCategory = ref(false);
+
+const openCreateExpenseCategory = () => {
+    expenseCategoryForm.reset();
+    expenseCategoryForm.id = null;
+    editingExpenseCategory.value = false;
+    isExpenseCategoryModalOpen.value = true;
+};
+
+const openEditExpenseCategory = (category: any) => {
+    expenseCategoryForm.name = category.name;
+    expenseCategoryForm.description = category.description;
+    expenseCategoryForm.id = category.id;
+    editingExpenseCategory.value = true;
+    isExpenseCategoryModalOpen.value = true;
+};
+
+const submitExpenseCategory = () => {
+    if (editingExpenseCategory.value && expenseCategoryForm.id) {
+        expenseCategoryForm.put(route('admin.finance.expense_categories.update', expenseCategoryForm.id), {
+            onSuccess: () => {
+                isExpenseCategoryModalOpen.value = false;
+                Swal.fire({ icon: 'success', title: 'Success', text: 'Category updated successfully', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+            },
+            onError: () => Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to save', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 })
+        });
+    } else {
+        expenseCategoryForm.post(route('admin.finance.expense_categories.store'), {
+            onSuccess: () => {
+                isExpenseCategoryModalOpen.value = false;
+                Swal.fire({ icon: 'success', title: 'Success', text: 'Category created successfully', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+            },
+            onError: () => Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to save', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 })
+        });
+    }
+};
+
+const deleteExpenseCategory = (category: any) => {
+     if (confirm('Are you sure?')) {
+        router.delete(route('admin.finance.expense_categories.destroy', category.id), {
+            onSuccess: () => Swal.fire({ icon: 'success', title: 'Deleted', text: 'Category deleted', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 }),
+            onError: () => Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to delete', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 })
+        });
+    }
+};
 </script>
 
 <template>
@@ -143,9 +196,11 @@ const deleteFeeType = (type: FeeType) => {
                 <TabsList>
                     <TabsTrigger value="types">Fee Types</TabsTrigger>
                     <TabsTrigger value="configs">Fee Rules / Configurations</TabsTrigger>
+                    <TabsTrigger value="categories">Expense Categories</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="types" class="space-y-4">
+                    <!-- ... Fee Types Content (No Change) ... -->
                      <Card>
                         <CardHeader class="flex flex-row items-center justify-between">
                             <div>
@@ -199,6 +254,63 @@ const deleteFeeType = (type: FeeType) => {
                             <DialogFooter>
                                 <Button variant="outline" @click="isFeeTypeModalOpen = false">Cancel</Button>
                                 <Button @click="submitFeeType" :disabled="feeTypeForm.processing">Save</Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                </TabsContent>
+
+                <TabsContent value="categories" class="space-y-4">
+                    <Card>
+                        <CardHeader class="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle>Expense Categories</CardTitle>
+                                <CardDescription>Define categories for tracking expenses (e.g., Utilities, Maintenance).</CardDescription>
+                            </div>
+                            <Button @click="openCreateExpenseCategory"><Plus class="mr-2 h-4 w-4" /> Add Category</Button>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Name</TableHead>
+                                        <TableHead>Description</TableHead>
+                                        <TableHead>Total Expenses</TableHead>
+                                        <TableHead class="text-right">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    <TableRow v-for="category in expenseCategories" :key="category.id">
+                                        <TableCell class="font-medium">{{ category.name }}</TableCell>
+                                        <TableCell>{{ category.description }}</TableCell>
+                                        <TableCell><Badge variant="secondary">{{ category.expenses_count }}</Badge></TableCell>
+                                        <TableCell class="text-right space-x-2">
+                                            <Button variant="ghost" size="icon" @click="openEditExpenseCategory(category)"><Edit class="h-4 w-4" /></Button>
+                                            <Button variant="ghost" size="icon" class="text-destructive" @click="deleteExpenseCategory(category)"><Trash2 class="h-4 w-4" /></Button>
+                                        </TableCell>
+                                    </TableRow>
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                     <!-- Expense Category Modal -->
+                    <Dialog v-model:open="isExpenseCategoryModalOpen">
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>{{ editingExpenseCategory ? 'Edit Category' : 'New Category' }}</DialogTitle>
+                            </DialogHeader>
+                            <div class="grid gap-4 py-4">
+                                <div class="grid gap-2">
+                                    <Label>Name</Label>
+                                    <Input v-model="expenseCategoryForm.name" placeholder="e.g. Utilities" />
+                                </div>
+                                <div class="grid gap-2">
+                                    <Label>Description</Label>
+                                    <Input v-model="expenseCategoryForm.description" />
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button variant="outline" @click="isExpenseCategoryModalOpen = false">Cancel</Button>
+                                <Button @click="submitExpenseCategory" :disabled="expenseCategoryForm.processing">Save</Button>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>

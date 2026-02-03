@@ -8,6 +8,9 @@ use App\Models\Invoice;
 use App\Models\Session;
 use App\Models\Student;
 use App\Models\User;
+use App\Models\Expense;
+use App\Models\Payroll;
+use App\Models\ExpenseCategory;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -144,7 +147,7 @@ class DashboardController extends Controller
             ->get();
 
         $revenueChart = [
-            'labels' => $revenueTrend->map(fn($r) => \Carbon\Carbon::createFromFormat('Y-m', $r->month)->format('M'))->toArray(),
+            'labels' => $revenueTrend->map(fn($r) => \Carbon\Carbon::createFromFormat('Y-m', (string) $r->month)->format('M'))->toArray(),
             'data' => $revenueTrend->pluck('total')->toArray(),
         ];
 
@@ -184,9 +187,39 @@ class DashboardController extends Controller
             ->get();
 
         $programChart = [
-            'labels' => $programStats->pluck('name')->map(fn($n) => \Illuminate\Support\Str::limit($n, 15))->toArray(),
+            'labels' => $programStats->pluck('name')->map(fn($n) => \Illuminate\Support\Str::limit((string) $n, 15))->toArray(),
             'data' => $programStats->pluck('total')->toArray(),
         ];
+
+        // Expense Trend (Monthly)
+        $expenseTrend = Expense::where('status', 'approved')
+            ->selectRaw('DATE_FORMAT(updated_at, "%Y-%m") as month, SUM(amount) as total')
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get()
+            ->keyBy('month');
+
+        // Combined Financial Trend
+        $financialTrendLabels = $revenueTrend->pluck('month')->merge($expenseTrend->pluck('month'))->unique()->sort()->values();
+
+        $combinedFinancialChart = [
+            'labels' => $financialTrendLabels->map(fn($m) => \Carbon\Carbon::createFromFormat('Y-m', (string) $m)->format('M'))->toArray(),
+            'inflow' => $financialTrendLabels->map(fn($m) => $revenueTrend->firstWhere('month', $m)?->total ?? 0)->toArray(),
+            'outflow' => $financialTrendLabels->map(fn($m) => $expenseTrend->get((string) $m)?->total ?? 0)->toArray(),
+        ];
+
+        // Expense by Category (Doughnut)
+        $expenseByCategory = Expense::where('status', 'approved')
+            ->with('category')
+            ->select('expense_category_id', \Illuminate\Support\Facades\DB::raw('SUM(amount) as total'))
+            ->groupBy('expense_category_id')
+            ->get();
+
+        $expenseCategoryChart = [
+            'labels' => $expenseByCategory->map(fn($e) => $e->category?->name ?? 'Uncategorized')->toArray(),
+            'data' => $expenseByCategory->pluck('total')->toArray(),
+        ];
+
 
         // Staff by Department (Bar Chart)
         $staffDeptStats = \App\Models\Staff::select('departments.name', \Illuminate\Support\Facades\DB::raw('count(*) as total'))
@@ -217,6 +250,15 @@ class DashboardController extends Controller
                 return $canViewAdmissions || $canViewResults;
             return true;
         })->values()->all();
+
+        // High Intensity Admissions Stats
+        $admissionsFunnel = [
+            'total_applicants' => $applicationsCount,
+            'screened_applicants' => User::role('applicant')->whereHas('student', function ($q) {
+                $q->whereNotNull('matriculation_number');
+            })->count(), // Proxy for "admitted"
+            'pending_screening' => User::role('applicant')->whereDoesntHave('student')->count(),
+        ];
 
         // Calculate Additional Metrics
         $outstandingFees = Invoice::where('session_id', $sessionId)
@@ -264,9 +306,25 @@ class DashboardController extends Controller
             'registration_compliance' => $canViewResults ? $registrationCompliance : null,
             'gender_distribution' => $canViewResults ? ['male' => $malePercentage, 'female' => $femalePercentage] : null,
             'structural' => $structuralStats,
+            'total_outflow' => $canViewFinance ? (float) Expense::where('status', 'approved')->sum('amount') + (float) Payroll::where('status', 'paid')->sum('total_amount') : null,
+            'net_cash_flow' => $canViewFinance ? ((float) Invoice::where('status', 'paid')->sum('amount')) - ((float) Expense::where('status', 'approved')->sum('amount') + (float) Payroll::where('status', 'paid')->sum('total_amount')) : null,
+            'admissions_funnel' => $canViewAdmissions ? $admissionsFunnel : null,
+            'active_students' => Student::count(),
         ];
 
-        // 7. View Data
+        // 7. Determine Primary Role for UI Layout
+        $primaryRole = 'admin'; // Default
+        if ($user->hasRole('admin')) {
+            $primaryRole = 'admin';
+        } elseif ($user->hasAnyRole(['bursar', 'finance_officer', 'finance_clerk'])) {
+            $primaryRole = 'finance';
+        } elseif ($user->hasAnyRole(['lecturer', 'course_coordinator', 'dean', 'hod'])) {
+            $primaryRole = 'academic';
+        } elseif ($user->hasAnyRole(['registrar', 'admissions_manager', 'admissions_officer', 'admissions_clerk'])) {
+            $primaryRole = 'admissions';
+        }
+
+        // 8. View Data
         $sessions = Session::orderBy('start_date', 'desc')->get(['id', 'name']);
 
         // 7. My Course Allocations & Timetable (If Staff)
@@ -311,13 +369,15 @@ class DashboardController extends Controller
             'recentActivity' => $recentActivity,
             'charts' => [
                 'revenue' => $canViewFinance ? $revenueChart : ['labels' => [], 'data' => []],
+                'financial_trend' => $canViewFinance ? $combinedFinancialChart : ['labels' => [], 'data' => [], 'inflow' => [], 'outflow' => []],
+                'expense_categories' => $canViewFinance ? $expenseCategoryChart : ['labels' => [], 'data' => []],
                 'faculty' => $canViewResults ? $facultyChart : ['labels' => [], 'data' => []],
                 'level' => $canViewResults ? $levelChart : ['labels' => [], 'data' => []],
                 'program' => $canViewResults ? $programChart : ['labels' => [], 'data' => []],
-                'staff_department' => $canViewResults ? $staffDeptChart : ['labels' => [], 'data' => []], // Using canViewResults as proxy for general admin view for now, or use canViewAdmissions? Or new perm? Let's assume broad access or same as other structural charts which seem to be tied to results/courses logic in current code structure.
+                'staff_department' => $canViewResults ? $staffDeptChart : ['labels' => [], 'data' => []],
             ],
-            'myAllocations' => $myAllocations,
             'myTimetable' => $myTimetable,
+            'userRole' => $primaryRole,
         ]);
     }
 }

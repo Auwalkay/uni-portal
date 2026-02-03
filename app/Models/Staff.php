@@ -28,4 +28,9 @@ class Staff extends Model
     {
         return $this->hasMany(CourseAllocation::class);
     }
+
+    public function payrollItems()
+    {
+        return $this->hasMany(PayrollItem::class);
+    }
 }
