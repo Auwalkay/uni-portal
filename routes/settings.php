@@ -79,8 +79,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // ADMIN & STAFF ROUTES
-    Route::prefix('admin')->name('admin.')->middleware(['role:admin|registrar|dean|hod|course_coordinator|lecturer|admissions_manager|admissions_officer|admissions_clerk|bursar|finance_officer|finance_clerk'])->group(function () {
+    Route::prefix('admin')->name('admin.')->middleware(['role:admin|registrar|dean|hod|course_coordinator|lecturer|admissions_manager|admissions_officer|admissions_clerk|bursar|finance_officer|finance_clerk|receptionist'])->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
+
+        // Front Desk Module
+        Route::middleware(['role:admin|receptionist'])->prefix('front-desk')->name('front-desk.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\FrontDesk\DashboardController::class, 'index'])->name('dashboard');
+
+            Route::resource('visitors', \App\Http\Controllers\Admin\FrontDesk\VisitorController::class);
+            Route::resource('complaints', \App\Http\Controllers\Admin\FrontDesk\ComplaintController::class);
+            Route::resource('enquiries', \App\Http\Controllers\Admin\FrontDesk\EnquiryController::class);
+        });
 
         // Admissions Management
         Route::middleware(['role:admin|admissions_manager|admissions_officer|admissions_clerk'])->group(function () {

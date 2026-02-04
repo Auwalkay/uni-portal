@@ -166,6 +166,35 @@ const administrationItems = computed(() => {
     ].filter(i => i.show);
 });
 
+const frontDeskItems = computed(() => {
+    return [
+        {
+            title: 'Front Desk Dashboard',
+            href: route().has('admin.front-desk.dashboard') ? route('admin.front-desk.dashboard') : '#',
+            icon: LayoutGrid,
+            show: isAdmin.value || (page.props.auth.user as any)?.roles?.includes('receptionist'),
+        },
+        {
+            title: 'Visitors',
+            href: route().has('admin.front-desk.visitors.index') ? route('admin.front-desk.visitors.index') : '#',
+            icon: Users,
+            show: isAdmin.value || userPermissions.value.includes('manage_visitors'),
+        },
+        {
+            title: 'Complaints',
+            href: route().has('admin.front-desk.complaints.index') ? route('admin.front-desk.complaints.index') : '#',
+            icon: FileText,
+            show: isAdmin.value || userPermissions.value.includes('manage_complaints'),
+        },
+        {
+            title: 'Enquiries',
+            href: route().has('admin.front-desk.enquiries.index') ? route('admin.front-desk.enquiries.index') : '#',
+            icon: BookOpen,
+            show: isAdmin.value || userPermissions.value.includes('manage_enquiries'),
+        },
+    ].filter(i => i.show);
+});
+
 const footerNavItems = computed(() => {
     return [
         {
@@ -195,6 +224,7 @@ const footerNavItems = computed(() => {
 
         <SidebarContent>
             <NavMain :items="overviewItems" label="Overview" />
+            <NavMain v-if="frontDeskItems.length > 0" :items="frontDeskItems" label="Front Desk" />
             <NavMain :items="personalItems" label="Personal" />
             <NavMain :items="academicsItems" label="Academics" />
             <NavMain :items="financeItems" label="Finance" />

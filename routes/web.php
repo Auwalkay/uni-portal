@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
-Route::middleware(['auth', 'verified', 'role:admin|registrar|bursar|finance_officer'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'verified', 'role:admin|registrar|bursar|finance_officer|receptionist'])->prefix('admin')->name('admin.')->group(function () {
     Route::prefix('finance')->name('finance.')->group(function () {
         Route::get('dashboard', [\App\Http\Controllers\Admin\FinanceController::class, 'dashboard'])->name('dashboard');
         Route::get('/', [\App\Http\Controllers\Admin\FinanceController::class, 'index'])->name('index');
@@ -69,7 +69,7 @@ Route::get('/', function () {
 Route::get('dashboard', function () {
     $user = auth()->user();
 
-    if ($user->hasAnyRole(['admin', 'registrar', 'dean', 'hod', 'course_coordinator', 'lecturer', 'admissions_manager', 'admissions_officer', 'admissions_clerk', 'bursar', 'finance_officer', 'finance_clerk'])) {
+    if ($user->hasAnyRole(['admin', 'registrar', 'dean', 'hod', 'course_coordinator', 'lecturer', 'admissions_manager', 'admissions_officer', 'admissions_clerk', 'bursar', 'finance_officer', 'finance_clerk', 'receptionist'])) {
         return redirect()->route('admin.dashboard');
     }
 
