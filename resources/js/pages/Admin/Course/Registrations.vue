@@ -1,17 +1,12 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import AdminLayout from '@/layouts/AdminLayout.vue';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
+import { throttle } from 'lodash';
 import { BookOpen, Download, ChevronRight, Home } from 'lucide-vue-next';
 import { ref, watch } from 'vue';
-import { throttle } from 'lodash';
-import Pagination from '@/Components/Pagination.vue';
 import { route } from 'ziggy-js';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+import Pagination from '@/components/Pagination.vue';
+import { Badge } from '@/components/ui/badge';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -20,6 +15,12 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 
 const props = defineProps<{
     course: {
@@ -86,7 +87,7 @@ const exportRegistrations = () => {
     (Object.keys(filters) as Array<keyof typeof filters>).forEach(key => {
         if (filters[key] === 'ALL') filters[key] = '';
     });
-    
+
     const url = route('admin.courses.registrations.export', {
         course: props.course.id,
         ...filters
