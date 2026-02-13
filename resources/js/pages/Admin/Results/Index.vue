@@ -1,19 +1,12 @@
 <script setup lang="ts">
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
-import { route } from 'ziggy-js';
-import AdminLayout from '@/layouts/AdminLayout.vue';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
+import { throttle } from 'lodash';
 import { Search, Filter, BookOpen, Home, GraduationCap, FileText } from 'lucide-vue-next';
 import { ref, watch } from 'vue';
-import { throttle } from 'lodash';
-import Pagination from '@/Components/Pagination.vue';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { route } from 'ziggy-js';
+
+import Pagination from '@/components/Pagination.vue';
+import { Badge } from '@/components/ui/badge';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -22,6 +15,14 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 
 const props = defineProps<{
     sessions: Array<{ id: string; name: string }>;
@@ -33,7 +34,7 @@ const props = defineProps<{
             code: string;
             title: string;
             units: number;
-            level: string; 
+            level: string;
             department: { name: string };
             program: { name: string };
             graded_count: number;
@@ -62,7 +63,7 @@ watch(form, throttle(() => {
     (Object.keys(filters) as Array<keyof typeof filters>).forEach(key => {
         if (filters[key] === 'ALL') filters[key] = '';
     });
-    
+
     router.get(route('admin.results.index'), filters, {
         preserveState: true,
         replace: true,
@@ -172,8 +173,8 @@ const getProgressColor = (course: any) => {
                         <div class="space-y-2">
                             <Label class="text-xs font-medium uppercase text-muted-foreground">Filter Options</Label>
                             <div class="flex items-center space-x-2 h-10 px-3 rounded-md border bg-card">
-                                <Switch 
-                                    id="has_registrations" 
+                                <Switch
+                                    id="has_registrations"
                                     v-model:checked="form.has_registrations"
                                 />
                                 <Label for="has_registrations" class="text-sm font-normal cursor-pointer">
@@ -226,8 +227,8 @@ const getProgressColor = (course: any) => {
                                     <Badge variant="outline">{{ course.level }}</Badge>
                                 </TableCell>
                                 <TableCell>
-                                    <Badge 
-                                        :variant="getProgressVariant(course)" 
+                                    <Badge
+                                        :variant="getProgressVariant(course)"
                                         :class="getProgressColor(course)"
                                     >
                                         {{ course.graded_count }} / {{ course.total_students }} Graded

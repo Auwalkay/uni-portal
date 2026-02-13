@@ -1,18 +1,11 @@
 <script setup lang="ts">
 import { Head, useForm, Link } from '@inertiajs/vue3';
-import { route } from 'ziggy-js';
-import AdminLayout from '@/layouts/AdminLayout.vue';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Upload, FileSpreadsheet, Save, ArrowLeft, Download, Users, BookOpen, Home, GraduationCap } from 'lucide-vue-next';
-import { ref, computed } from 'vue';
 import Swal from 'sweetalert2';
+import { ref, computed } from 'vue';
+import { route } from 'ziggy-js';
+
+import { Badge } from '@/components/ui/badge';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -21,6 +14,13 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 
 const props = defineProps<{
     course: any;
@@ -51,7 +51,7 @@ const handleFileChange = (e: Event) => {
 
 const submitUpload = () => {
     if (!uploadForm.file) return;
-    
+
     uploadForm.post(route('admin.results.upload', props.course.id), {
         onSuccess: () => {
             isUploadOpen.value = false;
@@ -99,7 +99,7 @@ const stats = computed(() => {
     const total = form.scores.length;
     const graded = form.scores.filter(s => s.ca_score !== null || s.exam_score !== null).length;
     const avgTotal = form.scores.reduce((sum, s, idx) => sum + calculateTotal(idx), 0) / (total || 1);
-    
+
     return {
         total,
         graded,
@@ -111,9 +111,9 @@ const stats = computed(() => {
 const downloadTemplate = () => {
     const headers = ['matric_number', 'ca', 'exam'];
     const rows = props.registrations.map(r => [r.student.matriculation_number, '', '']);
-    
-    let csvContent = "data:text/csv;charset=utf-8," 
-        + headers.join(",") + "\n" 
+
+    const csvContent = "data:text/csv;charset=utf-8,"
+        + headers.join(",") + "\n"
         + rows.map(e => e.join(",")).join("\n");
 
     const encodedUri = encodeURI(csvContent);
@@ -252,18 +252,18 @@ const downloadTemplate = () => {
                                     <TableCell class="font-mono font-medium text-primary">{{ getMatricNo(score.id) }}</TableCell>
                                     <TableCell class="font-medium">{{ getStudentName(score.id) }}</TableCell>
                                     <TableCell>
-                                        <Input 
-                                            type="number" 
-                                            v-model="score.ca_score" 
+                                        <Input
+                                            type="number"
+                                            v-model="score.ca_score"
                                             min="0" max="40" step="0.5"
                                             class="w-28 font-medium"
                                             placeholder="0"
                                         />
                                     </TableCell>
                                     <TableCell>
-                                        <Input 
-                                            type="number" 
-                                            v-model="score.exam_score" 
+                                        <Input
+                                            type="number"
+                                            v-model="score.exam_score"
                                             min="0" max="60" step="0.5"
                                             class="w-28 font-medium"
                                             placeholder="0"
@@ -273,8 +273,8 @@ const downloadTemplate = () => {
                                         <span class="text-lg font-bold">{{ calculateTotal(index) }}</span>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge 
-                                            variant="outline" 
+                                        <Badge
+                                            variant="outline"
                                             :class="getGrade(calculateTotal(index)).color"
                                             class="font-semibold"
                                         >
@@ -307,7 +307,7 @@ const downloadTemplate = () => {
                     <DialogHeader>
                         <DialogTitle>Import Results from Excel</DialogTitle>
                         <DialogDescription>
-                            Upload an Excel or CSV file containing student scores. 
+                            Upload an Excel or CSV file containing student scores.
                             Required columns: <code class="bg-muted px-1 py-0.5 rounded text-xs">matric_number</code>, <code class="bg-muted px-1 py-0.5 rounded text-xs">ca</code>, <code class="bg-muted px-1 py-0.5 rounded text-xs">exam</code>.
                         </DialogDescription>
                     </DialogHeader>
@@ -322,7 +322,7 @@ const downloadTemplate = () => {
                             </div>
                             <p class="text-sm text-muted-foreground">Download the template pre-filled with registered students.</p>
                         </div>
-                        
+
                         <div class="grid gap-2">
                             <Label for="file">Select File</Label>
                             <Input id="file" type="file" accept=".xlsx,.xls,.csv" @change="handleFileChange" />
