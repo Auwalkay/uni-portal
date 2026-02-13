@@ -28,6 +28,11 @@ class Session extends Model
         return $this->hasMany(Semester::class);
     }
 
+    public function studentSessions()
+    {
+        return $this->hasMany(StudentSession::class);
+    }
+
     public function feeConfigurations()
     {
         return $this->hasMany(FeeConfiguration::class);

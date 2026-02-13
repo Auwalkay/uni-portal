@@ -9,6 +9,7 @@ use App\Models\Invoice;
 use App\Models\Semester;
 use App\Models\Session;
 use App\Models\Student;
+use App\Models\StudentSession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -255,6 +256,18 @@ class CourseRegistrationController extends Controller
         // DB Transaction
         \Illuminate\Support\Facades\DB::transaction(function () use ($student, $currentSession, $firstSemester, $secondSemester, $firstSemCourses, $secondSemCourses) {
 
+            // Find or Create StudentSession
+            $studentSession = StudentSession::firstOrCreate(
+                [
+                    'student_id' => $student->id,
+                    'session_id' => $currentSession->id,
+                ],
+                [
+                    'level' => $student->current_level,
+                    'status' => 'active',
+                ]
+            );
+
             // Delete ALL registrations for this session to handle updates (unchecking courses)
             // Or better: Delete for First Sem if we are updating First Sem?
             // Since we submit ALL, we can sync ALL.
@@ -270,6 +283,7 @@ class CourseRegistrationController extends Controller
                         'course_id' => $course->id,
                         'session_id' => $currentSession->id,
                         'semester_id' => $firstSemester->id,
+                        'student_session_id' => $studentSession->id,
                     ]);
                 }
             }
@@ -282,6 +296,7 @@ class CourseRegistrationController extends Controller
                         'course_id' => $course->id,
                         'session_id' => $currentSession->id,
                         'semester_id' => $secondSemester->id,
+                        'student_session_id' => $studentSession->id,
                     ]);
                 }
             }

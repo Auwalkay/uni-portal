@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Applicant;
 use App\Http\Controllers\Controller;
 use App\Models\Applicant;
 use App\Models\Faculty;
+use DB;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -52,111 +53,120 @@ class ApplicationController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'first_name' => 'required|string',
-            'last_name' => 'required|string',
-            'dob' => 'required|date',
-            'phone' => 'required|string',
-            'jamb_score' => 'required|numeric',
-            'previous_institution' => 'nullable|string',
-            'programme_id' => 'required|exists:programmes,id',
-            'mode' => 'required|string',
-            'state_id' => 'required|exists:states,id',
-            'lga_id' => 'required|exists:lgas,id',
-            'next_of_kin_name' => 'required|string',
-            'next_of_kin_phone' => 'required|string',
-            'next_of_kin_relationship' => 'required|string',
-            'passport_photo' => 'nullable|file|mimes:jpeg,png,jpg|max:2048',
-            'waec_result' => 'nullable|file|mimes:pdf,jpeg,png,jpg|max:2048',
-        ]);
+        return DB::transaction(function () use ($request) {
 
-        $user = $request->user();
-
-        // Ensure user has applicant role
-        if (!$user->hasRole('applicant')) {
-            $user->assignRole('applicant');
-        }
-
-        $applicant = Applicant::updateOrCreate(
-            ['user_id' => $user->id],
-            [
-                // 'application_number' => ... // Generated after payment
-                'jamb_registration_number' => $request->input('jamb_number', 'PENDING-' . time()),
-                'application_mode' => $request->input('mode'),
-                'program_choice_1' => $request->input('programme_id'),
-                'status' => 'pending_payment', // Changed from submitted
-
-                // Personal
-                'first_name' => $request->first_name,
-                'last_name' => $request->last_name,
-                'dob' => $request->dob,
-                'phone' => $request->phone,
-
-                // Origin
-                'state_id' => $request->state_id,
-                'lga_id' => $request->lga_id,
-
-                // Academic
-                'jamb_score' => $request->jamb_score,
-
-                // NOK
-                'next_of_kin_name' => $request->next_of_kin_name,
-                'next_of_kin_phone' => $request->next_of_kin_phone,
-                'next_of_kin_relationship' => $request->next_of_kin_relationship,
-            ]
-        );
-
-        // Handle File Uploads
-        if ($request->hasFile('passport_photo')) {
-            $path = $request->file('passport_photo')->store('applicants/passports', 'public');
-            $applicant->documents()->create([
-                'type' => 'passport_photo',
-                'path' => $path,
-                'status' => 'uploaded'
+            $validated = $request->validate([
+                'first_name' => 'required|string',
+                'last_name' => 'required|string',
+                'dob' => 'required|date',
+                'phone' => 'required|string',
+                'jamb_score' => 'required|numeric',
+                'previous_institution' => 'nullable|string',
+                'programme_id' => 'required|exists:programmes,id',
+                'mode' => 'required|string',
+                'state_id' => 'required|exists:states,id',
+                'lga_id' => 'required|exists:lgas,id',
+                'next_of_kin_name' => 'required|string',
+                'next_of_kin_phone' => 'required|string',
+                'next_of_kin_relationship' => 'required|string',
+                'passport_photo' => 'nullable|file|mimes:jpeg,png,jpg|max:2048',
+                'waec_result' => 'nullable|file|mimes:pdf,jpeg,png,jpg|max:2048',
             ]);
-        }
 
-        if ($request->hasFile('waec_result')) {
-            $path = $request->file('waec_result')->store('applicants/results', 'public');
-            $applicant->documents()->create([
-                'type' => 'waec_result',
-                'path' => $path,
-                'status' => 'uploaded'
-            ]);
-        }
+            $user = $request->user();
 
-        // Generate Invoice for Application Fee
-        $currentSession = \App\Models\Session::current();
-        if (!$currentSession) {
-            return back()->with('error', 'No active academic session found.');
-        }
+            // Ensure user has applicant role
+            if (!$user->hasRole('applicant')) {
+                $user->assignRole('applicant');
+            }
 
-        $invoice = \App\Models\Invoice::firstOrCreate(
-            [
-                'user_id' => $user->id,
-                'type' => 'application_fee',
-                'session_id' => $currentSession->id,
-            ],
-            [
-                'reference' => 'APP-' . strtoupper(uniqid()),
-                'amount' => 50000,
-                'paid_amount' => 0,
-                'status' => 'pending',
-                'due_date' => now()->addDays(7),
-            ]
-        );
+            $applicant = Applicant::updateOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'jamb_registration_number' => $request->input('jamb_number', 'PENDING-' . time()),
+                    'application_mode' => $request->input('mode'),
+                    'program_choice_1' => $request->input('programme_id'),
+                    'status' => 'pending_payment',
 
-        // Ensure Invoice Item exists
-        if ($invoice->items()->count() === 0) {
-            $invoice->items()->create([
-                'description' => 'Application Fee',
-                'amount' => 50000,
-                'quantity' => 1,
-            ]);
-        }
+                    // Personal
+                    'first_name' => $request->first_name,
+                    'last_name' => $request->last_name,
+                    'dob' => $request->dob,
+                    'phone' => $request->phone,
+                    'gender' => $request->gender,
 
-        return redirect()->route('applicant.payment.index')->with('success', 'Application saved. Please pay the application fee to complete submission.');
+                    // Origin
+                    'state_id' => $request->state_id,
+                    'lga_id' => $request->lga_id,
+
+                    // Academic
+                    'jamb_score' => $request->jamb_score,
+
+                    // NOK
+                    'next_of_kin_name' => $request->next_of_kin_name,
+                    'next_of_kin_phone' => $request->next_of_kin_phone,
+                    'next_of_kin_relationship' => $request->next_of_kin_relationship,
+                ]
+            );
+
+            // Handle File Uploads
+            if ($request->hasFile('passport_photo')) {
+                $path = $request->file('passport_photo')
+                    ->store('applicants/passports', 'public');
+
+                $applicant->documents()->create([
+                    'type' => 'passport_photo',
+                    'path' => $path,
+                    'status' => 'uploaded',
+                ]);
+            }
+
+            if ($request->hasFile('waec_result')) {
+                $path = $request->file('waec_result')
+                    ->store('applicants/results', 'public');
+
+                $applicant->documents()->create([
+                    'type' => 'waec_result',
+                    'path' => $path,
+                    'status' => 'uploaded',
+                ]);
+            }
+
+            // Generate Invoice
+            $currentSession = \App\Models\Session::current();
+            if (!$currentSession) {
+                throw new \Exception('No active academic session found.');
+            }
+
+            $invoice = \App\Models\Invoice::firstOrCreate(
+                [
+                    'user_id' => $user->id,
+                    'type' => 'application_fee',
+                    'session_id' => $currentSession->id,
+                ],
+                [
+                    'reference' => 'APP-' . strtoupper(uniqid()),
+                    'amount' => 50000,
+                    'paid_amount' => 0,
+                    'status' => 'pending',
+                    'due_date' => now()->addDays(7),
+                ]
+            );
+
+            if ($invoice->items()->count() === 0) {
+                $invoice->items()->create([
+                    'description' => 'Application Fee',
+                    'amount' => 50000,
+                    'quantity' => 1,
+                ]);
+            }
+
+            return redirect()
+                ->route('applicant.payment.index')
+                ->with('success', 'Application saved. Please pay the application fee to complete submission.');
+        });
     }
+
 
     public function acceptOffer(Request $request)
     {

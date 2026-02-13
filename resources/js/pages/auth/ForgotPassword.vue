@@ -50,17 +50,18 @@ const submit = () => {
                         autocomplete="off"
                         autofocus
                         placeholder="email@example.com"
+                        class="shadow-sm"
                     />
                     <InputError :message="form.errors.email" />
                 </div>
 
                 <div class="my-6 flex items-center justify-start">
                     <Button
-                        class="w-full"
+                        class="w-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-md transition-all active:scale-95"
                         :disabled="form.processing"
                         data-test="email-password-reset-link-button"
                     >
-                        <Spinner v-if="form.processing" />
+                        <Spinner v-if="form.processing" class="mr-2" />
                         Email password reset link
                     </Button>
                 </div>
@@ -68,7 +69,7 @@ const submit = () => {
 
             <div class="space-x-1 text-center text-sm text-muted-foreground">
                 <span>Or, return to</span>
-                <TextLink :href="login().url">log in</TextLink>
+                <TextLink :href="login().url" class="font-medium text-primary hover:underline hover:text-primary/80 transition-colors">log in</TextLink>
             </div>
         </div>
     </AuthLayout>

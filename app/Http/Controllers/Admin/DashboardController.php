@@ -4,14 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\CourseRegistration;
+use App\Models\Expense;
 use App\Models\Invoice;
+use App\Models\Payroll;
 use App\Models\Session;
 use App\Models\Student;
 use App\Models\User;
-use App\Models\Expense;
-use App\Models\Payroll;
-use App\Models\ExpenseCategory;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class DashboardController extends Controller
@@ -23,7 +23,7 @@ class DashboardController extends Controller
         $sessionId = $request->input('session_id', $currentSession?->id);
         $selectedSession = Session::find($sessionId) ?? $currentSession;
 
-        if (!$selectedSession) {
+        if (! $selectedSession) {
             // Fallback if absolutely no session exists
             return Inertia::render('Admin/Dashboard', [
                 'stats' => [
@@ -42,7 +42,7 @@ class DashboardController extends Controller
                 'charts' => [
                     'revenue' => ['labels' => [], 'data' => []],
                     'faculty' => ['labels' => [], 'data' => []],
-                ]
+                ],
             ]);
         }
 
@@ -65,8 +65,8 @@ class DashboardController extends Controller
         // Application Count (Using a simplistic check if Application model exists, else 0 or approximation)
         // Assuming Applicant role for now if no specific model usage in this context, or verify file existence.
         // We see 'App\Http\Controllers\Applicant\ApplicationController', so maybe `Application` model?
-        // Let's stick to safe User role check for 'applicant' created_at in session timeframe? 
-        // Or simplified: Just don't break if model missing. 
+        // Let's stick to safe User role check for 'applicant' created_at in session timeframe?
+        // Or simplified: Just don't break if model missing.
         // Let's use User role 'applicant' count as a proxy for "Applications" in pipeline.
         // Let's use User role 'applicant' count as a proxy for "Applications" in pipeline.
         $applicationsCount = User::whereHas('roles', function ($query) {
@@ -102,15 +102,15 @@ class DashboardController extends Controller
             ->latest('updated_at')
             ->take(5)
             ->get()
-            ->map(fn($inv) => [
+            ->map(fn ($inv) => [
                 'id' => $inv->id,
                 'type' => 'payment',
                 'title' => 'Payment Received',
-                'description' => "{$inv->user->name} paid " . number_format($inv->amount),
+                'description' => "{$inv->user->name} paid ".number_format($inv->amount),
                 'amount' => $inv->amount,
                 'time_ago' => $inv->updated_at->diffForHumans(),
                 'timestamp' => $inv->updated_at,
-                'icon' => 'CreditCard'
+                'icon' => 'CreditCard',
             ]);
 
         // - New Registrations
@@ -119,14 +119,14 @@ class DashboardController extends Controller
             ->latest('created_at')
             ->take(5)
             ->get()
-            ->map(fn($std) => [
+            ->map(fn ($std) => [
                 'id' => $std->id,
                 'type' => 'student',
                 'title' => 'New Student',
-                'description' => "{$std->user->name} joined " . ($std->department ?? 'General'),
+                'description' => "{$std->user->name} joined ".($std->department ?? 'General'),
                 'time_ago' => $std->created_at->diffForHumans(),
                 'timestamp' => $std->created_at,
-                'icon' => 'UserPlus'
+                'icon' => 'UserPlus',
             ]);
 
         // Merge and Sort
@@ -134,7 +134,6 @@ class DashboardController extends Controller
             ->sortByDesc('timestamp')
             ->take(6)
             ->values();
-
 
         // 5. Chart Data
         // 5. Chart Data
@@ -147,12 +146,12 @@ class DashboardController extends Controller
             ->get();
 
         $revenueChart = [
-            'labels' => $revenueTrend->map(fn($r) => \Carbon\Carbon::createFromFormat('Y-m', (string) $r->month)->format('M'))->toArray(),
+            'labels' => $revenueTrend->map(fn ($r) => \Carbon\Carbon::createFromFormat('Y-m', (string) $r->month)->format('M'))->toArray(),
             'data' => $revenueTrend->pluck('total')->toArray(),
         ];
 
         // Faculty Distribution (Pie Chart) - Renamed for clarity in UI to "Student Distribution by Faculty"
-        $facultyStats = Student::select('faculties.name', \Illuminate\Support\Facades\DB::raw('count(*) as total'))
+        $facultyStats = Student::select('faculties.name', DB::raw('count(*) as total'))
             ->leftJoin('departments', 'students.department_id', '=', 'departments.id')
             ->leftJoin('faculties', 'departments.faculty_id', '=', 'faculties.id')
             ->whereNotNull('faculties.name')
@@ -166,19 +165,19 @@ class DashboardController extends Controller
         ];
 
         // Students by Level (Bar Chart)
-        $levelStats = Student::select('current_level', \Illuminate\Support\Facades\DB::raw('count(*) as total'))
+        $levelStats = Student::select('current_level', DB::raw('count(*) as total'))
             ->whereNotNull('current_level')
             ->groupBy('current_level')
             ->orderBy('current_level')
             ->get();
 
         $levelChart = [
-            'labels' => $levelStats->pluck('current_level')->map(fn($l) => $l . ' Lvl')->toArray(),
+            'labels' => $levelStats->pluck('current_level')->map(fn ($l) => $l.' Lvl')->toArray(),
             'data' => $levelStats->pluck('total')->toArray(),
         ];
 
         // Top Programs (Doughnut)
-        $programStats = Student::select('programmes.name', \Illuminate\Support\Facades\DB::raw('count(*) as total'))
+        $programStats = Student::select('programmes.name', DB::raw('count(*) as total'))
             ->leftJoin('programmes', 'students.program_id', '=', 'programmes.id')
             ->whereNotNull('programmes.name')
             ->groupBy('programmes.name')
@@ -187,7 +186,7 @@ class DashboardController extends Controller
             ->get();
 
         $programChart = [
-            'labels' => $programStats->pluck('name')->map(fn($n) => \Illuminate\Support\Str::limit((string) $n, 15))->toArray(),
+            'labels' => $programStats->pluck('name')->map(fn ($n) => \Illuminate\Support\Str::limit((string) $n, 15))->toArray(),
             'data' => $programStats->pluck('total')->toArray(),
         ];
 
@@ -203,26 +202,25 @@ class DashboardController extends Controller
         $financialTrendLabels = $revenueTrend->pluck('month')->merge($expenseTrend->pluck('month'))->unique()->sort()->values();
 
         $combinedFinancialChart = [
-            'labels' => $financialTrendLabels->map(fn($m) => \Carbon\Carbon::createFromFormat('Y-m', (string) $m)->format('M'))->toArray(),
-            'inflow' => $financialTrendLabels->map(fn($m) => $revenueTrend->firstWhere('month', $m)?->total ?? 0)->toArray(),
-            'outflow' => $financialTrendLabels->map(fn($m) => $expenseTrend->get((string) $m)?->total ?? 0)->toArray(),
+            'labels' => $financialTrendLabels->map(fn ($m) => \Carbon\Carbon::createFromFormat('Y-m', (string) $m)->format('M'))->toArray(),
+            'inflow' => $financialTrendLabels->map(fn ($m) => $revenueTrend->firstWhere('month', $m)?->total ?? 0)->toArray(),
+            'outflow' => $financialTrendLabels->map(fn ($m) => $expenseTrend->get((string) $m)?->total ?? 0)->toArray(),
         ];
 
         // Expense by Category (Doughnut)
         $expenseByCategory = Expense::where('status', 'approved')
             ->with('category')
-            ->select('expense_category_id', \Illuminate\Support\Facades\DB::raw('SUM(amount) as total'))
+            ->select('expense_category_id', DB::raw('SUM(amount) as total'))
             ->groupBy('expense_category_id')
             ->get();
 
         $expenseCategoryChart = [
-            'labels' => $expenseByCategory->map(fn($e) => $e->category?->name ?? 'Uncategorized')->toArray(),
+            'labels' => $expenseByCategory->map(fn ($e) => $e->category?->name ?? 'Uncategorized')->toArray(),
             'data' => $expenseByCategory->pluck('total')->toArray(),
         ];
 
-
         // Staff by Department (Bar Chart)
-        $staffDeptStats = \App\Models\Staff::select('departments.name', \Illuminate\Support\Facades\DB::raw('count(*) as total'))
+        $staffDeptStats = \App\Models\Staff::select('departments.name', DB::raw('count(*) as total'))
             ->leftJoin('departments', 'staff.department_id', '=', 'departments.id')
             ->whereNotNull('departments.name')
             ->groupBy('departments.name')
@@ -235,7 +233,6 @@ class DashboardController extends Controller
             'data' => $staffDeptStats->pluck('total')->toArray(),
         ];
 
-
         // 6. Access Control Filtering
         $user = $request->user();
         $canViewFinance = $user->hasAnyPermission(['manage_payments', 'verify_payments', 'view_payments']) || $user->hasRole('admin');
@@ -244,10 +241,13 @@ class DashboardController extends Controller
 
         // Filter Recent Activity
         $recentActivity = $recentActivity->filter(function ($item) use ($canViewFinance, $canViewAdmissions, $canViewResults) {
-            if ($item['type'] === 'payment')
+            if ($item['type'] === 'payment') {
                 return $canViewFinance;
-            if ($item['type'] === 'student')
+            }
+            if ($item['type'] === 'student') {
                 return $canViewAdmissions || $canViewResults;
+            }
+
             return true;
         })->values()->all();
 
@@ -274,7 +274,7 @@ class DashboardController extends Controller
 
         $registrationCompliance = $totalStudents > 0 ? round(($registeredStudentCount / $totalStudents) * 100, 1) : 0;
 
-        $genderStats = Student::select('gender', \Illuminate\Support\Facades\DB::raw('count(*) as count'))
+        $genderStats = Student::select('gender', DB::raw('count(*) as count'))
             ->groupBy('gender')
             ->pluck('count', 'gender')
             ->toArray();

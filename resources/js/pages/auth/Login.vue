@@ -60,6 +60,7 @@ const submit = () => {
                         :tabindex="1"
                         autocomplete="username"
                         placeholder="Email or Matric No"
+                        class="shadow-sm"
                     />
                     <InputError :message="form.errors.email" />
                 </div>
@@ -70,7 +71,7 @@ const submit = () => {
                         <TextLink
                             v-if="canResetPassword"
                             :href="request().url"
-                            class="text-sm"
+                            class="text-sm font-medium text-primary hover:underline hover:text-primary/80 transition-colors"
                             :tabindex="5"
                         >
                             Forgot password?
@@ -85,25 +86,26 @@ const submit = () => {
                         :tabindex="2"
                         autocomplete="current-password"
                         placeholder="Password"
+                        class="shadow-sm"
                     />
                     <InputError :message="form.errors.password" />
                 </div>
 
                 <div class="flex items-center justify-between">
-                    <Label for="remember" class="flex items-center space-x-3">
-                        <Checkbox id="remember" name="remember" v-model:checked="form.remember" :tabindex="3" />
+                    <Label for="remember" class="flex items-center space-x-2 text-sm text-muted-foreground">
+                        <Checkbox id="remember" name="remember" v-model:checked="form.remember" :tabindex="3" class="rounded border-input text-primary focus:ring-primary/20" />
                         <span>Remember me</span>
                     </Label>
                 </div>
 
                 <Button
                     type="submit"
-                    class="mt-4 w-full"
+                    class="w-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-md transition-all active:scale-95"
                     :tabindex="4"
                     :disabled="form.processing"
                     data-test="login-button"
                 >
-                    <Spinner v-if="form.processing" />
+                    <Spinner v-if="form.processing" class="mr-2" />
                     Log in
                 </Button>
             </div>
@@ -113,7 +115,7 @@ const submit = () => {
                 v-if="canRegister"
             >
                 Don't have an account?
-                <TextLink :href="register().url" :tabindex="5">Sign up</TextLink>
+                <TextLink :href="register().url" :tabindex="5" class="font-medium text-primary hover:underline hover:text-primary/80 transition-colors">Sign up</TextLink>
             </div>
         </form>
     </AuthBase>

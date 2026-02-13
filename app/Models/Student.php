@@ -86,4 +86,9 @@ class Student extends Model
     {
         return $this->hasMany(OLevelResult::class);
     }
+
+    public function sessions()
+    {
+        return $this->hasMany(StudentSession::class);
+    }
 }

@@ -39,4 +39,9 @@ class Invoice extends Model
     {
         return $this->belongsTo(Session::class);
     }
+
+    public function studentSession()
+    {
+        return $this->belongsTo(StudentSession::class);
+    }
 }

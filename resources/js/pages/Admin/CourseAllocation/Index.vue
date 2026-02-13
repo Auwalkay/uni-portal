@@ -1,38 +1,29 @@
 <script setup lang="ts">
-import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { ref, computed, watch } from 'vue';
 import { debounce } from 'lodash';
-import { route } from 'ziggy-js';
 import {
   Search, Plus, Trash2, User, Upload, Download, FileSpreadsheet
 } from 'lucide-vue-next';
-import { cn } from '@/lib/utils';
+import { ref, computed, watch } from 'vue';
+import { route } from 'ziggy-js';
 
-
-
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-
+import { Button } from '@/components/ui/button';
 import {
   Card, CardFooter
 } from '@/components/ui/card';
-
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
-
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel,
-} from '@/components/ui/select';
-
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
-
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel,
+} from '@/components/ui/select';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 const props = defineProps<{
   allocations: { data: Array<any>; links: Array<any>; from: number; to: number; total: number };
   sessions: Array<{ id: string; name: string }>;

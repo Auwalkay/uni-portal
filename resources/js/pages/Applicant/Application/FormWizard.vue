@@ -102,22 +102,41 @@ const prevStep = () => {
 const submitApplication = () => {
     form.post(route('applicant.apply.store'), {
         forceFormData: true,
-        onSuccess: () => {
-    alert('Submitting application...');
-        },
-        onError: (error) => {
+        onStart: () => {
             Swal.fire({
-                icon: 'error',
-                title: 'Registration Failed',
-                text: 'An error occurred during registration.',
+                title: 'Submitting application...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading(),
+            });
+        },
+        onSuccess: () => {
+            Swal.fire({
+                icon: 'success',
+                title: 'Submitted',
                 toast: true,
                 position: 'top-end',
                 showConfirmButton: false,
-                timer: 3000
+                timer: 2500,
             });
-        }
+        },
+        onError: (errors) => {
+            // errors is an object: { field: "message", field2: "message" }
+            const firstKey = Object.keys(errors)[0];
+            const firstMsg = firstKey ? errors[firstKey] : 'Something went wrong.';
+
+            Swal.fire({
+                icon: 'error',
+                title: 'Registration Failed',
+                text: firstMsg,
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+            });
+        },
+        // onFinish: () => Swal.close(),
     });
 };
+
 </script>
 
 <template>

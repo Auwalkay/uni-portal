@@ -64,6 +64,7 @@ watch(() => page.props.errors, (errors) => {
                         name="name"
                         v-model="form.name"
                         placeholder="Full name"
+                        class="shadow-sm"
                     />
                     <InputError :message="form.errors.name" />
                 </div>
@@ -79,6 +80,7 @@ watch(() => page.props.errors, (errors) => {
                         name="email"
                         v-model="form.email"
                         placeholder="email@example.com"
+                        class="shadow-sm"
                     />
                     <InputError :message="form.errors.email" />
                 </div>
@@ -94,6 +96,7 @@ watch(() => page.props.errors, (errors) => {
                         name="password"
                         v-model="form.password"
                         placeholder="Password"
+                        class="shadow-sm"
                     />
                     <InputError :message="form.errors.password" />
                 </div>
@@ -109,18 +112,19 @@ watch(() => page.props.errors, (errors) => {
                         name="password_confirmation"
                         v-model="form.password_confirmation"
                         placeholder="Confirm password"
+                        class="shadow-sm"
                     />
                     <InputError :message="form.errors.password_confirmation" />
                 </div>
 
                 <Button
                     type="submit"
-                    class="mt-2 w-full"
+                    class="w-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-md transition-all active:scale-95"
                     tabindex="5"
                     :disabled="form.processing"
                     data-test="register-user-button"
                 >
-                    <Spinner v-if="form.processing" />
+                    <Spinner v-if="form.processing" class="mr-2" />
                     Create account
                 </Button>
             </div>
@@ -129,7 +133,7 @@ watch(() => page.props.errors, (errors) => {
                 Already have an account?
                 <TextLink
                     :href="login().url"
-                    class="underline underline-offset-4"
+                    class="font-medium text-primary hover:underline hover:text-primary/80 transition-colors"
                     :tabindex="6"
                     >Log in</TextLink
                 >

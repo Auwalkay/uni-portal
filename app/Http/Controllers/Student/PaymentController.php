@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\StudentSession;
 use App\Services\PaystackService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -264,9 +265,22 @@ class PaymentController extends Controller
 
         $totalAmount = $configs->sum('amount');
 
+        // Find or Create StudentSession
+        $studentSession = StudentSession::firstOrCreate(
+            [
+                'student_id' => $student->id,
+                'session_id' => $currentSession->id,
+            ],
+            [
+                'level' => $student->current_level,
+                'status' => 'active',
+            ]
+        );
+
         $invoice = Invoice::create([
             'user_id' => $user->id,
             'session_id' => $currentSession->id,
+            'student_session_id' => $studentSession->id,
             'type' => 'school_fee',
             'reference' => 'SCH-' . strtoupper(uniqid()),
             'amount' => $totalAmount,

@@ -19,6 +19,9 @@ class CourseController extends Controller
 
         $filters = $request->only(['session_id', 'search']);
         $sessionId = $filters['session_id'] ?? $currentSession?->id;
+        if ($sessionId === 'all') {
+            $sessionId = null;
+        }
 
         $allocations = CourseAllocation::query()
             ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))

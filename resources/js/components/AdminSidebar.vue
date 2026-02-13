@@ -23,9 +23,26 @@ import { usePage } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 
 const page = usePage();
-const userPermissions = computed(() => (page.props.auth.user as any)?.permissions || []);
-const isAdmin = computed(() => (page.props.auth.user as any)?.roles?.includes('admin'));
 
+const hasRole = (roleOrRoles: string | string[]) => {
+    const user = (page.props.auth?.user as any);
+    if (!user || !user.roles || !Array.isArray(user.roles)) return false;
+    
+    if (Array.isArray(roleOrRoles)) {
+        return roleOrRoles.some(role => user.roles.includes(role));
+    }
+    return user.roles.includes(roleOrRoles);
+};
+
+const hasPermission = (permission: string) => {
+    const user = (page.props.auth?.user as any);
+    if (!user || ((!user.permissions || !Array.isArray(user.permissions)) && !user.roles)) return false;
+    
+    // Admins usually have all permissions, but explicit check:
+    if (hasRole('admin')) return true;
+
+    return (user.permissions && Array.isArray(user.permissions) && user.permissions.includes(permission));
+};
 
 const overviewItems = computed(() => {
     return [
@@ -55,7 +72,7 @@ const academicsItems = computed(() => {
             title: 'Admission / Applicants',
             href: '/admin/admissions',
             icon: Users,
-            show: isAdmin.value || userPermissions.value.includes('view_applications'),
+            show: hasPermission('view_applications'),
         },
         {
             title: 'Students',
@@ -67,37 +84,37 @@ const academicsItems = computed(() => {
             title: 'My Courses',
             href: route().has('admin.teaching.courses.index') ? route('admin.teaching.courses.index') : '#',
             icon: BookOpen,
-            show: ['lecturer', 'course_coordinator', 'dean', 'hod'].some(role => (page.props.auth.user as any)?.roles?.includes(role)) || userPermissions.value.includes('manage_courses'),
+            show: hasRole(['admin', 'lecturer', 'course_coordinator', 'dean', 'hod']) || hasPermission('manage_courses'),
         },
         {
             title: 'Timetables',
             href: route().has('admin.timetables.index') ? route('admin.timetables.index') : '#',
             icon: Calendar,
-            show: isAdmin.value || userPermissions.value.includes('manage_courses'),
+            show: hasPermission('manage_courses'),
         },
         {
             title: 'Course Management',
             href: '/admin/academics',
             icon: Folder,
-            show: isAdmin.value || userPermissions.value.includes('manage_courses'),
+            show: hasPermission('manage_courses'),
         },
         {
             title: 'Allocations',
             href: route().has('admin.course-allocations.index') ? route('admin.course-allocations.index') : '#',
             icon: CalendarRange,
-            show: isAdmin.value || userPermissions.value.includes('manage_courses'),
+            show: hasPermission('manage_courses'),
         },
         {
             title: 'Session & Semester',
             href: '/admin/sessions',
             icon: CalendarRange,
-            show: isAdmin.value || userPermissions.value.includes('manage_courses'),
+            show: hasPermission('manage_courses'),
         },
         {
             title: 'Results',
             href: '/admin/results',
             icon: FileText,
-            show: isAdmin.value || userPermissions.value.includes('view_results'),
+            show: hasPermission('view_results'),
         },
     ].filter(i => i.show);
 });
@@ -108,43 +125,43 @@ const financeItems = computed(() => {
             title: 'Finance Dashboard',
             href: route().has('admin.finance.dashboard') ? route('admin.finance.dashboard') : '#',
             icon: LayoutGrid,
-            show: isAdmin.value || userPermissions.value.includes('view_payments'),
+            show: hasRole('admin') || hasPermission('view_payments'),
         },
         {
             title: 'Expenses',
             href: route().has('admin.finance.expenses.index') ? route('admin.finance.expenses.index') : '#',
             icon: DollarSign,
-            show: isAdmin.value || userPermissions.value.includes('manage_payments'),
+            show: hasRole('admin') || hasPermission('manage_payments'),
         },
         {
             title: 'Payroll',
             href: route().has('admin.finance.payroll.index') ? route('admin.finance.payroll.index') : '#',
             icon: Banknote,
-            show: isAdmin.value || userPermissions.value.includes('manage_payments'),
+            show: hasRole('admin') || hasPermission('manage_payments'),
         },
         {
             title: 'Staff Salaries',
             href: route().has('admin.finance.salary.index') ? route('admin.finance.salary.index') : '#',
             icon: Wallet,
-            show: isAdmin.value || userPermissions.value.includes('manage_payments'),
+            show: hasRole('admin') || hasPermission('manage_payments'),
         },
         {
             title: 'Invoices',
             href: route().has('admin.invoices.index') ? route('admin.invoices.index') : '#',
             icon: CreditCard,
-            show: isAdmin.value || userPermissions.value.includes('view_payments'),
+            show: hasRole('admin') || hasPermission('view_payments'),
         },
         {
             title: 'Payments',
             href: '/admin/payments',
             icon: CreditCard,
-            show: isAdmin.value || userPermissions.value.includes('view_payments'),
+            show: hasRole('admin') || hasPermission('view_payments'),
         },
         {
             title: 'Finance Configuration',
             href: '/admin/finance',
             icon: Shield,
-            show: isAdmin.value || userPermissions.value.includes('manage_payments'),
+            show: hasRole('admin') || hasPermission('manage_payments'),
         },
     ].filter(i => i.show);
 });
@@ -155,13 +172,13 @@ const administrationItems = computed(() => {
             title: 'Staff Management',
             href: route().has('admin.staff.index') ? route('admin.staff.index') : '#',
             icon: Users,
-            show: isAdmin.value || userPermissions.value.includes('manage_staff'),
+            show: hasRole('admin') || hasPermission('manage_staff'),
         },
         {
             title: 'System Users',
             href: '/admin/users',
             icon: Shield,
-            show: isAdmin.value,
+            show: hasRole('admin'),
         },
     ].filter(i => i.show);
 });
@@ -172,25 +189,25 @@ const frontDeskItems = computed(() => {
             title: 'Front Desk Dashboard',
             href: route().has('admin.front-desk.dashboard') ? route('admin.front-desk.dashboard') : '#',
             icon: LayoutGrid,
-            show: isAdmin.value || (page.props.auth.user as any)?.roles?.includes('receptionist'),
+            show: hasRole(['admin', 'receptionist']),
         },
         {
             title: 'Visitors',
             href: route().has('admin.front-desk.visitors.index') ? route('admin.front-desk.visitors.index') : '#',
             icon: Users,
-            show: isAdmin.value || userPermissions.value.includes('manage_visitors'),
+            show: hasPermission('manage_visitors'),
         },
         {
             title: 'Complaints',
             href: route().has('admin.front-desk.complaints.index') ? route('admin.front-desk.complaints.index') : '#',
             icon: FileText,
-            show: isAdmin.value || userPermissions.value.includes('manage_complaints'),
+            show: hasPermission('manage_complaints'),
         },
         {
             title: 'Enquiries',
             href: route().has('admin.front-desk.enquiries.index') ? route('admin.front-desk.enquiries.index') : '#',
             icon: BookOpen,
-            show: isAdmin.value || userPermissions.value.includes('manage_enquiries'),
+            show: hasPermission('manage_enquiries'),
         },
     ].filter(i => i.show);
 });
@@ -201,7 +218,7 @@ const footerNavItems = computed(() => {
             title: 'System Settings',
             href: '/admin/settings',
             icon: Shield,
-            show: isAdmin.value,
+            show: hasRole('admin'),
         },
     ].filter(item => item.show);
 });

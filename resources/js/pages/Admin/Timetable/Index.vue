@@ -151,7 +151,7 @@ const breadcrumbs = [
     <Head title="Timetable Management" />
 
     <AdminLayout :breadcrumbs="breadcrumbs">
-        <div class="p-6 space-y-6 max-w-[1600px] mx-auto">
+        <div class="p-6 space-y-6 w-full">
 
             <div class="flex flex-col md:flex-row justify-between items-start gap-4">
                 <div>
@@ -175,7 +175,7 @@ const breadcrumbs = [
                     <Select v-model="filterForm.session_id">
                          <SelectTrigger><SelectValue placeholder="Select Session" /></SelectTrigger>
                          <SelectContent>
-                             <SelectItem v-for="s in sessions" :key="s.id" :value="s.id">{{ s.name }}</SelectItem>
+                             <SelectItem v-for="s in sessions" :key="s.id" :value="String(s.id)">{{ s.name }}</SelectItem>
                          </SelectContent>
                     </Select>
                 </div>
@@ -185,7 +185,7 @@ const breadcrumbs = [
                          <SelectTrigger><SelectValue placeholder="Any Semester" /></SelectTrigger>
                          <SelectContent>
                              <SelectItem value="all">All Semesters</SelectItem>
-                             <SelectItem v-for="s in semesters" :key="s.id" :value="s.id">{{ s.name }}</SelectItem>
+                             <SelectItem v-for="s in semesters" :key="s.id" :value="String(s.id)">{{ s.name }}</SelectItem>
                          </SelectContent>
                     </Select>
                 </div>
@@ -195,7 +195,7 @@ const breadcrumbs = [
                          <SelectTrigger><SelectValue placeholder="Any Department" /></SelectTrigger>
                          <SelectContent>
                              <SelectItem value="all">All Departments</SelectItem>
-                             <SelectItem v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</SelectItem>
+                             <SelectItem v-for="d in departments" :key="d.id" :value="String(d.id)">{{ d.name }}</SelectItem>
                          </SelectContent>
                     </Select>
                 </div>
@@ -275,7 +275,7 @@ const breadcrumbs = [
                                 <Select v-model="form.session_id">
                                      <SelectTrigger :class="{'border-red-500': form.errors.session_id}"><SelectValue placeholder="Session" /></SelectTrigger>
                                      <SelectContent>
-                                         <SelectItem v-for="s in sessions" :key="s.id" :value="s.id">{{ s.name }}</SelectItem>
+                                         <SelectItem v-for="s in sessions" :key="s.id" :value="String(s.id)">{{ s.name }}</SelectItem>
                                      </SelectContent>
                                 </Select>
                                 <p v-if="form.errors.session_id" class="text-xs text-red-500">{{ form.errors.session_id }}</p>
@@ -285,7 +285,7 @@ const breadcrumbs = [
                                 <Select v-model="form.semester_id">
                                      <SelectTrigger :class="{'border-red-500': form.errors.semester_id}"><SelectValue placeholder="Semester" /></SelectTrigger>
                                      <SelectContent>
-                                         <SelectItem v-for="s in semesters" :key="s.id" :value="s.id">{{ s.name }}</SelectItem>
+                                         <SelectItem v-for="s in semesters" :key="s.id" :value="String(s.id)">{{ s.name }}</SelectItem>
                                      </SelectContent>
                                 </Select>
                                 <p v-if="form.errors.semester_id" class="text-xs text-red-500">{{ form.errors.semester_id }}</p>
@@ -298,7 +298,7 @@ const breadcrumbs = [
                                 <Select v-model="form.department_id">
                                      <SelectTrigger :class="{'border-red-500': form.errors.department_id}"><SelectValue placeholder="Department" /></SelectTrigger>
                                      <SelectContent>
-                                         <SelectItem v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</SelectItem>
+                                         <SelectItem v-for="d in departments" :key="d.id" :value="String(d.id)">{{ d.name }}</SelectItem>
                                      </SelectContent>
                                 </Select>
                                 <p v-if="form.errors.department_id" class="text-xs text-red-500">{{ form.errors.department_id }}</p>
@@ -326,7 +326,7 @@ const breadcrumbs = [
                                      <SelectTrigger :class="{'border-red-500': form.errors.course_id}"><SelectValue placeholder="Select Course" /></SelectTrigger>
                                      <SelectContent>
                                          <!-- Really should filter courses by department/level, but showing all for simplicity/speed or use a combobox -->
-                                         <SelectItem v-for="c in courses" :key="c.id" :value="c.id">{{ c.code }} - {{ c.title }}</SelectItem>
+                                         <SelectItem v-for="c in courses" :key="c.id" :value="String(c.id)">{{ c.code }} - {{ c.title }}</SelectItem>
                                      </SelectContent>
                                 </Select>
                                 <p v-if="form.errors.course_id" class="text-xs text-red-500">{{ form.errors.course_id }}</p>

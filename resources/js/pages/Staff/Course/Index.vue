@@ -77,8 +77,8 @@ watch(selectedSession, (value) => {
                             <SelectValue placeholder="All Sessions" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">All Sessions</SelectItem>
-                            <SelectItem v-for="session in sessions" :key="session.id" :value="session.id">
+                            <SelectItem value="all">All Sessions</SelectItem>
+                            <SelectItem v-for="session in sessions" :key="session.id" :value="String(session.id)">
                                 {{ session.name }} Session
                             </SelectItem>
                         </SelectContent>

@@ -3,7 +3,13 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\CourseRegistration;
 use App\Models\Invoice;
+use App\Models\Semester;
+use App\Models\Session;
+use App\Models\Student;
+use App\Models\StudentSession;
+use App\Models\Timetable;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -11,19 +17,23 @@ class ProfileController extends Controller
 {
     public function dashboard()
     {
-        $student = \App\Models\Student::where('user_id', auth()->id())->with('user')->first();
+        $student = Student::where('user_id', auth()->id())->with('user')->first();
 
         // Simple check: if key fields are present
         $isProfileComplete = $student && $student->phone_number && $student->address && $student->next_of_kin_name;
 
         // Calculate registered units for current session
-        $currentSession = \App\Models\Session::current();
-        $currentSemester = \App\Models\Semester::current();
+        $currentSession = Session::current();
+        $currentSemester = Semester::current();
+
+        $currentStudentSession = StudentSession::where('student_id', $student->id)
+            ->where('session_id', $currentSession->id)
+            ->first();
 
         // Stats Calculations
         $cgpa = 0.00; // Placeholder for now
         $totalUnits = 0;
-        $level = $student->current_level ?? '100';
+        $level = $currentStudentSession->level ?? '0';
         $academicStatus = 'Good Standing';
         $showRegistrationNotification = false;
         $registrationMessage = '';
@@ -31,8 +41,7 @@ class ProfileController extends Controller
         if ($student && $currentSession) {
             // Assuming we have a relation or through model.
             // Let's use CourseRegistration model directly for now.
-            $totalUnits = \App\Models\CourseRegistration::where('student_id', $student->id)
-                ->where('session_id', $currentSession->id)
+            $totalUnits = CourseRegistration::where('student_session_id', $currentStudentSession->id)
                 ->join('courses', 'course_registrations.course_id', '=', 'courses.id')
                 ->sum('courses.units');
 
@@ -52,15 +61,14 @@ class ProfileController extends Controller
 
                 if ($isOpen) {
                     // Check if already registered
-                    $hasRegistered = \App\Models\CourseRegistration::where('student_id', $student->id)
-                        ->where('session_id', $currentSession->id)
+                    $hasRegistered = CourseRegistration::where('student_session_id', $currentStudentSession->id)
                         ->where('semester_id', $currentSemester->id)
                         ->exists();
 
-                    if (!$hasRegistered) {
+                    if (! $hasRegistered) {
                         $showRegistrationNotification = true;
                         if ($end) {
-                            $registrationMessage = "Registration for {$currentSemester->name} closes on " . $end->format('M d, Y') . '. Register now to avoid penalties.';
+                            $registrationMessage = "Registration for {$currentSemester->name} closes on ".$end->format('M d, Y').'. Register now to avoid penalties.';
                         } else {
                             $registrationMessage = "Registration for {$currentSemester->name} is now open.";
                         }
@@ -72,12 +80,11 @@ class ProfileController extends Controller
         // Fetch Timetable for Registered Courses
         $timetable = [];
         if ($student && $currentSession) {
-            $registeredCourseIds = \App\Models\CourseRegistration::where('student_id', $student->id)
-                ->where('session_id', $currentSession->id)
+            $registeredCourseIds = CourseRegistration::where('student_session_id', $currentStudentSession->id)
                 ->pluck('course_id');
 
-            $timetable = \App\Models\Timetable::whereIn('course_id', $registeredCourseIds)
-                ->where('session_id', $currentSession->id)
+            $timetable = Timetable::whereIn('course_id', $registeredCourseIds)
+                ->where('session_id', $currentStudentSession->session_id)
                 ->with(['course'])
                 ->get();
         }
@@ -87,7 +94,7 @@ class ProfileController extends Controller
         if ($currentSession) {
             $hasPaidSchoolFee = Invoice::where('user_id', auth()->id())
                 ->where('type', 'school_fee')
-                ->where('session_id', $currentSession->id)
+                ->where('student_session_id', $currentStudentSession->id)
                 ->whereIn('status', ['paid'])
                 ->exists();
         }
@@ -113,7 +120,7 @@ class ProfileController extends Controller
 
     public function edit(Request $request)
     {
-        $student = \App\Models\Student::where('user_id', $request->user()->id)
+        $student = Student::where('user_id', $request->user()->id)
             ->with(['user', 'state', 'lga', 'oLevelResults'])
             ->firstOrFail();
 
@@ -123,7 +130,7 @@ class ProfileController extends Controller
             return \App\Models\Subject::orderBy('name')->get();
         });
 
-        $currentSession = \App\Models\Session::current();
+        $currentSession = Session::current();
         // Allow full edit if in admitted session (fresh) OR if no admitted session set (legacy/error case handling)
         $canEditProfile = $currentSession && $student->admitted_session_id === $currentSession->id;
 
@@ -139,8 +146,8 @@ class ProfileController extends Controller
 
     public function update(Request $request)
     {
-        $student = \App\Models\Student::where('user_id', $request->user()->id)->firstOrFail();
-        $currentSession = \App\Models\Session::current();
+        $student = Student::where('user_id', $request->user()->id)->firstOrFail();
+        $currentSession = Session::current();
         $canEditProfile = $currentSession && $student->admitted_session_id === $currentSession->id;
 
         // Base rules (always editable)
@@ -189,7 +196,7 @@ class ProfileController extends Controller
         ];
 
         if ($canEditProfile) {
-            $data['gender'] = $request->gender;
+            $data['gender'] = strtolower($request->gender);
             $data['dob'] = $request->dob;
             $data['state_id'] = $request->state_id;
             $data['lga_id'] = $request->lga_id;
@@ -228,7 +235,7 @@ class ProfileController extends Controller
                     $oLevelData['scanned_copy_path'] = $path;
                 }
 
-                if (!empty($sitting['id'])) {
+                if (! empty($sitting['id'])) {
                     // Update existing
                     $result = $student->oLevelResults()->find($sitting['id']);
                     if ($result) {
@@ -264,7 +271,7 @@ class ProfileController extends Controller
         $user = auth()->user();
         $applicant = \App\Models\Applicant::where('user_id', $user->id)->first();
 
-        if (!$applicant || $applicant->status !== 'enrolled') {
+        if (! $applicant || $applicant->status !== 'enrolled') {
             return back()->with('error', 'Admission letter is not available.');
         }
 
