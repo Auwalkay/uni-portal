@@ -2,10 +2,17 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Helpers\MatriculationNumberHelper;
 use App\Http\Controllers\Controller;
 use App\Imports\StudentImport;
+use App\Models\Faculty;
+use App\Models\Programme;
+use App\Models\Session;
+use App\Models\State;
 use App\Models\Student;
+use App\Models\StudentSession;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -14,10 +21,10 @@ class StudentController extends Controller
     public function create()
     {
         return Inertia::render('Admin/Students/Create', [
-            'sessions' => \App\Models\Session::latest()->get(['id', 'name']),
-            'faculties' => \App\Models\Faculty::with('departments:id,name,faculty_id')->get(['id', 'name']),
-            'programmes' => \App\Models\Programme::orderBy('name')->get(['id', 'name']),
-            'states' => \App\Models\State::with('lgas:id,name,state_id')->get(['id', 'name']),
+            'sessions' => Session::latest()->get(['id', 'name']),
+            'faculties' => Faculty::with('departments:id,name,faculty_id')->get(['id', 'name']),
+            'programmes' => Programme::orderBy('name')->get(['id', 'name']),
+            'states' => State::with('lgas:id,name,state_id')->get(['id', 'name']),
             'levels' => ['100', '200', '300', '400', '500'],
             'entry_modes' => ['UTME', 'Direct Entry', 'Transfer', 'Postgraduate'],
         ]);
@@ -52,10 +59,10 @@ class StudentController extends Controller
             'waec_result' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
         ]);
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($validated, $request) {
+        DB::transaction(function () use ($validated, $request) {
             // Create User
             $user = \App\Models\User::create([
-                'name' => $validated['first_name'] . ' ' . $validated['last_name'],
+                'name' => $validated['first_name'].' '.$validated['last_name'],
                 'email' => $validated['email'],
                 'password' => \Illuminate\Support\Facades\Hash::make($validated['password'] ?? 'password'),
             ]);
@@ -63,7 +70,7 @@ class StudentController extends Controller
             $user->assignRole('student');
 
             // Generate Matric Number
-            $matricNumber = \App\Helpers\MatriculationNumberHelper::generate();
+            $matricNumber = MatriculationNumberHelper::generate();
 
             // Handle Passport
             $passportPath = null;
@@ -83,7 +90,7 @@ class StudentController extends Controller
                 'lga_id' => $validated['lga_id'],
                 'next_of_kin_name' => $validated['next_of_kin_name'],
                 'next_of_kin_phone' => $validated['next_of_kin_phone'],
-                'next_of_kin_relationship' => $validated['next_of_kin_relationship'],
+//                'next_of_kin_relationship' => $validated['next_of_kin_relationship'],
                 'faculty_id' => $validated['faculty_id'],
                 'department_id' => $validated['department_id'],
                 'program_id' => $validated['program_id'],
@@ -96,16 +103,28 @@ class StudentController extends Controller
                 'passport_photo_path' => $passportPath,
             ]);
 
+            $currentSession = \App\Models\Session::find($validated['admitted_session_id']);
+
+            $currenSemester = $currentSession->semesters()->where('is_current', true)->first();
+
+            StudentSession::create([
+                'student_id' => $student->id,
+                'session_id' => $validated['admitted_session_id'],
+                'level' => $validated['current_level'],
+                'status' => 'active',
+                'semester' => $currenSemester->name,
+            ]);
+
             // Handle WAEC Result
-            if ($request->hasFile('waec_result')) {
-                $waecPath = $request->file('waec_result')->store('documents/waec', 'public');
-                $student->oLevelResults()->create([
-                    'exam_type' => 'WAEC/NECO',
-                    'exam_year' => date('Y'), // Default to current year for admin onboarding
-                    'scanned_copy_path' => $waecPath,
-                    'subjects' => [], // Empty subjects as we're just uploading the doc
-                ]);
-            }
+//            if ($request->hasFile('waec_result')) {
+//                $waecPath = $request->file('waec_result')->store('documents/waec', 'public');
+//                $student->oLevelResults()->create([
+//                    'exam_type' => 'WAEC/NECO',
+//                    'exam_year' => date('Y'), // Default to current year for admin onboarding
+//                    'scanned_copy_path' => $waecPath,
+//                    'subjects' => [], // Empty subjects as we're just uploading the doc
+//                ]);
+//            }
         });
 
         return redirect()->route('admin.students.index')->with('success', 'Student created successfully.');
@@ -165,19 +184,19 @@ class StudentController extends Controller
         return Inertia::render('Admin/Students/Index', [
             'students' => $students,
             'filters' => $request->only(['search', 'session_id', 'faculty_id', 'department_id', 'level', 'program_id', 'program']),
-            'sessions' => \App\Models\Session::latest()->get(['id', 'name']),
-            'faculties' => \App\Models\Faculty::with('departments:id,name,faculty_id')->get(['id', 'name']),
+            'sessions' => Session::latest()->get(['id', 'name']),
+            'faculties' => Faculty::with('departments:id,name,faculty_id')->get(['id', 'name']),
             'departments' => \App\Models\Department::get(['id', 'name', 'faculty_id']),
-            'programmes' => \App\Models\Programme::orderBy('name')->get(['id', 'name']),
+            'programmes' => Programme::orderBy('name')->get(['id', 'name']),
             'stats' => [
                 'total' => Student::count(),
                 // Assuming 'new' means admitted in the latest session.
                 // We'll dynamically determine the latest session or just check created_at for this year if session isn't reliable yet.
                 // Using latest session is safer for academic context.
-                'new' => Student::where('admitted_session_id', \App\Models\Session::latest('start_date')->value('id'))->count(),
+                'new' => Student::where('admitted_session_id', Session::latest('start_date')->value('id'))->count(),
                 // Assuming graduating levels are 400, 500, 600
                 'graduating' => Student::whereIn('current_level', ['400', '500', '600'])->count(),
-            ]
+            ],
         ]);
     }
 
@@ -203,15 +222,15 @@ class StudentController extends Controller
             $student->load([
                 'registrations.course',
                 'registrations.session',
-                'registrations.semester'
+                'registrations.semester',
             ]);
         }
 
         $academicHistory = $canViewAcademics ? $student->registrations
             ->sortByDesc('session.start_date')
-            ->groupBy(fn($reg) => $reg->session?->name ?? 'Unknown Session')
+            ->groupBy(fn ($reg) => $reg->session?->name ?? 'Unknown Session')
             ->map(function ($sessionRegs) {
-                return $sessionRegs->groupBy(fn($reg) => $reg->semester ? $reg->semester->name : 'Unknown Semester');
+                return $sessionRegs->groupBy(fn ($reg) => $reg->semester ? $reg->semester->name : 'Unknown Semester');
             }) : null;
 
         return Inertia::render('Admin/Students/Show', [
@@ -219,14 +238,15 @@ class StudentController extends Controller
             'academicHistory' => $academicHistory,
             'financialHistory' => $canViewFinance ? [
                 'invoices' => $student->user->invoices->sortByDesc('created_at')->values(),
-                'payments' => $student->user->payments->sortByDesc('paid_at')->values()
+                'payments' => $student->user->payments->sortByDesc('paid_at')->values(),
             ] : null,
             'permissions' => [
                 'can_view_finance' => $canViewFinance,
                 'can_view_academics' => $canViewAcademics,
-            ]
+            ],
         ]);
     }
+
     public function import(Request $request)
     {
         $request->validate([
@@ -237,9 +257,9 @@ class StudentController extends Controller
             $import = new StudentImport;
             Excel::import($import, $request->file('file'));
 
-            return redirect()->route('admin.students.index')->with('success', $import->getProcessedCount() . ' students imported successfully.');
+            return redirect()->route('admin.students.index')->with('success', $import->getProcessedCount().' students imported successfully.');
         } catch (\Exception $e) {
-            return redirect()->route('admin.students.index')->with('error', 'Error during import: ' . $e->getMessage());
+            return redirect()->route('admin.students.index')->with('error', 'Error during import: '.$e->getMessage());
         }
     }
 
@@ -264,7 +284,7 @@ class StudentController extends Controller
             'matric_number',
             'jamb_reg',
             'jamb_score',
-            'previous_institution'
+            'previous_institution',
         ];
 
         $callback = function () use ($headers) {
@@ -290,17 +310,17 @@ class StudentController extends Controller
                 'UNI/2024/0001',
                 '2024123456AB',
                 '280',
-                ''
+                '',
             ]);
             fclose($file);
         };
 
         return response()->stream($callback, 200, [
-            "Content-type" => "text/csv",
-            "Content-Disposition" => "attachment; filename=student_import_template.csv",
-            "Pragma" => "no-cache",
-            "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
-            "Expires" => "0"
+            'Content-type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename=student_import_template.csv',
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
         ]);
     }
 }

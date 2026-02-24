@@ -2,30 +2,36 @@
 
 namespace App\Imports;
 
-use App\Models\User;
-use App\Models\Student;
-use App\Models\Faculty;
-use App\Models\Department;
+use App\Helpers\MatriculationNumberHelper;
+use App\Models\Lga;
 use App\Models\Programme;
 use App\Models\Session;
 use App\Models\State;
-use App\Models\Lga;
-use Illuminate\Support\Facades\Hash;
+use App\Models\Student;
+use App\Models\StudentSession;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\ToModel;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithValidation;
-use Illuminate\Support\Str;
-use Maatwebsite\Excel\Concerns\WithChunkReading;
 
-class StudentImport implements ToModel, WithHeadingRow, WithValidation, WithChunkReading
+class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithValidation
 {
     protected $processedCount = 0;
+
     protected $faculties = [];
+
     protected $departments = [];
+
     protected $programmes = [];
+
     protected $sessions = [];
+
     protected $states = [];
+
     protected $lgas = [];
 
     public function model(array $row)
@@ -35,17 +41,17 @@ class StudentImport implements ToModel, WithHeadingRow, WithValidation, WithChun
             $user = User::firstOrCreate(
                 ['email' => $row['email']],
                 [
-                    'name' => $row['first_name'] . ' ' . $row['last_name'],
+                    'name' => $row['first_name'].' '.$row['last_name'],
                     'password' => Hash::make($row['state'] ?? 'password'),
                 ]
             );
 
-            if (!$user->wasRecentlyCreated) {
+            if (! $user->wasRecentlyCreated) {
                 // Optionally update name if user exists
-                $user->update(['name' => $row['first_name'] . ' ' . $row['last_name']]);
+                $user->update(['name' => $row['first_name'].' '.$row['last_name']]);
             }
 
-            if (!$user->hasRole('student')) {
+            if (! $user->hasRole('student')) {
                 $user->assignRole('student');
             }
 
@@ -57,19 +63,19 @@ class StudentImport implements ToModel, WithHeadingRow, WithValidation, WithChun
 
             // State & LGA (Optional)
             $stateId = null;
-            if (!empty($row['state'])) {
+            if (! empty($row['state'])) {
                 $stateId = $this->getLookupId('state', $row['state']);
             }
 
             $lgaId = null;
-            if (!empty($row['lga']) && $stateId) {
+            if (! empty($row['lga']) && $stateId) {
                 // For LGA, we need to handle it carefully as names might be duplicated across states.
                 // Simplified caching for now, assuming unique names or combined key could be used but
                 // given the structure, let's just cache by name for simplicity or exact query if needed.
                 // To be safe/correct with state dependency, let's query if not cached, or cache with state key.
-                $lgaKey = $row['lga'] . '_' . $stateId;
-                if (!isset($this->lgas[$lgaKey])) {
-                    $this->lgas[$lgaKey] = Lga::where('name', 'like', '%' . $row['lga'] . '%')
+                $lgaKey = $row['lga'].'_'.$stateId;
+                if (! isset($this->lgas[$lgaKey])) {
+                    $this->lgas[$lgaKey] = Lga::where('name', 'like', '%'.$row['lga'].'%')
                         ->where('state_id', $stateId)
                         ->value('id');
                 }
@@ -77,7 +83,7 @@ class StudentImport implements ToModel, WithHeadingRow, WithValidation, WithChun
             }
 
             // Generate or use provided matric number
-            $matricNumber = $row['matric_number'] ?? \App\Helpers\MatriculationNumberHelper::generate();
+            $matricNumber = $row['matric_number'] ?? MatriculationNumberHelper::generate();
 
             $student = Student::updateOrCreate(
                 ['user_id' => $user->id],
@@ -101,15 +107,29 @@ class StudentImport implements ToModel, WithHeadingRow, WithValidation, WithChun
                 ]
             );
 
+
+            $currentSession = \App\Models\Session::find($student->admitted_session_id);
+
+            $currenSemester = $currentSession->semesters()->where('is_current', true)->first();
+
+            StudentSession::create([
+                'student_id' => $student->id,
+                'session_id' => $sessionId,
+                'level' => $student->current_level,
+                'status' => 'active',
+                'semester' => $currenSemester->name,
+            ]);
             $this->processedCount++;
+
             return $student;
         });
     }
 
     protected function getLookupId($type, $value)
     {
-        if (empty($value))
+        if (empty($value)) {
             return null;
+        }
 
         $cache = &$this->{Str::plural($type)}; // Dynamic property access: faculties, departments, etc.
 
@@ -117,14 +137,16 @@ class StudentImport implements ToModel, WithHeadingRow, WithValidation, WithChun
             return $cache[$value];
         }
 
-        $modelClass = 'App\\Models\\' . ucfirst($type);
+        $modelClass = 'App\\Models\\'.ucfirst($type);
         // Special case for Programme -> 'Programme' model but property is 'programmes'
-        if ($type === 'programme')
+        if ($type === 'programme') {
             $modelClass = Programme::class;
-        if ($type === 'session')
-            $modelClass = Session::class; // Ensure correct case if needed
+        }
+        if ($type === 'session') {
+            $modelClass = Session::class;
+        } // Ensure correct case if needed
 
-        $id = $modelClass::where('name', 'like', '%' . $value . '%')->value('id');
+        $id = $modelClass::where('name', 'like', '%'.$value.'%')->value('id');
         $cache[$value] = $id;
 
         return $id;
@@ -138,8 +160,8 @@ class StudentImport implements ToModel, WithHeadingRow, WithValidation, WithChun
             'email' => 'required|email',
             'faculty' => 'required|string',
             'department' => 'required|string',
-            'programme' => 'required|string',
-            'session' => 'required|string',
+            'programme' => 'required|string|exists:programmes,name',
+            'session' => 'required|string|exists:academic_sessions,name',
         ];
     }
 

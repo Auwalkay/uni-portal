@@ -10,14 +10,14 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-    ArrowLeft, 
-    Save, 
-    UserPlus, 
-    User, 
-    GraduationCap, 
-    FileText, 
-    ShieldCheck, 
+import {
+    ArrowLeft,
+    Save,
+    UserPlus,
+    User,
+    GraduationCap,
+    FileText,
+    ShieldCheck,
     Users,
     MapPin,
     Phone,
@@ -96,7 +96,8 @@ const form = useForm({
 // Dependent Dropdown for Departments
 const filteredDepartments = computed(() => {
     if (!form.faculty_id) return [];
-    const faculty = props.faculties.find(f => f.id === Number(form.faculty_id));
+    console.log('Faculty', form.faculty_id);
+    const faculty = props.faculties.find(f => f.id === form.faculty_id);
     return faculty ? faculty.departments : [];
 });
 
@@ -119,7 +120,7 @@ const submit = () => {
     <Head title="Add New Student" />
     <AdminLayout>
         <div class="py-10 px-6 space-y-8 w-full max-w-[1200px] mx-auto">
-            
+
             <!-- Back Link -->
             <Button variant="ghost" size="sm" as-child class="-ml-2 text-muted-foreground hover:text-foreground">
                 <Link :href="route('admin.students.index')">
@@ -226,9 +227,9 @@ const submit = () => {
                                         <Label for="address">Residential Address</Label>
                                         <div class="relative">
                                             <MapPin class="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                                            <textarea 
-                                                id="address" 
-                                                v-model="form.address" 
+                                            <textarea
+                                                id="address"
+                                                v-model="form.address"
                                                 class="flex min-h-[80px] w-full rounded-md border border-input bg-background pl-10 pr-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                                 placeholder="Enter full physical address"
                                                 required
@@ -402,13 +403,13 @@ const submit = () => {
                                     <Separator />
 
                                     <div class="grid md:grid-cols-2 gap-8 mt-4">
-                                        <FileUploader 
-                                            label="Passport Photograph" 
+                                        <FileUploader
+                                            label="Passport Photograph"
                                             accept="image/*"
                                             @update:file="(file) => form.passport_photo = file"
                                         />
-                                        <FileUploader 
-                                            label="O'Level Result (WAEC/NECO/NABTEB)" 
+                                        <FileUploader
+                                            label="O'Level Result (WAEC/NECO/NABTEB)"
                                             accept=".pdf,image/*"
                                             @update:file="(file) => form.waec_result = file"
                                         />

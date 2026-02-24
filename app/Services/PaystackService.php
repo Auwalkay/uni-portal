@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 class PaystackService
 {
     protected $baseUrl = 'https://api.paystack.co';
+
     protected $secretKey;
 
     public function __construct()
@@ -29,7 +30,8 @@ class PaystackService
             return $response->json()['data'];
         }
 
-        Log::error('Paystack Initialize Error: ' . $response->body());
+        Log::error('Paystack Initialize Error: '.$response->body());
+
         return null;
     }
 
@@ -41,7 +43,8 @@ class PaystackService
             return $response->json()['data'];
         }
 
-        Log::error('Paystack Verify Error: ' . $response->body());
+        Log::error('Paystack Verify Error: '.$response->body());
+
         return null;
     }
 }

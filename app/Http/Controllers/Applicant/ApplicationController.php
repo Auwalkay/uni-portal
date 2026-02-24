@@ -14,7 +14,7 @@ class ApplicationController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        if (!$user->hasRole('applicant')) {
+        if (! $user->hasRole('applicant')) {
             // Redirect or handle invalid role ??
         }
 
@@ -31,14 +31,14 @@ class ApplicationController extends Controller
         // If no applicant profile, maybe redirect to start page?
         return Inertia::render('Applicant/Dashboard', [
             'applicant' => $applicant,
-            'invoice' => $invoice
+            'invoice' => $invoice,
         ]);
     }
 
     public function create()
     {
         return Inertia::render('Applicant/Application/Start', [
-            'faculties' => Faculty::with('departments.programmes')->get()
+            'faculties' => Faculty::with('departments.programmes')->get(),
         ]);
     }
 
@@ -76,14 +76,14 @@ class ApplicationController extends Controller
             $user = $request->user();
 
             // Ensure user has applicant role
-            if (!$user->hasRole('applicant')) {
+            if (! $user->hasRole('applicant')) {
                 $user->assignRole('applicant');
             }
 
             $applicant = Applicant::updateOrCreate(
                 ['user_id' => $user->id],
                 [
-                    'jamb_registration_number' => $request->input('jamb_number', 'PENDING-' . time()),
+                    'jamb_registration_number' => $request->input('jamb_number', 'PENDING-'.time()),
                     'application_mode' => $request->input('mode'),
                     'program_choice_1' => $request->input('programme_id'),
                     'status' => 'pending_payment',
@@ -134,7 +134,7 @@ class ApplicationController extends Controller
 
             // Generate Invoice
             $currentSession = \App\Models\Session::current();
-            if (!$currentSession) {
+            if (! $currentSession) {
                 throw new \Exception('No active academic session found.');
             }
 
@@ -145,7 +145,7 @@ class ApplicationController extends Controller
                     'session_id' => $currentSession->id,
                 ],
                 [
-                    'reference' => 'APP-' . strtoupper(uniqid()),
+                    'reference' => 'APP-'.strtoupper(uniqid()),
                     'amount' => 50000,
                     'paid_amount' => 0,
                     'status' => 'pending',
@@ -167,10 +167,9 @@ class ApplicationController extends Controller
         });
     }
 
-
     public function acceptOffer(Request $request)
     {
-        \Illuminate\Support\Facades\Log::info("Accept Offer Hit by User: " . $request->user()->id);
+        \Illuminate\Support\Facades\Log::info('Accept Offer Hit by User: '.$request->user()->id);
         $user = $request->user();
 
         // Check if already a student
@@ -180,15 +179,17 @@ class ApplicationController extends Controller
 
         $applicant = Applicant::where('user_id', $user->id)->first();
 
-        if (!$applicant || $applicant->status !== 'admitted') {
+        if (! $applicant || $applicant->status !== 'admitted') {
             return back()->with('error', 'Invalid request. You must be admitted to accept.');
         }
 
         try {
             app(\App\Services\EnrollmentService::class)->enroll($applicant, $user->id);
+
             return redirect()->route('student.dashboard')->with('success', 'Admission accepted! Welcome to the university.');
         } catch (\Exception $e) {
-            Log::error("Enrollment failed: " . $e->getMessage());
+            Log::error('Enrollment failed: '.$e->getMessage());
+
             return back()->with('error', 'An error occurred while processing acceptance.');
         }
     }
@@ -201,7 +202,7 @@ class ApplicationController extends Controller
             ->firstOrFail();
 
         return Inertia::render('Applicant/Application/Show', [
-            'applicant' => $applicant
+            'applicant' => $applicant,
         ]);
     }
 }

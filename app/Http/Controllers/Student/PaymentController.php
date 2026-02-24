@@ -28,7 +28,7 @@ class PaymentController extends Controller
                 'session',
                 'payments' => function ($query) {
                     $query->where('status', 'success');
-                }
+                },
             ])
             ->latest()
             ->get();
@@ -42,12 +42,12 @@ class PaymentController extends Controller
                 ->where('session_id', $currentSession->id)
                 ->exists();
 
-            $canGenerateInvoice = !$hasInvoice;
+            $canGenerateInvoice = ! $hasInvoice;
         }
 
         return Inertia::render('Student/Finance/Index', [
             'invoices' => $invoices,
-            'canGenerateInvoice' => $canGenerateInvoice
+            'canGenerateInvoice' => $canGenerateInvoice,
         ]);
     }
 
@@ -72,13 +72,13 @@ class PaymentController extends Controller
 
         if ($invoice->paid_amount == 0) {
             // First payment: Can be Full or Half
-            if (!$isFullPayment && !$isHalfPayment) {
-                return back()->with('error', 'You can only pay the full amount (' . number_format($balance) . ') or a 50% installment (' . number_format($halfAmount) . ').');
+            if (! $isFullPayment && ! $isHalfPayment) {
+                return back()->with('error', 'You can only pay the full amount ('.number_format($balance).') or a 50% installment ('.number_format($halfAmount).').');
             }
         } else {
             // Subsequent payments: Must be Full Balance
-            if (!$isFullPayment) {
-                return back()->with('error', 'You must pay the remaining balance of ' . number_format($balance, 2));
+            if (! $isFullPayment) {
+                return back()->with('error', 'You must pay the remaining balance of '.number_format($balance, 2));
             }
         }
 
@@ -89,7 +89,7 @@ class PaymentController extends Controller
         $payment = Payment::create([
             'invoice_id' => $invoice->id,
             'user_id' => Auth::id(),
-            'gateway_reference' => 'TEMP-' . uniqid(), // Temporary ref
+            'gateway_reference' => 'TEMP-'.uniqid(), // Temporary ref
             'amount' => $amountToPay,
             'status' => 'pending',
         ]);
@@ -97,7 +97,7 @@ class PaymentController extends Controller
         // We actually use the Paystack Reference as gateway_reference if initializing.
         // Paystack generates one or acts on ours.
         // Let's generate ours: "PAY-" . uniqid()
-        $reference = 'PAY-' . strtoupper(uniqid());
+        $reference = 'PAY-'.strtoupper(uniqid());
         $payment->update(['gateway_reference' => $reference]);
 
         $data = $this->paystack->initializeTransaction(
@@ -117,7 +117,7 @@ class PaymentController extends Controller
     public function callback(Request $request)
     {
         $reference = $request->query('reference');
-        if (!$reference) {
+        if (! $reference) {
             return redirect()->route('student.payments.index')->with('error', 'No reference supplied.');
         }
 
@@ -161,7 +161,7 @@ class PaymentController extends Controller
                     \Illuminate\Support\Facades\Mail::to(Auth::user()->email)->send(new \App\Mail\FeeReceipt($payment, $payment->invoice, Auth::user()));
                     \Illuminate\Support\Facades\Log::info("Fee receipt email queued for payment: {$payment->gateway_reference}");
                 } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::error('Failed to send receipt email: ' . $e->getMessage());
+                    \Illuminate\Support\Facades\Log::error('Failed to send receipt email: '.$e->getMessage());
                 }
             }
 
@@ -170,6 +170,7 @@ class PaymentController extends Controller
 
         return redirect()->route('student.payments.index')->with('error', 'Payment verification failed.');
     }
+
     public function createSchoolFeeInvoice()
     {
         $user = Auth::user();
@@ -187,7 +188,7 @@ class PaymentController extends Controller
 
         // Get current session
         $currentSession = \App\Models\Session::current();
-        if (!$currentSession) {
+        if (! $currentSession) {
             return back()->with('error', 'No active academic session found.');
         }
 
@@ -214,7 +215,7 @@ class PaymentController extends Controller
 
         // Fetch Applicable Fees
         $configs = \App\Models\FeeConfiguration::where('session_id', $currentSession->id)
-            ->where(function ($query) use ($facultyId, $departmentId, $programId, $student) {
+            ->where(function ($query) use ($facultyId, $departmentId, $programId) {
                 // Global Fees
                 $query->where(function ($q) {
                     $q->whereNull('faculty_id')
@@ -246,7 +247,7 @@ class PaymentController extends Controller
                     });
                 }
             })
-            // Filter by Level (Exact match or Null/Global level?) 
+            // Filter by Level (Exact match or Null/Global level?)
             // Usually level fees are specific. If level is null, it applies to all levels.
             ->where(function ($q) use ($student) {
                 $q->where('level', $student->current_level)
@@ -255,11 +256,10 @@ class PaymentController extends Controller
             ->with('feeType')
             ->get();
 
-
         if ($configs->isEmpty()) {
-            // Fallback or Error? 
+            // Fallback or Error?
             // If no fees configured, maybe error out to avoid zero-invoices?
-            // Or allow zero invoice? 
+            // Or allow zero invoice?
             return back()->with('error', 'No fee configuration found for your level/department. Please contact support.');
         }
 
@@ -282,7 +282,7 @@ class PaymentController extends Controller
             'session_id' => $currentSession->id,
             'student_session_id' => $studentSession->id,
             'type' => 'school_fee',
-            'reference' => 'SCH-' . strtoupper(uniqid()),
+            'reference' => 'SCH-'.strtoupper(uniqid()),
             'amount' => $totalAmount,
             'status' => 'pending',
             'due_date' => now()->addWeeks(4),

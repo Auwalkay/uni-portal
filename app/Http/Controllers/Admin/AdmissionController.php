@@ -4,7 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Applicant;
+use App\Models\Invoice;
+use App\Models\Programme;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 
 class AdmissionController extends Controller
@@ -39,7 +44,7 @@ class AdmissionController extends Controller
 
         $applicants = $query->latest()->paginate(10)->withQueryString();
 
-        $programmes = \App\Models\Programme::select('id', 'name')->orderBy('name')->get();
+        $programmes = Programme::select('id', 'name')->orderBy('name')->get();
 
         return Inertia::render('Admin/Admissions/Index', [
             'applicants' => $applicants,
@@ -59,7 +64,7 @@ class AdmissionController extends Controller
             'programme.department.faculty',
         ]);
 
-        $paymentInfo = \App\Models\Invoice::where('user_id', $applicant->user_id)
+        $paymentInfo = Invoice::where('user_id', $applicant->user_id)
             ->where('type', 'application_fee')
             ->with('payments') // Load successful payments check?
             ->first();
@@ -84,7 +89,7 @@ class AdmissionController extends Controller
         $chargeAcceptanceFee = false; // Set to true/config to enable
 
         if ($request->status === 'admitted' && $chargeAcceptanceFee) {
-            \App\Models\Invoice::firstOrCreate(
+            Invoice::firstOrCreate(
                 [
                     'user_id' => $applicant->user_id,
                     'type' => 'acceptance_fee',
@@ -98,8 +103,8 @@ class AdmissionController extends Controller
             );
 
             // Send Admission Email
-            \Illuminate\Support\Facades\Mail::to($applicant->user->email)->send(new \App\Mail\StudentAdmitted($applicant));
-            \Illuminate\Support\Facades\Log::info("Admission email queued for applicant: {$applicant->jamb_registration_number}");
+            Mail::to($applicant->user->email)->send(new \App\Mail\StudentAdmitted($applicant));
+            Log::info("Admission email queued for applicant: {$applicant->jamb_registration_number}");
         }
 
         return back()->with('success', 'Applicant status updated successfully.');
@@ -113,7 +118,7 @@ class AdmissionController extends Controller
 
         $applicant->load(['user', 'programme.department.faculty']);
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.admission_letter', [
+        $pdf = Pdf::loadView('documents.admission_letter', [
             'applicant' => $applicant,
             'faculty_name' => $applicant->programme?->department->faculty->name ?? 'N/A',
             'programme_name' => $applicant->programme?->name ?? 'N/A',
