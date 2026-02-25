@@ -90,7 +90,7 @@ class StudentController extends Controller
                 'lga_id' => $validated['lga_id'],
                 'next_of_kin_name' => $validated['next_of_kin_name'],
                 'next_of_kin_phone' => $validated['next_of_kin_phone'],
-//                'next_of_kin_relationship' => $validated['next_of_kin_relationship'],
+                //                'next_of_kin_relationship' => $validated['next_of_kin_relationship'],
                 'faculty_id' => $validated['faculty_id'],
                 'department_id' => $validated['department_id'],
                 'program_id' => $validated['program_id'],
@@ -116,15 +116,15 @@ class StudentController extends Controller
             ]);
 
             // Handle WAEC Result
-//            if ($request->hasFile('waec_result')) {
-//                $waecPath = $request->file('waec_result')->store('documents/waec', 'public');
-//                $student->oLevelResults()->create([
-//                    'exam_type' => 'WAEC/NECO',
-//                    'exam_year' => date('Y'), // Default to current year for admin onboarding
-//                    'scanned_copy_path' => $waecPath,
-//                    'subjects' => [], // Empty subjects as we're just uploading the doc
-//                ]);
-//            }
+            //            if ($request->hasFile('waec_result')) {
+            //                $waecPath = $request->file('waec_result')->store('documents/waec', 'public');
+            //                $student->oLevelResults()->create([
+            //                    'exam_type' => 'WAEC/NECO',
+            //                    'exam_year' => date('Y'), // Default to current year for admin onboarding
+            //                    'scanned_copy_path' => $waecPath,
+            //                    'subjects' => [], // Empty subjects as we're just uploading the doc
+            //                ]);
+            //            }
         });
 
         return redirect()->route('admin.students.index')->with('success', 'Student created successfully.');

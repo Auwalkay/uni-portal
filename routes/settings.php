@@ -1,6 +1,16 @@
 <?php
 
+use App\Http\Controllers\Admin\AdmissionController;
 use App\Http\Controllers\Admin\CourseRegistrationController;
+use App\Http\Controllers\Admin\DocumentController;
+use App\Http\Controllers\Admin\FrontDesk\ComplaintController;
+use App\Http\Controllers\Admin\FrontDesk\DashboardController;
+use App\Http\Controllers\Admin\FrontDesk\EnquiryController;
+use App\Http\Controllers\Admin\FrontDesk\VisitorController;
+use App\Http\Controllers\Admin\ResultController;
+use App\Http\Controllers\Admin\SessionController;
+use App\Http\Controllers\Admin\StudentController;
+use App\Http\Controllers\Applicant\ApplicationController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
@@ -34,17 +44,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // APPLICANT ROUTES
     Route::prefix('applicant')->name('applicant.')->middleware(['role:applicant'])->group(function () {
-        Route::get('/dashboard', [\App\Http\Controllers\Applicant\ApplicationController::class, 'index'])->name('dashboard');
-        Route::get('/apply/start', [\App\Http\Controllers\Applicant\ApplicationController::class, 'create'])->name('apply.start');
-        Route::get('/apply/form', [\App\Http\Controllers\Applicant\ApplicationController::class, 'form'])->name('apply.form');
-        Route::post('/apply', [\App\Http\Controllers\Applicant\ApplicationController::class, 'store'])->name('apply.store');
-        Route::get('/application/preview', [\App\Http\Controllers\Applicant\ApplicationController::class, 'show'])->name('apply.show');
+        Route::get('/dashboard', [ApplicationController::class, 'index'])->name('dashboard');
+        Route::get('/apply/start', [ApplicationController::class, 'create'])->name('apply.start');
+        Route::get('/apply/form', [ApplicationController::class, 'form'])->name('apply.form');
+        Route::post('/apply', [ApplicationController::class, 'store'])->name('apply.store');
+        Route::get('/application/preview', [ApplicationController::class, 'show'])->name('apply.show');
 
         Route::get('/payment', [\App\Http\Controllers\Applicant\PaymentController::class, 'index'])->name('payment.index');
         Route::post('/payment/pay', [\App\Http\Controllers\Applicant\PaymentController::class, 'pay'])->name('payment.pay');
         Route::get('/payment/callback', [\App\Http\Controllers\Applicant\PaymentController::class, 'callback'])->name('payment.callback');
 
-        Route::post('/accept-offer', [\App\Http\Controllers\Applicant\ApplicationController::class, 'acceptOffer'])->name('accept.offer');
+        Route::post('/accept-offer', [ApplicationController::class, 'acceptOffer'])->name('accept.offer');
     });
 
     // External API Simulations
@@ -84,45 +94,45 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Front Desk Module
         Route::middleware(['role:admin|receptionist'])->prefix('front-desk')->name('front-desk.')->group(function () {
-            Route::get('/', [\App\Http\Controllers\Admin\FrontDesk\DashboardController::class, 'index'])->name('dashboard');
+            Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
-            Route::resource('visitors', \App\Http\Controllers\Admin\FrontDesk\VisitorController::class);
-            Route::resource('complaints', \App\Http\Controllers\Admin\FrontDesk\ComplaintController::class);
-            Route::resource('enquiries', \App\Http\Controllers\Admin\FrontDesk\EnquiryController::class);
+            Route::resource('visitors', VisitorController::class);
+            Route::resource('complaints', ComplaintController::class);
+            Route::resource('enquiries', EnquiryController::class);
         });
 
         // Admissions Management
         Route::middleware(['role:admin|admissions_manager|admissions_officer|admissions_clerk'])->group(function () {
-            Route::get('/admissions', [\App\Http\Controllers\Admin\AdmissionController::class, 'index'])->name('admissions.index');
-            Route::get('/admissions/{applicant}', [\App\Http\Controllers\Admin\AdmissionController::class, 'show'])->name('admissions.show');
-            Route::get('/admissions/{applicant}/letter', [\App\Http\Controllers\Admin\AdmissionController::class, 'downloadLetter'])->name('admissions.letter');
-            Route::get('/documents/{document}', [\App\Http\Controllers\Admin\DocumentController::class, 'show'])->name('documents.show');
+            Route::get('/admissions', [AdmissionController::class, 'index'])->name('admissions.index');
+            Route::get('/admissions/{applicant}', [AdmissionController::class, 'show'])->name('admissions.show');
+            Route::get('/admissions/{applicant}/letter', [AdmissionController::class, 'downloadLetter'])->name('admissions.letter');
+            Route::get('/documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
 
             // Restricted Admissions Actions
             Route::middleware(['role:admin|admissions_manager|admissions_officer'])->group(function () {
-                Route::put('/admissions/{applicant}', [\App\Http\Controllers\Admin\AdmissionController::class, 'update'])->name('admissions.update');
+                Route::put('/admissions/{applicant}', [AdmissionController::class, 'update'])->name('admissions.update');
             });
         });
 
         // Results Management
         Route::middleware(['role:admin|registrar|dean|hod|course_coordinator|lecturer'])->group(function () {
-            Route::get('/results', [\App\Http\Controllers\Admin\ResultController::class, 'index'])->name('results.index');
-            Route::get('/results/{course}/entry', [\App\Http\Controllers\Admin\ResultController::class, 'edit'])->name('results.edit');
-            Route::post('/results/{course}', [\App\Http\Controllers\Admin\ResultController::class, 'update'])->name('results.update');
-            Route::post('/results/{course}/upload', [\App\Http\Controllers\Admin\ResultController::class, 'upload'])->name('results.upload');
+            Route::get('/results', [ResultController::class, 'index'])->name('results.index');
+            Route::get('/results/{course}/entry', [ResultController::class, 'edit'])->name('results.edit');
+            Route::post('/results/{course}', [ResultController::class, 'update'])->name('results.update');
+            Route::post('/results/{course}/upload', [ResultController::class, 'upload'])->name('results.upload');
         });
 
         // Student Management (Creation & Migration)
         Route::middleware(['role:admin|registrar'])->group(function () {
-            Route::get('/students/create', [\App\Http\Controllers\Admin\StudentController::class, 'create'])->name('students.create');
-            Route::post('/students', [\App\Http\Controllers\Admin\StudentController::class, 'store'])->name('students.store');
-            Route::post('/students/import', [\App\Http\Controllers\Admin\StudentController::class, 'import'])->name('students.import');
-            Route::get('/students/template', [\App\Http\Controllers\Admin\StudentController::class, 'downloadTemplate'])->name('students.template');
+            Route::get('/students/create', [StudentController::class, 'create'])->name('students.create');
+            Route::post('/students', [StudentController::class, 'store'])->name('students.store');
+            Route::post('/students/import', [StudentController::class, 'import'])->name('students.import');
+            Route::get('/students/template', [StudentController::class, 'downloadTemplate'])->name('students.template');
         });
 
         // Search & View Students (All Staff)
-        Route::get('/students', [\App\Http\Controllers\Admin\StudentController::class, 'index'])->name('students.index');
-        Route::get('/students/{student}', [\App\Http\Controllers\Admin\StudentController::class, 'show'])->name('students.show');
+        Route::get('/students', [StudentController::class, 'index'])->name('students.index');
+        Route::get('/students/{student}', [StudentController::class, 'show'])->name('students.show');
 
         // Course Registrations & Academic Management
         Route::middleware(['role:admin|registrar|dean|hod'])->group(function () {
@@ -166,8 +176,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/academics/update', [\App\Http\Controllers\Admin\AcademicController::class, 'update'])->name('academics.update');
             Route::post('/academics/toggle', [\App\Http\Controllers\Admin\AcademicController::class, 'toggle'])->name('academics.toggle');
 
-            Route::get('/sessions', [\App\Http\Controllers\Admin\SessionController::class, 'index'])->name('sessions.index');
-            Route::get('/sessions/{session}', [\App\Http\Controllers\Admin\SessionController::class, 'show'])->name('sessions.show');
+            Route::get('/sessions', [SessionController::class, 'index'])->name('sessions.index');
+            Route::get('/sessions/{session}', [SessionController::class, 'show'])->name('sessions.show');
 
             // Timetable Management
             Route::post('timetables/import', [\App\Http\Controllers\Admin\TimetableController::class, 'import'])->name('timetables.import');
@@ -176,15 +186,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             // Restricted Session Management
             Route::middleware(['role:admin|registrar'])->group(function () {
-                Route::post('/sessions', [\App\Http\Controllers\Admin\SessionController::class, 'store'])->name('sessions.store');
-                Route::put('/sessions/{session}', [\App\Http\Controllers\Admin\SessionController::class, 'update'])->name('sessions.update');
-                Route::put('/sessions/{session}/settings', [\App\Http\Controllers\Admin\SessionController::class, 'updateSettings'])->name('sessions.settings');
-                Route::post('/sessions/{session}/fees', [\App\Http\Controllers\Admin\SessionController::class, 'storeFee'])->name('sessions.fees.store');
-                Route::delete('/sessions/{session}/fees/{feeConfiguration}', [\App\Http\Controllers\Admin\SessionController::class, 'destroyFee'])->name('sessions.fees.destroy');
-                Route::post('/sessions/{session}/activation', [\App\Http\Controllers\Admin\SessionController::class, 'activate'])->name('sessions.activate');
-                Route::post('/sessions/{session}/toggle-registration', [\App\Http\Controllers\Admin\SessionController::class, 'toggleRegistration'])->name('sessions.toggle_registration');
-                Route::post('/sessions/{session}/semesters/{semester}/activate', [\App\Http\Controllers\Admin\SessionController::class, 'activateSemester'])->name('sessions.semesters.activate');
-                Route::put('/sessions/{session}/semesters/{semester}', [\App\Http\Controllers\Admin\SessionController::class, 'updateSemester'])->name('sessions.semesters.update');
+                Route::post('/sessions', [SessionController::class, 'store'])->name('sessions.store');
+                Route::put('/sessions/{session}', [SessionController::class, 'update'])->name('sessions.update');
+                Route::put('/sessions/{session}/settings', [SessionController::class, 'updateSettings'])->name('sessions.settings');
+                Route::post('/sessions/{session}/fees', [SessionController::class, 'storeFee'])->name('sessions.fees.store');
+                Route::delete('/sessions/{session}/fees/{feeConfiguration}', [SessionController::class, 'destroyFee'])->name('sessions.fees.destroy');
+                Route::post('/sessions/{session}/activation', [SessionController::class, 'activate'])->name('sessions.activate');
+                Route::post('/sessions/{session}/toggle-registration', [SessionController::class, 'toggleRegistration'])->name('sessions.toggle_registration');
+                Route::post('/sessions/{session}/semesters/{semester}/activate', [SessionController::class, 'activateSemester'])->name('sessions.semesters.activate');
+                Route::put('/sessions/{session}/semesters/{semester}', [SessionController::class, 'updateSemester'])->name('sessions.semesters.update');
             });
         });
 
