@@ -42,7 +42,7 @@ class PaymentController extends Controller
                 ->where('session_id', $currentSession->id)
                 ->exists();
 
-            $canGenerateInvoice = ! $hasInvoice;
+            $canGenerateInvoice = !$hasInvoice;
         }
 
         return Inertia::render('Student/Finance/Index', [
@@ -72,13 +72,13 @@ class PaymentController extends Controller
 
         if ($invoice->paid_amount == 0) {
             // First payment: Can be Full or Half
-            if (! $isFullPayment && ! $isHalfPayment) {
-                return back()->with('error', 'You can only pay the full amount ('.number_format($balance).') or a 50% installment ('.number_format($halfAmount).').');
+            if (!$isFullPayment && !$isHalfPayment) {
+                return back()->with('error', 'You can only pay the full amount (' . number_format($balance) . ') or a 50% installment (' . number_format($halfAmount) . ').');
             }
         } else {
             // Subsequent payments: Must be Full Balance
-            if (! $isFullPayment) {
-                return back()->with('error', 'You must pay the remaining balance of '.number_format($balance, 2));
+            if (!$isFullPayment) {
+                return back()->with('error', 'You must pay the remaining balance of ' . number_format($balance, 2));
             }
         }
 
@@ -89,7 +89,7 @@ class PaymentController extends Controller
         $payment = Payment::create([
             'invoice_id' => $invoice->id,
             'user_id' => Auth::id(),
-            'gateway_reference' => 'TEMP-'.uniqid(), // Temporary ref
+            'gateway_reference' => 'TEMP-' . uniqid(), // Temporary ref
             'amount' => $amountToPay,
             'status' => 'pending',
         ]);
@@ -97,7 +97,7 @@ class PaymentController extends Controller
         // We actually use the Paystack Reference as gateway_reference if initializing.
         // Paystack generates one or acts on ours.
         // Let's generate ours: "PAY-" . uniqid()
-        $reference = 'PAY-'.strtoupper(uniqid());
+        $reference = 'PAY-' . strtoupper(uniqid());
         $payment->update(['gateway_reference' => $reference]);
 
         $data = $this->paystack->initializeTransaction(
@@ -117,7 +117,7 @@ class PaymentController extends Controller
     public function callback(Request $request)
     {
         $reference = $request->query('reference');
-        if (! $reference) {
+        if (!$reference) {
             return redirect()->route('student.payments.index')->with('error', 'No reference supplied.');
         }
 
@@ -161,7 +161,7 @@ class PaymentController extends Controller
                     \Illuminate\Support\Facades\Mail::to(Auth::user()->email)->send(new \App\Mail\FeeReceipt($payment, $payment->invoice, Auth::user()));
                     \Illuminate\Support\Facades\Log::info("Fee receipt email queued for payment: {$payment->gateway_reference}");
                 } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::error('Failed to send receipt email: '.$e->getMessage());
+                    \Illuminate\Support\Facades\Log::error('Failed to send receipt email: ' . $e->getMessage());
                 }
             }
 
@@ -174,7 +174,7 @@ class PaymentController extends Controller
     public function createSchoolFeeInvoice()
     {
         $user = Auth::user();
-        $student = \App\Models\Student::where('user_id', $user->id)->firstOrFail();
+        $student = \App\Models\Student::with('scholarship')->where('user_id', $user->id)->firstOrFail();
 
         // Check for pending SCHOOL FEE invoice
         $pendingInvoice = Invoice::where('user_id', $user->id)
@@ -188,7 +188,7 @@ class PaymentController extends Controller
 
         // Get current session
         $currentSession = \App\Models\Session::current();
-        if (! $currentSession) {
+        if (!$currentSession) {
             return back()->with('error', 'No active academic session found.');
         }
 
@@ -264,6 +264,13 @@ class PaymentController extends Controller
         }
 
         $totalAmount = $configs->sum('amount');
+        $discountAmount = 0;
+
+        if ($student->scholarship) {
+            $discountAmount = $totalAmount * ($student->scholarship->percentage / 100);
+        }
+
+        $finalAmount = $totalAmount - $discountAmount;
 
         // Find or Create StudentSession
         $studentSession = StudentSession::firstOrCreate(
@@ -282,8 +289,8 @@ class PaymentController extends Controller
             'session_id' => $currentSession->id,
             'student_session_id' => $studentSession->id,
             'type' => 'school_fee',
-            'reference' => 'SCH-'.strtoupper(uniqid()),
-            'amount' => $totalAmount,
+            'reference' => 'SCH-' . strtoupper(uniqid()),
+            'amount' => $finalAmount,
             'status' => 'pending',
             'due_date' => now()->addWeeks(4),
         ]);
@@ -295,6 +302,16 @@ class PaymentController extends Controller
                 'fee_type_id' => $config->fee_type_id,
                 'description' => $config->feeType->name ?? 'Fee',
                 'amount' => $config->amount,
+            ]);
+        }
+
+        // Add discount item if applicable
+        if ($discountAmount > 0) {
+            \App\Models\InvoiceItem::create([
+                'invoice_id' => $invoice->id,
+                'fee_type_id' => null,
+                'description' => 'Scholarship Discount (' . $student->scholarship->name . ' - ' . floatval($student->scholarship->percentage) . '%)',
+                'amount' => -$discountAmount,
             ]);
         }
 

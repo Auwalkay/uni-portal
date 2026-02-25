@@ -74,11 +74,13 @@ const props = defineProps<{
         level?: string;
         program?: string;
         program_id?: string;
+        scholarship_id?: string;
     };
     sessions: Array<{ id: string; name: string }>;
     faculties: Array<{ id: string; name: string }>;
     departments: Array<{ id: string; name: string; faculty_id: string }>;
     programmes: Array<{ id: string; name: string }>;
+    scholarships: Array<{ id: string; name: string }>;
     stats: {
         total: number;
         new: number;
@@ -92,6 +94,7 @@ const selectedFaculty = ref(props.filters.faculty_id || '');
 const selectedDepartment = ref(props.filters.department_id || '');
 const selectedLevel = ref(props.filters.level || '');
 const selectedProgram = ref(props.filters.program_id || '');
+const selectedScholarship = ref(props.filters.scholarship_id || '');
 
 // Computed departments based on selected faculty
 const filteredDepartments = computed(() => {
@@ -108,6 +111,7 @@ const updateFilters = debounce(() => {
         department_id: selectedDepartment.value,
         level: selectedLevel.value,
         program_id: selectedProgram.value, // Changed to program_id
+        scholarship_id: selectedScholarship.value,
     }, {
         preserveState: true,
         replace: true,
@@ -115,7 +119,7 @@ const updateFilters = debounce(() => {
     });
 }, 300);
 
-watch([search, selectedSession, selectedFaculty, selectedDepartment, selectedLevel, selectedProgram], () => {
+watch([search, selectedSession, selectedFaculty, selectedDepartment, selectedLevel, selectedProgram, selectedScholarship], () => {
      if (selectedFaculty.value && selectedDepartment.value) {
          const dept = props.departments.find(d => d.id === selectedDepartment.value);
          if (dept && dept.faculty_id !== selectedFaculty.value) {
@@ -132,6 +136,7 @@ const clearFilters = () => {
     selectedDepartment.value = '';
     selectedLevel.value = '';
     selectedProgram.value = '';
+    selectedScholarship.value = '';
 };
 
 const showImportModal = ref(false);
@@ -338,11 +343,23 @@ const submitImport = () => {
                                 <SelectItem v-for="p in programmes" :key="p.id" :value="p.id">{{ p.name }}</SelectItem>
                             </SelectContent>
                         </Select>
+                        
+                        <!-- Scholarship -->
+                        <Select v-model="selectedScholarship">
+                            <SelectTrigger class="w-[180px]">
+                                <SelectValue placeholder="Scholarship" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL_SCHOLARSHIPS">All Students</SelectItem>
+                                <SelectItem value="NONE">No Scholarship</SelectItem>
+                                <SelectItem v-for="s in scholarships" :key="s.id" :value="s.id">{{ s.name }}</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
 
                 <Button 
-                    v-if="search || selectedSession || selectedFaculty || selectedDepartment || selectedLevel || selectedProgram" 
+                    v-if="search || selectedSession || selectedFaculty || selectedDepartment || selectedLevel || selectedProgram || selectedScholarship" 
                     variant="ghost" 
                     @click="clearFilters"
                     class="text-destructive hover:text-destructive hover:bg-destructive/10"
@@ -360,8 +377,8 @@ const submitImport = () => {
                             <TableHead>Student</TableHead>
                             <TableHead>Department / Faculty</TableHead>
                             <TableHead>Session</TableHead>
-                            <TableHead>Level</TableHead>
-                            <TableHead>Program</TableHead>
+                            <TableHead>Level & Program</TableHead>
+                            <TableHead>Scholarship</TableHead>
                             <TableHead class="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -388,10 +405,16 @@ const submitImport = () => {
                                 <Badge variant="outline">{{ student.admitted_session?.name || 'N/A' }}</Badge>
                             </TableCell>
                             <TableCell>
-                                <Badge variant="secondary">{{ student.current_level }}</Badge>
+                                <div class="flex flex-col gap-1 items-start">
+                                    <Badge variant="secondary">{{ student.current_level }}</Badge>
+                                    <span class="text-xs text-muted-foreground line-clamp-1 truncate max-w-[150px]" :title="student.program?.name">{{ student.program?.name || 'N/A' }}</span>
+                                </div>
                             </TableCell>
-                            <TableCell class="text-sm text-muted-foreground">
-                                {{ student.program?.name || 'N/A' }}
+                            <TableCell>
+                                <Badge v-if="student.scholarship" variant="default" class="bg-primary/20 text-primary hover:bg-primary/30 border-transparent text-[10px] uppercase font-bold">
+                                    {{ student.scholarship.name }}
+                                </Badge>
+                                <span v-else class="text-xs text-muted-foreground">-</span>
                             </TableCell>
                             <TableCell class="text-right">
                                 <Button variant="outline" size="sm" as-child>

@@ -288,6 +288,13 @@ const getStatusClass = (status: string) => {
                                             <p class="text-xs font-medium text-muted-foreground uppercase">Entry Mode</p>
                                             <Badge variant="secondary" class="uppercase">{{ student.entry_mode || 'UTME' }}</Badge>
                                         </div>
+                                        <div class="space-y-1 sm:col-span-2">
+                                            <p class="text-xs font-medium text-muted-foreground uppercase">Scholarship Status</p>
+                                            <Badge v-if="student.scholarship" variant="default" class="bg-primary/20 text-primary hover:bg-primary/30 border-transparent">
+                                                {{ student.scholarship.name }} ({{ Number(student.scholarship.percentage) }}% Discount)
+                                            </Badge>
+                                            <p v-else class="text-sm text-muted-foreground">None</p>
+                                        </div>
                                     </div>
                                 </CardContent>
                             </Card>

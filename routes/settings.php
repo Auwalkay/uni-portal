@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\FrontDesk\DashboardController;
 use App\Http\Controllers\Admin\FrontDesk\EnquiryController;
 use App\Http\Controllers\Admin\FrontDesk\VisitorController;
 use App\Http\Controllers\Admin\ResultController;
+use App\Http\Controllers\Admin\ScholarshipController;
 use App\Http\Controllers\Admin\SessionController;
 use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Applicant\ApplicationController;
@@ -161,6 +162,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::post('/finance/configurations', [\App\Http\Controllers\Admin\FinanceController::class, 'storeFeeConfiguration'])->name('finance.configurations.store');
                 Route::put('/finance/configurations/{config}', [\App\Http\Controllers\Admin\FinanceController::class, 'updateFeeConfiguration'])->name('finance.configurations.update');
                 Route::get('/finance/sessions/{session}/fees', [\App\Http\Controllers\Admin\FinanceController::class, 'manageSessionFees'])->name('finance.session.fees');
+
+                Route::resource('/scholarships', ScholarshipController::class)
+                    ->except(['create', 'edit', 'show'])
+                    ->names('scholarships');
             });
 
             Route::middleware(['role:admin|bursar'])->group(function () {

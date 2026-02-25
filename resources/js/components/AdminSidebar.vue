@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -161,6 +161,12 @@ const financeItems = computed(() => {
             title: 'Finance Configuration',
             href: '/admin/finance',
             icon: Shield,
+            show: hasRole('admin') || hasPermission('manage_payments'),
+        },
+        {
+            title: 'Scholarships',
+            href: route().has('admin.scholarships.index') ? route('admin.scholarships.index') : '/admin/scholarships',
+            icon: Award,
             show: hasRole('admin') || hasPermission('manage_payments'),
         },
     ].filter(i => i.show);

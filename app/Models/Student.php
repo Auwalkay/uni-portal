@@ -36,6 +36,7 @@ class Student extends Model
         'next_of_kin_phone',
         'next_of_kin_address',
         'next_of_kin_relationship',
+        'scholarship_id',
     ];
 
     protected $casts = [
@@ -90,5 +91,10 @@ class Student extends Model
     public function sessions()
     {
         return $this->hasMany(StudentSession::class);
+    }
+
+    public function scholarship(): BelongsTo
+    {
+        return $this->belongsTo(Scholarship::class);
     }
 }

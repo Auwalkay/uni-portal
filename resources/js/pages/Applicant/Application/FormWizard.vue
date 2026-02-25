@@ -23,6 +23,7 @@ const props = defineProps<{
     mode?: string;
     programme_id?: string;
     states?: Array<{ id: number; name: string; lgas: Array<{ id: number; name: string }> }>;
+    scholarships?: Array<{ id: string; name: string; percentage: string }>;
 }>();
 
 const steps = ['JAMB Details', 'Personal Info', 'Academic History', 'Document Uploads', 'Review'];
@@ -50,6 +51,7 @@ const form = useForm({
     mode: props.mode || 'UTME',
     programme_id: props.programme_id || '',
     jamb_number: '',
+    scholarship_id: '',
     passport_photo: null as File | null,
     waec_result: null as File | null,
 });
@@ -331,9 +333,19 @@ const submitApplication = () => {
                             <Label>JAMB Score</Label>
                             <Input type="number" v-model="form.jamb_score" placeholder="e.g 280" />
                         </div>
-                         <div class="space-y-2">
-                            <Label>Previous Institution (if applicable)</Label>
-                            <Input v-model="form.previous_institution" placeholder="For Direct Entry or PG" />
+                        <div class="space-y-2">
+                            <Label>Scholarship Category (Optional)</Label>
+                            <Select v-model="form.scholarship_id">
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select Scholarship Category" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="NONE">None</SelectItem>
+                                    <SelectItem v-for="scholarship in scholarships" :key="scholarship.id" :value="String(scholarship.id)">
+                                        {{ scholarship.name }} ({{ Number(scholarship.percentage) }}% Discount)
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
 
