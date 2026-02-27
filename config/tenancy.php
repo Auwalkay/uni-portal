@@ -18,6 +18,7 @@ return [
      */
     'central_domains' => [
         env('CENTRAL_DOMAIN', 'localhost'),
+        env('CENTRAL_DOMAIN_WWW'),
         '127.0.0.1',
     ],
 
