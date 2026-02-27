@@ -47,6 +47,7 @@ class HandleInertiaRequests extends Middleware
                     'logo' => $tenant->logo_path ? global_asset('storage/' . $tenant->logo_path) : null,
                 ];
             },
+            'central_domain' => preg_replace('#^https?://#', '', env('CENTRAL_DOMAIN', 'localhost')),
             'name' => config('app.name'),
             'auth' => function () use ($request) {
                 $user = null;

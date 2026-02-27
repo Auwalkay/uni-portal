@@ -26,9 +26,14 @@ const submit = () => {
     form.post(route('central.tenants.store'));
 };
 
+import { usePage } from '@inertiajs/vue3';
+
+const page = usePage();
+
 const formatDomain = () => {
     if (form.id) {
-        form.domain = `${form.id}.localhost`; // Change locally, could be domain mapping in production
+        const baseDomain = page.props.central_domain || 'localhost';
+        form.domain = `${form.id}.${baseDomain}`;
     }
 };
 
