@@ -14,9 +14,21 @@
 
     <title inertia>{{ config('app.name', 'Laravel') }}</title>
 
-    <link rel="icon" href="/favicon.ico" sizes="any">
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    @php
+        $faviconUrl = '/favicon.ico'; // Default
+
+        if (isset($page['props']['tenant']['logo'])) {
+            $faviconUrl = $page['props']['tenant']['logo'];
+        } elseif (!tenant()) {
+            $faviconUrl = '/favicon.ico'; // Ensure NBTE has its own specific favicon or keep default
+        }
+    @endphp
+
+    <link rel="icon" href="{{ $faviconUrl }}">
+    @if (!isset($page['props']['tenant']['logo']))
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    @endif
 
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
