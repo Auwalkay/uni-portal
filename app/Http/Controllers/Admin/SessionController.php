@@ -88,7 +88,9 @@ class SessionController extends Controller
             // Let's assume global single active semester relative to session.
             Semester::query()->update(['is_current' => false]);
 
-            $firstSemester = $session->semesters()->where('name', 'First Semester')->first();
+            $firstSemester = $session->semesters()->where('name', 'First Semester')->first()
+                ?? $session->semesters()->first();
+
             if ($firstSemester) {
                 $firstSemester->update(['is_current' => true]);
             }

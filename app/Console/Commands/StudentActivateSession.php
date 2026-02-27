@@ -40,7 +40,8 @@ class StudentActivateSession extends Command
             $session->update(['is_current' => true]);
 
             // Activate first semester of this session
-            $firstSemester = $session->semesters()->where('name', 'First Semester')->first();
+            $firstSemester = $session->semesters()->where('name', 'First Semester')->first()
+                ?? $session->semesters()->first();
 
             if ($firstSemester) {
                 // Deactivate all semesters globally
@@ -49,6 +50,7 @@ class StudentActivateSession extends Command
             }
 
             Student::chunkById(200, function ($students) use ($session, $firstSemester) {
+                /** @var \App\Models\Student $student */
                 foreach ($students as $student) {
                     $existingSession = StudentSession::where('student_id', $student->id)
                         ->where('session_id', $session->id)
@@ -99,7 +101,7 @@ class StudentActivateSession extends Command
                                 'session_id' => $session->id,
                                 'level' => $newLevel,
                                 'status' => 'active',
-                                'semester' => $firstSemester->name,
+                                'semester' => $firstSemester ? $firstSemester->name : 'First Semester',
                             ]);
                         }
                     }

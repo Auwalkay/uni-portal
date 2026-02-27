@@ -99,10 +99,10 @@ const props = defineProps<{
 
 const user = props.auth?.user;
 const roleColorMap: Record<string, string> = {
-    admin: 'from-slate-800 to-slate-900',
-    finance: 'from-emerald-800 to-emerald-900',
-    academic: 'from-indigo-800 to-indigo-900',
-    admissions: 'from-amber-800 to-amber-900',
+    admin: 'from-primary to-primary/80',
+    finance: 'from-primary to-primary/80',
+    academic: 'from-primary to-primary/80',
+    admissions: 'from-primary to-primary/80',
 };
 
 const roleLabelMap: Record<string, string> = {
@@ -330,10 +330,10 @@ const staffChartData = {
             <div class="grid gap-6">
                 <!-- FINANCE HERO -->
                 <div v-if="userRole === 'finance'" class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <Card class="bg-emerald-600 text-white border-0 shadow-lg relative overflow-hidden group">
+                    <Card class="bg-primary text-primary-foreground border-0 shadow-lg relative overflow-hidden group">
                         <div class="absolute right-0 top-0 h-full w-24 bg-white/10 -mr-12 transform skew-x-12 transition-transform group-hover:translate-x-4"></div>
                         <CardHeader class="pb-2">
-                            <CardTitle class="text-xs font-medium text-emerald-100 uppercase tracking-wider">Net Cash Flow</CardTitle>
+                            <CardTitle class="text-xs font-medium text-primary-foreground/80 uppercase tracking-wider">Net Cash Flow</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div class="text-3xl font-bold">{{ formatCurrency(stats.net_cash_flow || 0) }}</div>
@@ -342,18 +342,18 @@ const staffChartData = {
                             </div>
                         </CardContent>
                     </Card>
-                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-emerald-500 shadow-sm">
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-primary shadow-sm">
                         <CardHeader class="pb-2">
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Revenue</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ formatCurrency(stats.revenue || 0) }}</div>
-                            <div class="mt-2 flex items-center gap-1.5 text-xs text-emerald-600 font-bold">
+                            <div class="mt-2 flex items-center gap-1.5 text-xs text-primary font-bold">
                                 <ArrowUpRight class="w-3 h-3" /> {{ stats.revenue_growth }}% <span class="text-muted-foreground font-normal">vs last session</span>
                             </div>
                         </CardContent>
                     </Card>
-                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-rose-500 shadow-sm">
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-primary shadow-sm">
                         <CardHeader class="pb-2">
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Outflow</CardTitle>
                         </CardHeader>
@@ -362,14 +362,14 @@ const staffChartData = {
                              <p class="text-xs text-muted-foreground mt-2">Expenses & Payroll</p>
                         </CardContent>
                     </Card>
-                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-amber-500 shadow-sm">
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-primary shadow-sm">
                         <CardHeader class="pb-2">
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Outstanding Fees</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-3xl font-bold text-amber-600">{{ formatCurrency(stats.outstanding_fees || 0) }}</div>
-                             <div class="h-1.5 w-full bg-amber-100 dark:bg-amber-900/30 rounded-full mt-3 overflow-hidden">
-                                <div class="h-full bg-amber-500 rounded-full" style="width: 45%"></div>
+                            <div class="text-3xl font-bold text-primary">{{ formatCurrency(stats.outstanding_fees || 0) }}</div>
+                             <div class="h-1.5 w-full bg-primary/20 rounded-full mt-3 overflow-hidden">
+                                <div class="h-full bg-primary rounded-full" style="width: 45%"></div>
                             </div>
                         </CardContent>
                     </Card>
@@ -377,10 +377,10 @@ const staffChartData = {
 
                 <!-- ACADEMIC HERO -->
                 <div v-if="userRole === 'academic'" class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <Card class="bg-indigo-600 text-white border-0 shadow-lg relative overflow-hidden group">
+                    <Card class="bg-primary text-primary-foreground border-0 shadow-lg relative overflow-hidden group">
                         <div class="absolute right-0 top-0 h-full w-24 bg-white/10 -mr-12 transform skew-x-12 transition-transform group-hover:translate-x-4"></div>
                         <CardHeader class="pb-2">
-                            <CardTitle class="text-xs font-medium text-indigo-100 uppercase tracking-wider">Classes Today</CardTitle>
+                            <CardTitle class="text-xs font-medium text-primary-foreground/80 uppercase tracking-wider">Classes Today</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div class="text-4xl font-bold">{{ lecturerStats?.classes_today || 0 }}</div>
@@ -389,7 +389,7 @@ const staffChartData = {
                             </div>
                         </CardContent>
                     </Card>
-                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-indigo-500 shadow-sm">
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-primary shadow-sm">
                         <CardHeader class="pb-2">
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Active Students</CardTitle>
                         </CardHeader>
@@ -398,7 +398,7 @@ const staffChartData = {
                              <p class="text-xs text-muted-foreground mt-2">Across all your courses</p>
                         </CardContent>
                     </Card>
-                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-violet-500 shadow-sm">
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-primary shadow-sm">
                         <CardHeader class="pb-2">
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Allocated Courses</CardTitle>
                         </CardHeader>
@@ -407,13 +407,13 @@ const staffChartData = {
                              <p class="text-xs text-muted-foreground mt-2">This academic session</p>
                         </CardContent>
                     </Card>
-                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-emerald-500 shadow-sm">
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-primary shadow-sm">
                         <CardHeader class="pb-2">
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Portal Access</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="flex items-center gap-2 text-emerald-600 font-bold text-lg py-1">
-                                <div class="h-2.5 w-2.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                            <div class="flex items-center gap-2 text-primary font-bold text-lg py-1">
+                                <div class="h-2.5 w-2.5 bg-primary rounded-full animate-pulse"></div>
                                 LIVE & ONLINE
                             </div>
                             <p class="text-xs text-muted-foreground mt-1.5">No maintenance scheduled.</p>
@@ -423,10 +423,10 @@ const staffChartData = {
 
                 <!-- ADMISSIONS HERO -->
                 <div v-if="userRole === 'admissions'" class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <Card class="bg-amber-600 text-white border-0 shadow-lg relative overflow-hidden group">
+                    <Card class="bg-primary text-primary-foreground border-0 shadow-lg relative overflow-hidden group">
                         <div class="absolute right-0 top-0 h-full w-24 bg-white/10 -mr-12 transform skew-x-12 transition-transform group-hover:translate-x-4"></div>
                         <CardHeader class="pb-2">
-                            <CardTitle class="text-xs font-medium text-amber-100 uppercase tracking-wider">Incoming Apps</CardTitle>
+                            <CardTitle class="text-xs font-medium text-primary-foreground/80 uppercase tracking-wider">Incoming Apps</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div class="text-4xl font-bold">{{ stats.admissions_funnel?.total_applicants || 0 }}</div>
@@ -435,7 +435,7 @@ const staffChartData = {
                             </div>
                         </CardContent>
                     </Card>
-                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-amber-500 shadow-sm transition-all hover:shadow-md cursor-pointer">
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-primary shadow-sm transition-all hover:shadow-md cursor-pointer">
                         <CardHeader class="pb-2">
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Admitted (Proxy)</CardTitle>
                         </CardHeader>
@@ -453,14 +453,14 @@ const staffChartData = {
                              <p class="text-xs text-muted-foreground mt-2 font-medium">Action required</p>
                         </CardContent>
                     </Card>
-                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-indigo-500 shadow-sm">
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-primary shadow-sm">
                         <CardHeader class="pb-2">
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Compliance</CardTitle>
                         </CardHeader>
                         <CardContent>
-                             <div class="text-3xl font-bold text-indigo-700">{{ stats.registration_compliance }}%</div>
-                             <div class="h-1.5 w-full bg-indigo-100 rounded-full mt-3 overflow-hidden">
-                                <div class="h-full bg-indigo-600 rounded-full" :style="{ width: `${stats.registration_compliance}%` }"></div>
+                             <div class="text-3xl font-bold text-primary">{{ stats.registration_compliance }}%</div>
+                             <div class="h-1.5 w-full bg-primary/20 rounded-full mt-3 overflow-hidden">
+                                <div class="h-full bg-primary rounded-full" :style="{ width: `${stats.registration_compliance}%` }"></div>
                             </div>
                         </CardContent>
                     </Card>
@@ -468,19 +468,19 @@ const staffChartData = {
 
                 <!-- ADMIN HERO -->
                 <div v-if="userRole === 'admin'" class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <Card class="bg-slate-900 dark:bg-slate-950 text-white border-0 shadow-xl relative overflow-hidden group">
-                        <div class="absolute right-0 top-0 h-full w-24 bg-white/5 -mr-12 transform skew-x-12"></div>
+                    <Card class="bg-primary text-primary-foreground border-0 shadow-xl relative overflow-hidden group">
+                        <div class="absolute right-0 top-0 h-full w-24 bg-white/10 -mr-12 transform skew-x-12"></div>
                         <CardHeader class="pb-2">
-                            <CardTitle class="text-xs font-medium text-slate-400 uppercase tracking-wider">Institutional Scale</CardTitle>
+                            <CardTitle class="text-xs font-medium text-primary-foreground/80 uppercase tracking-wider">Institutional Scale</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div class="text-4xl font-extrabold">{{ (stats.total_students || 0).toLocaleString() }}</div>
-                            <div class="mt-2 flex items-center gap-1.5 text-xs text-emerald-400 font-bold">
+                            <div class="mt-2 flex items-center gap-1.5 text-xs text-primary-foreground font-bold">
                                 <Users class="w-3 h-3" /> Total Enrolled Students
                             </div>
                         </CardContent>
                     </Card>
-                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-indigo-500 shadow-sm">
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-primary shadow-sm">
                         <CardHeader class="pb-2">
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Active Programs</CardTitle>
                         </CardHeader>
@@ -489,7 +489,7 @@ const staffChartData = {
                              <p class="text-xs text-muted-foreground mt-2">Across {{ stats.structural?.faculties }} Faculties</p>
                         </CardContent>
                     </Card>
-                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-emerald-500 shadow-sm">
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-primary shadow-sm">
                         <CardHeader class="pb-2">
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Human Resources</CardTitle>
                         </CardHeader>
@@ -670,33 +670,34 @@ const staffChartData = {
                 </h2>
                  <!-- Stats Overview -->
                 <div class="grid gap-4 md:grid-cols-3">
-                    <Card class="bg-gradient-to-br from-indigo-500 to-indigo-600 text-white border-0 shadow-md">
+                    <Card class="bg-primary text-primary-foreground border-0 shadow-md relative overflow-hidden group">
+                        <div class="absolute right-0 top-0 h-full w-24 bg-white/10 -mr-12 transform skew-x-12 transition-transform group-hover:translate-x-4"></div>
                         <CardHeader class="pb-2">
-                             <CardTitle class="text-sm font-medium text-indigo-100 uppercase tracking-wider">Students Taught</CardTitle>
+                             <CardTitle class="text-xs font-medium text-primary-foreground/80 uppercase tracking-wider">Students Taught</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div class="text-3xl font-bold">{{ lecturerStats.total_students }}</div>
-                            <p class="text-xs text-indigo-200 mt-1">Across {{ lecturerStats.total_courses }} courses</p>
+                            <p class="text-xs text-primary-foreground/70 mt-1">Across {{ lecturerStats.total_courses }} courses</p>
                         </CardContent>
                     </Card>
 
-                    <Card class="bg-gradient-to-br from-fuchsia-500 to-pink-600 text-white border-0 shadow-md">
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-primary shadow-sm">
                         <CardHeader class="pb-2">
-                             <CardTitle class="text-sm font-medium text-fuchsia-100 uppercase tracking-wider">Active Courses</CardTitle>
+                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Active Courses</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-3xl font-bold">{{ lecturerStats.total_courses }}</div>
-                            <p class="text-xs text-fuchsia-200 mt-1">Allocated this session</p>
+                            <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ lecturerStats.total_courses }}</div>
+                            <p class="text-xs text-muted-foreground mt-1">Allocated this session</p>
                         </CardContent>
                     </Card>
 
-                    <Card class="bg-gradient-to-br from-emerald-500 to-teal-600 text-white border-0 shadow-md">
+                    <Card class="bg-white dark:bg-slate-900 border-l-4 border-l-primary shadow-sm">
                         <CardHeader class="pb-2">
-                             <CardTitle class="text-sm font-medium text-emerald-100 uppercase tracking-wider">Classes Today</CardTitle>
+                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Classes Today</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-3xl font-bold">{{ lecturerStats.classes_today }}</div>
-                            <p class="text-xs text-emerald-200 mt-1">{{ new Date().toLocaleDateString('en-GB', { weekday: 'long' }) }}</p>
+                            <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ lecturerStats.classes_today }}</div>
+                            <p class="text-xs text-muted-foreground mt-1">{{ new Date().toLocaleDateString('en-GB', { weekday: 'long' }) }}</p>
                         </CardContent>
                     </Card>
                 </div>
@@ -737,19 +738,19 @@ const staffChartData = {
                     </div>
 
                      <!-- Today's Schedule (Mini) -->
-                     <Card class="bg-indigo-900 text-white border-0 shadow-lg relative overflow-hidden">
-                        <div class="absolute top-0 right-0 w-32 h-32 bg-indigo-800/50 rounded-full blur-3xl -mr-10 -mt-10"></div>
-                        <div class="absolute bottom-0 left-0 w-24 h-24 bg-purple-600/30 rounded-full blur-2xl -ml-5 -mb-5"></div>
+                     <Card class="bg-primary text-primary-foreground border-0 shadow-lg relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
+                        <div class="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full blur-2xl -ml-5 -mb-5"></div>
                         
                         <CardHeader>
                             <div class="flex items-center justify-between">
-                                <CardTitle class="flex items-center gap-2 text-indigo-100 relative z-10">
+                                <CardTitle class="flex items-center gap-2 text-primary-foreground relative z-10 text-lg">
                                     <CalendarClock class="w-5 h-5" /> Today's Schedule
                                 </CardTitle>
                                 
                                 <Dialog>
                                     <DialogTrigger as-child>
-                                        <Button size="sm" variant="secondary" class="relative z-10 bg-indigo-500/20 text-indigo-100 hover:bg-indigo-500/30 border-0 h-7">
+                                        <Button size="sm" variant="secondary" class="relative z-10 bg-white/20 text-white hover:bg-white/30 border-0 h-7 rounded-sm tracking-wide">
                                             View Full
                                         </Button>
                                     </DialogTrigger>
