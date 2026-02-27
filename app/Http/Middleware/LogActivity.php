@@ -19,6 +19,15 @@ class LogActivity
     {
         $response = $next($request);
 
+        // Audit Logs are strictly a Tenant-level feature.
+        // There is no audit_logs table or users table in the Central DB.
+        $centralDomains = config('tenancy.central_domains', []);
+        $host = $request->getHost();
+
+        if (in_array($host, $centralDomains) || !function_exists('tenant') || !tenant()) {
+            return $response;
+        }
+
         // Only log state-changing requests (POST, PUT, PATCH, DELETE)
         if (in_array($request->method(), ['POST', 'PUT', 'PATCH', 'DELETE'])) {
             // Skip logging certain sensitive routes or those that don't need logging

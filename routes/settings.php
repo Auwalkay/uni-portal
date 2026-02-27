@@ -1,20 +1,27 @@
 <?php
 
+use App\Http\Controllers\Admin\AcademicController;
 use App\Http\Controllers\Admin\AdmissionController;
 use App\Http\Controllers\Admin\CourseRegistrationController;
 use App\Http\Controllers\Admin\DocumentController;
+use App\Http\Controllers\Admin\FinanceController;
 use App\Http\Controllers\Admin\FrontDesk\ComplaintController;
 use App\Http\Controllers\Admin\FrontDesk\DashboardController;
 use App\Http\Controllers\Admin\FrontDesk\EnquiryController;
 use App\Http\Controllers\Admin\FrontDesk\VisitorController;
 use App\Http\Controllers\Admin\ResultController;
+use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\SessionController;
 use App\Http\Controllers\Admin\StudentController;
+use App\Http\Controllers\Admin\TimetableController;
+use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Applicant\ApplicationController;
+use App\Http\Controllers\External\JambController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
 use App\Http\Controllers\Staff\CourseController;
+use App\Http\Controllers\Student\IdCardController;
 use App\Http\Controllers\Student\PaymentController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -59,7 +66,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // External API Simulations
     Route::prefix('api/external')->group(function () {
-        Route::post('/jamb/fetch', [\App\Http\Controllers\External\JambController::class, 'fetchDetails']);
+        Route::post('/jamb/fetch', [JambController::class, 'fetchDetails']);
     });
 
     // STUDENT Routes
@@ -84,7 +91,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/results', [\App\Http\Controllers\Student\ResultController::class, 'index'])->name('results.index');
 
-        Route::get('/id-card', [\App\Http\Controllers\Student\IdCardController::class, 'show'])->name('id_card.show');
+        Route::get('/id-card', [IdCardController::class, 'show'])->name('id_card.show');
         Route::get('/admission-letter', [\App\Http\Controllers\Student\ProfileController::class, 'downloadAdmissionLetter'])->name('admission_letter.download');
     });
 
@@ -152,37 +159,37 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware(['role:admin|bursar|finance_officer|finance_clerk'])->group(function () {
             Route::get('/payments', [\App\Http\Controllers\Admin\PaymentController::class, 'index'])->name('payments.index');
             Route::get('/payments/{payment}', [\App\Http\Controllers\Admin\PaymentController::class, 'show'])->name('payments.show');
-            Route::get('/finance', [\App\Http\Controllers\Admin\FinanceController::class, 'index'])->name('finance.index');
+            Route::get('/finance', [FinanceController::class, 'index'])->name('finance.index');
 
             // Restricted Finance Actions
             Route::middleware(['role:admin|bursar|finance_officer'])->group(function () {
-                Route::post('/finance/fee-types', [\App\Http\Controllers\Admin\FinanceController::class, 'storeFeeType'])->name('finance.fee_types.store');
-                Route::put('/finance/fee-types/{feeType}', [\App\Http\Controllers\Admin\FinanceController::class, 'updateFeeType'])->name('finance.fee_types.update');
-                Route::post('/finance/configurations', [\App\Http\Controllers\Admin\FinanceController::class, 'storeFeeConfiguration'])->name('finance.configurations.store');
-                Route::put('/finance/configurations/{config}', [\App\Http\Controllers\Admin\FinanceController::class, 'updateFeeConfiguration'])->name('finance.configurations.update');
-                Route::get('/finance/sessions/{session}/fees', [\App\Http\Controllers\Admin\FinanceController::class, 'manageSessionFees'])->name('finance.session.fees');
+                Route::post('/finance/fee-types', [FinanceController::class, 'storeFeeType'])->name('finance.fee_types.store');
+                Route::put('/finance/fee-types/{feeType}', [FinanceController::class, 'updateFeeType'])->name('finance.fee_types.update');
+                Route::post('/finance/configurations', [FinanceController::class, 'storeFeeConfiguration'])->name('finance.configurations.store');
+                Route::put('/finance/configurations/{config}', [FinanceController::class, 'updateFeeConfiguration'])->name('finance.configurations.update');
+                Route::get('/finance/sessions/{session}/fees', [FinanceController::class, 'manageSessionFees'])->name('finance.session.fees');
             });
 
             Route::middleware(['role:admin|bursar'])->group(function () {
-                Route::delete('/finance/fee-types/{feeType}', [\App\Http\Controllers\Admin\FinanceController::class, 'destroyFeeType'])->name('finance.fee_types.destroy');
-                Route::delete('/finance/configurations/{config}', [\App\Http\Controllers\Admin\FinanceController::class, 'destroyFeeConfiguration'])->name('finance.configurations.destroy');
+                Route::delete('/finance/fee-types/{feeType}', [FinanceController::class, 'destroyFeeType'])->name('finance.fee_types.destroy');
+                Route::delete('/finance/configurations/{config}', [FinanceController::class, 'destroyFeeConfiguration'])->name('finance.configurations.destroy');
             });
         });
 
         // General Academics & Sessions
         Route::middleware(['role:admin|registrar|dean|hod'])->group(function () {
-            Route::get('/academics', [\App\Http\Controllers\Admin\AcademicController::class, 'index'])->name('academics.index');
-            Route::post('/academics/store', [\App\Http\Controllers\Admin\AcademicController::class, 'store'])->name('academics.store');
-            Route::post('/academics/update', [\App\Http\Controllers\Admin\AcademicController::class, 'update'])->name('academics.update');
-            Route::post('/academics/toggle', [\App\Http\Controllers\Admin\AcademicController::class, 'toggle'])->name('academics.toggle');
+            Route::get('/academics', [AcademicController::class, 'index'])->name('academics.index');
+            Route::post('/academics/store', [AcademicController::class, 'store'])->name('academics.store');
+            Route::post('/academics/update', [AcademicController::class, 'update'])->name('academics.update');
+            Route::post('/academics/toggle', [AcademicController::class, 'toggle'])->name('academics.toggle');
 
             Route::get('/sessions', [SessionController::class, 'index'])->name('sessions.index');
             Route::get('/sessions/{session}', [SessionController::class, 'show'])->name('sessions.show');
 
             // Timetable Management
-            Route::post('timetables/import', [\App\Http\Controllers\Admin\TimetableController::class, 'import'])->name('timetables.import');
-            Route::get('timetables/template', [\App\Http\Controllers\Admin\TimetableController::class, 'template'])->name('timetables.template');
-            Route::resource('timetables', \App\Http\Controllers\Admin\TimetableController::class)->only(['index', 'store', 'destroy']);
+            Route::post('timetables/import', [TimetableController::class, 'import'])->name('timetables.import');
+            Route::get('timetables/template', [TimetableController::class, 'template'])->name('timetables.template');
+            Route::resource('timetables', TimetableController::class)->only(['index', 'store', 'destroy']);
 
             // Restricted Session Management
             Route::middleware(['role:admin|registrar'])->group(function () {
@@ -202,17 +209,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware(['role:admin'])->group(function () {
             Route::get('/settings', [\App\Http\Controllers\Admin\SystemSettingsController::class, 'index'])->name('settings.index');
 
-            Route::get('/settings/roles', [\App\Http\Controllers\Admin\RoleController::class, 'index'])->name('settings.roles.index');
-            Route::get('/settings/roles/{role}/edit', [\App\Http\Controllers\Admin\RoleController::class, 'edit'])->name('settings.roles.edit');
-            Route::put('/settings/roles/{role}', [\App\Http\Controllers\Admin\RoleController::class, 'update'])->name('settings.roles.update');
+            Route::get('/settings/roles', [RoleController::class, 'index'])->name('settings.roles.index');
+            Route::get('/settings/roles/{role}/edit', [RoleController::class, 'edit'])->name('settings.roles.edit');
+            Route::put('/settings/roles/{role}', [RoleController::class, 'update'])->name('settings.roles.update');
             Route::get('/settings/logs', [\App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('settings.logs.index');
 
-            Route::patch('/users/{user}/roles', [\App\Http\Controllers\Admin\UserController::class, 'updateRoles'])->name('users.roles.update');
-            Route::patch('/users/{user}/status', [\App\Http\Controllers\Admin\UserController::class, 'toggleStatus'])->name('users.status.toggle');
+            Route::patch('/users/{user}/roles', [UserController::class, 'updateRoles'])->name('users.roles.update');
+            Route::patch('/users/{user}/status', [UserController::class, 'toggleStatus'])->name('users.status.toggle');
 
-            Route::get('/users', [\App\Http\Controllers\Admin\UserController::class, 'index'])->name('users.index');
-            Route::post('/users', [\App\Http\Controllers\Admin\UserController::class, 'store'])->name('users.store');
-            Route::delete('/users/{user}', [\App\Http\Controllers\Admin\UserController::class, 'destroy'])->name('users.destroy');
+            Route::get('/users', [UserController::class, 'index'])->name('users.index');
+            Route::post('/users', [UserController::class, 'store'])->name('users.store');
+            Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
         });
     });
 

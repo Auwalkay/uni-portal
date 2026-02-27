@@ -13,14 +13,22 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call([
-            RolesAndPermissionsSeeder::class,
-            AcademicSeeder::class,
-            NigeriaAcademicSeeder::class,
-            SubjectSeeder::class,
-            AcademicRecordsSeeder::class,
-            FeeSeeder::class,
-            AdminUserSeeder::class,
-        ]);
+        if (tenant()) {
+            $this->call([
+                RolesAndPermissionsSeeder::class,
+                    // AcademicSeeder::class,
+                    // NigeriaAcademicSeeder::class,
+                SubjectSeeder::class,
+                    // AcademicRecordsSeeder::class,
+                FeeSeeder::class,
+                NigeriaStateLgaSeeder::class,
+                TenantAdminSeeder::class,
+            ]);
+        } else {
+            $this->call([
+                CentralUserSeeder::class,
+                CentralRolesSeeder::class,
+            ]);
+        }
     }
 }

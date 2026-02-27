@@ -30,6 +30,8 @@ return new class extends Migration {
             $table->foreignUuid('department_id')->constrained()->onDelete('cascade');
             $table->string('name');
             $table->string('type')->default('UG'); // UG, PG, PHD
+            $table->integer('duration')->default(4); // Duration in years
+            $table->string('award')->default('BSc'); // e.g. BSc, MSc, PhD
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });

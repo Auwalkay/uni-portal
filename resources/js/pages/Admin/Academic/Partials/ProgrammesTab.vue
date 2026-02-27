@@ -21,9 +21,8 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
         <CardHeader class="flex flex-row items-center justify-between">
             <div>
                 <CardTitle>Programmes</CardTitle>
-                <CardDescription>Manage degree programmes.</CardDescription>
+                <CardDescription>View degree programmes.</CardDescription>
             </div>
-            <Button @click="emit('create')"><Plus class="mr-2 h-4 w-4" /> Add Programme</Button>
         </CardHeader>
         <CardContent>
             <Table>
@@ -34,7 +33,6 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                         <TableHead>Department</TableHead>
                         <TableHead>Faculty</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead class="text-right">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -44,12 +42,7 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                         <TableCell>{{ prog.department?.name }}</TableCell>
                         <TableCell>{{ prog.department?.faculty?.name }}</TableCell>
                         <TableCell>
-                                <Switch :checked="prog.is_active" @update:checked="emit('toggle', prog.id, prog.is_active)" />
-                        </TableCell>
-                        <TableCell class="text-right">
-                            <Button variant="ghost" size="icon" @click="emit('edit', prog)">
-                                <Pencil class="h-4 w-4" />
-                            </Button>
+                            <Badge :variant="prog.is_active ? 'default' : 'secondary'">{{ prog.is_active ? 'Active' : 'Inactive' }}</Badge>
                         </TableCell>
                     </TableRow>
                 </TableBody>

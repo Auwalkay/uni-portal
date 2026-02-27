@@ -14,6 +14,14 @@ import {
     Search
 } from 'lucide-vue-next';
 import { dashboard, login, register } from '@/routes';
+import { usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import ApplicationMark from '@/components/ApplicationMark.vue';
+
+const page = usePage();
+const tenant = computed(() => (page.props as any).tenant);
+const tenantName = computed(() => tenant.value?.name || 'Polytechnic Portal');
+const tenantLogo = computed(() => tenant.value?.logo);
 
 defineProps<{
     canRegister?: boolean;
@@ -23,7 +31,7 @@ const currentYear = new Date().getFullYear();
 </script>
 
 <template>
-    <Head title="Welcome to University Portal" />
+    <Head :title="`Welcome to ${tenantName}`" />
 
     <div class="min-h-screen bg-background text-foreground font-sans selection:bg-primary selection:text-primary-foreground">
         
@@ -31,10 +39,8 @@ const currentYear = new Date().getFullYear();
         <nav class="fixed top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
             <div class="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
                 <div class="flex items-center gap-2">
-                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-                        <GraduationCap class="h-5 w-5" />
-                    </div>
-                    <span class="text-xl font-bold tracking-tight text-foreground">UniPortal</span>
+                    <ApplicationMark class="h-9 w-9" />
+                    <span class="text-xl font-bold tracking-tight text-foreground">{{ tenantName }}</span>
                 </div>
 
                 <div class="flex items-center gap-4">
@@ -69,14 +75,9 @@ const currentYear = new Date().getFullYear();
 
                 <div class="mx-auto max-w-7xl px-6 lg:px-8 pt-24 pb-16 sm:pt-32 sm:pb-24">
                     <div class="mx-auto max-w-2xl text-center">
-                        <div class="mb-8 flex justify-center animate-fade-in-up">
-                            <span class="inline-flex items-center rounded-full bg-secondary/10 px-3 py-1 text-sm font-medium text-secondary ring-1 ring-inset ring-secondary/20">
-                                <Sparkles class="mr-1.5 h-3.5 w-3.5" />
-                                Admissions Open for {{ currentYear }}
-                            </span>
-                        </div>
-                        <h1 class="text-5xl font-bold tracking-tight text-foreground sm:text-7xl bg-clip-text text-transparent bg-gradient-to-r from-primary via-primary/80 to-secondary animate-fade-in-up delay-100">
-                            Empowering Future Leaders
+                        
+                        <h1 class="text-5xl font-bold tracking-tight text-foreground sm:text-7xl bg-clip-text text-transparent bg-gradient-to-r from-primary via-primary/80 to-secondary animate-fade-in-up delay-100 uppercase">
+                            {{ tenantName }}
                         </h1>
                         <p class="mt-6 text-lg leading-8 text-muted-foreground animate-fade-in-up delay-200">
                             Join a community dedicated to academic innovation, research, and holistic development. Experience world-class education with seamless digital integration.
@@ -214,10 +215,8 @@ const currentYear = new Date().getFullYear();
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <div>
                         <div class="flex items-center gap-2 mb-4">
-                            <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                                <GraduationCap class="h-5 w-5" />
-                            </div>
-                            <span class="text-xl font-bold text-foreground">UniPortal</span>
+                            <ApplicationMark class="h-8 w-8" />
+                            <span class="text-xl font-bold text-foreground">{{ tenantName }}</span>
                         </div>
                         <p class="text-sm leading-6">
                             Constructing the path to knowledge and success for the next generation of leaders.
@@ -251,7 +250,7 @@ const currentYear = new Date().getFullYear();
                     </div>
                 </div>
                 <div class="mt-12 border-t border-border pt-8 sm:mt-16 lg:mt-24">
-                    <p class="text-xs leading-5">&copy; {{ currentYear }} University Portal. All rights reserved.</p>
+                    <p class="text-xs leading-5">&copy; {{ currentYear }} {{ tenantName }}. All rights reserved.</p>
                 </div>
             </div>
         </footer>

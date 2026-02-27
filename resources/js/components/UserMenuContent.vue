@@ -13,15 +13,34 @@ import { logout } from '@/routes';
 import { edit } from '@/routes/profile';
 import type { User } from '@/types';
 
+import { route } from 'ziggy-js';
+
 interface Props {
     user: User;
+    isCentral?: boolean;
 }
 
-const handleLogout = () => {
-    router.flushAll();
-};
+const props = defineProps<Props>();
 
-defineProps<Props>();
+const handleLogout = (e: Event) => {
+    e.preventDefault();
+    
+    if (props.isCentral) {
+        router.post(route('central.logout'));
+    } else {
+        // Fallback to wayfinder logout if available, or standard logout
+        const logoutRoute = logout();
+        if (typeof logoutRoute === 'string') {
+            router.post(logoutRoute);
+        } else {
+            router.post(logoutRoute.url);
+        }
+    }
+    
+    if (typeof (router as any).flushAll === 'function') {
+        (router as any).flushAll();
+    }
+};
 </script>
 
 <template>

@@ -20,6 +20,10 @@ import UserMenuContent from './UserMenuContent.vue';
 const page = usePage();
 const user = page.props.auth.user;
 const { isMobile, state } = useSidebar();
+
+defineProps<{
+    isCentral?: boolean;
+}>();
 </script>
 
 <template>
@@ -48,7 +52,7 @@ const { isMobile, state } = useSidebar();
                     align="end"
                     :side-offset="4"
                 >
-                    <UserMenuContent :user="user" />
+                    <UserMenuContent :user="user" :is-central="isCentral" />
                 </DropdownMenuContent>
             </DropdownMenu>
         </SidebarMenuItem>

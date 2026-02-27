@@ -202,7 +202,7 @@ const doughnutOptions = {
 };
 
 const financialTrendChartData = {
-    labels: props.charts.financial_trend.labels,
+    labels: props.charts.financial_trend?.labels || [],
     datasets: [
         {
             label: 'Inflow',
@@ -210,7 +210,7 @@ const financialTrendChartData = {
             borderRadius: 6,
             barPercentage: 0.6,
             categoryPercentage: 0.8,
-            data: props.charts.financial_trend.inflow
+            data: props.charts.financial_trend?.inflow || []
         },
         {
             label: 'Outflow',
@@ -218,27 +218,27 @@ const financialTrendChartData = {
             borderRadius: 6,
             barPercentage: 0.6,
             categoryPercentage: 0.8,
-            data: props.charts.financial_trend.outflow
+            data: props.charts.financial_trend?.outflow || []
         }
     ]
 };
 
 const expenseCategoryChartData = {
-    labels: props.charts.expense_categories.labels,
+    labels: props.charts.expense_categories?.labels || [],
     datasets: [{
         backgroundColor: ['#6366f1', '#ec4899', '#14b8a6', '#f97316', '#8b5cf6', '#3b82f6'],
         borderWidth: 0,
-        data: props.charts.expense_categories.data
+        data: props.charts.expense_categories?.data || []
     }]
 };
 
 
 const facultyChartData = {
-    labels: props.charts.faculty.labels,
+    labels: props.charts.faculty?.labels || [],
     datasets: [{
         backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
         borderWidth: 0,
-        data: props.charts.faculty.data
+        data: props.charts.faculty?.data || []
     }]
 };
 
@@ -248,34 +248,34 @@ const facultyChartData = {
 
 
 const levelChartData = {
-    labels: props.charts.level.labels,
+    labels: props.charts.level?.labels || [],
     datasets: [{
         label: 'Students',
         backgroundColor: '#f59e0b',
         borderRadius: 4,
-        data: props.charts.level.data
+        data: props.charts.level?.data || []
     }]
 };
 
 const programChartData = {
-    labels: props.charts.program.labels,
+    labels: props.charts.program?.labels || [],
     datasets: [{
         backgroundColor: ['#6366f1', '#ec4899', '#14b8a6', '#f97316', '#8b5cf6'],
         borderWidth: 0,
-        data: props.charts.program.data
+        data: props.charts.program?.data || []
     }]
 };
 
 
 
 const staffChartData = {
-    labels: props.charts.staff_department.labels,
+    labels: props.charts.staff_department?.labels || [],
     datasets: [{
         label: 'Staff',
         backgroundColor: '#10b981',
         hoverBackgroundColor: '#059669',
         borderRadius: 6,
-        data: props.charts.staff_department.data
+        data: props.charts.staff_department?.data || []
     }]
 };
 

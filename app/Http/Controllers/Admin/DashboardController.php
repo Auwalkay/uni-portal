@@ -23,7 +23,7 @@ class DashboardController extends Controller
         $sessionId = $request->input('session_id', $currentSession?->id);
         $selectedSession = Session::find($sessionId) ?? $currentSession;
 
-        if (! $selectedSession) {
+        if (!$selectedSession) {
             // Fallback if absolutely no session exists
             return Inertia::render('Admin/Dashboard', [
                 'stats' => [
@@ -41,7 +41,12 @@ class DashboardController extends Controller
                 'currentSessionName' => 'N/A',
                 'charts' => [
                     'revenue' => ['labels' => [], 'data' => []],
+                    'financial_trend' => ['labels' => [], 'data' => [], 'inflow' => [], 'outflow' => []],
+                    'expense_categories' => ['labels' => [], 'data' => []],
                     'faculty' => ['labels' => [], 'data' => []],
+                    'level' => ['labels' => [], 'data' => []],
+                    'program' => ['labels' => [], 'data' => []],
+                    'staff_department' => ['labels' => [], 'data' => []],
                 ],
             ]);
         }
@@ -102,11 +107,11 @@ class DashboardController extends Controller
             ->latest('updated_at')
             ->take(5)
             ->get()
-            ->map(fn ($inv) => [
+            ->map(fn($inv) => [
                 'id' => $inv->id,
                 'type' => 'payment',
                 'title' => 'Payment Received',
-                'description' => "{$inv->user->name} paid ".number_format($inv->amount),
+                'description' => "{$inv->user->name} paid " . number_format($inv->amount),
                 'amount' => $inv->amount,
                 'time_ago' => $inv->updated_at->diffForHumans(),
                 'timestamp' => $inv->updated_at,
@@ -119,11 +124,11 @@ class DashboardController extends Controller
             ->latest('created_at')
             ->take(5)
             ->get()
-            ->map(fn ($std) => [
+            ->map(fn($std) => [
                 'id' => $std->id,
                 'type' => 'student',
                 'title' => 'New Student',
-                'description' => "{$std->user->name} joined ".($std->department ?? 'General'),
+                'description' => "{$std->user->name} joined " . ($std->department ?? 'General'),
                 'time_ago' => $std->created_at->diffForHumans(),
                 'timestamp' => $std->created_at,
                 'icon' => 'UserPlus',
@@ -146,7 +151,7 @@ class DashboardController extends Controller
             ->get();
 
         $revenueChart = [
-            'labels' => $revenueTrend->map(fn ($r) => \Carbon\Carbon::createFromFormat('Y-m', (string) $r->month)->format('M'))->toArray(),
+            'labels' => $revenueTrend->map(fn($r) => \Carbon\Carbon::createFromFormat('Y-m', (string) $r->month)->format('M'))->toArray(),
             'data' => $revenueTrend->pluck('total')->toArray(),
         ];
 
@@ -172,7 +177,7 @@ class DashboardController extends Controller
             ->get();
 
         $levelChart = [
-            'labels' => $levelStats->pluck('current_level')->map(fn ($l) => $l.' Lvl')->toArray(),
+            'labels' => $levelStats->pluck('current_level')->map(fn($l) => $l . ' Lvl')->toArray(),
             'data' => $levelStats->pluck('total')->toArray(),
         ];
 
@@ -186,7 +191,7 @@ class DashboardController extends Controller
             ->get();
 
         $programChart = [
-            'labels' => $programStats->pluck('name')->map(fn ($n) => \Illuminate\Support\Str::limit((string) $n, 15))->toArray(),
+            'labels' => $programStats->pluck('name')->map(fn($n) => \Illuminate\Support\Str::limit((string) $n, 15))->toArray(),
             'data' => $programStats->pluck('total')->toArray(),
         ];
 
@@ -202,9 +207,9 @@ class DashboardController extends Controller
         $financialTrendLabels = $revenueTrend->pluck('month')->merge($expenseTrend->pluck('month'))->unique()->sort()->values();
 
         $combinedFinancialChart = [
-            'labels' => $financialTrendLabels->map(fn ($m) => \Carbon\Carbon::createFromFormat('Y-m', (string) $m)->format('M'))->toArray(),
-            'inflow' => $financialTrendLabels->map(fn ($m) => $revenueTrend->firstWhere('month', $m)?->total ?? 0)->toArray(),
-            'outflow' => $financialTrendLabels->map(fn ($m) => $expenseTrend->get((string) $m)?->total ?? 0)->toArray(),
+            'labels' => $financialTrendLabels->map(fn($m) => \Carbon\Carbon::createFromFormat('Y-m', (string) $m)->format('M'))->toArray(),
+            'inflow' => $financialTrendLabels->map(fn($m) => $revenueTrend->firstWhere('month', $m)?->total ?? 0)->toArray(),
+            'outflow' => $financialTrendLabels->map(fn($m) => $expenseTrend->get((string) $m)?->total ?? 0)->toArray(),
         ];
 
         // Expense by Category (Doughnut)
@@ -215,7 +220,7 @@ class DashboardController extends Controller
             ->get();
 
         $expenseCategoryChart = [
-            'labels' => $expenseByCategory->map(fn ($e) => $e->category?->name ?? 'Uncategorized')->toArray(),
+            'labels' => $expenseByCategory->map(fn($e) => $e->category?->name ?? 'Uncategorized')->toArray(),
             'data' => $expenseByCategory->pluck('total')->toArray(),
         ];
 

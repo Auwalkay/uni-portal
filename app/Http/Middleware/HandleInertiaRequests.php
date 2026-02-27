@@ -37,16 +37,38 @@ class HandleInertiaRequests extends Middleware
     {
         return [
             ...parent::share($request),
+            'tenant' => function () {
+                $tenant = tenant();
+                if (!$tenant)
+                    return null;
+
+                return [
+                    'name' => $tenant->school_name,
+                    'logo' => $tenant->logo_path ? global_asset('storage/' . $tenant->logo_path) : null,
+                ];
+            },
             'name' => config('app.name'),
-            'auth' => [
-                'user' => $request->user() ? [
-                    'id' => $request->user()->id,
-                    'name' => $request->user()->name,
-                    'email' => $request->user()->email,
-                    'roles' => $request->user()->getRoleNames(),
-                    'permissions' => $request->user()->getAllPermissions()->pluck('name'),
-                ] : null,
-            ],
+            'auth' => function () use ($request) {
+                $user = null;
+
+                // If we are on a tenant domain, use the default web guard (which safely checks the tenant DB)
+                // If we are on the central domain, use the central guard.
+                if (tenant()) {
+                    $user = $request->user('web');
+                } else {
+                    $user = $request->user('central');
+                }
+
+                return [
+                    'user' => $user ? [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'roles' => method_exists($user, 'getRoleNames') ? $user->getRoleNames() : [],
+                        'permissions' => method_exists($user, 'getAllPermissions') ? $user->getAllPermissions()->pluck('name') : [],
+                    ] : null,
+                ];
+            },
             'sidebarOpen' => !$request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'flash' => [
                 'success' => fn() => $request->session()->get('success'),

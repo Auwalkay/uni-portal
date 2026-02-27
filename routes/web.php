@@ -1,91 +1,68 @@
 <?php
 
-use App\Http\Controllers\Admin\CourseAllocationController;
-use App\Http\Controllers\Admin\ExpenseController;
-use App\Http\Controllers\Admin\FinanceController;
-use App\Http\Controllers\Admin\InvoiceController;
-use App\Http\Controllers\Admin\PayrollController;
-use App\Http\Controllers\Admin\SalaryController;
-use App\Http\Controllers\Admin\StaffController;
-use App\Http\Controllers\Staff\StaffFinanceController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
-use Laravel\Fortify\Features;
+use App\Http\Controllers\Central\HomeController;
+use App\Http\Controllers\Central\DashboardController;
+use App\Http\Controllers\Central\TenantController;
+use App\Http\Controllers\Central\DomainController;
+use App\Http\Controllers\Central\SubscriptionController;
+use App\Http\Controllers\Central\CentralUserController;
+use App\Http\Controllers\Central\TenantAcademicController;
 
-Route::middleware(['auth', 'verified', 'role:admin|registrar|bursar|finance_officer|receptionist'])->prefix('admin')->name('admin.')->group(function () {
-    Route::prefix('finance')->name('finance.')->group(function () {
-        Route::get('dashboard', [FinanceController::class, 'dashboard'])->name('dashboard');
-        Route::get('/', [FinanceController::class, 'index'])->name('index');
+/*
+|--------------------------------------------------------------------------
+| Web Routes
+|--------------------------------------------------------------------------
+|
+| Here is where you can register web routes for your application. These
+| routes are loaded by the RouteServiceProvider and all of them will
+| be assigned to the "web" middleware group. Make something great!
+|
+*/
 
-        // Fee Logic
-        Route::post('fee-types', [FinanceController::class, 'storeFeeType'])->name('fee_types.store');
-        Route::put('fee-types/{feeType}', [FinanceController::class, 'updateFeeType'])->name('fee_types.update');
-        Route::delete('fee-types/{feeType}', [FinanceController::class, 'destroyFeeType'])->name('fee_types.destroy');
-        Route::post('fee-configurations', [FinanceController::class, 'storeFeeConfiguration'])->name('fee_configurations.store');
-        Route::put('fee-configurations/{config}', [FinanceController::class, 'updateFeeConfiguration'])->name('fee_configurations.update');
-        Route::delete('fee-configurations/{config}', [FinanceController::class, 'destroyFeeConfiguration'])->name('fee_configurations.destroy');
-        Route::get('session/{session}/fees', [FinanceController::class, 'manageSessionFees'])->name('session.fees');
+use App\Http\Controllers\Central\AuthController;
 
-        // Expense Categories
-        Route::post('expense-categories', [FinanceController::class, 'storeExpenseCategory'])->name('expense_categories.store');
-        Route::put('expense-categories/{category}', [FinanceController::class, 'updateExpenseCategory'])->name('expense_categories.update');
-        Route::delete('expense-categories/{category}', [FinanceController::class, 'destroyExpenseCategory'])->name('expense_categories.destroy');
+foreach (config('tenancy.central_domains', []) as $domain) {
+    Route::domain($domain)->group(function () {
+        Route::get('/', [HomeController::class, 'index'])->name('central.home');
 
-        // Expenses
-        Route::post('expenses/{expense}/approve', [ExpenseController::class, 'approve'])->name('expenses.approve');
-        Route::post('expenses/{expense}/reject', [ExpenseController::class, 'reject'])->name('expenses.reject');
-        Route::resource('expenses', ExpenseController::class);
+        Route::middleware('guest:central')->group(function () {
+            Route::get('/saas/login', [AuthController::class, 'create'])->name('central.login');
+            Route::post('/saas/login', [AuthController::class, 'store'])->name('central.login.store');
+        });
 
-        // Payroll
-        Route::post('payroll/generate', [PayrollController::class, 'generate'])->name('payroll.generate');
-        Route::post('payroll/{payroll}/mark-as-paid', [PayrollController::class, 'markAsPaid'])->name('payroll.mark-as-paid');
-        Route::get('payroll/{payroll}/payslip/{payrollItem}/download', [PayrollController::class, 'downloadPayslip'])->name('payroll.payslip.download');
-        Route::resource('payroll', PayrollController::class)->only(['index', 'show', 'destroy']);
+        Route::middleware(['auth:central'])->group(function () {
+            Route::post('/saas/logout', [AuthController::class, 'destroy'])->name('central.logout');
 
-        // Salary
-        Route::get('conf/salaries/export', [SalaryController::class, 'export'])->name('salary.export');
-        Route::post('conf/salaries/import', [SalaryController::class, 'import'])->name('salary.import');
-        Route::get('conf/salaries', [SalaryController::class, 'index'])->name('salary.index');
-        Route::put('conf/salaries/{staff}', [SalaryController::class, 'update'])->name('salary.update');
+            Route::prefix('saas')->name('central.')->group(function () {
+                Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+                // Tenant Management
+                Route::resource('tenants', TenantController::class)->only(['index', 'create', 'store', 'show', 'update']);
+                Route::post('tenants/{tenant}/toggle-status', [TenantController::class, 'toggleStatus'])->name('tenants.toggle-status');
+                Route::post('tenants/{tenant}/subscriptions', [TenantController::class, 'storeSubscription'])->name('tenants.subscriptions.store');
+
+                // Domain Management
+                Route::get('domains', [DomainController::class, 'index'])->name('domains.index');
+
+                // Subscription Management
+                Route::get('subscriptions', [SubscriptionController::class, 'index'])->name('subscriptions.index');
+
+                // Platform User Management
+                Route::resource('central-users', CentralUserController::class)->except(['create', 'edit', 'show']);
+
+                // Central Academic Management routes for a specific Tenant
+                Route::prefix('tenants/{tenant}')->name('tenants.')->group(function () {
+                    Route::get('academics', [TenantAcademicController::class, 'index'])->name('academics');
+                    Route::post('faculties', [TenantAcademicController::class, 'storeFaculty'])->name('faculties.store');
+                    Route::post('departments', [TenantAcademicController::class, 'storeDepartment'])->name('departments.store');
+                    Route::post('programmes', [TenantAcademicController::class, 'storeProgramme'])->name('programmes.store');
+                    Route::post('academics/upload', [TenantAcademicController::class, 'bulkUpload'])->name('academics.upload');
+
+                    // Student Monitoring
+                    Route::get('students/{student}', [TenantController::class, 'showStudent'])->name('students.show');
+                });
+            });
+        });
     });
-    Route::resource('staff', StaffController::class);
-    Route::post('course-allocations/import', [CourseAllocationController::class, 'import'])->name('course-allocations.import');
-    Route::get('course-allocations/template', [CourseAllocationController::class, 'downloadTemplate'])->name('course-allocations.template');
-    Route::resource('course-allocations', CourseAllocationController::class);
-    Route::get('invoices/search-students', [InvoiceController::class, 'searchStudents'])->name('invoices.search-students');
-    Route::resource('invoices', InvoiceController::class)->only(['index', 'show', 'create', 'store']);
-    Route::post('invoices/{invoice}/mark-as-paid', [InvoiceController::class, 'markAsPaid'])->name('invoices.mark-as-paid');
-    Route::post('payments/{payment}/verify', [InvoiceController::class, 'verifyPayment'])->name('payments.verify');
-});
-
-// Staff Self-Service Routes
-Route::middleware(['auth', 'verified', 'role:staff'])->prefix('staff')->name('staff.')->group(function () {
-    Route::get('payslips', [StaffFinanceController::class, 'index'])->name('payslips.index');
-    Route::get('payslips/{payrollItem}/download', [StaffFinanceController::class, 'download'])->name('payslips.download');
-});
-
-Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'canRegister' => Features::enabled(Features::registration()),
-    ]);
-})->name('home');
-
-Route::get('dashboard', function () {
-    $user = auth()->user();
-
-    if ($user->hasAnyRole(['admin', 'registrar', 'dean', 'hod', 'course_coordinator', 'lecturer', 'admissions_manager', 'admissions_officer', 'admissions_clerk', 'bursar', 'finance_officer', 'finance_clerk', 'receptionist'])) {
-        return redirect()->route('admin.dashboard');
-    }
-
-    if ($user->hasRole('student')) {
-        return redirect()->route('student.dashboard');
-    }
-
-    if ($user->hasRole('applicant')) {
-        return redirect()->route('applicant.dashboard');
-    }
-
-    return Inertia::render('Dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
-
-require __DIR__.'/settings.php';
+}

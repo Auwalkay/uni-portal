@@ -20,9 +20,8 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
         <CardHeader class="flex flex-row items-center justify-between">
             <div>
                 <CardTitle>Faculties</CardTitle>
-                <CardDescription>Manage university faculties.</CardDescription>
+                <CardDescription>View university faculties.</CardDescription>
             </div>
-            <Button @click="emit('create')"><Plus class="mr-2 h-4 w-4" /> Add Faculty</Button>
         </CardHeader>
         <CardContent>
             <Table>
@@ -32,7 +31,6 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                         <TableHead>Name</TableHead>
                         <TableHead>Departments</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead class="text-right">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -41,14 +39,7 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                         <TableCell>{{ faculty.name }}</TableCell>
                         <TableCell>{{ faculty.departments_count }}</TableCell>
                         <TableCell>
-                            <div class="flex items-center space-x-2">
-                                <Switch :checked="faculty.is_active" @update:checked="emit('toggle', faculty.id, faculty.is_active)" />
-                            </div>
-                        </TableCell>
-                        <TableCell class="text-right">
-                            <Button variant="ghost" size="icon" @click="emit('edit', faculty)">
-                                <Pencil class="h-4 w-4" />
-                            </Button>
+                            <Badge :variant="faculty.is_active ? 'default' : 'secondary'">{{ faculty.is_active ? 'Active' : 'Inactive' }}</Badge>
                         </TableCell>
                     </TableRow>
                 </TableBody>

@@ -10,9 +10,11 @@ return new class extends Migration {
      */
     public function up(): void
     {
-        Schema::table('programmes', function (Blueprint $table) {
-            $table->integer('duration')->default(4)->after('type');
-        });
+        if (!Schema::hasColumn('programmes', 'duration')) {
+            Schema::table('programmes', function (Blueprint $table) {
+                $table->integer('duration')->default(4)->after('type');
+            });
+        }
     }
 
     /**
