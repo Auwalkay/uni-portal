@@ -32,7 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         ]);
 
-        $middleware->redirectGuestsTo(function (Request $request) {
+        $middleware->redirectGuestsTo(function (\Illuminate\Http\Request $request) {
             if (in_array($request->getHost(), config('tenancy.central_domains', []))) {
                 return route('central.login');
             }
