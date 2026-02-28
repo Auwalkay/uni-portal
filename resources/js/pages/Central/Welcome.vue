@@ -34,6 +34,9 @@ defineProps<{
                             <Link :href="route('central.login')">
                                 <Button variant="ghost">Super Admin Login</Button>
                             </Link>
+                            <Link :href="route('central.register')">
+                                <Button>Register Institution</Button>
+                            </Link>
                         </template>
                     </div>
                 </div>
@@ -52,7 +55,10 @@ defineProps<{
             </div>
             <div class="mt-10 flex justify-center gap-4">
                 <Link :href="route('central.login')">
-                    <Button size="lg" class="px-8">Enter Portal</Button>
+                    <Button size="lg" variant="outline" class="px-8">Enter Portal</Button>
+                </Link>
+                <Link :href="route('central.register')">
+                    <Button size="lg" class="px-8 bg-primary hover:bg-primary/90">Register Institution</Button>
                 </Link>
             </div>
         </main>

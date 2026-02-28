@@ -13,7 +13,7 @@ import {
     Clock,
     Search
 } from 'lucide-vue-next';
-import { dashboard, login, register } from '@/routes';
+import { dashboard, login } from '@/routes';
 import { usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import ApplicationMark from '@/components/ApplicationMark.vue';
@@ -55,7 +55,7 @@ const currentYear = new Date().getFullYear();
                         </Link>
                         <Link 
                             v-if="canRegister" 
-                            :href="register()" 
+                            href="/register" 
                             class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-all duration-200"
                         >
                             Register
@@ -85,7 +85,7 @@ const currentYear = new Date().getFullYear();
                         <div class="mt-10 flex items-center justify-center gap-x-6 animate-fade-in-up delay-300">
                             <Link 
                                 v-if="canRegister"
-                                :href="register()" 
+                                href="/register" 
                                 class="rounded-lg bg-primary px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90 hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-all duration-200 flex items-center gap-2"
                             >
                                 Apply Now <ArrowRight class="h-4 w-4" />
@@ -194,7 +194,7 @@ const currentYear = new Date().getFullYear();
                         <div class="mt-10 flex items-center justify-center gap-x-6">
                             <Link 
                                 v-if="canRegister"
-                                :href="register()" 
+                                href="/register" 
                                 class="rounded-lg bg-primary px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-all"
                             >
                                 Get Started

@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { login } from '@/routes';
-import { store } from '@/routes/register';
+// import { store } from '@/routes/register';
 
 const page = usePage();
 
@@ -23,7 +23,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.post(store.url(), {
+    form.post('/register', {
         onFinish: () => form.reset('password', 'password_confirmation'),
     });
 };

@@ -309,7 +309,7 @@ const activeSub = getActiveSubscription();
                             
                             <div class="flex flex-wrap gap-2">
                                 <a v-for="domain in tenant.domains" :key="domain.id" 
-                                   :href="'http://' + domain.domain + ':8000'" 
+                                   :href="'https://' + domain.domain" 
                                    target="_blank" 
                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-medium rounded-lg transition-colors border border-indigo-100/50 group">
                                     <ExternalLink class="h-3.5 w-3.5 text-indigo-400 group-hover:text-indigo-600 transition-colors" />

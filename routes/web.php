@@ -22,6 +22,8 @@ use App\Http\Controllers\Central\TenantAcademicController;
 
 use App\Http\Controllers\Central\AuthController;
 
+use App\Http\Controllers\Central\RegistrationController;
+
 foreach (config('tenancy.central_domains', []) as $domain) {
     Route::domain($domain)->group(function () {
         Route::get('/', [HomeController::class, 'index'])->name('central.home');
@@ -29,6 +31,11 @@ foreach (config('tenancy.central_domains', []) as $domain) {
         Route::middleware('guest:central')->group(function () {
             Route::get('/saas/login', [AuthController::class, 'create'])->name('central.login');
             Route::post('/saas/login', [AuthController::class, 'store'])->name('central.login.store');
+
+            // Public Registration & Payment Callback
+            Route::get('/register', [RegistrationController::class, 'show'])->name('central.register');
+            Route::post('/register', [RegistrationController::class, 'store'])->name('central.register.store');
+            Route::get('/payment/callback', [RegistrationController::class, 'paymentCallback'])->name('central.register.callback');
         });
 
         Route::middleware(['auth:central'])->group(function () {
@@ -47,6 +54,9 @@ foreach (config('tenancy.central_domains', []) as $domain) {
 
                 // Subscription Management
                 Route::get('subscriptions', [SubscriptionController::class, 'index'])->name('subscriptions.index');
+
+                // Advanced Tier Management
+                Route::resource('subscription-tiers', \App\Http\Controllers\Central\SubscriptionTierController::class)->except(['create', 'show', 'edit']);
 
                 // Platform User Management
                 Route::resource('central-users', CentralUserController::class)->except(['create', 'edit', 'show']);

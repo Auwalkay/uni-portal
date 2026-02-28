@@ -76,6 +76,12 @@ const tenantItems = computed(() => {
             icon: CreditCard,
             show: true,
         },
+        {
+            title: 'Pricing & Tiers',
+            href: route('central.subscription-tiers.index'),
+            icon: Settings,
+            show: true,
+        },
     ].filter(i => i.show);
 });
 
