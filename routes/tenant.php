@@ -111,3 +111,5 @@ Route::middleware([
 
     require __DIR__ . '/settings.php';
 });
+
+require base_path('vendor/laravel/fortify/routes/routes.php');

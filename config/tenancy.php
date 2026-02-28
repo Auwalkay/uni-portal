@@ -15,20 +15,13 @@ return [
      * The list of domains hosting your central app.
      *
      * Only relevant if you're using the domain or subdomain identification middleware.
-    'central_domains' => array_filter(array_map(function($domain) {
-        if (empty($domain)) return null;
-        $domain = trim($domain);
-        // Ensure scheme exists for parse_url to correctly identify host
-        if (!preg_match('#^https?://#i', $domain)) {
-            $domain = 'http://' . $domain;
-        }
-        $host = parse_url($domain, PHP_URL_HOST);
-        return $host ?: null;
-    }, [
+     */
+
+    'central_domains' =>  [
         env('CENTRAL_DOMAIN', 'localhost'),
         env('CENTRAL_DOMAIN_WWW'),
         '127.0.0.1',
-    ])),
+    ];
 
     /**
      * Tenancy bootstrappers are executed when tenancy is initialized.
