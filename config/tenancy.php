@@ -17,11 +17,11 @@ return [
      * Only relevant if you're using the domain or subdomain identification middleware.
      */
 
-    'central_domains' =>  [
+    'central_domains' => [
         env('CENTRAL_DOMAIN', 'localhost'),
         env('CENTRAL_DOMAIN_WWW'),
         '127.0.0.1',
-    ];
+    ],
 
     /**
      * Tenancy bootstrappers are executed when tenancy is initialized.
