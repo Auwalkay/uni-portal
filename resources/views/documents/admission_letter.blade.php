@@ -12,11 +12,13 @@
         body {
             font-family: 'Helvetica', 'Arial', sans-serif;
             color: #333;
-            line-height: 1.45; /* Reduced line-height */
+            line-height: 1.45;
+            /* Reduced line-height */
             margin: 0;
             padding: 0;
             background: #fff;
-            font-size: 13px; /* Slightly smaller base font */
+            font-size: 13px;
+            /* Slightly smaller base font */
         }
 
         .watermark {
@@ -32,28 +34,32 @@
         }
 
         .container {
-            padding: 1.5cm 2cm 1.5cm 2cm; /* Reduced top/bottom padding */
+            padding: 1.5cm 2cm 1.5cm 2cm;
+            /* Reduced top/bottom padding */
             position: relative;
         }
 
         .header {
             text-align: center;
-            border-bottom: 2px solid #1a56db;
+            border-bottom: 2px solid #016634;
             padding-bottom: 15px;
-            margin-bottom: 25px; /* Reduced from 40px */
+            margin-bottom: 25px;
+            /* Reduced from 40px */
         }
 
         .logo {
-            width: 70px; /* Smaller */
+            width: 70px;
+            /* Smaller */
             height: auto;
             margin-bottom: 10px;
         }
 
         .uni-name {
-            font-size: 22px; /* Smaller */
+            font-size: 22px;
+            /* Smaller */
             font-weight: 700;
             text-transform: uppercase;
-            color: #1a56db;
+            color: #016634;
             margin: 0;
             letter-spacing: 1px;
         }
@@ -67,7 +73,8 @@
 
         .meta-table {
             width: 100%;
-            margin-bottom: 20px; /* Reduced */
+            margin-bottom: 20px;
+            /* Reduced */
         }
 
         .meta-table td {
@@ -86,8 +93,9 @@
 
         .recipient-box {
             background: #f8f9fa;
-            border-left: 4px solid #1a56db;
-            padding: 10px 15px; /* Reduced */
+            border-left: 4px solid #016634;
+            padding: 10px 15px;
+            /* Reduced */
             margin-bottom: 20px;
         }
 
@@ -104,9 +112,10 @@
 
         .title-text {
             display: inline-block;
-            background: #eff6ff;
-            color: #1a56db;
-            padding: 8px 25px; /* Reduced */
+            background: #ecfdf5;
+            color: #016634;
+            padding: 8px 25px;
+            /* Reduced */
             font-weight: bold;
             font-size: 15px;
             border-radius: 50px;
@@ -123,13 +132,15 @@
         .admission-details {
             width: 100%;
             border-collapse: collapse;
-            margin: 15px 0; /* Reduced */
+            margin: 15px 0;
+            /* Reduced */
             font-size: 12px;
         }
 
         .admission-details th {
             text-align: left;
-            padding: 8px 12px; /* Reduced */
+            padding: 8px 12px;
+            /* Reduced */
             background: #f1f5f9;
             color: #475569;
             border-bottom: 1px solid #e2e8f0;
@@ -137,7 +148,8 @@
         }
 
         .admission-details td {
-            padding: 8px 12px; /* Reduced */
+            padding: 8px 12px;
+            /* Reduced */
             border-bottom: 1px solid #e2e8f0;
             font-weight: 600;
         }
@@ -146,14 +158,16 @@
             background: #fffbeb;
             border: 1px solid #fcd34d;
             color: #92400e;
-            padding: 10px 15px; /* Reduced */
+            padding: 10px 15px;
+            /* Reduced */
             font-size: 11px;
             border-radius: 6px;
             margin-top: 15px;
         }
 
         .footer {
-            margin-top: 40px; /* Reduced significantly from 60px */
+            margin-top: 40px;
+            /* Reduced significantly from 60px */
             display: table;
             width: 100%;
         }
@@ -208,15 +222,18 @@
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <!-- <img src="{{ public_path('images/logo.png') }}" class="logo" alt="Logo"> -->
-            <!-- Placeholder Circle for Logo -->
-            <div
-                style="width: 60px; height: 60px; background: #1a56db; color: white; border-radius: 50%; line-height: 60px; margin: 0 auto 10px auto; font-weight: bold; font-size: 24px;">
-                U</div>
+            @if(tenant('logo_path'))
+                <img src="{{ storage_path('app/public/' . tenant('logo_path')) }}" class="logo" alt="Logo">
+            @else
+                <div
+                    style="width: 60px; height: 60px; background: #016634; color: white; border-radius: 50%; line-height: 60px; margin: 0 auto 10px auto; font-weight: bold; font-size: 24px;">
+                    {{ substr(tenant()->school_name, 0, 1) }}
+                </div>
+            @endif
 
-            <h1 class="uni-name">University Portal</h1>
-            <p class="uni-address">PVT Mail Bag 1234, Innovation Campus, Tech City, State</p>
-            <p class="uni-address">www.university-portal.edu.ng | admissions@university-portal.edu.ng</p>
+            <h1 class="uni-name">{{ tenant()->school_name }}</h1>
+            <p class="uni-address">{{ tenant()->address }}</p>
+            <p class="uni-address">{{ tenant()->email }}</p>
         </div>
 
         <!-- Meta Info -->
@@ -250,7 +267,8 @@
             <p>Dear <strong>{{ $applicant->first_name }}</strong>,</p>
 
             <p>Following your success in the recent screening exercise, I am pleased to inform you that you have been
-                offered provisional admission into the <strong>University Portal</strong> to pursue a course of study
+                offered provisional admission into the <strong>{{ tenant()->school_name }}</strong> to pursue a course
+                of study
                 leading to the award of:</p>
 
             <table class="admission-details">

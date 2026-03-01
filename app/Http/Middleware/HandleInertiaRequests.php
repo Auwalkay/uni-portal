@@ -44,7 +44,10 @@ class HandleInertiaRequests extends Middleware
 
                 return [
                     'name' => $tenant->school_name,
-                    'logo' => $tenant->logo_path ? global_asset('storage/' . $tenant->logo_path) : null,
+                    'address' => $tenant->address,
+                    'email' => $tenant->email,
+                    'logo' => $tenant->logo_path ? tenant_asset($tenant->logo_path) : null,
+                    'application_open' => \App\Models\Session::isApplicationOpen(),
                 ];
             },
             'central_domain' => preg_replace('#^https?://#', '', env('CENTRAL_DOMAIN', 'localhost')),
@@ -65,6 +68,18 @@ class HandleInertiaRequests extends Middleware
                         'id' => $user->id,
                         'name' => $user->name,
                         'email' => $user->email,
+                        'avatar' => function () use ($user) {
+                            if ($user->hasRole('student') && $user->student?->passport_photo_path) {
+                                return tenant_asset($user->student->passport_photo_path);
+                            }
+                            if ($user->hasRole('applicant')) {
+                                $passportDoc = $user->applicant?->documents()->where('type', 'passport_photo')->first();
+                                if ($passportDoc) {
+                                    return tenant_asset($passportDoc->path);
+                                }
+                            }
+                            return null;
+                        },
                         'roles' => method_exists($user, 'getRoleNames') ? $user->getRoleNames() : [],
                         'permissions' => method_exists($user, 'getAllPermissions') ? $user->getAllPermissions()->pluck('name') : [],
                     ] : null,

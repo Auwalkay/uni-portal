@@ -26,9 +26,14 @@ defineProps<{
     <ApplicantLayout>
         <div class="p-6 space-y-8">
             <!-- Welcome Section with Classic Typography -->
-            <div class="space-y-2">
-                <h2 class="text-3xl font-serif font-bold text-gray-900 tracking-tight">Welcome, Applicant</h2>
-                <p class="text-gray-500">Manage your admission progress and tasks.</p>
+            <div class="flex items-center gap-4">
+                <div v-if="$page.props.auth.user.avatar" class="h-16 w-16 rounded-full overflow-hidden border-2 border-primary shadow-sm">
+                    <img :src="$page.props.auth.user.avatar" class="h-full w-full object-cover" alt="Profile Picture" />
+                </div>
+                <div class="space-y-1">
+                    <h2 class="text-3xl font-serif font-bold text-gray-900 tracking-tight">Welcome, {{ $page.props.auth.user.name }}</h2>
+                    <p class="text-gray-500">Manage your admission progress and tasks.</p>
+                </div>
             </div>
 
             <!-- Status Overview -->
@@ -150,7 +155,7 @@ defineProps<{
                     </div>
 
                     <!-- START NEW -->
-                    <div v-else class="flex items-center justify-between bg-white p-4 rounded-lg border shadow-sm">
+                    <div v-else-if="$page.props.tenant.application_open" class="flex items-center justify-between bg-white p-4 rounded-lg border shadow-sm">
                         <div class="flex items-center gap-4">
                             <div class="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
                                 1
@@ -163,6 +168,19 @@ defineProps<{
                         <Link href="/applicant/apply/start">
                             <Button size="lg" class="font-serif">Start Application</Button>
                         </Link>
+                    </div>
+
+                    <!-- APPLICATIONS CLOSED -->
+                    <div v-else class="flex items-center justify-between bg-red-50 p-4 rounded-lg border border-red-100">
+                        <div class="flex items-center gap-4">
+                            <div class="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+                                <AlertCircle class="h-5 w-5" />
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-red-900">Applications Closed</h4>
+                                <p class="text-sm text-red-700">Admission applications are currently not being accepted. Please check back later.</p>
+                            </div>
+                        </div>
                     </div>
                 </CardContent>
             </Card>

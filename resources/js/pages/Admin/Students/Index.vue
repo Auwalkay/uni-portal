@@ -370,7 +370,7 @@ const submitImport = () => {
                             <TableCell>
                                 <div class="flex items-center gap-3">
                                    <Avatar class="h-10 w-10 border-2 border-background">
-                                        <AvatarImage :src="student?.passport_photo_path ? `/storage/${student.passport_photo_path}` : ''" />
+                                        <AvatarImage :src="student?.passport_photo_path ? `/tenancy/assets/${student.passport_photo_path}` : ''" />
                                         <AvatarFallback>{{ student.user.name.charAt(0) }}</AvatarFallback>
                                    </Avatar>
                                    <div>

@@ -46,7 +46,14 @@
 
 <body>
     <div class="header">
-        <h1>UNIVERSITY PORTAL</h1>
+        @if(tenant('logo_path'))
+            <img src="{{ storage_path('app/public/' . tenant('logo_path')) }}"
+                style="height: 60px; width: auto; margin-bottom: 10px;">
+        @endif
+        <h1>{{ tenant()->school_name }}</h1>
+        <p style="font-size: 10px; margin: 0;">{{ tenant()->address }}</p>
+        <p style="font-size: 10px; margin: 0;">{{ tenant()->email }}</p>
+        <hr>
         <h2>Payment Receipt</h2>
         <p>Reference: {{ $payment->gateway_reference }}</p>
     </div>

@@ -76,7 +76,7 @@ import { computed } from 'vue';
 
 const passportUrl = computed(() => {
     const doc = props.applicant.documents.find(d => d.type === 'passport_photo');
-    return doc ? `/storage/${doc.path}` : null;
+    return doc ? `/tenancy/assets/${doc.path}` : null;
 });
 </script>
 

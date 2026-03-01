@@ -210,7 +210,7 @@ const updatePassword = () => {
     });
 };
 
-const previewPassport = ref<string | null>(props.student.passport_photo_path ? `/storage/${props.student.passport_photo_path}` : null);
+const previewPassport = ref<string | null>(page.props.auth.user.avatar || null);
 
 const filteredLgas = computed(() => {
     if (!form.state_id) return [];

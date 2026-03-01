@@ -3,7 +3,7 @@ import { Head, Link } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import StudentLayout from '@/layouts/StudentLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard, Calendar, CalendarClock, MapPin } from 'lucide-vue-next';
+import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard, Calendar, CalendarClock, MapPin, FileText } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -74,7 +74,7 @@ const greeting = () => {
             <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 p-8 shadow-lg">
                 <div class="relative z-10 flex items-center gap-6 text-white">
                     <img 
-                        :src="student?.passport_photo_path ? `/storage/${student.passport_photo_path}` : `https://ui-avatars.com/api/?name=${user?.name}&background=random`" 
+                        :src="$page.props.auth.user.avatar || `https://ui-avatars.com/api/?name=${user?.name}&background=random`" 
                         alt="Profile Photo" 
                         class="h-20 w-20 rounded-full border-4 border-white/30 object-cover shadow-md"
                     />

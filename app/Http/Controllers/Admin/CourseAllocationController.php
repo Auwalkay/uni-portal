@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Imports\CourseAllocationImport;
 use App\Models\Course;
 use App\Models\Faculty;
 use App\Models\Session;
 use App\Models\Staff;
 use Inertia\Inertia;
+use Maatwebsite\Excel\Facades\Excel;
 
 class CourseAllocationController extends Controller
 {
@@ -18,13 +20,13 @@ class CourseAllocationController extends Controller
 
         $allocations = \App\Models\CourseAllocation::query()
             ->with(['course', 'staff.user', 'session'])
-            ->when($sessionId, fn($q) => $q->where('session_id', $sessionId))
+            ->when($sessionId, fn ($q) => $q->where('session_id', $sessionId))
             ->when($request->department_id, function ($q, $deptId) {
-                $q->whereHas('course', fn($c) => $c->where('department_id', $deptId));
+                $q->whereHas('course', fn ($c) => $c->where('department_id', $deptId));
             })
             ->when($request->search, function ($q, $search) {
-                $q->whereHas('course', fn($c) => $c->where('title', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
-                    ->orWhereHas('staff.user', fn($u) => $u->where('name', 'like', "%{$search}%"));
+                $q->whereHas('course', fn ($c) => $c->where('title', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
+                    ->orWhereHas('staff.user', fn ($u) => $u->where('name', 'like', "%{$search}%"));
             })
             ->latest()
             ->paginate(15)
@@ -43,7 +45,7 @@ class CourseAllocationController extends Controller
                 ->get()->map(function ($s) {
                     return [
                         'id' => $s->id,
-                        'name' => $s->user?->name . ' (' . ($s->department?->code ?? '') . ')',
+                        'name' => $s->user?->name.' ('.($s->department?->code ?? '').')',
                     ];
                 }),
         ]);
@@ -84,19 +86,19 @@ class CourseAllocationController extends Controller
         ]);
 
         try {
-            $import = new \App\Imports\CourseAllocationImport;
-            \Maatwebsite\Excel\Facades\Excel::import($import, $request->file('file'));
+            $import = new CourseAllocationImport;
+            Excel::import($import, $request->file('file'));
 
             $stats = $import->getStats();
             $msg = "Import processed: {$stats['created']} created, {$stats['skipped']} skipped.";
 
             if (count($stats['errors']) > 0) {
-                return back()->with('warning', $msg . ' Some errors occurred: ' . implode(' | ', array_slice($stats['errors'], 0, 3)));
+                return back()->with('warning', $msg.' Some errors occurred: '.implode(' | ', array_slice($stats['errors'], 0, 3)));
             }
 
             return back()->with('success', $msg);
         } catch (\Exception $e) {
-            return back()->with('error', 'Error during import: ' . $e->getMessage());
+            return back()->with('error', 'Error during import: '.$e->getMessage());
         }
     }
 
@@ -104,7 +106,7 @@ class CourseAllocationController extends Controller
     {
         $headers = [
             'course_code',
-            'staff_email'
+            'staff_email',
         ];
 
         $callback = function () use ($headers) {
@@ -116,11 +118,11 @@ class CourseAllocationController extends Controller
         };
 
         return response()->stream($callback, 200, [
-            "Content-type" => "text/csv",
-            "Content-Disposition" => "attachment; filename=course_allocation_template.csv",
-            "Pragma" => "no-cache",
-            "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
-            "Expires" => "0"
+            'Content-type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename=course_allocation_template.csv',
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
         ]);
     }
 }

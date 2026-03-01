@@ -45,6 +45,17 @@ class Session extends Model
         });
     }
 
+    public static function isApplicationOpen()
+    {
+        $currentSession = self::current();
+
+        if (!$currentSession) {
+            return false;
+        }
+
+        return $currentSession->applications_enabled || $currentSession->registration_enabled;
+    }
+
     protected static function booted()
     {
         static::saved(function ($session) {

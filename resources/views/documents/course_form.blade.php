@@ -21,7 +21,7 @@
 
         .header {
             text-align: center;
-            border-bottom: 2px solid #1a56db;
+            border-bottom: 2px solid #016634;
             padding-bottom: 10px;
             margin-bottom: 20px;
             position: relative;
@@ -54,7 +54,7 @@
             font-size: 20px;
             font-weight: bold;
             text-transform: uppercase;
-            color: #1a56db;
+            color: #016634;
             margin: 0;
             letter-spacing: 1px;
         }
@@ -105,14 +105,14 @@
         }
 
         .semester-title {
-            background: #eff6ff;
-            color: #1a56db;
+            background: #ecfdf5;
+            color: #016634;
             padding: 6px 12px;
             font-weight: bold;
             font-size: 13px;
             border-radius: 4px;
             margin-bottom: 8px;
-            border-left: 4px solid #1a56db;
+            border-left: 4px solid #016634;
         }
 
         .course-table {
@@ -141,7 +141,7 @@
         .course-code {
             font-family: monospace;
             font-weight: bold;
-            color: #1a56db;
+            color: #016634;
         }
 
         .total-row {
@@ -194,12 +194,17 @@
 
     <div class="header">
         <div class="logo-box">
-            <div
-                style="width: 40px; height: 40px; background: #1a56db; color: white; border-radius: 50%; line-height: 40px; text-align: center; font-weight: bold; font-size: 18px;">
-                U</div>
+            @if(tenant('logo_path'))
+                <img src="{{ storage_path('app/public/' . tenant('logo_path')) }}" style="height: 60px; width: auto;">
+            @else
+                <div
+                    style="width: 40px; height: 40px; background: #016634; color: white; border-radius: 50%; line-height: 40px; text-align: center; font-weight: bold; font-size: 18px;">
+                    {{ substr(tenant('school_name') ?? 'U', 0, 1) }}
+                </div>
+            @endif
         </div>
 
-        <h1 class="uni-name">{{env('APP_NAME')}}</h1>
+        <h1 class="uni-name">{{ tenant()->school_name }}</h1>
         <div class="form-title">Course Registration Form</div>
         <div class="session-info">
             {{ $session->name }} Academic Session
@@ -210,7 +215,7 @@
 
         <div class="passport-box">
             @if($student->passport_photo_path)
-                <img src="{{ public_path('storage/' . $student->passport_photo_path) }}" class="passport-photo">
+                <img src="{{ storage_path('app/public/' . $student->passport_photo_path) }}" class="passport-photo">
             @else
                 <div style="text-align: center; pt-10; color: #ccc;">Passport<br>Photo</div>
             @endif
@@ -275,7 +280,7 @@
         @endforeach
 
         <div
-            style="background: #1a56db; color: white; padding: 10px; border-radius: 4px; text-align: right; font-weight: bold;">
+            style="background: #016634; color: white; padding: 10px; border-radius: 4px; text-align: right; font-weight: bold;">
             Total Registered Units for Session: {{ $grandTotalUnits }}
         </div>
     </div>

@@ -3,12 +3,18 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\CourseAllocation;
 use App\Models\CourseRegistration;
+use App\Models\Department;
 use App\Models\Expense;
+use App\Models\Faculty;
 use App\Models\Invoice;
 use App\Models\Payroll;
+use App\Models\Programme;
 use App\Models\Session;
+use App\Models\Staff;
 use App\Models\Student;
+use App\Models\Timetable;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -225,7 +231,7 @@ class DashboardController extends Controller
         ];
 
         // Staff by Department (Bar Chart)
-        $staffDeptStats = \App\Models\Staff::select('departments.name', DB::raw('count(*) as total'))
+        $staffDeptStats = Staff::select('departments.name', DB::raw('count(*) as total'))
             ->leftJoin('departments', 'staff.department_id', '=', 'departments.id')
             ->whereNotNull('departments.name')
             ->groupBy('departments.name')
@@ -289,13 +295,13 @@ class DashboardController extends Controller
 
         // Structural Counts
         $structuralStats = [
-            'faculties' => \App\Models\Faculty::count(),
-            'departments' => \App\Models\Department::count(),
-            'programs' => \App\Models\Programme::count(),
+            'faculties' => Faculty::count(),
+            'departments' => Department::count(),
+            'programs' => Programme::count(),
             'sessions' => Session::count(),
-            'staff' => \App\Models\Staff::count(),
-            'academic_staff' => \App\Models\Staff::where('is_academic', true)->count(),
-            'non_academic_staff' => \App\Models\Staff::where('is_academic', false)->count(),
+            'staff' => Staff::count(),
+            'academic_staff' => Staff::where('is_academic', true)->count(),
+            'non_academic_staff' => Staff::where('is_academic', false)->count(),
         ];
 
         // Stats Object with sensitivity filtering
@@ -336,7 +342,7 @@ class DashboardController extends Controller
         $myAllocations = [];
         $myTimetable = [];
         if ($user->hasAnyRole(['lecturer', 'course_coordinator', 'dean', 'hod'])) {
-            $myAllocations = \App\Models\CourseAllocation::whereHas('staff', function ($q) use ($user) {
+            $myAllocations = CourseAllocation::whereHas('staff', function ($q) use ($user) {
                 $q->where('user_id', $user->id);
             })
                 ->where('session_id', $sessionId)
@@ -347,7 +353,7 @@ class DashboardController extends Controller
             $courseIds = $myAllocations->pluck('course_id');
 
             // Fetch Timetable
-            $myTimetable = \App\Models\Timetable::whereIn('course_id', $courseIds)
+            $myTimetable = Timetable::whereIn('course_id', $courseIds)
                 ->where('session_id', $sessionId)
                 ->with(['course'])
                 ->get();

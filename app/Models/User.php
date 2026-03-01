@@ -63,6 +63,11 @@ class User extends Authenticatable
         return $this->hasOne(Staff::class);
     }
 
+    public function applicant(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Applicant::class);
+    }
+
     public function invoices(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(Invoice::class);

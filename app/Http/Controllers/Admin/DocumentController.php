@@ -3,18 +3,19 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use App\Models\ApplicantDocument;
+use Illuminate\Support\Facades\Storage;
 
 class DocumentController extends Controller
 {
-    public function show(\App\Models\ApplicantDocument $document)
+    public function show(ApplicantDocument $document)
     {
-        if (!\Illuminate\Support\Facades\Storage::disk('public')->exists($document->path)) {
+        if (! Storage::disk('public')->exists($document->path)) {
             abort(404);
         }
 
         return response()->file(
-            \Illuminate\Support\Facades\Storage::disk('public')->path($document->path)
+            Storage::disk('public')->path($document->path)
         );
     }
 }

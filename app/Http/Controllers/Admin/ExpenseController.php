@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
 
 class ExpenseController extends Controller
 {
@@ -75,6 +75,7 @@ class ExpenseController extends Controller
         }
 
         $expense->delete();
+
         return back()->with('success', 'Expense deleted.');
     }
 

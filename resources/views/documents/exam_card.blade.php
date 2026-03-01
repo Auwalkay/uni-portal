@@ -21,8 +21,8 @@
 
         .header {
             text-align: center;
-            border-bottom: 2px solid #dc2626;
-            /* Red for Exam */
+            border-bottom: 2px solid #016634;
+            /* Exam branding */
             padding-bottom: 10px;
             margin-bottom: 15px;
             position: relative;
@@ -55,7 +55,7 @@
             font-size: 18px;
             font-weight: bold;
             text-transform: uppercase;
-            color: #dc2626;
+            color: #016634;
             margin: 0;
             letter-spacing: 1px;
         }
@@ -130,7 +130,7 @@
         .course-code {
             font-family: monospace;
             font-weight: bold;
-            color: #dc2626;
+            color: #016634;
         }
 
         .rules-section {
@@ -191,7 +191,7 @@
             left: 50%;
             transform: translate(-50%, -50%) rotate(-45deg);
             font-size: 70px;
-            color: rgba(220, 38, 38, 0.03);
+            color: rgba(1, 102, 52, 0.03);
             font-weight: bold;
             z-index: -1;
             white-space: nowrap;
@@ -204,12 +204,17 @@
 
     <div class="header">
         <div class="logo-box">
-            <div
-                style="width: 35px; height: 35px; background: #dc2626; color: white; border-radius: 50%; line-height: 35px; text-align: center; font-weight: bold; font-size: 16px;">
-                U</div>
+            @if(tenant('logo_path'))
+                <img src="{{ storage_path('app/public/' . tenant('logo_path')) }}" style="height: 50px; width: auto;">
+            @else
+                <div
+                    style="width: 35px; height: 35px; background: #016634; color: white; border-radius: 50%; line-height: 35px; text-align: center; font-weight: bold; font-size: 16px;">
+                    {{ substr(tenant()->school_name ?? 'U', 0, 1) }}
+                </div>
+            @endif
         </div>
 
-        <h1 class="uni-name">{{ env('APP_NAME') }}</h1>
+        <h1 class="uni-name">{{ tenant()->school_name }}</h1>
         <div class="form-title">Examination Admission Card</div>
         <div class="session-info">
             {{ $session->name }} Session - {{ $semester->name }} Semester
@@ -217,7 +222,7 @@
 
         <div class="passport-box">
             @if($student->passport_photo_path)
-                <img src="{{ public_path('storage/' . $student->passport_photo_path) }}" class="passport-photo">
+                <img src="{{ storage_path('app/public/' . $student->passport_photo_path) }}" class="passport-photo">
             @else
                 <div style="text-align: center; padding-top: 35px; color: #ccc;">No Photo</div>
             @endif

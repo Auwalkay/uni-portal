@@ -143,7 +143,7 @@ const getStatusClass = (status: string) => {
                     <CardContent class="relative pt-0 pb-6 px-6">
                          <div class="flex flex-col md:flex-row items-start md:items-end -mt-12 gap-6">
                             <Avatar class="w-32 h-32 border-4 border-background shadow-lg">
-                                <AvatarImage :src="student?.passport_photo_path ? `/storage/${student.passport_photo_path}` : ''" class="object-cover" />
+                                <AvatarImage :src="student?.passport_photo_path ? `/tenancy/assets/${student.passport_photo_path}` : ''" class="object-cover" />
                                 <AvatarFallback class="text-3xl bg-muted">{{ student.user.name.charAt(0) }}</AvatarFallback>
                             </Avatar>
                             
@@ -332,7 +332,7 @@ const getStatusClass = (status: string) => {
                                                 <p class="text-sm font-medium truncate">Passport Photo</p>
                                                 <p class="text-xs text-muted-foreground">Image</p>
                                             </div>
-                                             <a :href="`/storage/${student.passport_photo_path}`" target="_blank" class="p-2 text-muted-foreground hover:text-primary">
+                                             <a :href="`/tenancy/assets/${student.passport_photo_path}`" target="_blank" class="p-2 text-muted-foreground hover:text-primary">
                                                 <Download class="w-4 h-4" />
                                             </a>
                                         </div>
@@ -344,7 +344,7 @@ const getStatusClass = (status: string) => {
                                                 <p class="text-sm font-medium truncate">Indigene Letter</p>
                                                 <p class="text-xs text-muted-foreground">Document</p>
                                             </div>
-                                             <a :href="`/storage/${student.indigene_letter_path}`" target="_blank" class="p-2 text-muted-foreground hover:text-primary">
+                                             <a :href="`/tenancy/assets/${student.indigene_letter_path}`" target="_blank" class="p-2 text-muted-foreground hover:text-primary">
                                                 <Download class="w-4 h-4" />
                                             </a>
                                         </div>

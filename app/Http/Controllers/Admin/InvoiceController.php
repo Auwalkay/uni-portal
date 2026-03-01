@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\Payment;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class InvoiceController extends Controller
@@ -18,10 +17,9 @@ class InvoiceController extends Controller
         $query = Invoice::query()
             ->with(['user.student', 'session']);
 
-        // Scope to user role if not admin/bursar? 
+        // Scope to user role if not admin/bursar?
         // Admin middleware allows finance_officer now.
         // Usually fine to see all.
-
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -68,7 +66,7 @@ class InvoiceController extends Controller
             ->pluck('count', 'status');
 
         // Chart Data: Revenue Trend (Last 30 days)
-        $revenueTrend = \App\Models\Payment::where('status', 'success')
+        $revenueTrend = Payment::where('status', 'success')
             ->whereDate('paid_at', '>=', now()->subDays(30))
             ->selectRaw('DATE(paid_at) as date, SUM(amount) as total')
             ->groupBy('date')
@@ -102,9 +100,9 @@ class InvoiceController extends Controller
                                 $statusDistribution['paid'] ?? 0,
                                 $statusDistribution['partial'] ?? 0,
                                 $statusDistribution['pending'] ?? 0,
-                            ]
-                        ]
-                    ]
+                            ],
+                        ],
+                    ],
                 ],
                 'revenue_trend' => [
                     'labels' => $chartDates,
@@ -114,11 +112,11 @@ class InvoiceController extends Controller
                             'backgroundColor' => '#10b981',
                             'borderColor' => '#10b981',
                             'tension' => 0.3, // Smooth curve
-                            'data' => $chartData
-                        ]
-                    ]
-                ]
-            ]
+                            'data' => $chartData,
+                        ],
+                    ],
+                ],
+            ],
         ];
 
         $invoices = $query->latest()->paginate(15)->withQueryString();
@@ -127,7 +125,7 @@ class InvoiceController extends Controller
             'invoices' => $invoices,
             'filters' => $filters,
             'sessions' => \App\Models\Session::latest()->get(['id', 'name']),
-            'analytics' => $analytics
+            'analytics' => $analytics,
         ]);
     }
 
@@ -161,7 +159,7 @@ class InvoiceController extends Controller
             ->with([
                 'student' => function ($q) {
                     $q->select('id', 'user_id', 'matriculation_number', 'department', 'level');
-                }
+                },
             ])
             ->limit(10)
             ->get(['id', 'name', 'email', 'profile_photo_path']); // Select fields
@@ -181,7 +179,7 @@ class InvoiceController extends Controller
         ]);
 
         // Generate reference
-        $reference = 'INV-' . strtoupper(uniqid());
+        $reference = 'INV-'.strtoupper(uniqid());
 
         $invoice = Invoice::create([
             'user_id' => $validated['user_id'],
@@ -220,13 +218,14 @@ class InvoiceController extends Controller
         if ($pendingAmount <= 0) {
             // Should verify why it wasn't marked paid if balance is 0
             $invoice->update(['status' => 'paid']);
+
             return back()->with('success', 'Invoice corrected to Paid status.');
         }
 
         $payment = Payment::create([
             'invoice_id' => $invoice->id,
             'user_id' => $invoice->user_id,
-            'gateway_reference' => 'MANUAL-' . strtoupper(uniqid()),
+            'gateway_reference' => 'MANUAL-'.strtoupper(uniqid()),
             'amount' => $pendingAmount,
             'status' => 'success',
             'channel' => 'manual', // or 'admin'
@@ -254,12 +253,12 @@ class InvoiceController extends Controller
         return back()->with('success', 'Invoice marked as paid successfully.');
     }
 
-    public function verifyPayment(\App\Models\Payment $payment, \App\Services\PaystackService $paystackService)
+    public function verifyPayment(Payment $payment, \App\Services\PaystackService $paystackService)
     {
         // 1. Verify with Paystack
         $paymentData = $paystackService->verifyTransaction($payment->gateway_reference);
 
-        if (!$paymentData || $paymentData['status'] !== 'success') {
+        if (! $paymentData || $paymentData['status'] !== 'success') {
             return back()->with('error', 'Payment verification failed or transaction not successful.');
         }
 

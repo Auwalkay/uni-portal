@@ -3,22 +3,20 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\FeeType;
-use App\Models\FeeConfiguration;
-use App\Models\Session;
-use App\Models\Faculty;
 use App\Models\Department;
-use App\Models\Programme;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Illuminate\Support\Str;
-use App\Models\Payment;
-use App\Models\Invoice;
-use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 use App\Models\Expense;
-use App\Models\Payroll;
 use App\Models\ExpenseCategory;
+use App\Models\Faculty;
+use App\Models\FeeConfiguration;
+use App\Models\FeeType;
+use App\Models\Payment;
+use App\Models\Payroll;
+use App\Models\Programme;
+use App\Models\Session;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+use Inertia\Inertia;
 
 class FinanceController extends Controller
 {
@@ -69,20 +67,20 @@ class FinanceController extends Controller
         $recentPayments = Payment::with('user')->latest('paid_at')->take(5)->get()->map(function ($p) {
             return [
                 'type' => 'inflow',
-                'description' => 'Payment from ' . $p->user->name,
+                'description' => 'Payment from '.$p->user->name,
                 'amount' => $p->amount,
                 'date' => $p->paid_at,
-                'status' => 'success'
+                'status' => 'success',
             ];
         });
 
         $recentExpenses = Expense::with('user')->latest('date')->take(5)->get()->map(function ($e) {
             return [
                 'type' => 'outflow',
-                'description' => $e->title . ' (' . $e->user->name . ')',
+                'description' => $e->title.' ('.$e->user->name.')',
                 'amount' => $e->amount,
                 'date' => $e->date,
-                'status' => $e->status
+                'status' => $e->status,
             ];
         });
 
@@ -95,7 +93,7 @@ class FinanceController extends Controller
                 'netBalance' => $netBalance,
             ],
             'chartData' => $data,
-            'recentTransactions' => $recentTransactions
+            'recentTransactions' => $recentTransactions,
         ]);
     }
 
@@ -125,17 +123,19 @@ class FinanceController extends Controller
         ]);
 
         ExpenseCategory::create($validated);
+
         return back()->with('success', 'Expense Category created.');
     }
 
     public function updateExpenseCategory(Request $request, ExpenseCategory $category)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:expense_categories,name,' . $category->id,
+            'name' => 'required|string|max:255|unique:expense_categories,name,'.$category->id,
             'description' => 'nullable|string',
         ]);
 
         $category->update($validated);
+
         return back()->with('success', 'Expense Category updated.');
     }
 
@@ -145,6 +145,7 @@ class FinanceController extends Controller
             return back()->with('error', 'Cannot delete category with associated expenses.');
         }
         $category->delete();
+
         return back()->with('success', 'Expense Category deleted.');
     }
 
@@ -168,7 +169,7 @@ class FinanceController extends Controller
     public function updateFeeType(Request $request, FeeType $feeType)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:fee_types,name,' . $feeType->id,
+            'name' => 'required|string|max:255|unique:fee_types,name,'.$feeType->id,
             'description' => 'nullable|string',
         ]);
 
@@ -188,6 +189,7 @@ class FinanceController extends Controller
         }
 
         $feeType->delete();
+
         return back()->with('success', 'Fee Type deleted successfully.');
     }
 
@@ -215,7 +217,7 @@ class FinanceController extends Controller
             'amount' => 'required|numeric|min:0',
             'level' => 'nullable|string',
             'is_compulsory' => 'boolean',
-            // Typically we don't allow changing the structural targets (faculty/dept/program) on edit to avoid confusion, 
+            // Typically we don't allow changing the structural targets (faculty/dept/program) on edit to avoid confusion,
             // but for flexibility we could. Let's keep it simple for now: only amount/level/compulsory.
         ]);
 
@@ -227,6 +229,7 @@ class FinanceController extends Controller
     public function destroyFeeConfiguration(FeeConfiguration $config)
     {
         $config->delete();
+
         return back()->with('success', 'Fee Configuration removed.');
     }
 
