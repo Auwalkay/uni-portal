@@ -62,7 +62,7 @@ class StudentController extends Controller
         DB::transaction(function () use ($validated, $request) {
             // Create User
             $user = \App\Models\User::create([
-                'name' => $validated['first_name'].' '.$validated['last_name'],
+                'name' => $validated['first_name'] . ' ' . $validated['last_name'],
                 'email' => $validated['email'],
                 'password' => \Illuminate\Support\Facades\Hash::make($validated['password'] ?? 'password'),
             ]);
@@ -133,7 +133,7 @@ class StudentController extends Controller
     public function index(Request $request)
     {
         $query = Student::query()
-            ->with(['user', 'academicDepartment.faculty', 'admittedSession', 'program']);
+            ->with(['user', 'academicDepartment.faculty', 'admittedSession', 'program', 'scholarship']);
 
         // Search Filter
         if ($request->filled('search')) {
@@ -179,15 +179,25 @@ class StudentController extends Controller
             });
         }
 
+        // Scholarship Filter
+        if ($request->filled('scholarship_id')) {
+            if ($request->scholarship_id === 'NONE') {
+                $query->whereNull('scholarship_id');
+            } else {
+                $query->where('scholarship_id', $request->scholarship_id);
+            }
+        }
+
         $students = $query->latest()->paginate(15)->withQueryString();
 
         return Inertia::render('Admin/Students/Index', [
             'students' => $students,
-            'filters' => $request->only(['search', 'session_id', 'faculty_id', 'department_id', 'level', 'program_id', 'program']),
+            'filters' => $request->only(['search', 'session_id', 'faculty_id', 'department_id', 'level', 'program_id', 'program', 'scholarship_id']),
             'sessions' => Session::latest()->get(['id', 'name']),
             'faculties' => Faculty::with('departments:id,name,faculty_id')->get(['id', 'name']),
             'departments' => \App\Models\Department::get(['id', 'name', 'faculty_id']),
             'programmes' => Programme::orderBy('name')->get(['id', 'name']),
+            'scholarships' => \App\Models\Scholarship::get(['id', 'name']),
             'stats' => [
                 'total' => Student::count(),
                 // Assuming 'new' means admitted in the latest session.
@@ -212,6 +222,7 @@ class StudentController extends Controller
             'program',
             'state',
             'lga',
+            'scholarship',
         ]);
 
         if ($canViewFinance) {
@@ -228,9 +239,9 @@ class StudentController extends Controller
 
         $academicHistory = $canViewAcademics ? $student->registrations
             ->sortByDesc('session.start_date')
-            ->groupBy(fn ($reg) => $reg->session?->name ?? 'Unknown Session')
+            ->groupBy(fn($reg) => $reg->session?->name ?? 'Unknown Session')
             ->map(function ($sessionRegs) {
-                return $sessionRegs->groupBy(fn ($reg) => $reg->semester ? $reg->semester->name : 'Unknown Semester');
+                return $sessionRegs->groupBy(fn($reg) => $reg->semester ? $reg->semester->name : 'Unknown Semester');
             }) : null;
 
         return Inertia::render('Admin/Students/Show', [
@@ -257,9 +268,9 @@ class StudentController extends Controller
             $import = new StudentImport;
             Excel::import($import, $request->file('file'));
 
-            return redirect()->route('admin.students.index')->with('success', $import->getProcessedCount().' students imported successfully.');
+            return redirect()->route('admin.students.index')->with('success', $import->getProcessedCount() . ' students imported successfully.');
         } catch (\Exception $e) {
-            return redirect()->route('admin.students.index')->with('error', 'Error during import: '.$e->getMessage());
+            return redirect()->route('admin.students.index')->with('error', 'Error during import: ' . $e->getMessage());
         }
     }
 

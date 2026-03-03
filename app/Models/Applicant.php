@@ -37,5 +37,8 @@ class Applicant extends Model
         return $this->belongsTo(Lga::class);
     }
 
-
+    public function scholarship(): BelongsTo
+    {
+        return $this->belongsTo(Scholarship::class);
+    }
 }

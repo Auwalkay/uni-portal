@@ -42,7 +42,7 @@ class CourseRegistrationController extends Controller
                     'name' => $semester->name,
                     'is_current' => $semester->is_current,
                     'total_units' => $semesterRegs->sum('course.units'),
-                    'courses' => $semesterRegs->map(fn ($r) => $r->course),
+                    'courses' => $semesterRegs->map(fn($r) => $r->course),
                 ];
             })->values();
 
@@ -64,16 +64,16 @@ class CourseRegistrationController extends Controller
     {
         $student = Student::where('user_id', Auth::id())->with('academicDepartment')->first();
 
-        if (! $student) {
+        if (!$student) {
             return redirect()->route('dashboard')->with('error', 'You are not yet a matriculated student.');
         }
 
         $currentSession = Session::current();
-        if (! $currentSession) {
+        if (!$currentSession) {
             return back()->with('error', 'No active academic session found.');
         }
 
-        if (! $currentSession->registration_enabled) {
+        if (!$currentSession->registration_enabled) {
             return back()->with('error', 'Course registration is currently closed for this session.');
         }
 
@@ -84,7 +84,7 @@ class CourseRegistrationController extends Controller
             ->where('session_id', $currentSession->id)
             ->exists();
 
-        if (! $hasPaid) {
+        if (!$hasPaid) {
             return redirect()->route('student.payments.index')
                 ->with('error', 'You must pay the School Fees for the current session before registering courses.');
         }
@@ -92,8 +92,8 @@ class CourseRegistrationController extends Controller
         // Get Semesters
         $semesters = Semester::where('session_id', $currentSession->id)->orderBy('name')->get();
 
-        $firstSemester = $semesters->filter(fn ($s) => stripos($s->name, 'First') !== false || $s->name == '1')->first();
-        $secondSemester = $semesters->filter(fn ($s) => stripos($s->name, 'Second') !== false || $s->name == '2')->first();
+        $firstSemester = $semesters->filter(fn($s) => stripos($s->name, 'First') !== false || $s->name == '1')->first();
+        $secondSemester = $semesters->filter(fn($s) => stripos($s->name, 'Second') !== false || $s->name == '2')->first();
 
         // Check Locks (Registration Dates)
         $now = now();
@@ -120,17 +120,17 @@ class CourseRegistrationController extends Controller
         }
 
         $department = $student->academicDepartment;
-        if (! $department && ! empty($student->department)) {
+        if (!$department && !empty($student->department)) {
             $department = \App\Models\Department::where('name', $student->department)->first();
         }
 
-        if (! $department) {
+        if (!$department) {
             return back()->with('error', 'No department assigned to your student profile.');
         }
 
         // Programme Limits
         $programme = null;
-        if (! empty($student->program)) {
+        if (!empty($student->program)) {
             $programme = \App\Models\Programme::where('name', $student->program)->first();
         }
         $maxUnits = $programme ? $programme->max_credit_units : 24;
@@ -219,20 +219,20 @@ class CourseRegistrationController extends Controller
 
         $student = Student::where('user_id', Auth::id())->firstOrFail();
         $currentSession = Session::current();
-        if (! $currentSession) {
+        if (!$currentSession) {
             abort(404, 'No active session.');
         }
 
         // Resolve Semesters
         $semesters = Semester::where('session_id', $currentSession->id)->get();
-        $firstSemester = $semesters->filter(fn ($s) => stripos($s->name, 'First') !== false || $s->name == '1')->first();
-        $secondSemester = $semesters->filter(fn ($s) => stripos($s->name, 'Second') !== false || $s->name == '2')->first();
+        $firstSemester = $semesters->filter(fn($s) => stripos($s->name, 'First') !== false || $s->name == '1')->first();
+        $secondSemester = $semesters->filter(fn($s) => stripos($s->name, 'Second') !== false || $s->name == '2')->first();
 
         // Max Units Check (Global or Per Semester? Usually Per Semester, but let's assume Global for simplicity requested, or Per Semester)
         // User request was simple "select and show".
         // Let's implement Per Semester Unit Cap if possible, but for now stick to global maxUnits provided in create.
         $programme = null;
-        if (! empty($student->program)) {
+        if (!empty($student->program)) {
             $programme = \App\Models\Programme::where('name', $student->program)->first();
         }
         $maxUnits = $programme ? $programme->max_credit_units : 24;
@@ -323,7 +323,7 @@ class CourseRegistrationController extends Controller
             ->where('session_id', $session->id)
             ->with('course', 'semester')
             ->get()
-            ->groupBy(fn ($reg) => $reg->semester->name);
+            ->groupBy(fn($reg) => $reg->semester->name);
 
         if ($registrations->isEmpty()) {
             return response("No course registration records found for this session ({$session->name}). Please ensure you have registered courses.", 404);

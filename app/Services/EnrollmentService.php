@@ -28,7 +28,7 @@ class EnrollmentService
             $deptCode = $applicant->programme?->department?->code ?? 'GEN';
 
             $currentSession = \App\Models\Session::current();
-            if (! $currentSession) {
+            if (!$currentSession) {
                 throw new \Exception('No active academic session found.');
             }
 
@@ -43,7 +43,7 @@ class EnrollmentService
              */
             $prefix = "{$year}/{$facCode}/{$deptCode}/";
 
-            $last = Student::where('matriculation_number', 'LIKE', $prefix.'%')
+            $last = Student::where('matriculation_number', 'LIKE', $prefix . '%')
                 ->orderBy('matriculation_number', 'desc')
                 ->lockForUpdate()
                 ->value('matriculation_number');
@@ -55,7 +55,7 @@ class EnrollmentService
             }
 
             $sequence = str_pad($lastSeq + 1, 3, '0', STR_PAD_LEFT);
-            $matricNo = $prefix.$sequence;
+            $matricNo = $prefix . $sequence;
 
             $student = Student::create([
                 'user_id' => $userId,
@@ -70,6 +70,7 @@ class EnrollmentService
                 'entry_mode' => $applicant->application_mode,
                 'admitted_session_id' => $currentSession->id,
                 'program_duration' => $applicant->programme?->duration ?? 4,
+                'scholarship_id' => $applicant->scholarship_id,
             ]);
 
             StudentSession::create([
@@ -77,7 +78,7 @@ class EnrollmentService
                 'session_id' => $currentSession->id,
                 'level' => $currentLevel,
                 'status' => 'active',
-                'semester' => $currenSemester->name,
+                'semester' => $currenSemester ? $currenSemester->name : '1st Semester',
             ]);
 
             $user = User::lockForUpdate()->find($userId);

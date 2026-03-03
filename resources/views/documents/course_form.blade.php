@@ -21,7 +21,7 @@
 
         .header {
             text-align: center;
-            border-bottom: 2px solid #1a56db;
+            border-bottom: 2px solid #E31E24;
             padding-bottom: 10px;
             margin-bottom: 20px;
             position: relative;
@@ -54,7 +54,7 @@
             font-size: 20px;
             font-weight: bold;
             text-transform: uppercase;
-            color: #1a56db;
+            color: #E31E24;
             margin: 0;
             letter-spacing: 1px;
         }
@@ -106,13 +106,13 @@
 
         .semester-title {
             background: #eff6ff;
-            color: #1a56db;
+            color: #E31E24;
             padding: 6px 12px;
             font-weight: bold;
             font-size: 13px;
             border-radius: 4px;
             margin-bottom: 8px;
-            border-left: 4px solid #1a56db;
+            border-left: 4px solid #E31E24;
         }
 
         .course-table {
@@ -141,7 +141,7 @@
         .course-code {
             font-family: monospace;
             font-weight: bold;
-            color: #1a56db;
+            color: #E31E24;
         }
 
         .total-row {
@@ -194,12 +194,11 @@
 
     <div class="header">
         <div class="logo-box">
-            <div
-                style="width: 40px; height: 40px; background: #1a56db; color: white; border-radius: 50%; line-height: 40px; text-align: center; font-weight: bold; font-size: 18px;">
-                U</div>
+            <img src="{{ public_path('miu-logo.jpeg') }}" alt="Logo"
+                style="height: 45px; width: auto; max-width: 150px; margin-top: -5px;">
         </div>
 
-        <h1 class="uni-name">{{env('APP_NAME')}}</h1>
+        <h1 class="uni-name">Mewar International University Nigeria</h1>
         <div class="form-title">Course Registration Form</div>
         <div class="session-info">
             {{ $session->name }} Academic Session
@@ -275,7 +274,7 @@
         @endforeach
 
         <div
-            style="background: #1a56db; color: white; padding: 10px; border-radius: 4px; text-align: right; font-weight: bold;">
+            style="background: #E31E24; color: white; padding: 10px; border-radius: 4px; text-align: right; font-weight: bold;">
             Total Registered Units for Session: {{ $grandTotalUnits }}
         </div>
     </div>
@@ -293,7 +292,8 @@
             </tr>
             <tr>
                 <td colspan="3" style="padding-top: 30px; text-align: center; font-size: 10px; color: #999;">
-                    Generated on {{ now()->format('d/m/Y H:i:s') }} | University Portal Course Management System
+                    Generated on {{ now()->format('d/m/Y H:i:s') }} | Mewar International University Nigeria Course
+                    Management System
                 </td>
             </tr>
         </table>

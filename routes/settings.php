@@ -7,7 +7,10 @@ use App\Http\Controllers\Admin\FrontDesk\ComplaintController;
 use App\Http\Controllers\Admin\FrontDesk\DashboardController;
 use App\Http\Controllers\Admin\FrontDesk\EnquiryController;
 use App\Http\Controllers\Admin\FrontDesk\VisitorController;
+use App\Http\Controllers\Admin\HostelBookingController;
+use App\Http\Controllers\Admin\HostelController;
 use App\Http\Controllers\Admin\ResultController;
+use App\Http\Controllers\Admin\ScholarshipController;
 use App\Http\Controllers\Admin\SessionController;
 use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Applicant\ApplicationController;
@@ -83,6 +86,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/timetable', [\App\Http\Controllers\Student\TimetableController::class, 'index'])->name('timetable.index');
 
         Route::get('/results', [\App\Http\Controllers\Student\ResultController::class, 'index'])->name('results.index');
+
+        Route::get('/accommodation', [\App\Http\Controllers\Student\AccommodationController::class, 'index'])->name('accommodation.index');
+        Route::post('/accommodation', [\App\Http\Controllers\Student\AccommodationController::class, 'store'])->name('accommodation.store');
+        Route::get('/accommodation/download-slip', [\App\Http\Controllers\Student\AccommodationController::class, 'downloadAccommodationSlip'])->name('accommodation.download-slip');
+        Route::get('/accommodation/download-payment', [\App\Http\Controllers\Student\AccommodationController::class, 'downloadPaymentSlip'])->name('accommodation.download-payment');
 
         Route::get('/id-card', [\App\Http\Controllers\Student\IdCardController::class, 'show'])->name('id_card.show');
         Route::get('/admission-letter', [\App\Http\Controllers\Student\ProfileController::class, 'downloadAdmissionLetter'])->name('admission_letter.download');
@@ -161,6 +169,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::post('/finance/configurations', [\App\Http\Controllers\Admin\FinanceController::class, 'storeFeeConfiguration'])->name('finance.configurations.store');
                 Route::put('/finance/configurations/{config}', [\App\Http\Controllers\Admin\FinanceController::class, 'updateFeeConfiguration'])->name('finance.configurations.update');
                 Route::get('/finance/sessions/{session}/fees', [\App\Http\Controllers\Admin\FinanceController::class, 'manageSessionFees'])->name('finance.session.fees');
+
+                Route::resource('/scholarships', ScholarshipController::class)
+                    ->except(['create', 'edit', 'show'])
+                    ->names('scholarships');
             });
 
             Route::middleware(['role:admin|bursar'])->group(function () {
@@ -183,6 +195,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('timetables/import', [\App\Http\Controllers\Admin\TimetableController::class, 'import'])->name('timetables.import');
             Route::get('timetables/template', [\App\Http\Controllers\Admin\TimetableController::class, 'template'])->name('timetables.template');
             Route::resource('timetables', \App\Http\Controllers\Admin\TimetableController::class)->only(['index', 'store', 'destroy']);
+
+            // Hostel Management
+            Route::get('hostels/bookings', [HostelBookingController::class, 'index'])->name('hostels.bookings.index');
+            Route::resource('hostels', HostelController::class);
+
+            Route::post('hostels/{hostel}/blocks', [\App\Http\Controllers\Admin\HostelBlockController::class, 'store'])->name('hostels.blocks.store');
+            Route::delete('hostels/{hostel}/blocks/{block}', [\App\Http\Controllers\Admin\HostelBlockController::class, 'destroy'])->name('hostels.blocks.destroy');
+
+            Route::post('hostels/{hostel}/blocks/{block}/floors', [\App\Http\Controllers\Admin\HostelFloorController::class, 'store'])->name('hostels.floors.store');
+            Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}', [\App\Http\Controllers\Admin\HostelFloorController::class, 'destroy'])->name('hostels.floors.destroy');
+
+            Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms', [\App\Http\Controllers\Admin\HostelRoomController::class, 'store'])->name('hostels.rooms.store');
+            Route::put('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [\App\Http\Controllers\Admin\HostelRoomController::class, 'update'])->name('hostels.rooms.update');
+            Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [\App\Http\Controllers\Admin\HostelRoomController::class, 'destroy'])->name('hostels.rooms.destroy');
+
+            // Fees
+            Route::post('hostels/fees', [\App\Http\Controllers\Admin\HostelFeeController::class, 'store'])->name('hostels.fees.store');
+            Route::delete('hostels/fees/{fee}', [\App\Http\Controllers\Admin\HostelFeeController::class, 'destroy'])->name('hostels.fees.destroy');
 
             // Restricted Session Management
             Route::middleware(['role:admin|registrar'])->group(function () {

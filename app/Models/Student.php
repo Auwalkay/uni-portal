@@ -36,6 +36,7 @@ class Student extends Model
         'next_of_kin_phone',
         'next_of_kin_address',
         'next_of_kin_relationship',
+        'scholarship_id',
     ];
 
     protected $casts = [
@@ -67,6 +68,11 @@ class Student extends Model
         return $this->belongsTo(Programme::class, 'program_id');
     }
 
+    public function faculty(): BelongsTo
+    {
+        return $this->belongsTo(Faculty::class, 'faculty_id');
+    }
+
     public function registrations()
     {
         return $this->hasMany(CourseRegistration::class);
@@ -87,8 +93,23 @@ class Student extends Model
         return $this->hasMany(OLevelResult::class);
     }
 
+    public function currentSession()
+    {
+        return $this->hasOne(StudentSession::class)->where('status', 'active')->latest();
+    }
+
+    public function hostelBookings()
+    {
+        return $this->hasMany(HostelBooking::class);
+    }
+
     public function sessions()
     {
         return $this->hasMany(StudentSession::class);
+    }
+
+    public function scholarship(): BelongsTo
+    {
+        return $this->belongsTo(Scholarship::class);
     }
 }

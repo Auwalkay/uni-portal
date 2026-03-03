@@ -6,6 +6,7 @@ import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import PasswordInput from '@/components/PasswordInput.vue';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthBase from '@/layouts/AuthLayout.vue';
@@ -77,16 +78,15 @@ const submit = () => {
                             Forgot password?
                         </TextLink>
                     </div>
-                    <Input
+                    <PasswordInput
                         id="password"
-                        type="password"
                         name="password"
                         v-model="form.password"
                         required
                         :tabindex="2"
                         autocomplete="current-password"
                         placeholder="Password"
-                        class="shadow-sm"
+                        :error="form.errors.password"
                     />
                     <InputError :message="form.errors.password" />
                 </div>
