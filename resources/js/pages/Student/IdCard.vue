@@ -27,14 +27,14 @@ const printCard = () => {
         <!-- ID Card Container -->
         <div class="w-[350px] h-[550px] bg-white rounded-xl shadow-xl overflow-hidden border border-gray-200 relative print:shadow-none print:border-0">
             <!-- Header Pattern -->
-            <div class="h-32 bg-blue-900 relative overflow-hidden">
+            <div class="h-32 bg-[#1E2B58] relative overflow-hidden">
                 <div class="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
                 <!-- Logo Placeholders -->
-                 <div class="absolute inset-0 flex flex-col items-center justify-center text-white">
-                    <div class="h-12 w-12 bg-white/20 rounded-full flex items-center justify-center mb-1 backdrop-blur-sm">
-                        <span class="font-bold text-xl">UP</span>
+                 <div class="absolute inset-0 flex flex-col items-center pt-4 text-white">
+                    <div class="h-16 w-auto flex items-center justify-center mb-1">
+                        <img src="/miu-logo.jpeg" alt="Logo" class="h-full object-contain backdrop-blur-sm rounded-md shadow-sm">
                     </div>
-                    <h1 class="text-sm font-bold uppercase tracking-widest text-blue-100">University Portal</h1>
+                    <h1 class="text-[10px] font-bold uppercase tracking-widest text-[#E31E24] drop-shadow-md">Mewar International University Nigeria</h1>
                 </div>
             </div>
 
@@ -52,7 +52,7 @@ const printCard = () => {
             <!-- Content -->
             <div class="pt-24 pb-8 px-6 text-center">
                 <h2 class="text-2xl font-bold text-gray-900 uppercase">{{ student.user.name }}</h2>
-                <div class="text-blue-600 font-semibold mt-1">{{ student.matriculation_number }}</div>
+                <div class="text-[#1E2B58] font-semibold mt-1">{{ student.matriculation_number }}</div>
                 
                 <div class="mt-6 space-y-3 text-sm">
                     <div class="flex justify-between border-b pb-2">
@@ -74,14 +74,14 @@ const printCard = () => {
                 </div>
 
                 <div class="mt-8">
-                     <div class="inline-block px-6 py-2 bg-blue-50 text-blue-700 rounded-full text-xs font-bold uppercase tracking-wider border border-blue-100">
+                     <div class="inline-block px-6 py-2 bg-[#1E2B58]/10 text-[#1E2B58] rounded-full text-xs font-bold uppercase tracking-wider border border-[#1E2B58]/20">
                         Student
                     </div>
                 </div>
             </div>
 
             <!-- Footer Bar -->
-            <div class="absolute bottom-0 w-full h-4 bg-blue-600"></div>
+            <div class="absolute bottom-0 w-full h-4 bg-[#E31E24]"></div>
         </div>
     </div>
 </template>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -179,6 +179,18 @@ const administrationItems = computed(() => {
             href: route().has('admin.staff.index') ? route('admin.staff.index') : '#',
             icon: Users,
             show: hasRole('admin') || hasPermission('manage_staff'),
+        },
+        {
+            title: 'Hostels',
+            href: route('admin.hostels.index'),
+            icon: Building,
+            show: hasRole('admin') || hasPermission('manage_hostels'),
+        },
+        {
+            title: 'Hostel Bookings',
+            href: route('admin.hostels.bookings.index'),
+            icon: FileText,
+            show: hasRole('admin') || hasPermission('manage_hostels'),
         },
         {
             title: 'System Users',

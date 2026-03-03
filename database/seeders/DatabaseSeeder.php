@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             AcademicRecordsSeeder::class,
             FeeSeeder::class,
             AdminUserSeeder::class,
+            NigeriaStateLgaSeeder::class,
         ]);
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Mail\StudentAdmitted;
 use App\Models\Applicant;
 use App\Models\Invoice;
 use App\Models\Programme;
@@ -103,7 +104,7 @@ class AdmissionController extends Controller
             );
 
             // Send Admission Email
-            Mail::to($applicant->user->email)->send(new \App\Mail\StudentAdmitted($applicant));
+            Mail::to($applicant->user->email)->send(new StudentAdmitted($applicant));
             Log::info("Admission email queued for applicant: {$applicant->jamb_registration_number}");
         }
 

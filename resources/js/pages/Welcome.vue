@@ -23,7 +23,7 @@ const currentYear = new Date().getFullYear();
 </script>
 
 <template>
-    <Head title="Welcome to University Portal" />
+    <Head title="Welcome to MIU Nigeria University Portal" />
 
     <div class="min-h-screen bg-background text-foreground font-sans selection:bg-primary selection:text-primary-foreground">
         
@@ -31,10 +31,10 @@ const currentYear = new Date().getFullYear();
         <nav class="fixed top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
             <div class="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
                 <div class="flex items-center gap-2">
-                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-                        <GraduationCap class="h-5 w-5" />
+                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-white p-1 shadow-lg shadow-primary/20 overflow-hidden">
+                        <img src="/miu-logo.jpeg" alt="MIU Logo" class="h-full w-full object-contain" />
                     </div>
-                    <span class="text-xl font-bold tracking-tight text-foreground">UniPortal</span>
+                    <span class="text-xl font-bold tracking-tight text-foreground">MIU Nigeria</span>
                 </div>
 
                 <div class="flex items-center gap-4">
@@ -214,13 +214,13 @@ const currentYear = new Date().getFullYear();
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <div>
                         <div class="flex items-center gap-2 mb-4">
-                            <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                                <GraduationCap class="h-5 w-5" />
+                            <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-white p-1 shadow-sm overflow-hidden">
+                                <img src="/miu-logo.jpeg" alt="MIU Logo" class="h-full w-full object-contain" />
                             </div>
-                            <span class="text-xl font-bold text-foreground">UniPortal</span>
+                            <span class="text-xl font-bold text-foreground">MIU Nigeria</span>
                         </div>
                         <p class="text-sm leading-6">
-                            Constructing the path to knowledge and success for the next generation of leaders.
+                            Education for Knowledge, Peace and Prosperity.
                         </p>
                     </div>
                     <div>
@@ -237,21 +237,21 @@ const currentYear = new Date().getFullYear();
                         <ul role="list" class="mt-6 space-y-4">
                             <li class="text-sm leading-6 flex items-center gap-2">
                                 <div class="w-6"><Globe class="h-4 w-4" /></div>
-                                123 University Ave, Education City
+                                KM 21, Abuja-Keffi Road, Masaka, Nasarawa State, Nigeria
                             </li>
                             <li class="text-sm leading-6 flex items-center gap-2">
                                 <div class="w-6">@</div>
-                                contact@uniportal.edu
+                                info@miu-nigeria.edu.ng
                             </li>
                             <li class="text-sm leading-6 flex items-center gap-2">
                                 <div class="w-6"><Clock class="h-4 w-4" /></div>
-                                +1 (555) 123-4567
+                                +234 800 000 0000
                             </li>
                         </ul>
                     </div>
                 </div>
                 <div class="mt-12 border-t border-border pt-8 sm:mt-16 lg:mt-24">
-                    <p class="text-xs leading-5">&copy; {{ currentYear }} University Portal. All rights reserved.</p>
+                    <p class="text-xs leading-5">&copy; {{ currentYear }} MIU Nigeria University Portal. All rights reserved.</p>
                 </div>
             </div>
         </footer>

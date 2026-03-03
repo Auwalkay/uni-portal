@@ -156,6 +156,13 @@ class PaymentController extends Controller
                     }
                 }
 
+                if ($payment->invoice->type === 'hostel_fee') {
+                    $booking = \App\Models\HostelBooking::where('invoice_id', $payment->invoice->id)->first();
+                    if ($booking) {
+                        $booking->update(['status' => 'confirmed']);
+                    }
+                }
+
                 // Send Receipt Email
                 try {
                     \Illuminate\Support\Facades\Mail::to(Auth::user()->email)->send(new \App\Mail\FeeReceipt($payment, $payment->invoice, Auth::user()));
@@ -165,7 +172,7 @@ class PaymentController extends Controller
                 }
             }
 
-            return redirect()->route('student.payments.index')->with('success', 'Payment successful! Welcome to the University.');
+            return redirect()->route('student.payments.index')->with('success', 'Payment successful!');
         }
 
         return redirect()->route('student.payments.index')->with('error', 'Payment verification failed.');

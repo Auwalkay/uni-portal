@@ -34,10 +34,10 @@ defineProps<{
                 :href="home()"
                 class="relative z-20 flex items-center text-lg font-bold tracking-tight gap-2"
             >
-                <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 backdrop-blur-sm">
-                    <GraduationCap class="h-5 w-5 text-white" />
+                <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-white p-1 overflow-hidden">
+                    <img src="/miu-logo.jpeg" alt="MIU Logo" class="h-full w-full object-contain" />
                 </div>
-                {{ name }}
+                MIU Nigeria
             </Link>
             
             <div class="relative z-20 mt-auto">

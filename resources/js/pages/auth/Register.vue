@@ -7,6 +7,7 @@ import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import PasswordInput from '@/components/PasswordInput.vue';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthBase from '@/layouts/AuthLayout.vue';
@@ -87,32 +88,30 @@ watch(() => page.props.errors, (errors) => {
 
                 <div class="grid gap-2">
                     <Label for="password">Password</Label>
-                    <Input
+                    <PasswordInput
                         id="password"
-                        type="password"
                         required
                         :tabindex="3"
                         autocomplete="new-password"
                         name="password"
                         v-model="form.password"
                         placeholder="Password"
-                        class="shadow-sm"
+                        :error="form.errors.password"
                     />
                     <InputError :message="form.errors.password" />
                 </div>
 
                 <div class="grid gap-2">
                     <Label for="password_confirmation">Confirm password</Label>
-                    <Input
+                    <PasswordInput
                         id="password_confirmation"
-                        type="password"
                         required
                         :tabindex="4"
                         autocomplete="new-password"
                         name="password_confirmation"
                         v-model="form.password_confirmation"
                         placeholder="Confirm password"
-                        class="shadow-sm"
+                        :error="form.errors.password_confirmation"
                     />
                     <InputError :message="form.errors.password_confirmation" />
                 </div>

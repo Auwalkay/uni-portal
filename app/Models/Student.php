@@ -68,6 +68,11 @@ class Student extends Model
         return $this->belongsTo(Programme::class, 'program_id');
     }
 
+    public function faculty(): BelongsTo
+    {
+        return $this->belongsTo(Faculty::class, 'faculty_id');
+    }
+
     public function registrations()
     {
         return $this->hasMany(CourseRegistration::class);
@@ -86,6 +91,16 @@ class Student extends Model
     public function oLevelResults()
     {
         return $this->hasMany(OLevelResult::class);
+    }
+
+    public function currentSession()
+    {
+        return $this->hasOne(StudentSession::class)->where('status', 'active')->latest();
+    }
+
+    public function hostelBookings()
+    {
+        return $this->hasMany(HostelBooking::class);
     }
 
     public function sessions()

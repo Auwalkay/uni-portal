@@ -14,7 +14,7 @@ export function useActiveUrl() {
         urlToCheck: any,
         currentUrl?: string,
     ) {
-        let checkPath = toUrl(urlToCheck as string);
+        let checkPath = typeof urlToCheck === 'string' ? urlToCheck : String(toUrl(urlToCheck));
 
         // Normalize checkPath to pathname if it's a full URL
         if (checkPath.startsWith('http')) {

@@ -21,7 +21,7 @@
 
         .header {
             text-align: center;
-            border-bottom: 2px solid #dc2626;
+            border-bottom: 2px solid #E31E24;
             /* Red for Exam */
             padding-bottom: 10px;
             margin-bottom: 15px;
@@ -55,7 +55,7 @@
             font-size: 18px;
             font-weight: bold;
             text-transform: uppercase;
-            color: #dc2626;
+            color: #E31E24;
             margin: 0;
             letter-spacing: 1px;
         }
@@ -130,7 +130,7 @@
         .course-code {
             font-family: monospace;
             font-weight: bold;
-            color: #dc2626;
+            color: #E31E24;
         }
 
         .rules-section {
@@ -191,7 +191,7 @@
             left: 50%;
             transform: translate(-50%, -50%) rotate(-45deg);
             font-size: 70px;
-            color: rgba(220, 38, 38, 0.03);
+            color: rgba(227, 30, 36, 0.03);
             font-weight: bold;
             z-index: -1;
             white-space: nowrap;
@@ -204,12 +204,11 @@
 
     <div class="header">
         <div class="logo-box">
-            <div
-                style="width: 35px; height: 35px; background: #dc2626; color: white; border-radius: 50%; line-height: 35px; text-align: center; font-weight: bold; font-size: 16px;">
-                U</div>
+            <img src="{{ public_path('miu-logo.jpeg') }}" alt="Logo"
+                style="height: 45px; width: auto; max-width: 150px; margin-top: -5px;">
         </div>
 
-        <h1 class="uni-name">{{ env('APP_NAME') }}</h1>
+        <h1 class="uni-name">Mewar International University Nigeria</h1>
         <div class="form-title">Examination Admission Card</div>
         <div class="session-info">
             {{ $session->name }} Session - {{ $semester->name }} Semester
