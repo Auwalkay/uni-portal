@@ -12,6 +12,7 @@ use App\Models\StudentSession;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
@@ -37,18 +38,22 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
     public function model(array $row)
     {
         return DB::transaction(function () use ($row) {
-            // Find or Create User
-            $user = User::firstOrCreate(
-                ['email' => $row['email']],
-                [
-                    'name' => $row['first_name'].' '.$row['last_name'],
-                    'password' => Hash::make($row['state'] ?? 'password'),
-                ]
-            );
+            $password = Str::random(10);
+            $isNewUser = false;
 
-            if (! $user->wasRecentlyCreated) {
+            // Find or Create User
+            $user = User::where('email', $row['email'])->first();
+
+            if (!$user) {
+                $user = User::create([
+                    'name' => $row['first_name'] . ' ' . $row['last_name'],
+                    'email' => $row['email'],
+                    'password' => Hash::make($password),
+                ]);
+                $isNewUser = true;
+            } else {
                 // Optionally update name if user exists
-                $user->update(['name' => $row['first_name'].' '.$row['last_name']]);
+                $user->update(['name' => $row['first_name'] . ' ' . $row['last_name']]);
             }
 
             if (! $user->hasRole('student')) {
@@ -119,6 +124,10 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
                 'status' => 'active',
                 'semester' => $currenSemester->name,
             ]);
+            if ($isNewUser) {
+                Mail::to($user->email)->send(new StudentAccountCreated($user, $password));
+            }
+
             $this->processedCount++;
 
             return $student;

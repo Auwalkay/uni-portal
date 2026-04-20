@@ -13,8 +13,11 @@ use App\Models\Student;
 use App\Models\StudentSession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Mail\StudentAccountCreated;
 
 class StudentController extends Controller
 {
@@ -59,12 +62,14 @@ class StudentController extends Controller
             'waec_result' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
         ]);
 
-        DB::transaction(function () use ($validated, $request) {
+        $password = $request->password ?? Str::random(10);
+
+        DB::transaction(function () use ($validated, $request, $password) {
             // Create User
             $user = \App\Models\User::create([
                 'name' => $validated['first_name'] . ' ' . $validated['last_name'],
                 'email' => $validated['email'],
-                'password' => \Illuminate\Support\Facades\Hash::make($validated['password'] ?? 'password'),
+                'password' => \Illuminate\Support\Facades\Hash::make($password),
             ]);
 
             $user->assignRole('student');
@@ -116,15 +121,17 @@ class StudentController extends Controller
             ]);
 
             // Handle WAEC Result
-            //            if ($request->hasFile('waec_result')) {
-            //                $waecPath = $request->file('waec_result')->store('documents/waec', 'public');
-            //                $student->oLevelResults()->create([
-            //                    'exam_type' => 'WAEC/NECO',
-            //                    'exam_year' => date('Y'), // Default to current year for admin onboarding
-            //                    'scanned_copy_path' => $waecPath,
-            //                    'subjects' => [], // Empty subjects as we're just uploading the doc
-            //                ]);
-            //            }
+            //             if ($request->hasFile('waec_result')) {
+            //                 $waecPath = $request->file('waec_result')->store('documents/waec', 'public');
+            //                 $student->oLevelResults()->create([
+            //                     'exam_type' => 'WAEC/NECO',
+            //                     'exam_year' => date('Y'), // Default to current year for admin onboarding
+            //                     'scanned_copy_path' => $waecPath,
+            //                     'subjects' => [], // Empty subjects as we're just uploading the doc
+            //                 ]);
+            //             }
+
+            Mail::to($user->email)->send(new StudentAccountCreated($user, $password));
         });
 
         return redirect()->route('admin.students.index')->with('success', 'Student created successfully.');

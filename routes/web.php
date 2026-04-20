@@ -48,6 +48,8 @@ Route::middleware(['auth', 'verified', 'role:admin|registrar|bursar|finance_offi
         Route::get('conf/salaries', [SalaryController::class, 'index'])->name('salary.index');
         Route::put('conf/salaries/{staff}', [SalaryController::class, 'update'])->name('salary.update');
     });
+    Route::post('staff/import', [StaffController::class, 'import'])->name('staff.import');
+    Route::get('staff/template', [StaffController::class, 'downloadTemplate'])->name('staff.template');
     Route::resource('staff', StaffController::class);
     Route::post('course-allocations/import', [CourseAllocationController::class, 'import'])->name('course-allocations.import');
     Route::get('course-allocations/template', [CourseAllocationController::class, 'downloadTemplate'])->name('course-allocations.template');

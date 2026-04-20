@@ -549,7 +549,7 @@ const bookRoom = () => {
             <footer class="border-t py-6 bg-card/50">
                 <div class="px-6 md:px-12 max-w-[1600px] mx-auto flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
                     <div class="flex items-center gap-4 italic opacity-50">
-                        <span>Secured by MIU Systems</span>
+                        <span>Powered by MIU Systems</span>
                         <div class="w-1 h-1 rounded-full bg-primary mb-0.5"></div>
                     </div>
                 </div>
