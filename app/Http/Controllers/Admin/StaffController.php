@@ -11,7 +11,12 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use App\Imports\StaffImport;
+use App\Mail\StaffAccountCreated;
+use Maatwebsite\Excel\Facades\Excel;
 
 class StaffController extends Controller
 {
@@ -133,10 +138,12 @@ class StaffController extends Controller
             'role_id' => 'required|exists:roles,id',
         ]);
 
+        $password = $request->password ?? Str::random(10);
+
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'password' => Hash::make($password),
         ]);
 
         $user->assignRole('staff');
@@ -153,8 +160,45 @@ class StaffController extends Controller
             'is_academic' => $request->is_academic ?? false,
         ]);
 
+        Mail::to($user->email)->send(new StaffAccountCreated($user, $password));
+
         return redirect()->route('admin.staff.index')
             ->with('success', 'Staff member created successfully.');
+    }
+
+    public function import(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|mimes:csv,txt,xlsx|max:10240',
+        ]);
+
+        try {
+            $import = new StaffImport;
+            Excel::import($import, $request->file('file'));
+
+            return redirect()->route('admin.staff.index')->with('success', $import->getProcessedCount() . ' staff members imported successfully.');
+        } catch (\Exception $e) {
+            return redirect()->route('admin.staff.index')->with('error', 'Error during import: ' . $e->getMessage());
+        }
+    }
+
+    public function downloadTemplate()
+    {
+        $headers = ['name', 'email', 'staff_number', 'designation', 'department', 'role', 'is_academic'];
+        $callback = function () use ($headers) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, $headers);
+            fputcsv($file, ['John Doe', 'john.doe@example.com', 'STF001', 'Lecturer I', 'Computer Science', 'lecturer', '1']);
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, [
+            'Content-type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename=staff_import_template.csv',
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
+        ]);
     }
 
     /**
