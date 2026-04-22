@@ -117,10 +117,15 @@ class AcademicController extends Controller
         } elseif ($request->type === 'programme') {
             $data = $request->validate([
                 'name' => 'required|string|max:255',
-                'type' => 'required|string|in:UG,PG,PHD',
+                'program_type' => 'required|string|in:UG,PG,PHD',
                 'department_id' => 'required|exists:departments,id',
             ]);
-            Programme::create($data);
+
+            Programme::create([
+                'name' => $data['name'],
+                'type' => $data['program_type'],
+                'department_id' => $data['department_id'],
+            ]);
         } elseif ($request->type === 'course') {
             $data = $request->validate([
                 'title' => 'required|string|max:255',
@@ -163,10 +168,15 @@ class AcademicController extends Controller
             $programme = Programme::findOrFail($request->id);
             $data = $request->validate([
                 'name' => 'required|string|max:255',
-                'type' => 'required|string|in:UG,PG,PHD',
+                'program_type' => 'required|string|in:UG,PG,PHD',
                 'department_id' => 'required|exists:departments,id',
             ]);
-            $programme->update($data);
+
+            $programme->update([
+                'name' => $data['name'],
+                'type' => $data['program_type'],
+                'department_id' => $data['department_id'],
+            ]);
         } elseif ($request->type === 'course') {
             $course = Course::findOrFail($request->id);
             $data = $request->validate([
