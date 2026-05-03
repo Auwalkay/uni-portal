@@ -85,6 +85,7 @@ const form = useForm({
     current_level: '',
     admitted_session_id: '',
     entry_mode: '',
+    matriculation_number: '',
     jamb_registration_number: '',
     jamb_score: '',
     previous_institution: '',
@@ -364,6 +365,15 @@ const submit = () => {
                                             </SelectContent>
                                         </Select>
                                         <p v-if="form.errors.admitted_session_id" class="text-xs text-destructive">{{ form.errors.admitted_session_id }}</p>
+                                    </div>
+                                    <div class="space-y-2">
+                                        <Label for="matric_no">Matriculation Number (Optional)</Label>
+                                        <div class="relative">
+                                            <ShieldCheck class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                            <Input id="matric_no" v-model="form.matriculation_number" class="pl-10" placeholder="Leave blank for auto-generation" />
+                                        </div>
+                                        <p v-if="form.errors.matriculation_number" class="text-xs text-destructive">{{ form.errors.matriculation_number }}</p>
+                                        <p class="text-[10px] text-muted-foreground italic">If left empty, the system will generate one based on the current session format.</p>
                                     </div>
                                 </CardContent>
                             </Card>

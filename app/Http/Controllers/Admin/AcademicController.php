@@ -9,6 +9,7 @@ use App\Models\Faculty;
 use App\Models\Programme;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Cache;
 
 class AcademicController extends Controller
 {
@@ -49,8 +50,14 @@ class AcademicController extends Controller
                 ->withQueryString();
         }
 
+        $user = $request->user();
         if ($tab === 'courses') {
             $courses = Course::with('department', 'programme')
+                ->when(!$user->can('manage_courses'), function ($q) use ($user) {
+                    $q->whereHas('allocations', function ($aq) use ($user) {
+                        $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
+                    });
+                })
                 ->when($search, fn ($q) => $q->where('title', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
                 ->when($facultyId, fn ($q) => $q->whereHas('department', fn ($d) => $d->where('faculty_id', $facultyId)))
                 ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId))
@@ -67,9 +74,9 @@ class AcademicController extends Controller
             'departments' => $departments ?? $empty,
             'programmes' => $programmes ?? $empty,
             'courses' => $courses ?? $empty,
-            'allFaculties' => Faculty::orderBy('name')->get(),
-            'allDepartments' => Department::orderBy('name')->get(),
-            'allProgrammes' => Programme::orderBy('name')->get(),
+            'allFaculties' => Cache::remember('all_faculties', 86400, fn() => Faculty::orderBy('name')->get()),
+            'allDepartments' => Cache::remember('all_departments', 86400, fn() => Department::orderBy('name')->get()),
+            'allProgrammes' => Cache::remember('all_programmes', 86400, fn() => Programme::orderBy('name')->get()),
             'filters' => $request->only(['search', 'faculty_id', 'department_id', 'tab']),
         ]);
     }
@@ -92,7 +99,19 @@ class AcademicController extends Controller
         $item = $modelClass::findOrFail($request->id);
         $item->update(['is_active' => $request->is_active]);
 
+        $this->clearAcademicCache();
+
         return back()->with('success', ucfirst($request->type).' status updated.');
+    }
+
+    private function clearAcademicCache()
+    {
+        Cache::forget('all_faculties');
+        Cache::forget('all_departments');
+        Cache::forget('all_programmes');
+        Cache::forget('faculties_with_departments');
+        Cache::forget('faculties_with_departments_full');
+        Cache::forget('all_programmes_list');
     }
 
     public function store(Request $request)
@@ -138,6 +157,8 @@ class AcademicController extends Controller
             ]);
             Course::create($data);
         }
+
+        $this->clearAcademicCache();
 
         return back()->with('success', ucfirst($request->type).' created successfully.');
     }
@@ -190,6 +211,8 @@ class AcademicController extends Controller
             ]);
             $course->update($data);
         }
+
+        $this->clearAcademicCache();
 
         return back()->with('success', ucfirst($request->type).' updated successfully.');
     }

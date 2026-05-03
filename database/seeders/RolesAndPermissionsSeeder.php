@@ -15,23 +15,86 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // 1. Define Permissions
         $permissions = [
-            // Results
-            'manage_results',
-            'approve_results',
-            'view_results',
-            // Payments
-            'manage_payments',
-            'verify_payments',
-            'view_payments',
-            // Admissions
-            'admit_students',
-            'review_applications',
-            'view_applications',
-            // Academics
-            'manage_courses',
+            // General & Portal Access
+            'access_admin_dashboard',
+            'access_student_portal',
+            'access_applicant_portal',
+            'access_staff_portal',
+            
+            // Academic Management (Courses & Structure)
+            'view_faculties', 'manage_faculties',
+            'view_departments', 'manage_departments',
+            'view_programmes', 'manage_programmes',
+            'view_courses', 'manage_courses',
             'assign_coordinators',
-            'manage_settings',
-            'manage_staff',
+            'manage_academic_sessions',
+            'manage_timetables',
+            
+            // Result Management
+            'view_results',
+            'enter_results',
+            'edit_results',
+            'approve_results',
+            'publish_results',
+            'manage_results', // Global Override
+            
+            // Student & Admissions
+            'view_applications',
+            'review_applications',
+            'admit_students',
+            'view_students',
+            'create_students',
+            'edit_students',
+            'delete_students',
+            'import_students',
+            'manage_users', // Global student search/access
+            
+            // Staff & HR
+            'view_staff',
+            'create_staff',
+            'edit_staff',
+            'delete_staff',
+            'manage_staff', // Global staff management
+            'view_salaries',
+            'manage_salaries',
+            'run_payroll',
+            
+            // Finance & Payments
+            'view_payments',
+            'verify_payments',
+            'manage_payments',
+            'create_invoices',
+            'cancel_invoices',
+            'manage_scholarships',
+            'view_expenses',
+            'create_expenses',
+            'approve_expenses',
+            
+            // Infrastructure & Utilities
+            'manage_hostels',
+            'manage_hostel_bookings',
+            'manage_visitors',
+            'view_audit_logs',
+            'manage_system_settings',
+            // Dashboard & Analytics
+            'view_global_analytics',
+            'view_revenue_stats',
+            'view_academic_stats',
+            'view_admission_stats',
+            'view_recent_activities',
+            'view_system_status',
+            
+            // Advanced & Compliance
+            'impersonate_users',
+            'export_pii_data',
+            'bypass_registration_limits',
+            'override_prerequisites',
+            'manage_student_clearance',
+            'issue_official_transcripts',
+            'manage_bulk_communications',
+            
+            // Personal
+            'view_own_payslips',
         ];
 
         foreach ($permissions as $permission) {
@@ -46,43 +109,63 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // --- ACADEMIC ROLES ---
         $registrar = Role::firstOrCreate(['name' => 'registrar']);
-        $registrar->syncPermissions(['manage_courses', 'assign_coordinators', 'approve_results', 'view_results', 'view_applications', 'view_payments', 'manage_staff']);
+        $registrar->syncPermissions([
+            'access_admin_dashboard',
+            'manage_courses', 
+            'assign_coordinators', 
+            'approve_results', 
+            'view_results', 
+            'view_applications', 
+            'view_payments', 
+            'manage_staff',
+            'manage_academic_sessions',
+            'manage_hostels'
+        ]);
 
         $dean = Role::firstOrCreate(['name' => 'dean']);
-        $dean->syncPermissions(['approve_results', 'view_results', 'manage_courses']);
+        $dean->syncPermissions(['access_admin_dashboard', 'approve_results', 'view_results', 'manage_courses']);
 
         $hod = Role::firstOrCreate(['name' => 'hod']);
-        $hod->syncPermissions(['approve_results', 'view_results', 'manage_courses', 'assign_coordinators']);
+        $hod->syncPermissions(['access_admin_dashboard', 'approve_results', 'view_results', 'manage_courses', 'assign_coordinators']);
 
         $courseCoordinator = Role::firstOrCreate(['name' => 'course_coordinator']);
-        $courseCoordinator->syncPermissions(['manage_results', 'view_results']);
+        $courseCoordinator->syncPermissions(['access_admin_dashboard', 'view_results']);
 
         $lecturer = Role::firstOrCreate(['name' => 'lecturer']);
-        $lecturer->syncPermissions(['manage_results', 'view_results']);
+        $lecturer->syncPermissions(['access_admin_dashboard', 'view_results']);
 
         // --- ADMISSIONS ROLES ---
         $admissionsManager = Role::firstOrCreate(['name' => 'admissions_manager']);
-        $admissionsManager->syncPermissions(['admit_students', 'review_applications', 'view_applications']);
+        $admissionsManager->syncPermissions(['access_admin_dashboard', 'admit_students', 'review_applications', 'view_applications']);
 
         $admissionsOfficer = Role::firstOrCreate(['name' => 'admissions_officer']);
-        $admissionsOfficer->syncPermissions(['review_applications', 'view_applications']);
+        $admissionsOfficer->syncPermissions(['access_admin_dashboard', 'review_applications', 'view_applications']);
 
         $admissionsClerk = Role::firstOrCreate(['name' => 'admissions_clerk']);
-        $admissionsClerk->syncPermissions(['view_applications']);
+        $admissionsClerk->syncPermissions(['access_admin_dashboard', 'view_applications']);
 
         // --- FINANCE ROLES ---
         $bursar = Role::firstOrCreate(['name' => 'bursar']);
-        $bursar->syncPermissions(['manage_payments', 'verify_payments', 'view_payments']);
+        $bursar->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments']);
 
         $financeOfficer = Role::firstOrCreate(['name' => 'finance_officer']);
-        $financeOfficer->syncPermissions(['verify_payments', 'view_payments']);
+        $financeOfficer->syncPermissions(['access_admin_dashboard', 'verify_payments', 'view_payments']);
 
         $financeClerk = Role::firstOrCreate(['name' => 'finance_clerk']);
-        $financeClerk->syncPermissions(['view_payments']);
+        $financeClerk->syncPermissions(['access_admin_dashboard', 'view_payments']);
+
+        // --- FRONT DESK ---
+        $receptionist = Role::firstOrCreate(['name' => 'receptionist']);
+        $receptionist->syncPermissions(['access_admin_dashboard', 'manage_visitors']);
 
         // --- CORE ROLES ---
-        Role::firstOrCreate(['name' => 'staff']);
-        Role::firstOrCreate(['name' => 'student']);
-        Role::firstOrCreate(['name' => 'applicant']);
+        $staff = Role::firstOrCreate(['name' => 'staff']);
+        $staff->syncPermissions(['access_staff_portal', 'view_own_payslips']);
+
+        $student = Role::firstOrCreate(['name' => 'student']);
+        $student->syncPermissions(['access_student_portal']);
+
+        $applicant = Role::firstOrCreate(['name' => 'applicant']);
+        $applicant->syncPermissions(['access_applicant_portal']);
     }
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
 import { 
     Shield, 
     Users, 
@@ -12,7 +12,9 @@ import {
     Globe,
     Database,
     Bell,
-    ShieldAlert
+    ShieldAlert,
+    Award,
+    Hash
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
 import {
@@ -21,9 +23,14 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import Swal from 'sweetalert2';
+import { computed } from 'vue';
 
 const props = defineProps<{
     stats: {
@@ -31,12 +38,52 @@ const props = defineProps<{
         permissions_count: number;
         admin_users: number;
         staff_users: number;
+    },
+    settings: {
+        matric_format: string;
     }
 }>();
 
 const breadcrumbs = [
     { title: 'System Settings', href: '/admin/settings' }
 ];
+
+const form = useForm({
+    key: 'matric_format',
+    value: props.settings.matric_format
+});
+
+const submitSetting = () => {
+    form.post(route('admin.settings.update'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            Swal.fire({
+                icon: 'success',
+                title: 'Updated',
+                text: 'System setting updated successfully',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
+            });
+        }
+    });
+};
+
+const matricPreview = computed(() => {
+    const year = new Date().getFullYear();
+    const random = '1234';
+    const sequence = '001';
+    const dept = 'SEN';
+    const faculty = 'ENG';
+    return form.value
+        ? form.value.replace('{YEAR}', year.toString())
+                    .replace('{RANDOM}', random)
+                    .replace('{SEQUENCE}', sequence)
+                    .replace('{DEPT}', dept)
+                    .replace('{FACULTY}', faculty)
+        : '---';
+});
 
 const settingsModules = [
     {
@@ -58,13 +105,13 @@ const settingsModules = [
         stats: `${props.stats.admin_users + props.stats.staff_users} Core Personnel`
     },
     {
-        title: 'Security & Auth',
-        description: 'Configure multi-factor authentication, session timeouts, and password policies.',
-        icon: Lock,
-        href: '#',
-        color: 'text-orange-600',
-        bgColor: 'bg-orange-50 dark:bg-orange-900/20',
-        stats: 'Enterprise Secure'
+        title: 'Designations',
+        description: 'Manage staff designations and ranks across the university departments.',
+        icon: Award,
+        href: route('admin.designations.index'),
+        color: 'text-rose-600',
+        bgColor: 'bg-rose-50 dark:bg-rose-900/20',
+        stats: 'Dynamic Ranks'
     },
     {
         title: 'System Logs',
@@ -96,6 +143,54 @@ const settingsModules = [
             </div>
 
             <div class="grid gap-6 md:grid-cols-2">
+                <!-- General Configuration Card -->
+                <Card class="md:col-span-2 border-primary/20 bg-primary/5">
+                    <CardHeader class="flex flex-row items-center gap-4">
+                        <div class="bg-primary/10 p-3 rounded-xl text-primary">
+                            <Settings2 class="w-6 h-6" />
+                        </div>
+                        <div>
+                            <CardTitle>General Configuration</CardTitle>
+                            <CardDescription>Configure core system behaviors and identifiers.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div class="grid md:grid-cols-2 gap-8">
+                            <div class="space-y-4">
+                                <div class="space-y-2">
+                                    <Label for="matric_format" class="flex items-center gap-2">
+                                        <Hash class="w-4 h-4" />
+                                        Matriculation Number Format
+                                    </Label>
+                                    <Input 
+                                        id="matric_format" 
+                                        v-model="form.value" 
+                                        placeholder="MIU{YEAR}{SEQUENCE}" 
+                                    />
+                                    <p class="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                                        Available Placeholders: 
+                                        <span class="text-primary font-mono">{YEAR}</span>, 
+                                        <span class="text-primary font-mono">{RANDOM}</span>,
+                                        <span class="text-primary font-mono">{SEQUENCE}</span>,
+                                        <span class="text-primary font-mono">{DEPT}</span>,
+                                        <span class="text-primary font-mono">{FACULTY}</span>
+                                    </p>
+                                </div>
+                                <Button @click="submitSetting" :disabled="form.processing">
+                                    {{ form.processing ? 'Saving...' : 'Update Configuration' }}
+                                </Button>
+                            </div>
+                            <div class="bg-white dark:bg-slate-900 border rounded-2xl p-6 flex flex-col justify-center items-center text-center space-y-2">
+                                <p class="text-xs text-muted-foreground uppercase font-bold tracking-widest">Format Preview</p>
+                                <p class="text-3xl font-black font-mono tracking-tighter text-primary">
+                                    {{ matricPreview }}
+                                </p>
+                                <p class="text-[10px] text-muted-foreground">Example generated for the current session</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
                 <Card v-for="module in settingsModules" :key="module.title" class="group hover:shadow-lg transition-all border-slate-200 dark:border-slate-800">
                     <CardHeader class="flex flex-row items-center gap-4 pb-2">
                         <div :class="[module.bgColor, 'p-3 rounded-xl transition-colors group-hover:scale-110 duration-200']">

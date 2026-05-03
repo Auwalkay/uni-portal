@@ -25,8 +25,8 @@ class StudentController extends Controller
     {
         return Inertia::render('Admin/Students/Create', [
             'sessions' => Session::latest()->get(['id', 'name']),
-            'faculties' => Faculty::with('departments:id,name,faculty_id')->get(['id', 'name']),
-            'programmes' => Programme::orderBy('name')->get(['id', 'name']),
+            'faculties' => \Illuminate\Support\Facades\Cache::remember('faculties_with_departments', 86400, fn() => Faculty::with('departments:id,name,faculty_id')->get(['id', 'name'])),
+            'programmes' => \Illuminate\Support\Facades\Cache::remember('all_programmes_list', 86400, fn() => Programme::orderBy('name')->get(['id', 'name'])),
             'states' => State::with('lgas:id,name,state_id')->get(['id', 'name']),
             'levels' => ['100', '200', '300', '400', '500'],
             'entry_modes' => ['UTME', 'Direct Entry', 'Transfer', 'Postgraduate'],
@@ -54,6 +54,7 @@ class StudentController extends Controller
             'current_level' => 'required|in:100,200,300,400,500',
             'admitted_session_id' => 'required|exists:academic_sessions,id',
             'entry_mode' => 'required|string',
+            'matriculation_number' => 'nullable|string|unique:students,matriculation_number',
             'jamb_registration_number' => 'nullable|string|max:255',
             'jamb_score' => 'nullable|integer',
             'previous_institution' => 'nullable|string|max:255',
@@ -75,7 +76,8 @@ class StudentController extends Controller
             $user->assignRole('student');
 
             // Generate Matric Number
-            $matricNumber = MatriculationNumberHelper::generate();
+            $dept = \App\Models\Department::find($validated['department_id']);
+            $matricNumber = $validated['matriculation_number'] ?? MatriculationNumberHelper::generate(['dept_code' => $dept?->code]);
 
             // Handle Passport
             $passportPath = null;
@@ -139,8 +141,20 @@ class StudentController extends Controller
 
     public function index(Request $request)
     {
+        $user = auth()->user();
         $query = Student::query()
             ->with(['user', 'academicDepartment.faculty', 'admittedSession', 'program', 'scholarship']);
+
+        // Access Control: Lecturers see only students registered in their allocated courses
+        if (!$user->can('manage_users')) {
+            $query->whereHas('registrations', function ($q) use ($user) {
+                $q->whereHas('course', function ($cq) use ($user) {
+                    $cq->whereHas('allocations', function ($aq) use ($user) {
+                        $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
+                    });
+                });
+            });
+        }
 
         // Search Filter
         if ($request->filled('search')) {
@@ -206,13 +220,9 @@ class StudentController extends Controller
             'programmes' => Programme::orderBy('name')->get(['id', 'name']),
             'scholarships' => \App\Models\Scholarship::get(['id', 'name']),
             'stats' => [
-                'total' => Student::count(),
-                // Assuming 'new' means admitted in the latest session.
-                // We'll dynamically determine the latest session or just check created_at for this year if session isn't reliable yet.
-                // Using latest session is safer for academic context.
-                'new' => Student::where('admitted_session_id', Session::latest('start_date')->value('id'))->count(),
-                // Assuming graduating levels are 400, 500, 600
-                'graduating' => Student::whereIn('current_level', ['400', '500', '600'])->count(),
+                'total' => (clone $query)->count(),
+                'new' => (clone $query)->where('admitted_session_id', Session::latest('start_date')->value('id'))->count(),
+                'graduating' => (clone $query)->whereIn('current_level', ['400', '500', '600'])->count(),
             ],
         ]);
     }
@@ -220,6 +230,20 @@ class StudentController extends Controller
     public function show(Student $student)
     {
         $user = auth()->user();
+        
+        // Authorization check for lecturers
+        if (!$user->can('manage_users')) {
+            $isAuthorized = $student->registrations()->whereHas('course', function ($q) use ($user) {
+                $q->whereHas('allocations', function ($aq) use ($user) {
+                    $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
+                });
+            })->exists();
+
+            if (!$isAuthorized) {
+                abort(403, 'You are not authorized to view this student.');
+            }
+        }
+
         $canViewFinance = $user->hasAnyPermission(['manage_payments', 'verify_payments', 'view_payments']) || $user->hasRole('admin');
         $canViewAcademics = $user->hasAnyPermission(['manage_results', 'approve_results', 'view_results', 'manage_courses', 'assign_coordinators']) || $user->hasRole('admin');
 

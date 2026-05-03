@@ -198,6 +198,12 @@ const administrationItems = computed(() => {
             icon: Shield,
             show: hasRole('admin'),
         },
+        {
+            title: 'Designations',
+            href: route().has('admin.designations.index') ? route('admin.designations.index') : '/admin/designations',
+            icon: Award,
+            show: hasRole('admin'),
+        },
     ].filter(i => i.show);
 });
 

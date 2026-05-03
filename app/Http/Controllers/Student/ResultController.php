@@ -46,9 +46,10 @@ class ResultController extends Controller
                 'semesters' => []
             ];
 
-            // Get semesters for this session (that have registrations)
+            // Get semesters for this session (that have published registrations)
             $registrationsInSession = CourseRegistration::where('student_id', $student->id)
                 ->where('session_id', $session->id)
+                ->where('is_published', true)
                 ->with(['course', 'semester'])
                 ->get()
                 ->groupBy('semester.name'); // Group by Semester Name (First/Second)
@@ -76,8 +77,11 @@ class ResultController extends Controller
             $history[] = $sessionData;
         }
 
-        // 3. CGPA Calculation (All registrations)
-        $allRegs = CourseRegistration::where('student_id', $student->id)->with('course')->get();
+        // 3. CGPA Calculation (Only published registrations)
+        $allRegs = CourseRegistration::where('student_id', $student->id)
+            ->where('is_published', true)
+            ->with('course')
+            ->get();
         $cgpa = $this->gradingService->calculateGPA($allRegs);
 
         return Inertia::render('Student/Results/Index', [

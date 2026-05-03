@@ -36,26 +36,7 @@ class EnrollmentService
 
             $currentLevel = ($applicant->application_mode === 'DE') ? 200 : 100;
 
-            /**
-             * Concurrency-safe matric generation:
-             * - Get latest matric for this pattern (ORDER BY) and lock it.
-             * - Then increment sequence.
-             */
-            $prefix = "{$year}/{$facCode}/{$deptCode}/";
-
-            $last = Student::where('matriculation_number', 'LIKE', $prefix . '%')
-                ->orderBy('matriculation_number', 'desc')
-                ->lockForUpdate()
-                ->value('matriculation_number');
-
-            $lastSeq = 0;
-            if ($last) {
-                $parts = explode('/', $last);
-                $lastSeq = (int) end($parts);
-            }
-
-            $sequence = str_pad($lastSeq + 1, 3, '0', STR_PAD_LEFT);
-            $matricNo = $prefix . $sequence;
+            $matricNo = \App\Helpers\MatriculationNumberHelper::generate(['dept_code' => $applicant->programme?->department?->code]);
 
             $student = Student::create([
                 'user_id' => $userId,

@@ -46,7 +46,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('two-factor.show');
 
     // APPLICANT ROUTES
-    Route::prefix('applicant')->name('applicant.')->middleware(['role:applicant'])->group(function () {
+    Route::prefix('applicant')->name('applicant.')->middleware(['permission:access_applicant_portal'])->group(function () {
         Route::get('/dashboard', [ApplicationController::class, 'index'])->name('dashboard');
         Route::get('/apply/start', [ApplicationController::class, 'create'])->name('apply.start');
         Route::get('/apply/form', [ApplicationController::class, 'form'])->name('apply.form');
@@ -66,7 +66,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // STUDENT Routes
-    Route::prefix('student')->name('student.')->middleware('role:student')->group(function () {
+    Route::prefix('student')->name('student.')->middleware('permission:access_student_portal')->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Student\ProfileController::class, 'dashboard'])->name('dashboard');
 
         Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
@@ -97,11 +97,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // ADMIN & STAFF ROUTES
-    Route::prefix('admin')->name('admin.')->middleware(['role:admin|registrar|dean|hod|course_coordinator|lecturer|admissions_manager|admissions_officer|admissions_clerk|bursar|finance_officer|finance_clerk|receptionist'])->group(function () {
+    Route::prefix('admin')->name('admin.')->middleware(['permission:access_admin_dashboard'])->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
 
         // Front Desk Module
-        Route::middleware(['role:admin|receptionist'])->prefix('front-desk')->name('front-desk.')->group(function () {
+        Route::middleware(['permission:manage_visitors'])->prefix('front-desk')->name('front-desk.')->group(function () {
             Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
             Route::resource('visitors', VisitorController::class);
@@ -110,28 +110,29 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 
         // Admissions Management
-        Route::middleware(['role:admin|admissions_manager|admissions_officer|admissions_clerk'])->group(function () {
+        Route::middleware(['permission:view_applications'])->group(function () {
             Route::get('/admissions', [AdmissionController::class, 'index'])->name('admissions.index');
             Route::get('/admissions/{applicant}', [AdmissionController::class, 'show'])->name('admissions.show');
             Route::get('/admissions/{applicant}/letter', [AdmissionController::class, 'downloadLetter'])->name('admissions.letter');
             Route::get('/documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
 
             // Restricted Admissions Actions
-            Route::middleware(['role:admin|admissions_manager|admissions_officer'])->group(function () {
+            Route::middleware(['permission:review_applications'])->group(function () {
                 Route::put('/admissions/{applicant}', [AdmissionController::class, 'update'])->name('admissions.update');
             });
         });
 
         // Results Management
-        Route::middleware(['role:admin|registrar|dean|hod|course_coordinator|lecturer'])->group(function () {
+        Route::middleware(['permission:view_results'])->group(function () {
             Route::get('/results', [ResultController::class, 'index'])->name('results.index');
             Route::get('/results/{course}/entry', [ResultController::class, 'edit'])->name('results.edit');
             Route::post('/results/{course}', [ResultController::class, 'update'])->name('results.update');
             Route::post('/results/{course}/upload', [ResultController::class, 'upload'])->name('results.upload');
+            Route::post('/results/{course}/publish', [ResultController::class, 'publish'])->name('results.publish');
         });
 
         // Student Management (Creation & Migration)
-        Route::middleware(['role:admin|registrar'])->group(function () {
+        Route::middleware(['permission:manage_staff'])->group(function () {
             Route::get('/students/create', [StudentController::class, 'create'])->name('students.create');
             Route::post('/students', [StudentController::class, 'store'])->name('students.store');
             Route::post('/students/import', [StudentController::class, 'import'])->name('students.import');
@@ -143,7 +144,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/students/{student}', [StudentController::class, 'show'])->name('students.show');
 
         // Course Registrations & Academic Management
-        Route::middleware(['role:admin|registrar|dean|hod'])->group(function () {
+        Route::middleware(['permission:manage_academic_sessions'])->group(function () {
             Route::get('/courses/{course}/registrations', [CourseRegistrationController::class, 'index'])->name('courses.registrations.index');
             Route::get('/courses/{course}/registrations/export', [CourseRegistrationController::class, 'export'])->name('courses.registrations.export');
 
@@ -151,19 +152,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 
         // Staff Course Management (Teaching)
-        Route::middleware(['role:admin|lecturer|course_coordinator'])->prefix('teaching')->name('teaching.')->group(function () {
+        Route::middleware(['permission:view_results'])->prefix('teaching')->name('teaching.')->group(function () {
             Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
             Route::get('/courses/{course}', [CourseController::class, 'show'])->name('courses.show');
         });
 
         // Finance & Payments
-        Route::middleware(['role:admin|bursar|finance_officer|finance_clerk'])->group(function () {
+        Route::middleware(['permission:view_payments'])->group(function () {
             Route::get('/payments', [\App\Http\Controllers\Admin\PaymentController::class, 'index'])->name('payments.index');
             Route::get('/payments/{payment}', [\App\Http\Controllers\Admin\PaymentController::class, 'show'])->name('payments.show');
             Route::get('/finance', [\App\Http\Controllers\Admin\FinanceController::class, 'index'])->name('finance.index');
 
             // Restricted Finance Actions
-            Route::middleware(['role:admin|bursar|finance_officer'])->group(function () {
+            Route::middleware(['permission:verify_payments'])->group(function () {
                 Route::post('/finance/fee-types', [\App\Http\Controllers\Admin\FinanceController::class, 'storeFeeType'])->name('finance.fee_types.store');
                 Route::put('/finance/fee-types/{feeType}', [\App\Http\Controllers\Admin\FinanceController::class, 'updateFeeType'])->name('finance.fee_types.update');
                 Route::post('/finance/configurations', [\App\Http\Controllers\Admin\FinanceController::class, 'storeFeeConfiguration'])->name('finance.configurations.store');
@@ -175,14 +176,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     ->names('scholarships');
             });
 
-            Route::middleware(['role:admin|bursar'])->group(function () {
+            Route::middleware(['permission:manage_payments'])->group(function () {
                 Route::delete('/finance/fee-types/{feeType}', [\App\Http\Controllers\Admin\FinanceController::class, 'destroyFeeType'])->name('finance.fee_types.destroy');
                 Route::delete('/finance/configurations/{config}', [\App\Http\Controllers\Admin\FinanceController::class, 'destroyFeeConfiguration'])->name('finance.configurations.destroy');
             });
         });
 
         // General Academics & Sessions
-        Route::middleware(['role:admin|registrar|dean|hod'])->group(function () {
+        Route::middleware(['permission:manage_academic_sessions'])->group(function () {
             Route::get('/academics', [\App\Http\Controllers\Admin\AcademicController::class, 'index'])->name('academics.index');
             Route::post('/academics/store', [\App\Http\Controllers\Admin\AcademicController::class, 'store'])->name('academics.store');
             Route::post('/academics/update', [\App\Http\Controllers\Admin\AcademicController::class, 'update'])->name('academics.update');
@@ -215,7 +216,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('hostels/fees/{fee}', [\App\Http\Controllers\Admin\HostelFeeController::class, 'destroy'])->name('hostels.fees.destroy');
 
             // Restricted Session Management
-            Route::middleware(['role:admin|registrar'])->group(function () {
+            Route::middleware(['permission:manage_academic_sessions'])->group(function () {
                 Route::post('/sessions', [SessionController::class, 'store'])->name('sessions.store');
                 Route::put('/sessions/{session}', [SessionController::class, 'update'])->name('sessions.update');
                 Route::put('/sessions/{session}/settings', [SessionController::class, 'updateSettings'])->name('sessions.settings');
@@ -229,8 +230,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 
         // System Settings & RBAC Management
-        Route::middleware(['role:admin'])->group(function () {
+        Route::middleware(['permission:manage_system_settings'])->group(function () {
             Route::get('/settings', [\App\Http\Controllers\Admin\SystemSettingsController::class, 'index'])->name('settings.index');
+            Route::post('/settings/update', [\App\Http\Controllers\Admin\SystemSettingsController::class, 'updateSetting'])->name('settings.update');
 
             Route::get('/settings/roles', [\App\Http\Controllers\Admin\RoleController::class, 'index'])->name('settings.roles.index');
             Route::get('/settings/roles/{role}/edit', [\App\Http\Controllers\Admin\RoleController::class, 'edit'])->name('settings.roles.edit');
