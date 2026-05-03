@@ -296,7 +296,7 @@ class DashboardController extends Controller
             }
 
             return true;
-        })->values()->all();
+        })->values()->all() : [];
 
         // High Intensity Admissions Stats
         $admissionsFunnel = [
