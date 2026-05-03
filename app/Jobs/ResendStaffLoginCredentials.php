@@ -19,9 +19,12 @@ class ResendStaffLoginCredentials implements ShouldQueue
 
     public function handle(): void
     {
-        $staffMembers = \App\Models\User::role('staff')->get();
+        $staffProfiles = \App\Models\Staff::with('user')->get();
 
-        foreach ($staffMembers as $user) {
+        foreach ($staffProfiles as $staff) {
+            $user = $staff->user;
+            if (!$user) continue;
+
             $password = \Illuminate\Support\Str::random(10);
             $user->update([
                 'password' => \Illuminate\Support\Facades\Hash::make($password)
