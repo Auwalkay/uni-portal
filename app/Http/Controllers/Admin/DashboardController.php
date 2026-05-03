@@ -115,7 +115,7 @@ class DashboardController extends Controller
 
         // - New Registrations
         $registrations = Student::where('admitted_session_id', $sessionId)
-            ->with('user')
+            ->with(['user', 'department'])
             ->latest('created_at')
             ->take(5)
             ->get()
@@ -123,16 +123,35 @@ class DashboardController extends Controller
                 'id' => $std->id,
                 'type' => 'student',
                 'title' => 'New Student',
-                'description' => "{$std->user->name} joined ".($std->department ?? 'General'),
+                'description' => "{$std->user->name} joined " . ($std->department->name ?? 'General'),
                 'time_ago' => $std->created_at->diffForHumans(),
                 'timestamp' => $std->created_at,
                 'icon' => 'UserPlus',
+                'department_id' => $std->department_id,
+            ]);
+
+        // - Recent Results
+        $results = CourseRegistration::where('session_id', $sessionId)
+            ->whereNotNull('score')
+            ->with(['student.user', 'course'])
+            ->latest('updated_at')
+            ->take(5)
+            ->get()
+            ->map(fn ($reg) => [
+                'id' => $reg->id,
+                'type' => 'result',
+                'title' => 'Result Entered',
+                'description' => "Grade for {$reg->student->user->name} in {$reg->course->code}",
+                'time_ago' => $reg->updated_at->diffForHumans(),
+                'timestamp' => $reg->updated_at,
+                'icon' => 'FileText',
+                'course_id' => $reg->course_id,
             ]);
 
         // Merge and Sort
-        $recentActivity = $payments->concat($registrations)
+        $recentActivity = $payments->concat($registrations)->concat($results)
             ->sortByDesc('timestamp')
-            ->take(6)
+            ->take(8)
             ->values();
 
         // 5. Chart Data
@@ -235,17 +254,45 @@ class DashboardController extends Controller
 
         // 6. Access Control Filtering
         $user = $request->user();
-        $canViewFinance = $user->hasAnyPermission(['manage_payments', 'verify_payments', 'view_payments']) || $user->hasRole('admin');
-        $canViewAdmissions = $user->hasAnyPermission(['admit_students', 'review_applications', 'view_applications']) || $user->hasRole('admin');
-        $canViewResults = $user->hasAnyPermission(['manage_results', 'approve_results', 'view_results', 'manage_courses']) || $user->hasRole('admin');
+        $canViewFinance = $user->can('view_revenue_stats');
+        $canViewAdmissions = $user->can('view_admission_stats');
+        $canViewResults = $user->can('view_academic_stats');
+        $canViewStaff = $user->can('manage_staff');
+        $canViewSettings = $user->can('manage_system_settings');
+        $canViewGlobalAnalytics = $user->can('view_global_analytics');
+        $canViewActivity = $user->can('view_recent_activities');
+        $canViewSystemStatus = $user->can('view_system_status');
 
         // Filter Recent Activity
-        $recentActivity = $recentActivity->filter(function ($item) use ($canViewFinance, $canViewAdmissions, $canViewResults) {
+        $recentActivity = $canViewActivity ? $recentActivity->filter(function ($item) use ($user, $canViewFinance, $canViewAdmissions, $canViewResults) {
+            // Finance Filter
             if ($item['type'] === 'payment') {
                 return $canViewFinance;
             }
+
+            // Student Filter (Restrict by department for non-admins)
             if ($item['type'] === 'student') {
-                return $canViewAdmissions || $canViewResults;
+                if (!$canViewAdmissions && !$canViewResults) return false;
+                
+                if (!$user->can('manage_users')) { // Not a super admin/registrar
+                    $staff = $user->staff;
+                    if ($staff && $staff->department_id && isset($item['department_id'])) {
+                        return $staff->department_id === $item['department_id'];
+                    }
+                }
+                return true;
+            }
+
+            // Result Filter (Restrict by allocation for non-admins)
+            if ($item['type'] === 'result') {
+                if (!$canViewResults) return false;
+
+                if (!$user->can('manage_results')) {
+                    return \App\Models\CourseAllocation::where('course_id', $item['course_id'])
+                        ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
+                        ->exists();
+                }
+                return true;
             }
 
             return true;
@@ -295,21 +342,21 @@ class DashboardController extends Controller
 
         // Stats Object with sensitivity filtering
         $dashboardStats = [
-            'total_students' => $canViewResults ? $totalStudents : null,
-            'fresh_students' => $canViewResults ? $freshStudents : null,
+            'total_students' => $canViewGlobalAnalytics ? $totalStudents : null,
+            'fresh_students' => $canViewGlobalAnalytics ? $freshStudents : null,
             'applications' => $canViewAdmissions ? $applicationsCount : null,
             'revenue' => $canViewFinance ? $revenue : null,
             'active_courses' => $canViewResults ? $activeCoursesCount : null,
             'revenue_growth' => $canViewFinance ? round($revenueGrowth, 1) : null,
-            'student_growth' => $canViewResults ? round($studentGrowth, 1) : null,
+            'student_growth' => $canViewGlobalAnalytics ? round($studentGrowth, 1) : null,
             'outstanding_fees' => $canViewFinance ? $outstandingFees : null,
-            'registration_compliance' => $canViewResults ? $registrationCompliance : null,
-            'gender_distribution' => $canViewResults ? ['male' => $malePercentage, 'female' => $femalePercentage] : null,
-            'structural' => $structuralStats,
+            'registration_compliance' => $canViewGlobalAnalytics ? $registrationCompliance : null,
+            'gender_distribution' => $canViewGlobalAnalytics ? ['male' => $malePercentage, 'female' => $femalePercentage] : null,
+            'structural' => $canViewGlobalAnalytics ? $structuralStats : null,
             'total_outflow' => $canViewFinance ? (float) Expense::where('status', 'approved')->sum('amount') + (float) Payroll::where('status', 'paid')->sum('total_amount') : null,
             'net_cash_flow' => $canViewFinance ? ((float) Invoice::where('status', 'paid')->sum('amount')) - ((float) Expense::where('status', 'approved')->sum('amount') + (float) Payroll::where('status', 'paid')->sum('total_amount')) : null,
             'admissions_funnel' => $canViewAdmissions ? $admissionsFunnel : null,
-            'active_students' => Student::count(),
+            'active_students' => $canViewGlobalAnalytics ? Student::count() : null,
         ];
 
         // 7. Determine Primary Role for UI Layout
@@ -359,6 +406,13 @@ class DashboardController extends Controller
                 })->count(),
             ];
         }
+        
+        // 9. Overwrite stats for Lecturers/Allocated Staff (Strictly their own data)
+        if (!$canViewGlobalAnalytics && isset($lecturerStats)) {
+            $dashboardStats['total_students'] = $lecturerStats['total_students'];
+            $dashboardStats['active_courses'] = $lecturerStats['total_courses'];
+            $dashboardStats['active_students'] = $lecturerStats['total_students'];
+        }
 
         return Inertia::render('Admin/Dashboard', [
             'currentSessionName' => $selectedSession->name,
@@ -371,13 +425,21 @@ class DashboardController extends Controller
                 'revenue' => $canViewFinance ? $revenueChart : ['labels' => [], 'data' => []],
                 'financial_trend' => $canViewFinance ? $combinedFinancialChart : ['labels' => [], 'data' => [], 'inflow' => [], 'outflow' => []],
                 'expense_categories' => $canViewFinance ? $expenseCategoryChart : ['labels' => [], 'data' => []],
-                'faculty' => $canViewResults ? $facultyChart : ['labels' => [], 'data' => []],
-                'level' => $canViewResults ? $levelChart : ['labels' => [], 'data' => []],
-                'program' => $canViewResults ? $programChart : ['labels' => [], 'data' => []],
-                'staff_department' => $canViewResults ? $staffDeptChart : ['labels' => [], 'data' => []],
+                'faculty' => $canViewGlobalAnalytics ? $facultyChart : ['labels' => [], 'data' => []],
+                'level' => $canViewGlobalAnalytics ? $levelChart : ['labels' => [], 'data' => []],
+                'program' => $canViewGlobalAnalytics ? $programChart : ['labels' => [], 'data' => []],
+                'staff_department' => $canViewGlobalAnalytics ? $staffDeptChart : ['labels' => [], 'data' => []],
             ],
             'myTimetable' => $myTimetable,
             'userRole' => $primaryRole,
+            'can' => [
+                'manage_students' => $user->can('manage_staff'), // In this system registrar/admin manages students
+                'manage_finance' => $canViewFinance,
+                'manage_results' => $user->can('manage_results'),
+                'manage_settings' => $user->can('manage_system_settings'),
+                'view_global_analytics' => $canViewGlobalAnalytics,
+                'view_system_status' => $canViewSystemStatus,
+            ],
         ]);
     }
 }

@@ -95,6 +95,14 @@ const props = defineProps<{
         classes_today: number;
     } | null;
     userRole: string;
+    can: {
+        manage_students: boolean;
+        manage_finance: boolean;
+        manage_results: boolean;
+        manage_settings: boolean;
+        view_global_analytics: boolean;
+        view_system_status: boolean;
+    };
  }>();
 
 const user = props.auth?.user;
@@ -319,7 +327,7 @@ const staffChartData = {
                                 </SelectItem>
                             </SelectContent>
                         </Select>
-                         <p class="text-[10px] text-white/50 mt-3 flex items-center gap-1.5 font-mono">
+                         <p v-if="can.view_system_status" class="text-[10px] text-white/50 mt-3 flex items-center gap-1.5 font-mono">
                             <Activity class="w-3 h-3" /> System Status: Optimal Performance
                         </p>
                     </div>
@@ -513,7 +521,7 @@ const staffChartData = {
             <!-- Secondary Insights Section (Pulse) -->
              <div class="grid md:grid-cols-2 gap-6" :style="{ order: userRole === 'admin' ? 3 : 5 }">
                 <!-- Institutional Structure -->
-                <Card class="border-0 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+                <Card v-if="stats.structural" class="border-0 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
                     <CardHeader class="border-b bg-slate-50/50 dark:bg-slate-800/50">
                         <CardTitle class="text-lg flex items-center gap-2">
                              <Building2 class="w-5 h-5 text-indigo-500" /> University Infrastructure
@@ -589,7 +597,7 @@ const staffChartData = {
              </div>
 
             <!-- Analytics Hub -->
-            <div class="space-y-6" :style="{ order: 8 }">
+            <div v-if="userRole !== 'academic' && (charts.faculty.labels.length > 0 || charts.financial_trend.labels.length > 0)" class="space-y-6" :style="{ order: 8 }">
                 <div class="flex items-center justify-between border-b pb-2">
                      <h2 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-3">
                         <div class="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600">
@@ -633,7 +641,7 @@ const staffChartData = {
                 </div>
 
                  <div class="grid md:grid-cols-3 gap-6">
-                    <Card class="md:col-span-1 border-0 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+                    <Card v-if="charts.faculty.labels.length > 0" class="md:col-span-1 border-0 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
                         <CardHeader class="pb-2">
                             <CardTitle class="text-md">Faculty Distribution</CardTitle>
                         </CardHeader>
@@ -642,7 +650,7 @@ const staffChartData = {
                         </CardContent>
                     </Card>
 
-                    <Card class="md:col-span-1 border-0 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+                    <Card v-if="charts.level.labels.length > 0" class="md:col-span-1 border-0 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
                         <CardHeader class="pb-2">
                              <CardTitle class="text-md">Enrollment by Level</CardTitle>
                         </CardHeader>
@@ -651,7 +659,7 @@ const staffChartData = {
                         </CardContent>
                     </Card>
 
-                    <Card class="md:col-span-1 border-0 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+                    <Card v-if="charts.program.labels.length > 0" class="md:col-span-1 border-0 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
                         <CardHeader class="pb-2">
                              <CardTitle class="text-md">Top Programs</CardTitle>
                         </CardHeader>
@@ -947,7 +955,7 @@ const staffChartData = {
                             <CardTitle class="text-lg relative z-10">Quick Actions</CardTitle>
                         </CardHeader>
                         <CardContent class="grid gap-3 relative z-10">
-                             <Button v-if="stats.total_students !== null" variant="secondary" class="w-full justify-start h-auto py-3 bg-white/10 hover:bg-white/20 text-white border-0" as-child>
+                             <Button v-if="can.manage_students" variant="secondary" class="w-full justify-start h-auto py-3 bg-white/10 hover:bg-white/20 text-white border-0" as-child>
                                 <a :href="route('admin.students.create')" class="flex items-center">
                                     <div class="p-2 rounded bg-indigo-500/30 mr-3">
                                         <UserPlus class="h-4 w-4" />
@@ -959,7 +967,7 @@ const staffChartData = {
                                 </a>
                             </Button>
                             
-                            <Button v-if="stats.revenue !== null" variant="secondary" class="w-full justify-start h-auto py-3 bg-white/10 hover:bg-white/20 text-white border-0" as-child>
+                            <Button v-if="can.manage_finance" variant="secondary" class="w-full justify-start h-auto py-3 bg-white/10 hover:bg-white/20 text-white border-0" as-child>
                                 <a :href="route('admin.finance.index')" class="flex items-center">
                                     <div class="p-2 rounded bg-emerald-500/30 mr-3">
                                         <CreditCard class="h-4 w-4" />
@@ -970,10 +978,22 @@ const staffChartData = {
                                     </div>
                                 </a>
                             </Button>
+
+                            <Button v-if="can.manage_results" variant="secondary" class="w-full justify-start h-auto py-3 bg-white/10 hover:bg-white/20 text-white border-0" as-child>
+                                <a :href="route('admin.results.index')" class="flex items-center">
+                                    <div class="p-2 rounded bg-violet-500/30 mr-3">
+                                        <FileText class="h-4 w-4" />
+                                    </div>
+                                    <div class="text-left">
+                                        <div class="font-medium text-sm">Manage Results</div>
+                                        <div class="text-[10px] opacity-70">Enter student grades</div>
+                                    </div>
+                                </a>
+                            </Button>
                         </CardContent>
                     </Card>
 
-                    <Card class="border-l-4 border-l-amber-500">
+                    <Card v-if="can.view_system_status" class="border-l-4 border-l-amber-500">
                         <CardHeader class="pb-2">
                             <CardTitle class="text-sm font-medium text-muted-foreground uppercase tracking-wider">System Health</CardTitle>
                         </CardHeader>

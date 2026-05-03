@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
-Route::middleware(['auth', 'verified', 'role:admin|registrar|bursar|finance_officer|receptionist'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->prefix('admin')->name('admin.')->group(function () {
     Route::prefix('finance')->name('finance.')->group(function () {
         Route::get('dashboard', [FinanceController::class, 'dashboard'])->name('dashboard');
         Route::get('/', [FinanceController::class, 'index'])->name('index');
@@ -58,10 +58,11 @@ Route::middleware(['auth', 'verified', 'role:admin|registrar|bursar|finance_offi
     Route::resource('invoices', InvoiceController::class)->only(['index', 'show', 'create', 'store']);
     Route::post('invoices/{invoice}/mark-as-paid', [InvoiceController::class, 'markAsPaid'])->name('invoices.mark-as-paid');
     Route::post('payments/{payment}/verify', [InvoiceController::class, 'verifyPayment'])->name('payments.verify');
+    Route::resource('designations', \App\Http\Controllers\Admin\DesignationController::class)->except(['create', 'edit', 'show']);
 });
 
 // Staff Self-Service Routes
-Route::middleware(['auth', 'verified', 'role:staff'])->prefix('staff')->name('staff.')->group(function () {
+Route::middleware(['auth', 'verified', 'permission:access_staff_portal'])->prefix('staff')->name('staff.')->group(function () {
     Route::get('payslips', [StaffFinanceController::class, 'index'])->name('payslips.index');
     Route::get('payslips/{payrollItem}/download', [StaffFinanceController::class, 'download'])->name('payslips.download');
 });
@@ -75,15 +76,15 @@ Route::get('/', function () {
 Route::get('dashboard', function () {
     $user = auth()->user();
 
-    if ($user->hasAnyRole(['admin', 'registrar', 'dean', 'hod', 'course_coordinator', 'lecturer', 'admissions_manager', 'admissions_officer', 'admissions_clerk', 'bursar', 'finance_officer', 'finance_clerk', 'receptionist'])) {
+    if ($user->can('access_admin_dashboard')) {
         return redirect()->route('admin.dashboard');
     }
 
-    if ($user->hasRole('student')) {
+    if ($user->can('access_student_portal')) {
         return redirect()->route('student.dashboard');
     }
 
-    if ($user->hasRole('applicant')) {
+    if ($user->can('access_applicant_portal')) {
         return redirect()->route('applicant.dashboard');
     }
 

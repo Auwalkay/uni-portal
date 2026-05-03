@@ -36,8 +36,17 @@ class ResultController extends Controller
         $selectedLevel = $request->input('level');
         $hasRegistrations = $request->boolean('has_registrations');
 
+        $user = auth()->user();
         $courses = Course::query()
             ->with(['department', 'program'])
+            ->when(!$user->can('manage_results'), function ($query) use ($user, $selectedSessionId) {
+                $query->whereHas('allocations', function ($q) use ($user, $selectedSessionId) {
+                    $q->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
+                    if ($selectedSessionId) {
+                        $q->where('session_id', $selectedSessionId);
+                    }
+                });
+            })
             ->when($selectedDepartmentId, function ($query, $deptId) {
                 $query->where('department_id', $deptId);
             })
@@ -61,6 +70,12 @@ class ResultController extends Controller
                     $query->where('session_id', $selectedSessionId);
                 }
             ])
+            ->withCount([
+                'registrations as published_count' => function ($query) use ($selectedSessionId) {
+                    $query->where('session_id', $selectedSessionId)
+                        ->where('is_published', true);
+                }
+            ])
             ->paginate(20)
             ->withQueryString();
 
@@ -74,12 +89,46 @@ class ResultController extends Controller
                 'department_id' => $selectedDepartmentId,
                 'level' => $selectedLevel,
                 'has_registrations' => $hasRegistrations,
+            ],
+            'can' => [
+                'publish_results' => $user->can('publish_results') || $user->hasRole('admin'),
             ]
         ]);
     }
 
+    public function publish(Request $request, Course $course)
+    {
+        $user = auth()->user();
+        if (!$user->can('publish_results') && !$user->hasRole('admin')) {
+            abort(403, 'You do not have permission to publish results.');
+        }
+
+        $request->validate([
+            'session_id' => 'required|exists:academic_sessions,id',
+            'is_published' => 'required|boolean'
+        ]);
+
+        CourseRegistration::where('course_id', $course->id)
+            ->where('session_id', $request->session_id)
+            ->update(['is_published' => $request->is_published]);
+
+        $status = $request->is_published ? 'published' : 'unpublished';
+        return back()->with('success', "Results for {$course->code} have been {$status}.");
+    }
+
     public function edit(Course $course, Request $request)
     {
+        $user = auth()->user();
+        if (!$user->can('manage_results')) {
+            $allocated = \App\Models\CourseAllocation::where('course_id', $course->id)
+                ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
+                ->exists();
+            
+            if (!$allocated) {
+                abort(403, 'You are not allocated to this course.');
+            }
+        }
+
         // Allow passing session_id, default to current
         $sessionId = $request->input('session_id');
         if ($sessionId) {
@@ -103,6 +152,16 @@ class ResultController extends Controller
 
     public function update(Request $request, Course $course)
     {
+        $user = auth()->user();
+        if (!$user->can('manage_results')) {
+            $allocated = \App\Models\CourseAllocation::where('course_id', $course->id)
+                ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
+                ->exists();
+            
+            if (!$allocated) {
+                abort(403, 'You are not allocated to this course.');
+            }
+        }
         $request->validate([
             'scores' => 'required|array',
             'scores.*.id' => 'required|exists:course_registrations,id',
@@ -137,6 +196,16 @@ class ResultController extends Controller
 
     public function upload(Request $request, Course $course)
     {
+        $user = auth()->user();
+        if (!$user->can('manage_results')) {
+            $allocated = \App\Models\CourseAllocation::where('course_id', $course->id)
+                ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
+                ->exists();
+            
+            if (!$allocated) {
+                abort(403, 'You are not allocated to this course.');
+            }
+        }
         $request->validate([
             'file' => 'required|mimes:xlsx,xls,csv',
             'session_id' => 'required|exists:academic_sessions,id'

@@ -17,35 +17,19 @@ use Illuminate\Validation\Rule;
 use App\Imports\StaffImport;
 use App\Mail\StaffAccountCreated;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Models\Designation;
+use Illuminate\Support\Facades\Cache;
 
 class StaffController extends Controller
 {
     private function getDesignations(): array
     {
-        return [
-            'Professor',
-            'Associate Professor',
-            'Senior Lecturer',
-            'Lecturer I',
-            'Lecturer II',
-            'Assistant Lecturer',
-            'Graduate Assistant',
-            'Technologist',
-            'Senior Technologist',
-            'Administrative Officer',
-            'Assistant Registrar',
-            'Senior Assistant Registrar',
-            'Principal Assistant Registrar',
-            'Deputy Registrar',
-            'Registrar',
-            'Bursar',
-            'Librarian',
-            'Medical Officer',
-            'Coach',
-            'Porter',
-            'Driver',
-            'Security Officer',
-        ];
+        return Cache::remember('staff_designations_list', 3600, function () {
+            return Designation::where('is_active', true)
+                ->orderBy('name')
+                ->pluck('name')
+                ->toArray();
+        });
     }
 
     /**
@@ -94,7 +78,7 @@ class StaffController extends Controller
         return Inertia::render('Admin/Staff/Index', [
             'staff' => $staff,
             'filters' => $request->only(['search', 'role_id', 'faculty_id', 'department_id']),
-            'faculties' => Faculty::with('departments:id,name,faculty_id')->get(['id', 'name']),
+            'faculties' => Cache::remember('faculties_with_departments', 86400, fn() => Faculty::with('departments:id,name,faculty_id')->get(['id', 'name'])),
             'roles' => \App\Models\Role::whereNotIn('name', ['admin', 'student', 'applicant', 'staff'])->get(['id', 'name']),
             'stats' => [
                 'total' => User::role('staff')->count(),
@@ -116,7 +100,7 @@ class StaffController extends Controller
     public function create()
     {
         return Inertia::render('Admin/Staff/Create', [
-            'faculties' => Faculty::with('departments')->get(),
+            'faculties' => Cache::remember('faculties_with_departments_full', 86400, fn() => Faculty::with('departments')->get()),
             'designations' => $this->getDesignations(),
             'roles' => Role::whereNotIn('name', ['admin', 'student', 'applicant', 'staff'])->get(['id', 'name']),
         ]);
@@ -256,7 +240,7 @@ class StaffController extends Controller
 
         return Inertia::render('Admin/Staff/Edit', [
             'staff' => $staff,
-            'faculties' => Faculty::with('departments')->get(),
+            'faculties' => Cache::remember('faculties_with_departments_full', 86400, fn() => Faculty::with('departments')->get()),
             'designations' => $this->getDesignations(),
         ]);
     }
