@@ -222,6 +222,7 @@ const submit = () => {
                                 </Select>
                                 <p v-if="form.errors.designation" class="text-sm text-red-500 font-medium">{{ form.errors.designation }}</p>
                             </div>
+                        </div>
 
                         <div class="flex items-center space-x-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
                             <Switch id="is_academic" v-model:checked="form.is_academic" />
