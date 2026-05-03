@@ -198,8 +198,10 @@ const getStatusClass = (status: string) => {
                                     </DialogContent>
                                 </Dialog>
 
-                                <Button variant="default" size="sm">
-                                    <Edit class="w-4 h-4 mr-2" /> Edit Profile
+                                <Button variant="default" size="sm" as-child>
+                                    <Link :href="route('admin.students.edit', student.id)">
+                                        <Edit class="w-4 h-4 mr-2" /> Edit Profile
+                                    </Link>
                                 </Button>
                             </div>
                          </div>

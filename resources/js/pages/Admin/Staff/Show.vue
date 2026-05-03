@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import AdminLayout from '@/layouts/AdminLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { 
     User, Mail, Building2, Briefcase, GraduationCap, Shield, ArrowLeft, 
     Calendar, Pencil, ShieldCheck, UserCircle, Building, Hash, BookOpen, 
-    BarChart3, Clock, AlertCircle, CalendarClock, MapPin, Download
+    BarChart3, Clock, AlertCircle, CalendarClock, MapPin, Download, RefreshCw
 } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -90,6 +90,12 @@ const breadcrumbs = [
     { title: 'Staff Management', href: '/admin/staff' },
     { title: 'Staff Profile', href: '#' }
 ];
+
+const resetPassword = () => {
+    if (confirm('Are you sure you want to reset this staff member\'s password? A new random password will be generated and emailed to them immediately.')) {
+        router.post(route('admin.staff.reset_password', props.staff.id));
+    }
+};
 </script>
 
 <template>
@@ -134,6 +140,9 @@ const breadcrumbs = [
                             </div>
                             
                             <div class="flex gap-2">
+                                <Button variant="outline" type="button" @click="resetPassword" class="bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200">
+                                    <RefreshCw class="w-4 h-4 mr-2" /> Reset Password
+                                </Button>
                                 <Button variant="outline" as-child class="md:text-slate-700">
                                     <Link :href="route('admin.staff.edit', staff.id)">
                                         <Pencil class="w-4 h-4 mr-2" /> Edit Profile

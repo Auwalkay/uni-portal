@@ -3,7 +3,7 @@ import { Head, Link } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import StudentLayout from '@/layouts/StudentLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard, Calendar, CalendarClock, MapPin } from 'lucide-vue-next';
+import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard, Calendar, CalendarClock, MapPin, FileText } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';

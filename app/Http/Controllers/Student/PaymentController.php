@@ -181,7 +181,7 @@ class PaymentController extends Controller
     public function createSchoolFeeInvoice()
     {
         $user = Auth::user();
-        $student = \App\Models\Student::with('scholarship')->where('user_id', $user->id)->firstOrFail();
+        $student = \App\Models\Student::with(['scholarship', 'admittedSession'])->where('user_id', $user->id)->firstOrFail();
 
         // Check for pending SCHOOL FEE invoice
         $pendingInvoice = Invoice::where('user_id', $user->id)
@@ -193,69 +193,20 @@ class PaymentController extends Controller
             return redirect()->route('student.payments.index')->with('info', 'You already have a pending invoice.');
         }
 
-        // Get current session
+        // Get current system session
         $currentSession = \App\Models\Session::current();
         if (!$currentSession) {
             return back()->with('error', 'No active academic session found.');
         }
 
-        // Resolve IDs for Student Fields (assuming stored as strings or potential future IDs)
-        // We try to find matching Faculty, Dept, Program by Name if UUID not found
-        // Since we haven't migrated Student to use UUIDs yet, we do best effort lookup.
-        $facultyId = null;
-        if ($student->faculty) {
-            $faculty = \App\Models\Faculty::where('name', $student->faculty)->orWhere('id', $student->faculty)->first();
-            $facultyId = $faculty?->id;
-        }
+        // Determine which session to use for fee lookup based on policy
+        // If policy is admission_session, we use their original session fees.
+        $targetSessionId = ($student->fee_policy === 'admission_session' && $student->admitted_session_id) 
+            ? $student->admitted_session_id 
+            : $currentSession->id;
 
-        $departmentId = null;
-        if ($student->department) {
-            $department = \App\Models\Department::where('name', $student->department)->orWhere('id', $student->department)->first();
-            $departmentId = $department?->id;
-        }
-
-        $programId = null;
-        if ($student->program) {
-            $program = \App\Models\Programme::where('name', $student->program)->orWhere('id', $student->program)->first();
-            $programId = $program?->id;
-        }
-
-        // Fetch Applicable Fees
-        $configs = \App\Models\FeeConfiguration::where('session_id', $currentSession->id)
-            ->where(function ($query) use ($facultyId, $departmentId, $programId) {
-                // Global Fees
-                $query->where(function ($q) {
-                    $q->whereNull('faculty_id')
-                        ->whereNull('department_id')
-                        ->whereNull('program_id');
-                });
-
-                // Faculty Fees
-                if ($facultyId) {
-                    $query->orWhere(function ($q) use ($facultyId) {
-                        $q->where('faculty_id', $facultyId)
-                            ->whereNull('department_id')
-                            ->whereNull('program_id');
-                    });
-                }
-
-                // Department Fees
-                if ($departmentId) {
-                    $query->orWhere(function ($q) use ($departmentId) {
-                        $q->where('department_id', $departmentId)
-                            ->whereNull('program_id');
-                    });
-                }
-
-                // Program Fees
-                if ($programId) {
-                    $query->orWhere(function ($q) use ($programId) {
-                        $q->where('program_id', $programId);
-                    });
-                }
-            })
-            // Filter by Level (Exact match or Null/Global level?)
-            // Usually level fees are specific. If level is null, it applies to all levels.
+        // Fetch ALL potentially applicable fees for the target session
+        $allConfigs = \App\Models\FeeConfiguration::where('session_id', $targetSessionId)
             ->where(function ($q) use ($student) {
                 $q->where('level', $student->current_level)
                     ->orWhereNull('level');
@@ -263,17 +214,63 @@ class PaymentController extends Controller
             ->with('feeType')
             ->get();
 
-        if ($configs->isEmpty()) {
-            // Fallback or Error?
-            // If no fees configured, maybe error out to avoid zero-invoices?
-            // Or allow zero invoice?
-            return back()->with('error', 'No fee configuration found for your level/department. Please contact support.');
+        // Specificity Resolver: Group by FeeType and pick the most specific one
+        $resolvedConfigs = collect();
+        $groupedConfigs = $allConfigs->groupBy('fee_type_id');
+
+        foreach ($groupedConfigs as $feeTypeId => $configs) {
+            $resolved = null;
+
+            // 1. Check for Program match
+            if ($student->program_id) {
+                $resolved = $configs->where('program_id', $student->program_id)->first();
+            }
+
+            // 2. Check for Department match
+            if (!$resolved && $student->department_id) {
+                $resolved = $configs->where('department_id', $student->department_id)
+                    ->whereNull('program_id')
+                    ->first();
+            }
+
+            // 3. Check for Faculty match
+            if (!$resolved && $student->faculty_id) {
+                $resolved = $configs->where('faculty_id', $student->faculty_id)
+                    ->whereNull('department_id')
+                    ->whereNull('program_id')
+                    ->first();
+            }
+
+            // 4. Fallback to Global (no faculty/dept/program)
+            if (!$resolved) {
+                $resolved = $configs->whereNull('faculty_id')
+                    ->whereNull('department_id')
+                    ->whereNull('program_id')
+                    ->first();
+            }
+
+            if ($resolved) {
+                $resolvedConfigs->push($resolved);
+            }
         }
 
-        $totalAmount = $configs->sum('amount');
-        $discountAmount = 0;
+        if ($resolvedConfigs->isEmpty()) {
+            return back()->with('error', 'No fee configuration found for your profile. Please contact support.');
+        }
 
-        if ($student->scholarship) {
+        $totalAmount = $resolvedConfigs->sum('amount');
+        
+        // Add Global Admin Charge if enabled
+        $adminChargeEnabled = \App\Models\SystemSetting::get('admin_charge_enabled', true);
+        $adminChargeAmount = \App\Models\SystemSetting::get('admin_charge_amount', 250000);
+        
+        if ($adminChargeEnabled) {
+            $totalAmount += $adminChargeAmount;
+        }
+
+        // Apply Scholarship Discount
+        $discountAmount = 0;
+        if ($student->scholarship && ($student->program?->scholarship_eligible ?? true)) {
             $discountAmount = $totalAmount * ($student->scholarship->percentage / 100);
         }
 
@@ -303,12 +300,22 @@ class PaymentController extends Controller
         ]);
 
         // Create Invoice Items
-        foreach ($configs as $config) {
+        foreach ($resolvedConfigs as $config) {
             \App\Models\InvoiceItem::create([
                 'invoice_id' => $invoice->id,
                 'fee_type_id' => $config->fee_type_id,
                 'description' => $config->feeType->name ?? 'Fee',
                 'amount' => $config->amount,
+            ]);
+        }
+        
+        // Add Admin Charge item
+        if ($adminChargeEnabled) {
+            \App\Models\InvoiceItem::create([
+                'invoice_id' => $invoice->id,
+                'fee_type_id' => null, // Or specific fee type if exists
+                'description' => 'Administrative Charges',
+                'amount' => $adminChargeAmount,
             ]);
         }
 

@@ -12,13 +12,13 @@
         body {
             font-family: 'Helvetica', 'Arial', sans-serif;
             color: #333;
-            line-height: 1.45;
-            /* Reduced line-height */
+            line-height: 1.35;
+            /* Even tighter */
             margin: 0;
             padding: 0;
             background: #fff;
-            font-size: 13px;
-            /* Slightly smaller base font */
+            font-size: 12px;
+            /* Reduced from 13px */
         }
 
         .watermark {
@@ -34,28 +34,29 @@
         }
 
         .container {
-            padding: 1.5cm 2cm 1.5cm 2cm;
-            /* Reduced top/bottom padding */
+            padding: 1.0cm 1.5cm;
+            /* Reduced padding */
             position: relative;
         }
 
         .header {
             text-align: center;
             border-bottom: 2px solid #E31E24;
-            padding-bottom: 15px;
-            margin-bottom: 25px;
-            /* Reduced from 40px */
+            padding-bottom: 8px;
+            /* Reduced */
+            margin-bottom: 15px;
+            /* Reduced */
         }
 
         .logo {
-            width: 70px;
+            width: 60px;
             /* Smaller */
             height: auto;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
         }
 
         .uni-name {
-            font-size: 22px;
+            font-size: 20px;
             /* Smaller */
             font-weight: 700;
             text-transform: uppercase;
@@ -65,16 +66,16 @@
         }
 
         .uni-address {
-            font-size: 10px;
+            font-size: 9px;
+            /* Smaller */
             color: #666;
-            margin-top: 5px;
+            margin-top: 3px;
             text-transform: uppercase;
         }
 
         .meta-table {
             width: 100%;
-            margin-bottom: 20px;
-            /* Reduced */
+            margin-bottom: 15px;
         }
 
         .meta-table td {
@@ -83,7 +84,7 @@
 
         .ref-box {
             text-align: right;
-            font-size: 11px;
+            font-size: 10px;
         }
 
         .ref-label {
@@ -93,63 +94,63 @@
 
         .recipient-box {
             background: #f8f9fa;
-            border-left: 4px solid #E31E24;
-            padding: 10px 15px;
-            /* Reduced */
-            margin-bottom: 20px;
+            border-left: 3px solid #E31E24;
+            padding: 8px 12px;
+            margin-bottom: 10px;
         }
 
         .recipient-name {
             font-weight: bold;
-            font-size: 15px;
-            margin-bottom: 3px;
+            font-size: 14px;
+            margin-bottom: 2px;
         }
 
         .title-banner {
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         .title-text {
             display: inline-block;
             background: #eff6ff;
             color: #E31E24;
-            padding: 8px 25px;
-            /* Reduced */
+            padding: 5px 20px;
             font-weight: bold;
-            font-size: 15px;
+            font-size: 14px;
             border-radius: 50px;
             text-transform: uppercase;
-            letter-spacing: 1px;
         }
 
         .content-body {
-            font-size: 13px;
+            font-size: 12px;
             text-align: justify;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
+        }
+
+        .content-body p {
+            margin-bottom: 8px;
+            /* Tighten paragraph spacing */
+            margin-top: 0;
         }
 
         .admission-details {
             width: 100%;
             border-collapse: collapse;
-            margin: 15px 0;
-            /* Reduced */
-            font-size: 12px;
+            margin: 10px 0;
+            font-size: 11px;
         }
 
         .admission-details th {
             text-align: left;
-            padding: 8px 12px;
-            /* Reduced */
+            padding: 6px 10px;
             background: #f1f5f9;
             color: #475569;
             border-bottom: 1px solid #e2e8f0;
-            width: 35%;
+            width: 30%;
         }
 
         .admission-details td {
-            padding: 8px 12px;
-            /* Reduced */
+            padding: 6px 10px;
             border-bottom: 1px solid #e2e8f0;
             font-weight: 600;
         }
@@ -158,16 +159,15 @@
             background: #fffbeb;
             border: 1px solid #fcd34d;
             color: #92400e;
-            padding: 10px 15px;
-            /* Reduced */
-            font-size: 11px;
+            padding: 8px 12px;
+            font-size: 10px;
             border-radius: 6px;
-            margin-top: 15px;
+            margin-top: 10px;
         }
 
         .footer {
-            margin-top: 40px;
-            /* Reduced significantly from 60px */
+            margin-top: 25px;
+            /* Reduced from 40px */
             display: table;
             width: 100%;
         }
@@ -180,17 +180,17 @@
 
         .signature-line {
             border-bottom: 1px solid #000;
-            width: 180px;
+            width: 150px;
             margin-bottom: 5px;
         }
 
         .registrar-name {
             font-weight: bold;
-            font-size: 13px;
+            font-size: 12px;
         }
 
         .registrar-title {
-            font-size: 11px;
+            font-size: 10px;
             color: #666;
         }
 
@@ -203,13 +203,13 @@
 
         .qr-placeholder {
             display: inline-block;
-            width: 70px;
-            height: 70px;
+            width: 60px;
+            height: 60px;
             background: #f1f5f9;
             border: 1px dashed #cbd5e1;
             padding: 5px;
             text-align: center;
-            font-size: 8px;
+            font-size: 7px;
             color: #94a3b8;
         }
     </style>
@@ -225,7 +225,7 @@
             <img src="{{ public_path('miu-logo.jpeg') }}" class="logo" alt="Logo">
 
             <h1 class="uni-name">Mewar International University Nigeria</h1>
-            <p class="uni-address">Mowe, Ogun State, Nigeria</p>
+            <p class="uni-address">Km21, Kuchikau I, Abuja - Keffi Expy, New Karu, Nasarawa</p>
             <p class="uni-address">www.miu.edu.ng | admissions@miu.edu.ng</p>
         </div>
 
@@ -241,10 +241,10 @@
                 </td>
                 <td>
                     <div class="ref-box">
-                        <div><span class="ref-label">Reference No:</span>
+                        <div><span class="ref-label">Registration Number:</span>
                             {{ $applicant->application_number ?? 'REF-' . rand(1000, 9999) }}</div>
                         <div><span class="ref-label">Date:</span> {{ now()->format('F d, Y') }}</div>
-                        <div><span class="ref-label">Session:</span> 2025/2026</div>
+                        <div><span class="ref-label">Session:</span> {{ $session_name }}</div>
                     </div>
                 </td>
             </tr>
@@ -257,7 +257,7 @@
 
         <!-- Body -->
         <div class="content-body">
-            <p>Dear <strong>{{ $applicant->first_name }}</strong>,</p>
+            <p>Dear <strong>{{ ucwords($applicant->first_name) }}</strong>,</p>
 
             <p>Following your success in the recent screening exercise, I am pleased to inform you that you have been
                 offered provisional admission into <strong>Mewar International University Nigeria</strong> to pursue a
@@ -287,7 +287,39 @@
                 </tr>
             </table>
 
-            <p>This offer is subject to the ratification of your credentials by the Admissions Office. You are required
+            @if(isset($fees) && $fees['total'] > 0)
+                <div
+                    style="margin-top: 10px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc;">
+                    <h3
+                        style="margin-top: 0; color: #1e293b; font-size: 12px; text-transform: uppercase; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px; margin-bottom: 5px;">
+                        Financial Information</h3>
+                    <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 2px 0;">Tuition & Core Fees:</td>
+                            <td style="text-align: right; font-weight: bold;">N{{ number_format($fees['tuition']) }}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 2px 0;">Administrative Charges:</td>
+                            <td style="text-align: right; font-weight: bold;">N{{ number_format($fees['admin_charge']) }}
+                            </td>
+                        </tr>
+                        @if($fees['discount'] > 0)
+                            <tr style="color: #059669;">
+                                <td style="padding: 2px 0;">Scholarship ({{ $fees['scholarship_name'] }}):</td>
+                                <td style="text-align: right; font-weight: bold;">N{{ number_format($fees['discount']) }}</td>
+                            </tr>
+                        @endif
+                        <tr style="font-size: 13px; border-top: 1px solid #cbd5e1;">
+                            <td style="padding: 5px 0; font-weight: bold; color: #1e40af;">Total Net Payable:</td>
+                            <td style="text-align: right; font-weight: bold; color: #1e40af;">
+                                N{{ number_format($fees['total']) }}</td>
+                        </tr>
+                    </table>
+                </div>
+            @endif
+
+            <p style="margin-top: 15px;">This offer is subject to the ratification of your credentials by the Admissions
+                Office. You are required
                 to accept this offer by paying the non-refundable acceptance fee within two (2) weeks of this letter.
             </p>
         </div>

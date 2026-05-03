@@ -37,8 +37,13 @@ const props = defineProps<{
         departments: Array<{
             id: string;
             name: string;
+            units: Array<{
+                id: string;
+                name: string;
+            }>;
         }>;
     }>;
+    nonAcademicDepartments: Array<any>;
     designations: Array<string>;
     roles: Array<{ id: string; name: string }>;
 }>();
@@ -55,6 +60,7 @@ const form = useForm({
     staff_number: '',
     designation: '',
     department_id: '',
+    unit_id: '',
     is_academic: true,
     role_id: '',
 });
@@ -62,13 +68,38 @@ const form = useForm({
 const selectedFacultyId = ref<string>('');
 
 const availableDepartments = computed(() => {
-    if (!selectedFacultyId.value) return [];
-    const faculty = props.faculties.find(f => f.id === selectedFacultyId.value);
-    return faculty ? faculty.departments : [];
+    if (form.is_academic) {
+        if (!selectedFacultyId.value) return [];
+        const faculty = props.faculties.find(f => f.id === selectedFacultyId.value);
+        return faculty ? faculty.departments : [];
+    } else {
+        return props.nonAcademicDepartments;
+    }
+});
+
+const availableUnits = computed(() => {
+    if (!form.department_id) return [];
+    let dept: any;
+    if (form.is_academic) {
+        const faculty = props.faculties.find(f => f.id === selectedFacultyId.value);
+        dept = faculty?.departments.find(d => d.id === form.department_id);
+    } else {
+        dept = props.nonAcademicDepartments.find(d => d.id === form.department_id);
+    }
+    return dept ? dept.units : [];
 });
 
 watch(selectedFacultyId, () => {
     form.department_id = '';
+});
+
+watch(() => form.is_academic, () => {
+    form.department_id = '';
+    selectedFacultyId.value = '';
+});
+
+watch(() => form.department_id, () => {
+    form.unit_id = '';
 });
 
 const formatRoleName = (name: string) => {
@@ -174,7 +205,21 @@ const submit = () => {
                         </CardHeader>
                         <CardContent class="p-6">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div class="space-y-2">
+                                <div class="space-y-4 md:col-span-2 p-4 bg-primary/5 rounded-lg border border-primary/10">
+                                    <div class="flex items-center justify-between">
+                                        <div class="space-y-0.5">
+                                            <Label for="is_academic" class="text-base font-semibold">Academic Position</Label>
+                                            <p class="text-xs text-muted-foreground italic">Toggle on if this staff member is involved in teaching/research.</p>
+                                        </div>
+                                        <Switch 
+                                            id="is_academic" 
+                                            v-model:checked="form.is_academic" 
+                                            class="data-[state=checked]:bg-primary"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div v-if="form.is_academic" class="space-y-2">
                                     <Label class="text-sm font-semibold">Faculty</Label>
                                     <Select v-model="selectedFacultyId">
                                         <SelectTrigger class="bg-white">
@@ -190,7 +235,7 @@ const submit = () => {
 
                                 <div class="space-y-2">
                                     <Label class="text-sm font-semibold">Department</Label>
-                                    <Select v-model="form.department_id" :disabled="!selectedFacultyId">
+                                    <Select v-model="form.department_id" :disabled="form.is_academic && !selectedFacultyId">
                                         <SelectTrigger class="bg-white">
                                             <SelectValue placeholder="Select Department" />
                                         </SelectTrigger>
@@ -203,23 +248,24 @@ const submit = () => {
                                     <p v-if="form.errors.department_id" class="text-xs text-destructive">{{ form.errors.department_id }}</p>
                                 </div>
 
-                                <div class="space-y-4 md:col-span-2 p-4 bg-primary/5 rounded-lg border border-primary/10">
-                                    <div class="flex items-center justify-between">
-                                        <div class="space-y-0.5">
-                                            <Label for="is_academic" class="text-base font-semibold">Academic Position</Label>
-                                            <p class="text-xs text-muted-foreground italic">Toggle on if this staff member is involved in teaching/research.</p>
-                                        </div>
-                                        <Switch 
-                                            id="is_academic" 
-                                            :checked="form.is_academic" 
-                                            @update:checked="(val) => form.is_academic = val"
-                                            class="data-[state=checked]:bg-primary"
-                                        />
-                                    </div>
+                                <div class="space-y-2">
+                                    <Label class="text-sm font-semibold">Unit (Optional)</Label>
+                                    <Select v-model="form.unit_id" :disabled="!form.department_id">
+                                        <SelectTrigger class="bg-white">
+                                            <SelectValue placeholder="Select Unit" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem v-for="unit in availableUnits" :key="unit.id" :value="unit.id">
+                                                {{ unit.name }}
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <p v-if="form.errors.unit_id" class="text-xs text-destructive">{{ form.errors.unit_id }}</p>
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
+
                 </div>
 
                 <!-- Right Column: Roles & Action -->

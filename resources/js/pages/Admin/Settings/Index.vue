@@ -41,6 +41,8 @@ const props = defineProps<{
     },
     settings: {
         matric_format: string;
+        admin_charge_amount: string | number;
+        admin_charge_enabled: boolean;
     }
 }>();
 
@@ -51,6 +53,11 @@ const breadcrumbs = [
 const form = useForm({
     key: 'matric_format',
     value: props.settings.matric_format
+});
+
+const adminChargeForm = useForm({
+    amount: props.settings.admin_charge_amount,
+    enabled: props.settings.admin_charge_enabled
 });
 
 const submitSetting = () => {
@@ -70,8 +77,26 @@ const submitSetting = () => {
     });
 };
 
+const submitAdminCharge = () => {
+    // We'll update both settings
+    const amountPromise = axios.post(route('admin.settings.update'), { key: 'admin_charge_amount', value: adminChargeForm.amount });
+    const enabledPromise = axios.post(route('admin.settings.update'), { key: 'admin_charge_enabled', value: adminChargeForm.enabled });
+    
+    Promise.all([amountPromise, enabledPromise]).then(() => {
+        Swal.fire({
+            icon: 'success',
+            title: 'Updated',
+            text: 'Administrative charge settings updated',
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000
+        });
+    });
+};
+
 const matricPreview = computed(() => {
-    const year = new Date().getFullYear();
+    const year = new Date().getFullYear().toString().slice(-2);
     const random = '1234';
     const sequence = '001';
     const dept = 'SEN';
@@ -144,7 +169,7 @@ const settingsModules = [
 
             <div class="grid gap-6 md:grid-cols-2">
                 <!-- General Configuration Card -->
-                <Card class="md:col-span-2 border-primary/20 bg-primary/5">
+                <Card class="border-primary/20 bg-primary/5">
                     <CardHeader class="flex flex-row items-center gap-4">
                         <div class="bg-primary/10 p-3 rounded-xl text-primary">
                             <Settings2 class="w-6 h-6" />
@@ -155,39 +180,65 @@ const settingsModules = [
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <div class="grid md:grid-cols-2 gap-8">
-                            <div class="space-y-4">
-                                <div class="space-y-2">
-                                    <Label for="matric_format" class="flex items-center gap-2">
-                                        <Hash class="w-4 h-4" />
-                                        Matriculation Number Format
-                                    </Label>
-                                    <Input 
-                                        id="matric_format" 
-                                        v-model="form.value" 
-                                        placeholder="MIU{YEAR}{SEQUENCE}" 
-                                    />
-                                    <p class="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
-                                        Available Placeholders: 
-                                        <span class="text-primary font-mono">{YEAR}</span>, 
-                                        <span class="text-primary font-mono">{RANDOM}</span>,
-                                        <span class="text-primary font-mono">{SEQUENCE}</span>,
-                                        <span class="text-primary font-mono">{DEPT}</span>,
-                                        <span class="text-primary font-mono">{FACULTY}</span>
-                                    </p>
+                        <div class="space-y-4">
+                            <div class="space-y-2">
+                                <Label for="matric_format" class="flex items-center gap-2">
+                                    <Hash class="w-4 h-4" />
+                                    Matriculation Number Format
+                                </Label>
+                                <Input 
+                                    id="matric_format" 
+                                    v-model="form.value" 
+                                    placeholder="MIU{YEAR}{SEQUENCE}" 
+                                />
+                                <div class="bg-white dark:bg-slate-900 border rounded-xl p-3 text-center">
+                                    <p class="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Preview</p>
+                                    <p class="text-xl font-black font-mono tracking-tighter text-primary">{{ matricPreview }}</p>
                                 </div>
-                                <Button @click="submitSetting" :disabled="form.processing">
-                                    {{ form.processing ? 'Saving...' : 'Update Configuration' }}
-                                </Button>
-                            </div>
-                            <div class="bg-white dark:bg-slate-900 border rounded-2xl p-6 flex flex-col justify-center items-center text-center space-y-2">
-                                <p class="text-xs text-muted-foreground uppercase font-bold tracking-widest">Format Preview</p>
-                                <p class="text-3xl font-black font-mono tracking-tighter text-primary">
-                                    {{ matricPreview }}
+                                <p class="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                                    Placeholders: {YEAR}, {RANDOM}, {SEQUENCE}, {DEPT}, {FACULTY}
                                 </p>
-                                <p class="text-[10px] text-muted-foreground">Example generated for the current session</p>
+                            </div>
+                            <Button @click="submitSetting" :disabled="form.processing" class="w-full">
+                                {{ form.processing ? 'Saving...' : 'Update Format' }}
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <!-- Administrative Charges Card -->
+                <Card class="border-indigo-200 bg-indigo-50/30">
+                    <CardHeader class="flex flex-row items-center gap-4">
+                        <div class="bg-indigo-100 p-3 rounded-xl text-indigo-600">
+                            <CreditCard class="w-6 h-6" />
+                        </div>
+                        <div>
+                            <CardTitle>Administrative Charges</CardTitle>
+                            <CardDescription>Global administrative fee applied to school fees.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent class="space-y-6">
+                        <div class="grid gap-4">
+                            <div class="flex items-center justify-between">
+                                <Label for="admin_enabled">Enable Admin Charge</Label>
+                                <Switch 
+                                    id="admin_enabled" 
+                                    v-model:checked="adminChargeForm.enabled" 
+                                />
+                            </div>
+                            <div class="space-y-2">
+                                <Label for="admin_amount">Charge Amount (₦)</Label>
+                                <Input 
+                                    id="admin_amount" 
+                                    type="number" 
+                                    v-model="adminChargeForm.amount" 
+                                    :disabled="!adminChargeForm.enabled"
+                                />
                             </div>
                         </div>
+                        <Button @click="submitAdminCharge" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
+                            Update Financials
+                        </Button>
                     </CardContent>
                 </Card>
 

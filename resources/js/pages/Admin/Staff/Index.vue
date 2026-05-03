@@ -96,6 +96,7 @@ const props = defineProps<{
         name: string; 
         departments: Array<{ id: string; name: string; faculty_id: string }> 
     }>;
+    nonAcademicDepartments: Array<{ id: string; name: string }>;
     roles: Array<{ id: string; name: string }>;
     stats: {
         total: number;
@@ -112,6 +113,7 @@ const selectedDepartment = ref(props.filters.department_id || '');
 
 // Computed departments based on selected faculty
 const filteredDepartments = computed(() => {
+    if (selectedFaculty.value === 'NON_ACADEMIC') return props.nonAcademicDepartments;
     if (!selectedFaculty.value || selectedFaculty.value === 'ALL_FACULTIES') return [];
     const faculty = props.faculties.find(f => String(f.id) === String(selectedFaculty.value));
     return faculty ? faculty.departments : [];
@@ -344,6 +346,7 @@ const breadcrumbs = [
                             </SelectTrigger>
                              <SelectContent>
                                 <SelectItem value="ALL_FACULTIES">All Faculties</SelectItem>
+                                <SelectItem value="NON_ACADEMIC">Non-Academic Departments</SelectItem>
                                 <SelectItem v-for="f in faculties" :key="f.id" :value="String(f.id)">{{ f.name }}</SelectItem>
                             </SelectContent>
                         </Select>
@@ -420,8 +423,11 @@ const breadcrumbs = [
                             </TableCell>
                             <TableCell>
                                 <div class="flex flex-col">
-                                    <span class="text-sm font-medium text-foreground">{{ user.staff?.department?.name || 'Unassigned' }}</span>
-                                    <span class="text-[10px] text-muted-foreground uppercase tracking-widest">{{ user.staff?.department?.faculty?.name || 'N/A' }}</span>
+                                    <span class="text-sm font-medium text-foreground">
+                                        {{ user.staff?.department?.name || 'Unassigned' }}
+                                        <span v-if="user.staff?.unit" class="text-xs text-primary ml-1">[{{ user.staff.unit.name }}]</span>
+                                    </span>
+                                    <span class="text-[10px] text-muted-foreground uppercase tracking-widest">{{ user.staff?.department?.faculty?.name || 'Non-Academic' }}</span>
                                 </div>
                             </TableCell>
                             <TableCell>

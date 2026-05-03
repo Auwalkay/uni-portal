@@ -37,6 +37,7 @@ class Student extends Model
         'next_of_kin_address',
         'next_of_kin_relationship',
         'scholarship_id',
+        'fee_policy',
     ];
 
     protected $casts = [

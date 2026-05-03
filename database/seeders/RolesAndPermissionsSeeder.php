@@ -162,6 +162,21 @@ class RolesAndPermissionsSeeder extends Seeder
         $staff = Role::firstOrCreate(['name' => 'staff']);
         $staff->syncPermissions(['access_staff_portal', 'view_own_payslips']);
 
+        // --- NON-ACADEMIC SPECIFIC ROLES ---
+        $nonAcademicRoles = [
+            'cleaner',
+            'driver',
+            'carpenter',
+            'janitor',
+            'security_officer',
+            'maintenance_worker',
+        ];
+
+        foreach ($nonAcademicRoles as $roleName) {
+            $role = Role::firstOrCreate(['name' => $roleName]);
+            $role->syncPermissions(['access_staff_portal', 'view_own_payslips']);
+        }
+
         $student = Role::firstOrCreate(['name' => 'student']);
         $student->syncPermissions(['access_student_portal']);
 

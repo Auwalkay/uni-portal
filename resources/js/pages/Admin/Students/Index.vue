@@ -417,11 +417,18 @@ const submitImport = () => {
                                 <span v-else class="text-xs text-muted-foreground">-</span>
                             </TableCell>
                             <TableCell class="text-right">
-                                <Button variant="outline" size="sm" as-child>
-                                    <Link :href="route('admin.students.show', student.id)">
-                                        View
-                                    </Link>
-                                </Button>
+                                <div class="flex justify-end gap-2">
+                                    <Button variant="outline" size="sm" as-child>
+                                        <Link :href="route('admin.students.show', student.id)">
+                                            View
+                                        </Link>
+                                    </Button>
+                                    <Button variant="secondary" size="sm" as-child>
+                                        <Link :href="route('admin.students.edit', student.id)">
+                                            Edit
+                                        </Link>
+                                    </Button>
+                                </div>
                             </TableCell>
                         </TableRow>
                          <TableRow v-if="students.data.length === 0">

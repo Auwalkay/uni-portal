@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { Head, useForm, Link } from '@inertiajs/vue3';
-import { ref, computed, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { route } from 'ziggy-js';
 import AdminLayout from '@/layouts/AdminLayout.vue';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     ArrowLeft,
     Save,
-    UserPlus,
     User,
     GraduationCap,
     FileText,
@@ -23,9 +22,9 @@ import {
     Phone,
     Mail,
     Calendar,
-    Briefcase
+    Briefcase,
+    Pencil
 } from 'lucide-vue-next';
-import FileUploader from '@/components/FileUploader.vue';
 
 interface Faculty {
     id: number;
@@ -62,6 +61,7 @@ interface Scholarship {
 }
 
 const props = defineProps<{
+    student: any;
     faculties: Faculty[];
     sessions: Session[];
     states: State[];
@@ -74,59 +74,61 @@ const props = defineProps<{
 const activeTab = ref('personal');
 
 const form = useForm({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone_number: '',
-    gender: '',
-    dob: '',
-    address: '',
-    state_id: '',
-    lga_id: '',
-    next_of_kin_name: '',
-    next_of_kin_phone: '',
-    next_of_kin_relationship: '',
-    faculty_id: '',
-    department_id: '',
-    program_id: '',
-    current_level: '',
-    admitted_session_id: '',
-    entry_mode: '',
-    matriculation_number: '',
-    jamb_registration_number: '',
-    jamb_score: '',
-    previous_institution: '',
+    first_name: props.student.first_name || '',
+    last_name: props.student.last_name || '',
+    email: props.student.user?.email || '',
+    phone_number: props.student.phone_number || '',
+    gender: props.student.gender || '',
+    dob: props.student.dob || '',
+    address: props.student.address || '',
+    state_id: String(props.student.state_id) || '',
+    lga_id: String(props.student.lga_id) || '',
+    next_of_kin_name: props.student.next_of_kin_name || '',
+    next_of_kin_phone: props.student.next_of_kin_phone || '',
+    faculty_id: String(props.student.faculty_id) || '',
+    department_id: String(props.student.department_id) || '',
+    program_id: props.student.program_id || '',
+    current_level: props.student.current_level || '',
+    admitted_session_id: props.student.admitted_session_id || '',
+    entry_mode: props.student.entry_mode || '',
+    matriculation_number: props.student.matriculation_number || '',
+    jamb_registration_number: props.student.jamb_registration_number || '',
+    jamb_score: props.student.jamb_score || '',
+    previous_institution: props.student.previous_institution || '',
     password: '',
-    passport_photo: null as File | null,
-    waec_result: null as File | null,
-    fee_policy: 'admission_session',
-    scholarship_id: '',
+    fee_policy: props.student.fee_policy || 'admission_session',
+    scholarship_id: props.student.scholarship_id || '',
 });
 
 // Dependent Dropdown for Departments
 const filteredDepartments = computed(() => {
     if (!form.faculty_id) return [];
-    console.log('Faculty', form.faculty_id);
-    const faculty = props.faculties.find(f => f.id === form.faculty_id);
+    const faculty = props.faculties.find(f => String(f.id) === form.faculty_id);
     return faculty ? faculty.departments : [];
 });
 
-watch(() => form.faculty_id, () => {
-    form.department_id = '';
-    form.program_id = '';
+watch(() => form.faculty_id, (newVal, oldVal) => {
+    if (oldVal !== undefined && oldVal !== '') {
+        form.department_id = '';
+        form.program_id = '';
+    }
 });
 
-watch(() => form.department_id, () => {
-    form.program_id = '';
+watch(() => form.department_id, (newVal, oldVal) => {
+    if (oldVal !== undefined && oldVal !== '') {
+        form.program_id = '';
+    }
 });
 
-watch(() => form.state_id, () => {
-    form.lga_id = '';
+watch(() => form.state_id, (newVal, oldVal) => {
+    if (oldVal !== undefined && oldVal !== '') {
+        form.lga_id = '';
+    }
 });
 
 // Dependent Dropdown for Programmes
 const filteredProgrammes = computed(() => {
-    console.log('Filtering programmes for dept:', form.department_id);
+    console.log('Editing: Filtering programmes for dept:', form.department_id);
     console.log('Available programmes:', props.programmes.length);
     if (!form.department_id) return [];
     const filtered = props.programmes.filter(p => String(p.department_id) === String(form.department_id));
@@ -137,50 +139,47 @@ const filteredProgrammes = computed(() => {
 // Dependent Dropdown for LGAs
 const filteredLgas = computed(() => {
     if (!form.state_id) return [];
-    const state = props.states.find(s => s.id === Number(form.state_id));
+    const state = props.states.find(s => String(s.id) === form.state_id);
     return state ? state.lgas : [];
 });
 
 const submit = () => {
-    form.post(route('admin.students.store'), {
-        forceFormData: true,
+    form.put(route('admin.students.update', props.student.id), {
         onFinish: () => form.reset('password'),
     });
 };
+
+const breadcrumbs = [
+    { title: 'Student Management', href: route('admin.students.index') },
+    { title: 'Edit Student', href: '#' }
+];
 </script>
 
 <template>
-    <Head title="Add New Student" />
-    <AdminLayout>
+    <Head :title="`Edit ${student.user.name}`" />
+    <AdminLayout :breadcrumbs="breadcrumbs">
         <div class="py-10 px-6 space-y-8 w-full max-w-[1200px] mx-auto">
-
-            <!-- Back Link -->
-            <Button variant="ghost" size="sm" as-child class="-ml-2 text-muted-foreground hover:text-foreground">
-                <Link :href="route('admin.students.index')">
-                    <ArrowLeft class="w-4 h-4 mr-2" /> Back to Students
-                </Link>
-            </Button>
 
             <!-- Header -->
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 class="text-3xl font-bold text-foreground">Add New Student</h1>
-                    <p class="text-muted-foreground">Comprehensive onboarding for manual student entry.</p>
+                    <h1 class="text-3xl font-bold text-foreground">Edit Student Profile</h1>
+                    <p class="text-muted-foreground">Updating records for {{ student.user.name }} ({{ student.matriculation_number }})</p>
                 </div>
                 <div class="flex gap-2">
                     <Button variant="outline" as-child>
-                        <Link :href="route('admin.students.index')">Cancel</Link>
+                        <Link :href="route('admin.students.show', student.id)">View Profile</Link>
                     </Button>
                     <Button @click="submit" :disabled="form.processing" class="shadow-lg">
-                        <UserPlus class="w-4 h-4 mr-2" />
-                        {{ form.processing ? 'Creating...' : 'Create Student' }}
+                        <Save class="w-4 h-4 mr-2" />
+                        {{ form.processing ? 'Saving...' : 'Update Records' }}
                     </Button>
                 </div>
             </div>
 
             <form @submit.prevent="submit" class="space-y-6">
                 <Tabs v-model="activeTab" class="w-full">
-                    <TabsList class="grid w-full grid-cols-2 md:grid-cols-5 h-auto p-1 bg-muted/50 rounded-xl">
+                    <TabsList class="grid w-full grid-cols-2 md:grid-cols-5 h-auto p-1 bg-muted/50 rounded-xl shadow-sm">
                         <TabsTrigger value="personal" class="py-3 rounded-lg flex items-center gap-2">
                             <User class="w-4 h-4" /> <span class="hidden md:inline">Personal</span>
                         </TabsTrigger>
@@ -201,29 +200,29 @@ const submit = () => {
                     <div class="mt-8">
                         <!-- Personal Info Tab -->
                         <TabsContent value="personal" class="space-y-6">
-                            <Card>
+                            <Card class="border-slate-200 shadow-sm">
                                 <CardHeader>
                                     <CardTitle class="flex items-center gap-2">
                                         <User class="w-5 h-5 text-primary" /> Personal Information
                                     </CardTitle>
-                                    <CardDescription>Basic bio-data and contact details of the student.</CardDescription>
+                                    <CardDescription>Bio-data and contact details.</CardDescription>
                                 </CardHeader>
                                 <CardContent class="grid md:grid-cols-2 gap-x-8 gap-y-6">
                                     <div class="space-y-2">
                                         <Label for="first_name">First Name</Label>
-                                        <Input id="first_name" v-model="form.first_name" placeholder="Enter first name" required />
+                                        <Input id="first_name" v-model="form.first_name" required />
                                         <p v-if="form.errors.first_name" class="text-xs text-destructive">{{ form.errors.first_name }}</p>
                                     </div>
                                     <div class="space-y-2">
                                         <Label for="last_name">Last Name</Label>
-                                        <Input id="last_name" v-model="form.last_name" placeholder="Enter last name" required />
+                                        <Input id="last_name" v-model="form.last_name" required />
                                         <p v-if="form.errors.last_name" class="text-xs text-destructive">{{ form.errors.last_name }}</p>
                                     </div>
                                     <div class="space-y-2">
                                         <Label for="email">Email Address</Label>
                                         <div class="relative">
                                             <Mail class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                            <Input id="email" type="email" v-model="form.email" class="pl-10" placeholder="student@example.com" required />
+                                            <Input id="email" type="email" v-model="form.email" class="pl-10" required />
                                         </div>
                                         <p v-if="form.errors.email" class="text-xs text-destructive">{{ form.errors.email }}</p>
                                     </div>
@@ -231,7 +230,7 @@ const submit = () => {
                                         <Label for="phone">Phone Number</Label>
                                         <div class="relative">
                                             <Phone class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                            <Input id="phone" v-model="form.phone_number" class="pl-10" placeholder="+234..." required />
+                                            <Input id="phone" v-model="form.phone_number" class="pl-10" required />
                                         </div>
                                         <p v-if="form.errors.phone_number" class="text-xs text-destructive">{{ form.errors.phone_number }}</p>
                                     </div>
@@ -258,16 +257,12 @@ const submit = () => {
                                     </div>
                                     <div class="space-y-2 md:col-span-2">
                                         <Label for="address">Residential Address</Label>
-                                        <div class="relative">
-                                            <MapPin class="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                                            <textarea
-                                                id="address"
-                                                v-model="form.address"
-                                                class="flex min-h-[80px] w-full rounded-md border border-input bg-background pl-10 pr-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                                placeholder="Enter full physical address"
-                                                required
-                                            ></textarea>
-                                        </div>
+                                        <textarea
+                                            id="address"
+                                            v-model="form.address"
+                                            class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                            required
+                                        ></textarea>
                                         <p v-if="form.errors.address" class="text-xs text-destructive">{{ form.errors.address }}</p>
                                     </div>
                                     <div class="grid md:grid-cols-2 gap-4 md:col-span-2">
@@ -306,14 +301,36 @@ const submit = () => {
 
                         <!-- Academic Details Tab -->
                         <TabsContent value="academic" class="space-y-6">
-                            <Card>
+                            <Card class="border-slate-200 shadow-sm">
                                 <CardHeader>
                                     <CardTitle class="flex items-center gap-2">
-                                        <GraduationCap class="w-5 h-5 text-primary" /> Academic Details
+                                        <GraduationCap class="w-5 h-5 text-primary" /> Academic Enrollment
                                     </CardTitle>
-                                    <CardDescription>Enrollment details and academic placement.</CardDescription>
+                                    <CardDescription>Academic placement and matriculation details.</CardDescription>
                                 </CardHeader>
                                 <CardContent class="grid md:grid-cols-2 gap-x-8 gap-y-6">
+                                    <div class="space-y-2">
+                                        <Label for="matric_no">Matriculation Number</Label>
+                                        <div class="relative">
+                                            <ShieldCheck class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                            <Input id="matric_no" v-model="form.matriculation_number" class="pl-10 font-mono font-bold" required />
+                                        </div>
+                                        <p v-if="form.errors.matriculation_number" class="text-xs text-destructive">{{ form.errors.matriculation_number }}</p>
+                                    </div>
+                                    <div class="space-y-2">
+                                        <Label for="level">Current Level</Label>
+                                        <Select v-model="form.current_level">
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select Level" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem v-for="lvl in levels" :key="lvl" :value="lvl">
+                                                    {{ lvl }} Level
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <p v-if="form.errors.current_level" class="text-xs text-destructive">{{ form.errors.current_level }}</p>
+                                    </div>
                                     <div class="space-y-2">
                                         <Label for="faculty">Faculty</Label>
                                         <Select v-model="form.faculty_id">
@@ -371,20 +388,6 @@ const submit = () => {
                                         <p v-if="form.errors.entry_mode" class="text-xs text-destructive">{{ form.errors.entry_mode }}</p>
                                     </div>
                                     <div class="space-y-2">
-                                        <Label for="level">Current Level</Label>
-                                        <Select v-model="form.current_level">
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select Level" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem v-for="lvl in levels" :key="lvl" :value="lvl">
-                                                    {{ lvl }} Level
-                                                </SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <p v-if="form.errors.current_level" class="text-xs text-destructive">{{ form.errors.current_level }}</p>
-                                    </div>
-                                    <div class="space-y-2">
                                         <Label for="session">Admitted Session</Label>
                                         <Select v-model="form.admitted_session_id">
                                             <SelectTrigger>
@@ -397,15 +400,6 @@ const submit = () => {
                                             </SelectContent>
                                         </Select>
                                         <p v-if="form.errors.admitted_session_id" class="text-xs text-destructive">{{ form.errors.admitted_session_id }}</p>
-                                    </div>
-                                    <div class="space-y-2">
-                                        <Label for="matric_no">Matriculation Number (Optional)</Label>
-                                        <div class="relative">
-                                            <ShieldCheck class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                            <Input id="matric_no" v-model="form.matriculation_number" class="pl-10" placeholder="Leave blank for auto-generation" />
-                                        </div>
-                                        <p v-if="form.errors.matriculation_number" class="text-xs text-destructive">{{ form.errors.matriculation_number }}</p>
-                                        <p class="text-[10px] text-muted-foreground italic">If left empty, the system will generate one based on the current session format.</p>
                                     </div>
                                     <div class="space-y-2">
                                         <Label for="fee_policy">Fee Policy</Label>
@@ -439,54 +433,30 @@ const submit = () => {
                             </Card>
                         </TabsContent>
 
-                        <!-- Background & Documents Tab -->
+                        <!-- Background Tab -->
                         <TabsContent value="background" class="space-y-6">
-                            <Card>
+                            <Card class="border-slate-200 shadow-sm">
                                 <CardHeader>
                                     <CardTitle class="flex items-center gap-2">
-                                        <FileText class="w-5 h-5 text-primary" /> Educational Background & Documents
+                                        <FileText class="w-5 h-5 text-primary" /> Educational Background
                                     </CardTitle>
-                                    <CardDescription>JAMB details, previous studies, and document uploads (Optional).</CardDescription>
+                                    <CardDescription>JAMB details and previous studies.</CardDescription>
                                 </CardHeader>
-                                <CardContent class="space-y-8">
-                                    <div class="grid md:grid-cols-2 gap-6">
-                                        <div class="space-y-2">
-                                            <Label for="jamb_num">JAMB Registration Number</Label>
-                                            <Input id="jamb_num" v-model="form.jamb_registration_number" placeholder="e.g. 2024123456AB" class="uppercase" />
-                                            <p v-if="form.errors.jamb_registration_number" class="text-xs text-destructive">{{ form.errors.jamb_registration_number }}</p>
-                                        </div>
-                                        <div class="space-y-2">
-                                            <Label for="jamb_score">JAMB Score</Label>
-                                            <Input id="jamb_score" type="number" v-model="form.jamb_score" placeholder="e.g. 280" />
-                                            <p v-if="form.errors.jamb_score" class="text-xs text-destructive">{{ form.errors.jamb_score }}</p>
-                                        </div>
-                                        <div class="space-y-2 md:col-span-2">
-                                            <Label for="prev_inst">Previous Institution (if any)</Label>
-                                            <div class="relative">
-                                                <Briefcase class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                                <Input id="prev_inst" v-model="form.previous_institution" class="pl-10" placeholder="For Direct Entry / Transfer students" />
-                                            </div>
-                                            <p v-if="form.errors.previous_institution" class="text-xs text-destructive">{{ form.errors.previous_institution }}</p>
-                                        </div>
+                                <CardContent class="grid md:grid-cols-2 gap-6">
+                                    <div class="space-y-2">
+                                        <Label for="jamb_num">JAMB Registration Number</Label>
+                                        <Input id="jamb_num" v-model="form.jamb_registration_number" class="uppercase" />
+                                        <p v-if="form.errors.jamb_registration_number" class="text-xs text-destructive">{{ form.errors.jamb_registration_number }}</p>
                                     </div>
-
-                                    <Separator />
-
-                                    <div class="grid md:grid-cols-2 gap-8 mt-4">
-                                        <FileUploader
-                                            label="Passport Photograph"
-                                            accept="image/*"
-                                            @update:file="(file) => form.passport_photo = file"
-                                        />
-                                        <FileUploader
-                                            label="O'Level Result (WAEC/NECO/NABTEB)"
-                                            accept=".pdf,image/*"
-                                            @update:file="(file) => form.waec_result = file"
-                                        />
+                                    <div class="space-y-2">
+                                        <Label for="jamb_score">JAMB Score</Label>
+                                        <Input id="jamb_score" type="number" v-model="form.jamb_score" />
+                                        <p v-if="form.errors.jamb_score" class="text-xs text-destructive">{{ form.errors.jamb_score }}</p>
                                     </div>
-                                    <div class="grid md:grid-cols-2 gap-8 text-xs text-muted-foreground -mt-4 px-1">
-                                         <p v-if="form.errors.passport_photo" class="text-destructive">{{ form.errors.passport_photo }}</p>
-                                         <p v-if="form.errors.waec_result" class="text-destructive">{{ form.errors.waec_result }}</p>
+                                    <div class="space-y-2 md:col-span-2">
+                                        <Label for="prev_inst">Previous Institution (if any)</Label>
+                                        <Input id="prev_inst" v-model="form.previous_institution" />
+                                        <p v-if="form.errors.previous_institution" class="text-xs text-destructive">{{ form.errors.previous_institution }}</p>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -494,40 +464,23 @@ const submit = () => {
 
                         <!-- Next of Kin Tab -->
                         <TabsContent value="nok" class="space-y-6">
-                            <Card>
+                            <Card class="border-slate-200 shadow-sm">
                                 <CardHeader>
                                     <CardTitle class="flex items-center gap-2">
-                                        <Users class="w-5 h-5 text-primary" /> Next of Kin (Emergency Contact)
+                                        <Users class="w-5 h-5 text-primary" /> Next of Kin
                                     </CardTitle>
-                                    <CardDescription>Primary contact person for the student (Optional).</CardDescription>
+                                    <CardDescription>Emergency contact information.</CardDescription>
                                 </CardHeader>
                                 <CardContent class="grid md:grid-cols-2 gap-x-8 gap-y-6">
                                     <div class="space-y-2">
                                         <Label for="nok_name">Full Name</Label>
-                                        <Input id="nok_name" v-model="form.next_of_kin_name" placeholder="John Doe Sr." />
+                                        <Input id="nok_name" v-model="form.next_of_kin_name" />
                                         <p v-if="form.errors.next_of_kin_name" class="text-xs text-destructive">{{ form.errors.next_of_kin_name }}</p>
                                     </div>
                                     <div class="space-y-2">
                                         <Label for="nok_phone">Phone Number</Label>
-                                        <Input id="nok_phone" v-model="form.next_of_kin_phone" placeholder="+234..." />
+                                        <Input id="nok_phone" v-model="form.next_of_kin_phone" />
                                         <p v-if="form.errors.next_of_kin_phone" class="text-xs text-destructive">{{ form.errors.next_of_kin_phone }}</p>
-                                    </div>
-                                    <div class="space-y-2">
-                                        <Label for="nok_rel">Relationship</Label>
-                                        <Select v-model="form.next_of_kin_relationship">
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select Relationship" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Father">Father</SelectItem>
-                                                <SelectItem value="Mother">Mother</SelectItem>
-                                                <SelectItem value="Sibling">Sibling</SelectItem>
-                                                <SelectItem value="Spouse">Spouse</SelectItem>
-                                                <SelectItem value="Guardian">Guardian</SelectItem>
-                                                <SelectItem value="Other">Other</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <p v-if="form.errors.next_of_kin_relationship" class="text-xs text-destructive">{{ form.errors.next_of_kin_relationship }}</p>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -535,19 +488,19 @@ const submit = () => {
 
                         <!-- Account Security Tab -->
                         <TabsContent value="account" class="space-y-6">
-                            <Card>
+                            <Card class="border-slate-200 shadow-sm">
                                 <CardHeader>
                                     <CardTitle class="flex items-center gap-2">
                                         <ShieldCheck class="w-5 h-5 text-primary" /> Account Security
                                     </CardTitle>
-                                    <CardDescription>Configure initial login credentials for the student portal.</CardDescription>
+                                    <CardDescription>Update portal access credentials.</CardDescription>
                                 </CardHeader>
                                 <CardContent class="max-w-md space-y-4">
                                     <div class="space-y-2">
-                                        <Label for="password">Initial Password (Optional)</Label>
-                                        <Input id="password" type="password" v-model="form.password" placeholder="Leave blank for default" />
-                                        <p class="text-[11px] text-muted-foreground bg-muted/50 p-2 rounded border border-dashed">
-                                            If left blank, the student's default password will be <strong>'password'</strong>. They will be prompted to change it upon first login.
+                                        <Label for="password">Change Password</Label>
+                                        <Input id="password" type="password" v-model="form.password" placeholder="Leave blank to keep current" />
+                                        <p class="text-[11px] text-muted-foreground bg-amber-50 dark:bg-amber-900/10 p-3 rounded-lg border border-amber-100 dark:border-amber-900/30">
+                                            Changing this will update the student's login password immediately. They will not be notified automatically.
                                         </p>
                                         <p v-if="form.errors.password" class="text-xs text-destructive">{{ form.errors.password }}</p>
                                     </div>
@@ -557,35 +510,16 @@ const submit = () => {
                     </div>
                 </Tabs>
 
-                <div class="flex justify-between items-center bg-card border rounded-xl p-6 mt-10 shadow-sm border-t-2 border-t-primary">
-                    <div class="hidden md:block">
-                        <p class="text-sm font-medium">Verify all information before creating.</p>
-                        <p class="text-xs text-muted-foreground">The student will receive an onboarding email upon successful creation.</p>
-                    </div>
-                    <div class="flex gap-4 w-full md:w-auto">
-                        <Button type="button" variant="outline" @click="activeTab = 'personal'" class="flex-1 md:flex-none" v-if="activeTab !== 'personal'">
-                            Back to Start
-                        </Button>
-                        <Button type="submit" :disabled="form.processing" class="flex-1 md:flex-none px-8 shadow-lg">
-                            <Save class="w-4 h-4 mr-2" />
-                            {{ form.processing ? 'Processing...' : 'Save & Create Student' }}
-                        </Button>
-                    </div>
+                <div class="flex justify-end gap-4 bg-card border rounded-xl p-6 shadow-sm">
+                    <Button type="button" variant="ghost" as-child>
+                        <Link :href="route('admin.students.show', student.id)">Cancel</Link>
+                    </Button>
+                    <Button type="submit" :disabled="form.processing" class="px-8 shadow-md">
+                        <Save class="w-4 h-4 mr-2" />
+                        {{ form.processing ? 'Saving...' : 'Update Student' }}
+                    </Button>
                 </div>
             </form>
         </div>
     </AdminLayout>
 </template>
-
-<style scoped>
-/* Smooth transition for tabs */
-.tabs-content-enter-active,
-.tabs-content-leave-active {
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-.tabs-content-enter-from,
-.tabs-content-leave-to {
-  opacity: 0;
-  transform: translateY(10px);
-}
-</style>

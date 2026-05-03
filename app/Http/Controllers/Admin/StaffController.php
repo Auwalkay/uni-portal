@@ -19,18 +19,11 @@ use App\Mail\StaffAccountCreated;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Models\Designation;
 use Illuminate\Support\Facades\Cache;
+use App\Services\AcademicCacheService;
+use App\Models\Department;
 
 class StaffController extends Controller
 {
-    private function getDesignations(): array
-    {
-        return Cache::remember('staff_designations_list', 3600, function () {
-            return Designation::where('is_active', true)
-                ->orderBy('name')
-                ->pluck('name')
-                ->toArray();
-        });
-    }
 
     /**
      * Display a listing of the resource.
@@ -63,7 +56,11 @@ class StaffController extends Controller
         // Department/Faculty Filter
         if ($request->filled('faculty_id')) {
             $query->whereHas('staff.department', function ($q) use ($request) {
-                $q->where('faculty_id', $request->faculty_id);
+                if ($request->faculty_id === 'NON_ACADEMIC') {
+                    $q->whereNull('faculty_id');
+                } else {
+                    $q->where('faculty_id', $request->faculty_id);
+                }
             });
         }
 
@@ -78,7 +75,8 @@ class StaffController extends Controller
         return Inertia::render('Admin/Staff/Index', [
             'staff' => $staff,
             'filters' => $request->only(['search', 'role_id', 'faculty_id', 'department_id']),
-            'faculties' => Cache::remember('faculties_with_departments', 86400, fn() => Faculty::with('departments:id,name,faculty_id')->get(['id', 'name'])),
+            'faculties' => AcademicCacheService::getFaculties(),
+            'nonAcademicDepartments' => AcademicCacheService::getNonAcademicDepartments(),
             'roles' => \App\Models\Role::whereNotIn('name', ['admin', 'student', 'applicant', 'staff'])->get(['id', 'name']),
             'stats' => [
                 'total' => User::role('staff')->count(),
@@ -100,8 +98,9 @@ class StaffController extends Controller
     public function create()
     {
         return Inertia::render('Admin/Staff/Create', [
-            'faculties' => Cache::remember('faculties_with_departments_full', 86400, fn() => Faculty::with('departments')->get()),
-            'designations' => $this->getDesignations(),
+            'faculties' => AcademicCacheService::getFacultiesFull(),
+            'nonAcademicDepartments' => AcademicCacheService::getNonAcademicDepartments(),
+            'designations' => AcademicCacheService::getDesignations(),
             'roles' => Role::whereNotIn('name', ['admin', 'student', 'applicant', 'staff'])->get(['id', 'name']),
         ]);
     }
@@ -116,8 +115,9 @@ class StaffController extends Controller
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8', // In production, maybe send invitation link
             'staff_number' => 'required|string|max:255|unique:staff',
-            'designation' => ['nullable', 'string', Rule::in($this->getDesignations())],
+            'designation' => ['nullable', 'string', Rule::in(AcademicCacheService::getDesignations())],
             'department_id' => 'nullable|exists:departments,id',
+            'unit_id' => 'nullable|exists:units,id',
             'is_academic' => 'boolean',
             'role_id' => 'required|exists:roles,id',
         ]);
@@ -141,6 +141,7 @@ class StaffController extends Controller
             'staff_number' => $request->staff_number,
             'designation' => $request->designation,
             'department_id' => $request->department_id,
+            'unit_id' => $request->unit_id,
             'is_academic' => $request->is_academic ?? false,
         ]);
 
@@ -232,16 +233,21 @@ class StaffController extends Controller
      */
     public function edit(User $staff)
     {
-        $staff->load(['staff.department']);
+        $staff->load(['staff.department', 'staff.unit']);
 
         if (!$staff->hasRole('staff')) {
             abort(404);
         }
 
+        $currentRole = $staff->roles->whereNotIn('name', ['admin', 'student', 'applicant', 'staff'])->first();
+
         return Inertia::render('Admin/Staff/Edit', [
             'staff' => $staff,
-            'faculties' => Cache::remember('faculties_with_departments_full', 86400, fn() => Faculty::with('departments')->get()),
-            'designations' => $this->getDesignations(),
+            'faculties' => AcademicCacheService::getFacultiesFull(),
+            'nonAcademicDepartments' => AcademicCacheService::getNonAcademicDepartments(),
+            'designations' => AcademicCacheService::getDesignations(),
+            'roles' => Role::whereNotIn('name', ['admin', 'student', 'applicant', 'staff'])->get(['id', 'name']),
+            'current_role_id' => $currentRole?->id,
         ]);
     }
 
@@ -258,9 +264,11 @@ class StaffController extends Controller
             'name' => 'required|string|max:255',
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($staff->id)],
             'staff_number' => ['required', 'string', 'max:255', Rule::unique('staff')->ignore($staff->staff->id)],
-            'designation' => ['nullable', 'string', Rule::in($this->getDesignations())],
+            'designation' => ['nullable', 'string', Rule::in(AcademicCacheService::getDesignations())],
             'department_id' => 'nullable|exists:departments,id',
+            'unit_id' => 'nullable|exists:units,id',
             'is_academic' => 'boolean',
+            'role_id' => 'required|exists:roles,id',
         ]);
 
         $staff->update([
@@ -281,8 +289,15 @@ class StaffController extends Controller
             'staff_number' => $request->staff_number,
             'designation' => $request->designation,
             'department_id' => $request->department_id,
+            'unit_id' => $request->unit_id,
             'is_academic' => $request->is_academic ?? false,
         ]);
+
+        // Update Role
+        $role = Role::find($request->role_id);
+        if ($role) {
+            $staff->syncRoles(['staff', $role->name]);
+        }
 
         return redirect()->route('admin.staff.index')
             ->with('success', 'Staff member updated successfully.');
@@ -301,6 +316,22 @@ class StaffController extends Controller
 
         return redirect()->route('admin.staff.index')
             ->with('success', 'Staff member deleted successfully.');
+    }
+
+    public function resetPassword(User $staff)
+    {
+        if (!$staff->hasRole('staff')) {
+            abort(404);
+        }
+
+        $password = Str::random(10);
+        $staff->update([
+            'password' => Hash::make($password)
+        ]);
+
+        Mail::to($staff->email)->send(new StaffAccountCreated($staff, $password));
+
+        return back()->with('success', "Password reset successfully. New credentials sent to {$staff->email}");
     }
 
     public function resendAllCredentials()

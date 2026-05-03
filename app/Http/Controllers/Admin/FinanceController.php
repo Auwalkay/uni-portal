@@ -240,4 +240,38 @@ class FinanceController extends Controller
             'programs' => Programme::orderBy('name')->get(),
         ]);
     }
+    public function cloneSessionFees(Request $request)
+    {
+        $validated = $request->validate([
+            'source_session_id' => 'required|exists:academic_sessions,id',
+            'target_session_id' => 'required|exists:academic_sessions,id|different:source_session_id',
+        ]);
+
+        $sourceConfigs = FeeConfiguration::where('session_id', $validated['source_session_id'])->get();
+
+        if ($sourceConfigs->isEmpty()) {
+            return back()->with('error', 'Source session has no fee configurations to clone.');
+        }
+
+        DB::transaction(function () use ($sourceConfigs, $validated) {
+            foreach ($sourceConfigs as $config) {
+                // Check if identical rule exists in target
+                $exists = FeeConfiguration::where('session_id', $validated['target_session_id'])
+                    ->where('fee_type_id', $config->fee_type_id)
+                    ->where('faculty_id', $config->faculty_id)
+                    ->where('department_id', $config->department_id)
+                    ->where('program_id', $config->program_id)
+                    ->where('level', $config->level)
+                    ->exists();
+
+                if (!$exists) {
+                    $newConfig = $config->replicate();
+                    $newConfig->session_id = $validated['target_session_id'];
+                    $newConfig->save();
+                }
+            }
+        });
+
+        return back()->with('success', 'Fee configurations cloned successfully.');
+    }
 }
