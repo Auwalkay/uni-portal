@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Artisan;
+use App\Services\AcademicCacheService;
 
 class SessionController extends Controller
 {
@@ -97,6 +98,8 @@ class SessionController extends Controller
             Artisan::call('student:activate-session', ['sessionId' => $session->id]);
         });
 
+        AcademicCacheService::clearAll();
+
         return back()->with('success', 'Session activated and students promoted to next level.');
     }
 
@@ -121,6 +124,8 @@ class SessionController extends Controller
                 $session->update(['is_current' => true]);
             }
         });
+
+        AcademicCacheService::clearAll();
 
         return back()->with('success', "{$semester->name} is now active.");
     }

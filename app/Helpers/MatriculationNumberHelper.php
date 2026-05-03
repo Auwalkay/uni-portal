@@ -16,7 +16,7 @@ class MatriculationNumberHelper
     public static function generate(?array $data = null): string
     {
         return DB::transaction(function () use ($data) {
-            $year = date('Y');
+            $year = date('y');
             $format = \App\Models\SystemSetting::get('matric_format', 'MIU{YEAR}{SEQUENCE}');
 
             $deptCode = $data['dept_code'] ?? 'GEN';

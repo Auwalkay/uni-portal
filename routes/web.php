@@ -25,6 +25,7 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
         Route::put('fee-configurations/{config}', [FinanceController::class, 'updateFeeConfiguration'])->name('fee_configurations.update');
         Route::delete('fee-configurations/{config}', [FinanceController::class, 'destroyFeeConfiguration'])->name('fee_configurations.destroy');
         Route::get('session/{session}/fees', [FinanceController::class, 'manageSessionFees'])->name('session.fees');
+        Route::post('clone-fees', [FinanceController::class, 'cloneSessionFees'])->name('clone_fees');
 
         // Expense Categories
         Route::post('expense-categories', [FinanceController::class, 'storeExpenseCategory'])->name('expense_categories.store');
@@ -51,6 +52,7 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
     Route::post('staff/import', [StaffController::class, 'import'])->name('staff.import');
     Route::get('staff/template', [StaffController::class, 'downloadTemplate'])->name('staff.template');
     Route::post('staff/resend-all', [StaffController::class, 'resendAllCredentials'])->name('staff.resend_all');
+    Route::post('staff/{staff}/reset-password', [StaffController::class, 'resetPassword'])->name('staff.reset_password');
     Route::resource('staff', StaffController::class);
     Route::post('course-allocations/import', [CourseAllocationController::class, 'import'])->name('course-allocations.import');
     Route::get('course-allocations/template', [CourseAllocationController::class, 'downloadTemplate'])->name('course-allocations.template');

@@ -36,7 +36,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Trash2, Edit, Settings } from 'lucide-vue-next';
+import { Plus, Trash2, Edit, Settings, Copy, ArrowRight } from 'lucide-vue-next';
 
 interface FeeType {
     id: number;
@@ -179,6 +179,25 @@ const deleteExpenseCategory = (category: any) => {
         });
     }
 };
+
+// Session Cloning Logic
+const cloneForm = useForm({
+    source_session_id: '',
+    target_session_id: '',
+});
+
+const isCloneModalOpen = ref(false);
+
+const submitClone = () => {
+    cloneForm.post(route('admin.finance.clone_fees'), {
+        onSuccess: () => {
+            isCloneModalOpen.value = false;
+            cloneForm.reset();
+            Swal.fire({ icon: 'success', title: 'Cloned', text: 'Fees cloned successfully', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+        },
+        onError: () => Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to clone fees', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 })
+    });
+};
 </script>
 
 <template>
@@ -187,8 +206,16 @@ const deleteExpenseCategory = (category: any) => {
         <div class="p-6 space-y-6">
              <div class="flex items-center justify-between">
                 <div>
-                    <h2 class="text-3xl font-bold tracking-tight">Finance Management</h2>
-                    <p class="text-muted-foreground">Manage fees types and allocation rules.</p>
+                    <h2 class="text-3xl font-bold tracking-tight text-indigo-900">Finance Management</h2>
+                    <p class="text-muted-foreground">Manage fee structures, rules, and global financial settings.</p>
+                </div>
+                <div class="flex gap-3">
+                    <Button variant="outline" @click="isCloneModalOpen = true" class="border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+                        <Copy class="mr-2 h-4 w-4" /> Clone Session Fees
+                    </Button>
+                    <Button as-child variant="indigo" class="bg-indigo-600 hover:bg-indigo-700 text-white">
+                        <Link :href="route('admin.settings.index')"><Settings class="mr-2 h-4 w-4" /> Global Settings</Link>
+                    </Button>
                 </div>
             </div>
 
@@ -343,6 +370,58 @@ const deleteExpenseCategory = (category: any) => {
                      </div>
                 </TabsContent>
             </Tabs>
+
+            <!-- Clone Fees Modal -->
+            <Dialog v-model:open="isCloneModalOpen">
+                <DialogContent class="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle class="flex items-center gap-2">
+                            <Copy class="w-5 h-5 text-indigo-600" />
+                            Clone Fee Configurations
+                        </DialogTitle>
+                        <DialogDescription>
+                            Duplicate all fee rules from one academic session to another. Existing rules in the target session will not be overwritten.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div class="grid gap-6 py-4">
+                        <div class="grid gap-2">
+                            <Label for="source">Source Session (Copy From)</Label>
+                            <Select v-model="cloneForm.source_session_id">
+                                <SelectTrigger id="source">
+                                    <SelectValue placeholder="Select session" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="sess in sessions" :key="sess.id" :value="sess.id">
+                                        {{ sess.name }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div class="flex justify-center">
+                            <ArrowRight class="w-6 h-6 text-muted-foreground animate-pulse" />
+                        </div>
+                        <div class="grid gap-2">
+                            <Label for="target">Target Session (Copy To)</Label>
+                            <Select v-model="cloneForm.target_session_id">
+                                <SelectTrigger id="target">
+                                    <SelectValue placeholder="Select session" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="sess in sessions" :key="sess.id" :value="sess.id">
+                                        {{ sess.name }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" @click="isCloneModalOpen = false">Cancel</Button>
+                        <Button @click="submitClone" :disabled="cloneForm.processing || !cloneForm.source_session_id || !cloneForm.target_session_id" class="bg-indigo-600 hover:bg-indigo-700 text-white">
+                            {{ cloneForm.processing ? 'Cloning...' : 'Begin Cloning' }}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
 
 

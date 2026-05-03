@@ -18,23 +18,28 @@ use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Mail\StudentAccountCreated;
+use App\Services\AcademicCacheService;
 
 class StudentController extends Controller
 {
     public function create()
     {
         return Inertia::render('Admin/Students/Create', [
-            'sessions' => Session::latest()->get(['id', 'name']),
-            'faculties' => \Illuminate\Support\Facades\Cache::remember('faculties_with_departments', 86400, fn() => Faculty::with('departments:id,name,faculty_id')->get(['id', 'name'])),
-            'programmes' => \Illuminate\Support\Facades\Cache::remember('all_programmes_list', 86400, fn() => Programme::orderBy('name')->get(['id', 'name'])),
-            'states' => State::with('lgas:id,name,state_id')->get(['id', 'name']),
+            'sessions' => AcademicCacheService::getSessions(),
+            'faculties' => AcademicCacheService::getFaculties(),
+            'programmes' => AcademicCacheService::getProgrammes(),
+            'states' => AcademicCacheService::getStates(),
             'levels' => ['100', '200', '300', '400', '500'],
             'entry_modes' => ['UTME', 'Direct Entry', 'Transfer', 'Postgraduate'],
+            'scholarships' => AcademicCacheService::getScholarships(),
         ]);
     }
 
     public function store(Request $request)
     {
+        if ($request->scholarship_id === 'none') {
+            $request->merge(['scholarship_id' => null]);
+        }
         $validated = $request->validate([
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
@@ -61,6 +66,8 @@ class StudentController extends Controller
             'password' => 'nullable|string|min:8',
             'passport_photo' => 'nullable|image|max:2048',
             'waec_result' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'fee_policy' => 'required|in:admission_session,current_session',
+            'scholarship_id' => 'nullable|exists:scholarships,id',
         ]);
 
         $password = $request->password ?? Str::random(10);
@@ -105,9 +112,10 @@ class StudentController extends Controller
                 'admitted_session_id' => $validated['admitted_session_id'],
                 'entry_mode' => $validated['entry_mode'],
                 'jamb_registration_number' => $validated['jamb_registration_number'],
-                'jamb_score' => $validated['jamb_score'],
                 'previous_institution' => $validated['previous_institution'],
                 'passport_photo_path' => $passportPath,
+                'fee_policy' => $validated['fee_policy'],
+                'scholarship_id' => $validated['scholarship_id'],
             ]);
 
             $currentSession = \App\Models\Session::find($validated['admitted_session_id']);
@@ -202,7 +210,7 @@ class StudentController extends Controller
 
         // Scholarship Filter
         if ($request->filled('scholarship_id')) {
-            if ($request->scholarship_id === 'NONE') {
+            if ($request->scholarship_id === 'NONE' || $request->scholarship_id === 'none') {
                 $query->whereNull('scholarship_id');
             } else {
                 $query->where('scholarship_id', $request->scholarship_id);
@@ -214,11 +222,11 @@ class StudentController extends Controller
         return Inertia::render('Admin/Students/Index', [
             'students' => $students,
             'filters' => $request->only(['search', 'session_id', 'faculty_id', 'department_id', 'level', 'program_id', 'program', 'scholarship_id']),
-            'sessions' => Session::latest()->get(['id', 'name']),
-            'faculties' => Faculty::with('departments:id,name,faculty_id')->get(['id', 'name']),
-            'departments' => \App\Models\Department::get(['id', 'name', 'faculty_id']),
-            'programmes' => Programme::orderBy('name')->get(['id', 'name']),
-            'scholarships' => \App\Models\Scholarship::get(['id', 'name']),
+            'sessions' => AcademicCacheService::getSessions(),
+            'faculties' => AcademicCacheService::getFaculties(),
+            'departments' => AcademicCacheService::getAllDepartments(),
+            'programmes' => AcademicCacheService::getProgrammes(),
+            'scholarships' => AcademicCacheService::getScholarships(),
             'stats' => [
                 'total' => (clone $query)->count(),
                 'new' => (clone $query)->where('admitted_session_id', Session::latest('start_date')->value('id'))->count(),
@@ -364,5 +372,94 @@ class StudentController extends Controller
             'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
             'Expires' => '0',
         ]);
+    }
+
+    public function edit(Student $student)
+    {
+        $student->load(['user', 'academicDepartment.faculty', 'admittedSession', 'program', 'state', 'lga']);
+
+        $nameParts = explode(' ', $student->user->name, 2);
+        $student->first_name = $nameParts[0] ?? '';
+        $student->last_name = $nameParts[1] ?? '';
+        
+        return Inertia::render('Admin/Students/Edit', [
+            'student' => $student,
+            'sessions' => AcademicCacheService::getSessions(),
+            'faculties' => AcademicCacheService::getFaculties(),
+            'programmes' => AcademicCacheService::getProgrammes(),
+            'states' => AcademicCacheService::getStates(),
+            'levels' => ['100', '200', '300', '400', '500'],
+            'entry_modes' => ['UTME', 'Direct Entry', 'Transfer', 'Postgraduate'],
+            'scholarships' => AcademicCacheService::getScholarships(),
+        ]);
+    }
+
+    public function update(Request $request, Student $student)
+    {
+        if ($request->scholarship_id === 'none') {
+            $request->merge(['scholarship_id' => null]);
+        }
+        $validated = $request->validate([
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email,' . $student->user_id,
+            'phone_number' => 'required|string|max:20',
+            'gender' => 'required|in:male,female',
+            'dob' => 'required|date',
+            'address' => 'required|string',
+            'state_id' => 'required|exists:states,id',
+            'lga_id' => 'required|exists:lgas,id',
+            'next_of_kin_name' => 'nullable|string|max:255',
+            'next_of_kin_phone' => 'nullable|string|max:20',
+            'faculty_id' => 'required|exists:faculties,id',
+            'department_id' => 'required|exists:departments,id',
+            'program_id' => 'required|exists:programmes,id',
+            'current_level' => 'required|in:100,200,300,400,500',
+            'admitted_session_id' => 'required|exists:academic_sessions,id',
+            'entry_mode' => 'required|string',
+            'matriculation_number' => 'required|string|unique:students,matriculation_number,' . $student->id,
+            'jamb_score' => 'nullable|integer',
+            'previous_institution' => 'nullable|string|max:255',
+            'fee_policy' => 'required|in:admission_session,current_session',
+            'scholarship_id' => 'nullable|exists:scholarships,id',
+        ]);
+
+        DB::transaction(function () use ($validated, $student, $request) {
+            $student->user->update([
+                'name' => $validated['first_name'] . ' ' . $validated['last_name'],
+                'email' => $validated['email'],
+            ]);
+
+            if ($request->filled('password')) {
+                $student->user->update([
+                    'password' => \Illuminate\Support\Facades\Hash::make($request->password),
+                ]);
+            }
+
+            $student->update([
+                'matriculation_number' => $validated['matriculation_number'],
+                'gender' => $validated['gender'],
+                'dob' => $validated['dob'],
+                'phone_number' => $validated['phone_number'],
+                'address' => $validated['address'],
+                'state_id' => $validated['state_id'],
+                'lga_id' => $validated['lga_id'],
+                'next_of_kin_name' => $validated['next_of_kin_name'],
+                'next_of_kin_phone' => $validated['next_of_kin_phone'],
+                'faculty_id' => $validated['faculty_id'],
+                'department_id' => $validated['department_id'],
+                'program_id' => $validated['program_id'],
+                'current_level' => $validated['current_level'],
+                'admitted_session_id' => $validated['admitted_session_id'],
+                'entry_mode' => $validated['entry_mode'],
+                'jamb_registration_number' => $validated['jamb_registration_number'],
+                'jamb_score' => $validated['jamb_score'],
+                'previous_institution' => $validated['previous_institution'],
+                'fee_policy' => $validated['fee_policy'],
+                'scholarship_id' => $validated['scholarship_id'],
+            ]);
+        });
+
+        return redirect()->route('admin.students.index')->with('success', 'Student updated successfully.');
     }
 }

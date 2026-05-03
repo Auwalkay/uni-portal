@@ -24,6 +24,8 @@ class SystemSettingsController extends Controller
             ],
             'settings' => [
                 'matric_format' => SystemSetting::get('matric_format', 'MIU{YEAR}{SEQUENCE}'),
+                'admin_charge_amount' => SystemSetting::get('admin_charge_amount', 250000),
+                'admin_charge_enabled' => SystemSetting::get('admin_charge_enabled', true),
             ]
         ]);
     }

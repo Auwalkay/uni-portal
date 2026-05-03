@@ -7,6 +7,7 @@ use App\Models\Student;
 use App\Models\StudentSession;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use App\Services\AcademicCacheService;
 
 class StudentActivateSession extends Command
 {
@@ -107,6 +108,7 @@ class StudentActivateSession extends Command
             });
         });
 
+        AcademicCacheService::clearAll();
         $this->info('Session activated and students promoted/graduated successfully.');
     }
 }

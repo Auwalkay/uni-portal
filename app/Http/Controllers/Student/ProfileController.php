@@ -270,19 +270,139 @@ class ProfileController extends Controller
     {
         $user = auth()->user();
         $applicant = \App\Models\Applicant::where('user_id', $user->id)->first();
+        $student = \App\Models\Student::where('user_id', $user->id)->with(['user', 'state', 'lga', 'program.department.faculty', 'admittedSession'])->first();
 
-        if (! $applicant || $applicant->status !== 'enrolled') {
+        if (! $applicant && ! $student) {
+            return back()->with('error', 'Admission record not found.');
+        }
+
+        // If we only have an applicant, check status
+        if ($applicant && ! $student && ! in_array($applicant->status, ['admitted', 'enrolled'])) {
             return back()->with('error', 'Admission letter is not available.');
         }
 
-        $applicant->load(['user', 'programme.department.faculty']);
+        // Prepare data for the letter
+        if ($student) {
+            // Calculate Fees for the Letter
+            $feesData = $this->calculateEstimatedFees($student);
+            
+            // Map student data to what the template expects
+            $data = [
+                'applicant' => (object) [
+                    'user' => $student->user,
+                    'first_name' => explode(' ', $student->user->name)[0],
+                    'address' => $student->address,
+                    'state' => $student->state,
+                    'lga' => $student->lga,
+                    'application_number' => $student->matriculation_number,
+                    'jamb_registration_number' => $student->jamb_registration_number,
+                    'application_mode' => $student->entry_mode ?? 'UTME',
+                    'programme' => $student->program,
+                ],
+                'faculty_name' => $student->faculty?->name ?? $student->program?->department?->faculty?->name ?? 'N/A',
+                'programme_name' => $student->program?->name ?? 'N/A',
+                'session_name' => $student->admittedSession?->name ?? \App\Models\Session::current()->name ?? '2025/2026',
+                'fees' => $feesData,
+            ];
+        } else {
+            $applicant->load(['user', 'programme.department.faculty', 'state', 'lga']);
+            
+            // For applicants, we use their first program choice and current session fees
+            $currentSession = \App\Models\Session::current();
+            $feesData = $this->calculateEstimatedFeesForApplicant($applicant, $currentSession);
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.admission_letter', [
-            'applicant' => $applicant,
-            'faculty_name' => $applicant->programme?->department->faculty->name ?? 'N/A',
-            'programme_name' => $applicant->programme?->name ?? 'N/A',
-        ]);
+            $data = [
+                'applicant' => $applicant,
+                'faculty_name' => $applicant->programme?->department->faculty->name ?? 'N/A',
+                'programme_name' => $applicant->programme?->name ?? 'N/A',
+                'session_name' => $currentSession->name ?? '2025/2026',
+                'fees' => $feesData,
+            ];
+        }
 
-        return $pdf->download("Admission_Letter_{$applicant->jamb_registration_number}.pdf");
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.admission_letter', $data);
+
+        $identifer = $student->matriculation_number ?? $applicant->jamb_registration_number ?? $applicant->application_number ?? 'Letter';
+        return $pdf->download("Admission_Letter_{$identifer}.pdf");
+    }
+
+    private function calculateEstimatedFees($student)
+    {
+        $sessionId = $student->admitted_session_id ?? \App\Models\Session::current()?->id;
+        if (!$sessionId) return null;
+
+        $allConfigs = \App\Models\FeeConfiguration::where('session_id', $sessionId)
+            ->where(function ($q) use ($student) {
+                $q->where('level', $student->current_level)->orWhereNull('level');
+            })->get();
+
+        $tuition = 0;
+        $grouped = $allConfigs->groupBy('fee_type_id');
+        foreach ($grouped as $configs) {
+            $resolved = $configs->where('program_id', $student->program_id)->first()
+                ?? $configs->where('department_id', $student->department_id)->whereNull('program_id')->first()
+                ?? $configs->where('faculty_id', $student->faculty_id)->whereNull('department_id')->whereNull('program_id')->first()
+                ?? $configs->whereNull('faculty_id')->whereNull('department_id')->whereNull('program_id')->first();
+            
+            if ($resolved) $tuition += $resolved->amount;
+        }
+
+        $adminCharge = \App\Models\SystemSetting::get('admin_charge_enabled', true) 
+            ? \App\Models\SystemSetting::get('admin_charge_amount', 250000) : 0;
+            
+        $discount = 0;
+        if ($student->scholarship && ($student->program?->scholarship_eligible ?? true)) {
+            $discount = $total * ($student->scholarship->percentage / 100);
+        }
+
+        return [
+            'tuition' => $tuition,
+            'admin_charge' => $adminCharge,
+            'discount' => $discount,
+            'total' => $total - $discount,
+            'scholarship_name' => $student->scholarship?->name
+        ];
+    }
+
+    private function calculateEstimatedFeesForApplicant($applicant, $session)
+    {
+        if (!$session) return null;
+        
+        $program = $applicant->programme;
+        $deptId = $program?->department_id;
+        $facultyId = $program?->department?->faculty_id;
+
+        $allConfigs = \App\Models\FeeConfiguration::where('session_id', $session->id)
+            ->where(function ($q) {
+                $q->where('level', '100')->orWhereNull('level');
+            })->get();
+
+        $tuition = 0;
+        $grouped = $allConfigs->groupBy('fee_type_id');
+        foreach ($grouped as $configs) {
+            $resolved = $configs->where('program_id', $applicant->program_choice_1)->first()
+                ?? $configs->where('department_id', $deptId)->whereNull('program_id')->first()
+                ?? $configs->where('faculty_id', $facultyId)->whereNull('department_id')->whereNull('program_id')->first()
+                ?? $configs->whereNull('faculty_id')->whereNull('department_id')->whereNull('program_id')->first();
+            
+            if ($resolved) $tuition += $resolved->amount;
+        }
+
+        $adminCharge = \App\Models\SystemSetting::get('admin_charge_enabled', true) 
+            ? \App\Models\SystemSetting::get('admin_charge_amount', 250000) : 0;
+            
+        $total = $tuition + $adminCharge;
+        $discount = 0;
+        if ($applicant->scholarship && ($applicant->programme?->scholarship_eligible ?? true)) {
+            $discount = $total * ($applicant->scholarship->percentage / 100);
+        }
+
+        return [
+            'tuition' => $tuition,
+            'admin_charge' => $adminCharge,
+            'discount' => $discount,
+            'total' => $total - $discount,
+            'scholarship_name' => $applicant->scholarship?->name
+        ];
     }
 }

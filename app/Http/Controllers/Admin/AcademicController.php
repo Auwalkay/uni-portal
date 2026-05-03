@@ -7,9 +7,11 @@ use App\Models\Course;
 use App\Models\Department;
 use App\Models\Faculty;
 use App\Models\Programme;
+use App\Models\Unit;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Cache;
+use App\Services\AcademicCacheService;
 
 class AcademicController extends Controller
 {
@@ -20,7 +22,7 @@ class AcademicController extends Controller
         $departmentId = $request->input('department_id');
         $tab = $request->input('tab', 'faculties'); // Default tab
 
-        $faculties = $departments = $programmes = $courses = null;
+        $faculties = $departments = $programmes = $courses = $units = null;
 
         if ($tab === 'faculties') {
             $faculties = Faculty::withCount('departments')
@@ -32,9 +34,15 @@ class AcademicController extends Controller
 
         if ($tab === 'departments') {
             $departments = Department::with('faculty')
-                ->withCount('programmes')
+                ->withCount(['programmes', 'units'])
                 ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
-                ->when($facultyId, fn ($q) => $q->where('faculty_id', $facultyId))
+                ->when($facultyId, function ($q) use ($facultyId) {
+                    if ($facultyId === 'NON_ACADEMIC') {
+                        $q->whereNull('faculty_id');
+                    } else {
+                        $q->where('faculty_id', $facultyId);
+                    }
+                })
                 ->orderBy('name')
                 ->paginate(15, ['*'], 'page')
                 ->withQueryString();
@@ -44,6 +52,15 @@ class AcademicController extends Controller
             $programmes = Programme::with('department.faculty')
                 ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%"))
                 ->when($facultyId, fn ($q) => $q->whereHas('department', fn ($d) => $d->where('faculty_id', $facultyId)))
+                ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId))
+                ->orderBy('name')
+                ->paginate(15, ['*'], 'page')
+                ->withQueryString();
+        }
+
+        if ($tab === 'units') {
+            $units = Unit::with('department')
+                ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
                 ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId))
                 ->orderBy('name')
                 ->paginate(15, ['*'], 'page')
@@ -74,9 +91,10 @@ class AcademicController extends Controller
             'departments' => $departments ?? $empty,
             'programmes' => $programmes ?? $empty,
             'courses' => $courses ?? $empty,
-            'allFaculties' => Cache::remember('all_faculties', 86400, fn() => Faculty::orderBy('name')->get()),
-            'allDepartments' => Cache::remember('all_departments', 86400, fn() => Department::orderBy('name')->get()),
-            'allProgrammes' => Cache::remember('all_programmes', 86400, fn() => Programme::orderBy('name')->get()),
+            'units' => $units ?? $empty,
+            'allFaculties' => AcademicCacheService::getAllFaculties(),
+            'allDepartments' => AcademicCacheService::getAllDepartments(),
+            'allProgrammes' => AcademicCacheService::getAllProgrammes(),
             'filters' => $request->only(['search', 'faculty_id', 'department_id', 'tab']),
         ]);
     }
@@ -84,7 +102,7 @@ class AcademicController extends Controller
     public function toggle(Request $request)
     {
         $request->validate([
-            'type' => 'required|in:faculty,department,programme,course',
+            'type' => 'required|in:faculty,department,programme,course,unit',
             'id' => 'required|uuid',
             'is_active' => 'required|boolean',
         ]);
@@ -94,30 +112,19 @@ class AcademicController extends Controller
             'department' => Department::class,
             'programme' => Programme::class,
             'course' => Course::class,
+            'unit' => Unit::class,
         };
 
         $item = $modelClass::findOrFail($request->id);
         $item->update(['is_active' => $request->is_active]);
 
-        $this->clearAcademicCache();
-
         return back()->with('success', ucfirst($request->type).' status updated.');
-    }
-
-    private function clearAcademicCache()
-    {
-        Cache::forget('all_faculties');
-        Cache::forget('all_departments');
-        Cache::forget('all_programmes');
-        Cache::forget('faculties_with_departments');
-        Cache::forget('faculties_with_departments_full');
-        Cache::forget('all_programmes_list');
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'type' => 'required|in:faculty,department,programme,course',
+            'type' => 'required|in:faculty,department,programme,course,unit',
         ]);
 
         if ($request->type === 'faculty') {
@@ -130,20 +137,30 @@ class AcademicController extends Controller
             $data = $request->validate([
                 'name' => 'required|string|max:255',
                 'code' => 'required|string|max:10|unique:departments,code',
-                'faculty_id' => 'required|exists:faculties,id',
+                'faculty_id' => 'nullable|exists:faculties,id',
+                'is_academic' => 'required|boolean',
             ]);
             Department::create($data);
+        } elseif ($request->type === 'unit') {
+            $data = $request->validate([
+                'name' => 'required|string|max:255',
+                'code' => 'required|string|max:10|unique:units,code',
+                'department_id' => 'required|exists:departments,id',
+            ]);
+            Unit::create($data);
         } elseif ($request->type === 'programme') {
             $data = $request->validate([
                 'name' => 'required|string|max:255',
                 'program_type' => 'required|string|in:UG,PG,PHD',
                 'department_id' => 'required|exists:departments,id',
+                'scholarship_eligible' => 'required|boolean',
             ]);
 
             Programme::create([
                 'name' => $data['name'],
                 'type' => $data['program_type'],
                 'department_id' => $data['department_id'],
+                'scholarship_eligible' => $data['scholarship_eligible'],
             ]);
         } elseif ($request->type === 'course') {
             $data = $request->validate([
@@ -158,15 +175,13 @@ class AcademicController extends Controller
             Course::create($data);
         }
 
-        $this->clearAcademicCache();
-
         return back()->with('success', ucfirst($request->type).' created successfully.');
     }
 
     public function update(Request $request)
     {
         $request->validate([
-            'type' => 'required|in:faculty,department,programme,course',
+            'type' => 'required|in:faculty,department,programme,course,unit',
             'id' => 'required|uuid',
         ]);
 
@@ -182,21 +197,32 @@ class AcademicController extends Controller
             $data = $request->validate([
                 'name' => 'required|string|max:255',
                 'code' => 'required|string|max:10|unique:departments,code,'.$department->id,
-                'faculty_id' => 'required|exists:faculties,id',
+                'faculty_id' => 'nullable|exists:faculties,id',
+                'is_academic' => 'required|boolean',
             ]);
             $department->update($data);
+        } elseif ($request->type === 'unit') {
+            $unit = Unit::findOrFail($request->id);
+            $data = $request->validate([
+                'name' => 'required|string|max:255',
+                'code' => 'required|string|max:10|unique:units,code,'.$unit->id,
+                'department_id' => 'required|exists:departments,id',
+            ]);
+            $unit->update($data);
         } elseif ($request->type === 'programme') {
             $programme = Programme::findOrFail($request->id);
             $data = $request->validate([
                 'name' => 'required|string|max:255',
                 'program_type' => 'required|string|in:UG,PG,PHD',
                 'department_id' => 'required|exists:departments,id',
+                'scholarship_eligible' => 'required|boolean',
             ]);
 
             $programme->update([
                 'name' => $data['name'],
                 'type' => $data['program_type'],
                 'department_id' => $data['department_id'],
+                'scholarship_eligible' => $data['scholarship_eligible'],
             ]);
         } elseif ($request->type === 'course') {
             $course = Course::findOrFail($request->id);
@@ -211,8 +237,6 @@ class AcademicController extends Controller
             ]);
             $course->update($data);
         }
-
-        $this->clearAcademicCache();
 
         return back()->with('success', ucfirst($request->type).' updated successfully.');
     }
