@@ -50,6 +50,7 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
     });
     Route::post('staff/import', [StaffController::class, 'import'])->name('staff.import');
     Route::get('staff/template', [StaffController::class, 'downloadTemplate'])->name('staff.template');
+    Route::post('staff/resend-all', [StaffController::class, 'resendAllCredentials'])->name('staff.resend_all');
     Route::resource('staff', StaffController::class);
     Route::post('course-allocations/import', [CourseAllocationController::class, 'import'])->name('course-allocations.import');
     Route::get('course-allocations/template', [CourseAllocationController::class, 'downloadTemplate'])->name('course-allocations.template');

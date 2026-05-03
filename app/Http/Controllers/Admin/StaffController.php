@@ -302,4 +302,11 @@ class StaffController extends Controller
         return redirect()->route('admin.staff.index')
             ->with('success', 'Staff member deleted successfully.');
     }
+
+    public function resendAllCredentials()
+    {
+        \App\Jobs\ResendStaffLoginCredentials::dispatch();
+
+        return back()->with('success', 'Staff credentials resend job has been dispatched. Emails will be sent in the background.');
+    }
 }
