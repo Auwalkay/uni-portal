@@ -78,7 +78,7 @@ const academicsItems = computed(() => {
             title: 'Students',
             href: '/admin/students',
             icon: GraduationCap,
-            show: true,
+            show: hasPermission('view_students'),
         },
         {
             title: 'My Courses',
@@ -90,7 +90,7 @@ const academicsItems = computed(() => {
             title: 'Timetables',
             href: route().has('admin.timetables.index') ? route('admin.timetables.index') : '#',
             icon: Calendar,
-            show: hasPermission('manage_courses'),
+            show: hasPermission('manage_timetables'),
         },
         {
             title: 'Course Management',
@@ -102,13 +102,13 @@ const academicsItems = computed(() => {
             title: 'Allocations',
             href: route().has('admin.course-allocations.index') ? route('admin.course-allocations.index') : '#',
             icon: CalendarRange,
-            show: hasPermission('manage_courses'),
+            show: hasPermission('assign_coordinators'),
         },
         {
             title: 'Session & Semester',
             href: '/admin/sessions',
             icon: CalendarRange,
-            show: hasPermission('manage_courses'),
+            show: hasPermission('manage_academic_sessions'),
         },
         {
             title: 'Results',
@@ -131,43 +131,43 @@ const financeItems = computed(() => {
             title: 'Expenses',
             href: route().has('admin.finance.expenses.index') ? route('admin.finance.expenses.index') : '#',
             icon: DollarSign,
-            show: hasRole('admin') || hasPermission('manage_payments'),
+            show: hasPermission('view_expenses'),
         },
         {
             title: 'Payroll',
             href: route().has('admin.finance.payroll.index') ? route('admin.finance.payroll.index') : '#',
             icon: Banknote,
-            show: hasRole('admin') || hasPermission('manage_payments'),
+            show: hasPermission('run_payroll'),
         },
         {
             title: 'Staff Salaries',
             href: route().has('admin.finance.salary.index') ? route('admin.finance.salary.index') : '#',
             icon: Wallet,
-            show: hasRole('admin') || hasPermission('manage_payments'),
+            show: hasPermission('view_salaries'),
         },
         {
             title: 'Invoices',
             href: route().has('admin.invoices.index') ? route('admin.invoices.index') : '#',
             icon: CreditCard,
-            show: hasRole('admin') || hasPermission('view_payments'),
+            show: hasPermission('view_payments'),
         },
         {
             title: 'Payments',
             href: '/admin/payments',
             icon: CreditCard,
-            show: hasRole('admin') || hasPermission('view_payments'),
+            show: hasPermission('view_payments'),
         },
         {
             title: 'Finance Configuration',
             href: '/admin/finance',
             icon: Shield,
-            show: hasRole('admin') || hasPermission('manage_payments'),
+            show: hasPermission('manage_payments'),
         },
         {
             title: 'Scholarships',
             href: route().has('admin.scholarships.index') ? route('admin.scholarships.index') : '/admin/scholarships',
             icon: Award,
-            show: hasRole('admin') || hasPermission('manage_payments'),
+            show: hasPermission('manage_scholarships'),
         },
     ].filter(i => i.show);
 });
@@ -196,13 +196,13 @@ const administrationItems = computed(() => {
             title: 'System Users',
             href: '/admin/users',
             icon: Shield,
-            show: hasRole('admin'),
+            show: hasPermission('manage_system_settings'),
         },
         {
             title: 'Designations',
             href: route().has('admin.designations.index') ? route('admin.designations.index') : '/admin/designations',
             icon: Award,
-            show: hasRole('admin'),
+            show: hasPermission('manage_staff'),
         },
     ].filter(i => i.show);
 });
@@ -242,7 +242,7 @@ const footerNavItems = computed(() => {
             title: 'System Settings',
             href: '/admin/settings',
             icon: Shield,
-            show: hasRole('admin'),
+            show: hasPermission('manage_system_settings'),
         },
     ].filter(item => item.show);
 });
@@ -264,12 +264,12 @@ const footerNavItems = computed(() => {
         </SidebarHeader>
 
         <SidebarContent>
-            <NavMain :items="overviewItems" label="Overview" />
+            <NavMain v-if="overviewItems.length > 0" :items="overviewItems" label="Overview" />
             <NavMain v-if="frontDeskItems.length > 0" :items="frontDeskItems" label="Front Desk" />
-            <NavMain :items="personalItems" label="Personal" />
-            <NavMain :items="academicsItems" label="Academics" />
-            <NavMain :items="financeItems" label="Finance" />
-            <NavMain :items="administrationItems" label="Administration" />
+            <NavMain v-if="personalItems.length > 0" :items="personalItems" label="Personal" />
+            <NavMain v-if="academicsItems.length > 0" :items="academicsItems" label="Academics" />
+            <NavMain v-if="financeItems.length > 0" :items="financeItems" label="Finance" />
+            <NavMain v-if="administrationItems.length > 0" :items="administrationItems" label="Administration" />
         </SidebarContent>
 
         <SidebarFooter>

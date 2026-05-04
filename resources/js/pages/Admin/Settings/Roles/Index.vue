@@ -32,6 +32,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
+import { useForm } from '@inertiajs/vue3';
+import Swal from 'sweetalert2';
+
 const props = defineProps<{
     roles: Array<{
         id: number;
@@ -84,8 +87,10 @@ const getRoleDescription = (name: string) => {
                 </div>
 
                 <div class="flex gap-2">
-                    <Button variant="outline" class="gap-2">
-                         <Plus class="w-4 h-4" /> Create Custom Role
+                    <Button as-child variant="outline" class="gap-2">
+                        <Link :href="route('admin.settings.roles.create')">
+                             <Plus class="w-4 h-4" /> Create Custom Role
+                        </Link>
                     </Button>
                 </div>
             </div>
