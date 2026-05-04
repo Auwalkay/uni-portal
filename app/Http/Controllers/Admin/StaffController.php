@@ -77,7 +77,7 @@ class StaffController extends Controller
             'filters' => $request->only(['search', 'role_id', 'faculty_id', 'department_id']),
             'faculties' => AcademicCacheService::getFaculties(),
             'nonAcademicDepartments' => AcademicCacheService::getNonAcademicDepartments(),
-            'roles' => \App\Models\Role::whereNotIn('name', ['admin', 'student', 'applicant', 'staff'])->get(['id', 'name']),
+            'roles' => \App\Models\Role::whereNotIn('name', ['student', 'applicant'])->get(['id', 'name']),
             'stats' => [
                 'total' => User::role('staff')->count(),
                 'academic' => Staff::where('is_academic', true)->count(),
@@ -101,7 +101,7 @@ class StaffController extends Controller
             'faculties' => AcademicCacheService::getFacultiesFull(),
             'nonAcademicDepartments' => AcademicCacheService::getNonAcademicDepartments(),
             'designations' => AcademicCacheService::getDesignations(),
-            'roles' => Role::whereNotIn('name', ['admin', 'student', 'applicant', 'staff'])->get(['id', 'name']),
+            'roles' => Role::whereNotIn('name', ['student', 'applicant'])->get(['id', 'name']),
         ]);
     }
 
@@ -246,7 +246,7 @@ class StaffController extends Controller
             'faculties' => AcademicCacheService::getFacultiesFull(),
             'nonAcademicDepartments' => AcademicCacheService::getNonAcademicDepartments(),
             'designations' => AcademicCacheService::getDesignations(),
-            'roles' => Role::whereNotIn('name', ['admin', 'student', 'applicant', 'staff'])->get(['id', 'name']),
+            'roles' => Role::whereNotIn('name', ['student', 'applicant'])->get(['id', 'name']),
             'current_role_id' => $currentRole?->id,
         ]);
     }

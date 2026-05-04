@@ -237,6 +237,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/settings/update', [\App\Http\Controllers\Admin\SystemSettingsController::class, 'updateSetting'])->name('settings.update');
 
             Route::get('/settings/roles', [\App\Http\Controllers\Admin\RoleController::class, 'index'])->name('settings.roles.index');
+            Route::get('/settings/roles/create', [\App\Http\Controllers\Admin\RoleController::class, 'create'])->name('settings.roles.create');
+            Route::post('/settings/roles', [\App\Http\Controllers\Admin\RoleController::class, 'store'])->name('settings.roles.store');
             Route::get('/settings/roles/{role}/edit', [\App\Http\Controllers\Admin\RoleController::class, 'edit'])->name('settings.roles.edit');
             Route::put('/settings/roles/{role}', [\App\Http\Controllers\Admin\RoleController::class, 'update'])->name('settings.roles.update');
             Route::get('/settings/logs', [\App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('settings.logs.index');

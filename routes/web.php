@@ -83,6 +83,10 @@ Route::get('dashboard', function () {
         return redirect()->route('admin.dashboard');
     }
 
+    if ($user->can('access_staff_portal')) {
+        return redirect()->route('staff.payslips.index');
+    }
+
     if ($user->can('access_student_portal')) {
         return redirect()->route('student.dashboard');
     }

@@ -7,22 +7,19 @@ import {
     ArrowLeft,
     Save,
     CheckCircle2,
-    XCircle,
-    Info,
     Search,
     Lock,
     Unlock,
-    Settings
+    Plus
 } from 'lucide-vue-next';
-import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue';
 import { route } from 'ziggy-js';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,27 +29,18 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 
 const props = defineProps<{
-    role: {
-        id: number;
-        name: string;
-        permissions: Array<{ id: number; name: string }>;
-    };
     allPermissions: Record<string, Array<{ id: number; name: string }>>;
 }>();
 
 const breadcrumbs = [
     { title: 'System Settings', href: route('admin.settings.index') },
     { title: 'Roles', href: route('admin.settings.roles.index') },
-    { title: `Manage ${props.role.name}`, href: '#' }
+    { title: 'Create Custom Role', href: '#' }
 ];
 
 const form = useForm({
-    permissions: props.role.permissions ? props.role.permissions.map(p => p.name) : []
-});
-
-// Sync permissions if role changes without full page reload
-watch(() => props.role.id, () => {
-    form.permissions = props.role.permissions ? props.role.permissions.map(p => p.name) : [];
+    name: '',
+    permissions: [] as string[]
 });
 
 const togglePermission = (name: string) => {
@@ -65,11 +53,7 @@ const togglePermission = (name: string) => {
 };
 
 const submit = () => {
-    form.put(route('admin.settings.roles.update', props.role.id));
-};
-
-const formatRoleName = (name: string) => {
-    return name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    form.post(route('admin.settings.roles.store'));
 };
 
 const formatPermissionName = (name: string) => {
@@ -104,13 +88,11 @@ const toggleGroup = (groupName: string) => {
     const allSelected = isGroupAllSelected(groupName);
 
     if (allSelected) {
-        // Remove all
         groupPerms.forEach(p => {
             const index = form.permissions.indexOf(p.name);
             if (index > -1) form.permissions.splice(index, 1);
         });
     } else {
-        // Add all
         groupPerms.forEach(p => {
             if (!form.permissions.includes(p.name)) form.permissions.push(p.name);
         });
@@ -119,7 +101,7 @@ const toggleGroup = (groupName: string) => {
 </script>
 
 <template>
-    <Head :title="`Permissions for ${formatRoleName(role.name)}`" />
+    <Head title="Create Custom Role" />
 
     <AdminLayout :breadcrumbs="breadcrumbs">
         <div class="py-10 px-6 space-y-8 w-full max-w-6xl mx-auto">
@@ -132,55 +114,59 @@ const toggleGroup = (groupName: string) => {
                        </Link>
                    </Button>
                     <div>
-                        <h1 class="text-3xl font-bold tracking-tight text-foreground">{{ formatRoleName(role.name) }} Permissions</h1>
-                        <p class="text-muted-foreground mt-1 text-sm">Fine-tune exactly what users with this role can see and do.</p>
+                        <h1 class="text-3xl font-bold tracking-tight text-foreground">Create Custom Role</h1>
+                        <p class="text-muted-foreground mt-1 text-sm">Define a new authority level and assign its initial capabilities.</p>
                     </div>
                 </div>
 
                 <div class="flex items-center gap-2">
-                    <div class="relative w-64 mr-2">
-                        <Search class="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input v-model="searchQuery" placeholder="Filter capabilities..." class="pl-8 h-9 text-sm" />
-                    </div>
                     <Button @click="submit" :disabled="form.processing" class="gap-2 shadow-md">
-                        <Save class="w-4 h-4" /> Save Changes
+                        <Plus class="w-4 h-4" /> Create & Finalize
                     </Button>
                 </div>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                <!-- Sidebar Info -->
+                <!-- Sidebar Config -->
                 <div class="space-y-6">
-                    <Card class="bg-indigo-600 text-white border-0 shadow-lg">
-                        <CardHeader class="pb-2">
-                            <CardTitle class="text-lg flex items-center gap-2">
-                                <ShieldCheck class="w-5 h-5 text-indigo-300" /> Security Note
-                            </CardTitle>
+                    <Card class="border-primary/20 bg-primary/5">
+                        <CardHeader>
+                            <CardTitle class="text-sm font-bold uppercase tracking-wider text-primary">Role Identity</CardTitle>
                         </CardHeader>
-                        <CardContent class="text-sm text-indigo-100 leading-relaxed">
-                            Permissions defined here grant systemic authority. Ensure you only enable capabilities necessary for the role's business function.
+                        <CardContent class="space-y-4">
+                            <div class="space-y-2">
+                                <Label for="role_name">Role Display Name</Label>
+                                <Input 
+                                    id="role_name" 
+                                    v-model="form.name" 
+                                    placeholder="e.g. Laboratory Supervisor" 
+                                    required
+                                />
+                                <p v-if="form.errors.name" class="text-xs text-destructive">{{ form.errors.name }}</p>
+                                <p class="text-[10px] text-muted-foreground italic">System will auto-format this for DB compatibility.</p>
+                            </div>
                         </CardContent>
                     </Card>
 
                     <Card class="border border-slate-200 dark:border-slate-800">
                         <CardHeader class="pb-2">
-                            <CardTitle class="text-sm font-bold uppercase tracking-wider text-muted-foreground">Selection Summary</CardTitle>
+                            <CardTitle class="text-sm font-bold uppercase tracking-wider text-muted-foreground">Permission Summary</CardTitle>
                         </CardHeader>
                         <CardContent class="space-y-4 pt-2">
                             <div class="flex justify-between items-center text-sm">
-                                <span class="text-muted-foreground">Selected Capabilities</span>
-                                <Badge variant="secondary" class="font-bold underline decoration-primary decoration-2">{{ form.permissions.length }}</Badge>
+                                <span class="text-muted-foreground">Initial Capabilities</span>
+                                <Badge variant="secondary" class="font-bold">{{ form.permissions.length }}</Badge>
                             </div>
                             <Separator />
-                            <div class="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl text-[11px] leading-relaxed text-slate-500 italic">
-                                <div class="font-bold mb-1">Active IDs:</div>
-                                <div class="break-all">{{ form.permissions.join(', ') || 'None' }}</div>
+                            <div class="relative">
+                                <Search class="absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                                <Input v-model="searchQuery" placeholder="Filter capabilities..." class="pl-7 h-8 text-[11px]" />
                             </div>
                         </CardContent>
                     </Card>
                 </div>
 
-                <!-- Matrix -->
+                <!-- Permission Matrix -->
                 <div class="lg:col-span-3 space-y-6">
                     <div v-for="(perms, group) in filteredPermissions" :key="group" class="bg-white dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
                         <div class="px-6 py-4 bg-slate-50 dark:bg-slate-900/40 border-b flex justify-between items-center">
@@ -192,11 +178,11 @@ const toggleGroup = (groupName: string) => {
                                 <h3 class="font-bold text-lg capitalize">{{ group }} Management</h3>
                             </div>
                             <Button variant="ghost" size="sm" class="text-xs h-8 text-primary hover:bg-primary/5" @click="toggleGroup(String(group))">
-                                {{ isGroupAllSelected(String(group)) ? 'Deselect Group' : 'Select All in Group' }}
+                                {{ isGroupAllSelected(String(group)) ? 'Toggle Group' : 'Select Group' }}
                             </Button>
                         </div>
                         <div class="p-6 grid sm:grid-cols-2 md:grid-cols-3 gap-6">
-                              <div v-for="permission in perms" :key="permission.id" 
+                             <div v-for="permission in perms" :key="permission.id" 
                                 class="flex items-start gap-3 p-4 rounded-xl border transition-all cursor-pointer group"
                                 :class="[
                                     form.permissions.includes(permission.name) 
@@ -205,43 +191,25 @@ const toggleGroup = (groupName: string) => {
                                 ]"
                                 @click="togglePermission(permission.name)"
                              >
-                                <div class="relative flex items-center h-5">
-                                    <input 
-                                        type="checkbox"
-                                        :checked="form.permissions.includes(permission.name)"
-                                        @click.stop="togglePermission(permission.name)"
-                                        class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
-                                    />
-                                </div>
+                                <Checkbox 
+                                    :id="`perm-${permission.id}`" 
+                                    :checked="form.permissions.includes(permission.name)"
+                                    @click.stop="togglePermission(permission.name)"
+                                    class="mt-0.5"
+                                />
                                 <div class="space-y-0.5 pointer-events-none">
                                     <Label 
                                         class="text-sm font-bold leading-none cursor-pointer group-hover:text-primary transition-colors"
                                         :class="{ 'text-primary': form.permissions.includes(permission.name) }"
                                     >
                                         {{ formatPermissionName(permission.name) }}
-                                        
-                                        <span v-if="form.permissions.includes(permission.name)" class="ml-1 text-[8px] uppercase text-green-600 font-black">ACTIVE</span>
                                     </Label>
+                                    <p class="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">Capability</p>
                                 </div>
                              </div>
                         </div>
                     </div>
-
-                    <div v-if="Object.keys(filteredPermissions).length === 0" class="h-64 flex flex-col items-center justify-center space-y-4 bg-slate-50 dark:bg-slate-900/20 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800">
-                        <Search class="w-12 h-12 text-slate-300" />
-                        <div class="text-center">
-                            <p class="font-bold">No matching permissions</p>
-                            <p class="text-sm text-muted-foreground">Adjust your search query to find specific capabilities.</p>
-                        </div>
-                    </div>
                 </div>
-            </div>
-
-            <!-- Footer Actions -->
-             <div class="fixed bottom-8 right-8 z-50 md:hidden">
-                <Button size="lg" @click="submit" :disabled="form.processing" class="shadow-2xl h-14 w-14 rounded-full p-0">
-                    <Save class="w-6 h-6" />
-                </Button>
             </div>
         </div>
     </AdminLayout>

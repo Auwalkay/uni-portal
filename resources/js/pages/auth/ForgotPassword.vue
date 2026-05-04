@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { watch } from 'vue';
+import Swal from 'sweetalert2';
 
 import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
@@ -10,6 +12,22 @@ import { Spinner } from '@/components/ui/spinner';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { login } from '@/routes';
 import { email } from '@/routes/password';
+
+const page = usePage();
+
+watch(() => page.props.errors, (errors) => {
+    if (Object.keys(errors).length > 0) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Request Failed',
+            text: 'Please check your email address.',
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 4000
+        });
+    }
+}, { deep: true });
 
 defineProps<{
     status?: string;
