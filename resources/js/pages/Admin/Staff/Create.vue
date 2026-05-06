@@ -14,6 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+} from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
 import { 
     User, 
     Mail, 
@@ -25,7 +32,14 @@ import {
     ArrowLeft,
     CheckCircle2,
     Loader2,
-    Shield
+    Shield,
+    Calendar,
+    Phone,
+    MapPin,
+    Globe,
+    BookOpen,
+    ClipboardList,
+    Heart
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js'; 
 import { ref, watch, computed } from 'vue';
@@ -46,6 +60,7 @@ const props = defineProps<{
     nonAcademicDepartments: Array<any>;
     designations: Array<string>;
     roles: Array<{ id: string; name: string }>;
+    states: Array<{ id: number; name: string; lgas: Array<{ id: number; name: string }> }>;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -63,9 +78,32 @@ const form = useForm({
     unit_id: '',
     is_academic: true,
     role_id: '',
+    date_joined: '',
+    highest_qualification: '',
+    phone_number: '',
+    gender: '',
+    date_of_birth: '',
+    marital_status: '',
+    address: '',
+    nationality: 'Nigerian',
+    state_id: '',
+    lga_id: '',
+    specialization: '',
+    research_interests: '',
 });
 
 const selectedFacultyId = ref<string>('');
+
+// State & LGA Logic
+const availableLgas = computed(() => {
+    if (!form.state_id) return [];
+    const state = props.states.find(s => s.id === form.state_id);
+    return state ? state.lgas : [];
+});
+
+watch(() => form.state_id, () => {
+    form.lga_id = '';
+});
 
 const availableDepartments = computed(() => {
     if (form.is_academic) {
@@ -115,7 +153,7 @@ const submit = () => {
     <Head title="Create Staff Account" />
 
     <AdminLayout :breadcrumbs="breadcrumbs">
-        <div class="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-20">
+        <div class="p-4 md:p-8 space-y-8 pb-20">
             <!-- Header Section -->
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border shadow-sm">
                 <div class="space-y-1">
@@ -135,137 +173,297 @@ const submit = () => {
                 </Button>
             </div>
 
-            <form @submit.prevent="submit" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <!-- Left Column: Primary Information -->
-                <div class="lg:col-span-2 space-y-8">
-                    <!-- Personal & Account Details -->
-                    <Card class="border shadow-sm overflow-hidden">
-                        <CardHeader class="bg-slate-50 border-b py-4">
-                            <CardTitle class="text-base flex items-center gap-2">
-                                <User class="w-4 h-4 text-primary" />
-                                Account Information
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent class="p-6">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div class="space-y-2">
-                                    <Label for="name" class="text-sm font-semibold">Full Name</Label>
-                                    <div class="relative group">
-                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
-                                            <User class="w-4 h-4" />
+            <form @submit.prevent="submit" class="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-20">
+                <!-- Left Column: Tabbed Information -->
+                <div class="lg:col-span-2">
+                    <Tabs default-value="account" class="w-full space-y-6">
+                        <TabsList class="grid w-full grid-cols-3 h-12 p-1 bg-slate-100 rounded-xl">
+                            <TabsTrigger value="account" class="rounded-lg font-bold text-xs uppercase tracking-widest">
+                                <User class="w-3.5 h-3.5 mr-2" /> Account
+                            </TabsTrigger>
+                            <TabsTrigger value="personal" class="rounded-lg font-bold text-xs uppercase tracking-widest">
+                                <Heart class="w-3.5 h-3.5 mr-2" /> Personal
+                            </TabsTrigger>
+                            <TabsTrigger value="placement" class="rounded-lg font-bold text-xs uppercase tracking-widest">
+                                <Building2 class="w-3.5 h-3.5 mr-2" /> Placement
+                            </TabsTrigger>
+                        </TabsList>
+
+                        <!-- Account & Employment Tab -->
+                        <TabsContent value="account" class="space-y-6 animate-in fade-in-50 duration-300">
+                            <Card class="border shadow-sm overflow-hidden">
+                                <CardHeader class="bg-slate-50 border-b py-4">
+                                    <CardTitle class="text-base flex items-center gap-2">
+                                        <User class="w-4 h-4 text-primary" />
+                                        Identity & Credentials
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent class="p-6">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div class="space-y-2">
+                                            <Label for="name" class="text-sm font-semibold">Full Name</Label>
+                                            <div class="relative group">
+                                                <User class="absolute left-3 top-3 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                                <Input id="name" v-model="form.name" required class="pl-10" placeholder="e.g. Dr. Jane Smith" />
+                                            </div>
                                         </div>
-                                        <Input id="name" v-model="form.name" class="pl-10" placeholder="e.g. Dr. John Doe" required />
-                                    </div>
-                                    <p v-if="form.errors.name" class="text-xs text-destructive">{{ form.errors.name }}</p>
-                                </div>
 
-                                <div class="space-y-2">
-                                    <Label for="email" class="text-sm font-semibold">Email Address</Label>
-                                    <div class="relative group">
-                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
-                                            <Mail class="w-4 h-4" />
+                                        <div class="space-y-2">
+                                            <Label for="email" class="text-sm font-semibold">Email Address</Label>
+                                            <div class="relative group">
+                                                <Mail class="absolute left-3 top-3 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                                <Input id="email" type="email" v-model="form.email" required class="pl-10" placeholder="jane.smith@university.edu" />
+                                            </div>
                                         </div>
-                                        <Input id="email" type="email" v-model="form.email" class="pl-10" placeholder="john.doe@university.edu" required />
-                                    </div>
-                                    <p v-if="form.errors.email" class="text-xs text-destructive">{{ form.errors.email }}</p>
-                                </div>
 
-                                <div class="space-y-2">
-                                    <Label for="staff_number" class="text-sm font-semibold">Staff ID Number</Label>
-                                    <div class="relative group">
-                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
-                                            <BadgeCheck class="w-4 h-4" />
+                                        <div class="space-y-2">
+                                            <Label for="password" class="text-sm font-semibold">Initial Password</Label>
+                                            <div class="relative group">
+                                                <Lock class="absolute left-3 top-3 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                                <Input id="password" type="password" v-model="form.password" required class="pl-10" />
+                                            </div>
+                                            <p class="text-[10px] text-muted-foreground italic">Staff can change this after first login.</p>
                                         </div>
-                                        <Input id="staff_number" v-model="form.staff_number" class="pl-10" placeholder="STF/2024/001" required />
-                                    </div>
-                                    <p v-if="form.errors.staff_number" class="text-xs text-destructive">{{ form.errors.staff_number }}</p>
-                                </div>
 
-                                <div class="space-y-2">
-                                    <Label for="password" class="text-sm font-semibold">Temporary Password</Label>
-                                    <div class="relative group">
-                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
-                                            <Lock class="w-4 h-4" />
+                                        <div class="space-y-2">
+                                            <Label for="staff_number" class="text-sm font-semibold">Staff ID Number</Label>
+                                            <div class="relative group">
+                                                <BadgeCheck class="absolute left-3 top-3 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                                <Input id="staff_number" v-model="form.staff_number" required class="pl-10" placeholder="STF/2024/001" />
+                                            </div>
                                         </div>
-                                        <Input id="password" type="password" v-model="form.password" class="pl-10" required />
-                                    </div>
-                                    <p v-if="form.errors.password" class="text-xs text-destructive">{{ form.errors.password }}</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
 
-                    <!-- Academic & Placement -->
-                    <Card class="border shadow-sm overflow-hidden">
-                        <CardHeader class="bg-slate-50 border-b py-4">
-                            <CardTitle class="text-base flex items-center gap-2">
-                                <Building2 class="w-4 h-4 text-primary" />
-                                Academic Placement
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent class="p-6">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div class="space-y-4 md:col-span-2 p-4 bg-primary/5 rounded-lg border border-primary/10">
-                                    <div class="flex items-center justify-between">
-                                        <div class="space-y-0.5">
-                                            <Label for="is_academic" class="text-base font-semibold">Academic Position</Label>
-                                            <p class="text-xs text-muted-foreground italic">Toggle on if this staff member is involved in teaching/research.</p>
+                                        <div class="space-y-2">
+                                            <Label class="text-sm font-semibold">Professional Designation</Label>
+                                            <Select v-model="form.designation">
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select Designation" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem v-for="designation in designations" :key="designation" :value="designation">
+                                                        {{ designation }}
+                                                    </SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                         </div>
-                                        <Switch 
-                                            id="is_academic" 
-                                            v-model:checked="form.is_academic" 
-                                            class="data-[state=checked]:bg-primary"
-                                        />
+
+                                        <div class="space-y-2">
+                                            <Label class="text-sm font-semibold">Date Joined</Label>
+                                            <div class="relative group">
+                                                <Calendar class="absolute left-3 top-3 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                                <Input type="date" v-model="form.date_joined" class="pl-10" />
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
 
-                                <div v-if="form.is_academic" class="space-y-2">
-                                    <Label class="text-sm font-semibold">Faculty</Label>
-                                    <Select v-model="selectedFacultyId">
-                                        <SelectTrigger class="bg-white">
-                                            <SelectValue placeholder="Assign Faculty" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem v-for="faculty in faculties" :key="faculty.id" :value="faculty.id">
-                                                {{ faculty.name }}
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                        <!-- Personal Details Tab -->
+                        <TabsContent value="personal" class="space-y-6 animate-in fade-in-50 duration-300">
+                            <Card class="border shadow-sm overflow-hidden">
+                                <CardHeader class="bg-slate-50 border-b py-4">
+                                    <CardTitle class="text-base flex items-center gap-2">
+                                        <Heart class="w-4 h-4 text-primary" />
+                                        Personal Profile
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent class="p-6">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div class="space-y-2">
+                                            <Label class="text-sm font-semibold">Gender</Label>
+                                            <Select v-model="form.gender">
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select Gender" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="male">Male</SelectItem>
+                                                    <SelectItem value="female">Female</SelectItem>
+                                                    <SelectItem value="other">Other</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
 
-                                <div class="space-y-2">
-                                    <Label class="text-sm font-semibold">Department</Label>
-                                    <Select v-model="form.department_id" :disabled="form.is_academic && !selectedFacultyId">
-                                        <SelectTrigger class="bg-white">
-                                            <SelectValue placeholder="Select Department" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem v-for="dept in availableDepartments" :key="dept.id" :value="dept.id">
-                                                {{ dept.name }}
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <p v-if="form.errors.department_id" class="text-xs text-destructive">{{ form.errors.department_id }}</p>
-                                </div>
+                                        <div class="space-y-2">
+                                            <Label class="text-sm font-semibold">Marital Status</Label>
+                                            <Select v-model="form.marital_status">
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select Status" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="single">Single</SelectItem>
+                                                    <SelectItem value="married">Married</SelectItem>
+                                                    <SelectItem value="divorced">Divorced</SelectItem>
+                                                    <SelectItem value="widowed">Widowed</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
 
-                                <div class="space-y-2">
-                                    <Label class="text-sm font-semibold">Unit (Optional)</Label>
-                                    <Select v-model="form.unit_id" :disabled="!form.department_id">
-                                        <SelectTrigger class="bg-white">
-                                            <SelectValue placeholder="Select Unit" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem v-for="unit in availableUnits" :key="unit.id" :value="unit.id">
-                                                {{ unit.name }}
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <p v-if="form.errors.unit_id" class="text-xs text-destructive">{{ form.errors.unit_id }}</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                                        <div class="space-y-2">
+                                            <Label for="date_of_birth" class="text-sm font-semibold">Date of Birth</Label>
+                                            <div class="relative group">
+                                                <Calendar class="absolute left-3 top-3 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                                <Input id="date_of_birth" type="date" v-model="form.date_of_birth" class="pl-10" />
+                                            </div>
+                                        </div>
 
+                                        <div class="space-y-2">
+                                            <Label for="phone_number" class="text-sm font-semibold">Phone Number</Label>
+                                            <div class="relative group">
+                                                <Phone class="absolute left-3 top-3 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                                <Input id="phone_number" v-model="form.phone_number" class="pl-10" placeholder="+234..." />
+                                            </div>
+                                        </div>
+
+                                        <div class="space-y-2">
+                                            <Label class="text-sm font-semibold">Nationality</Label>
+                                            <div class="relative group">
+                                                <Globe class="absolute left-3 top-3 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                                <Input v-model="form.nationality" class="pl-10" placeholder="e.g. Nigerian" />
+                                            </div>
+                                        </div>
+
+                                        <div class="space-y-2">
+                                            <div class="grid grid-cols-2 gap-4">
+                                                <div class="space-y-2">
+                                                    <Label class="text-sm font-semibold">State of Origin</Label>
+                                                    <Select v-model="form.state_id">
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Select State" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem v-for="state in states" :key="state.id" :value="state.id">
+                                                                {{ state.name }}
+                                                            </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div class="space-y-2">
+                                                    <Label class="text-sm font-semibold">LGA</Label>
+                                                    <Select v-model="form.lga_id" :disabled="!form.state_id">
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Select LGA" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem v-for="lga in availableLgas" :key="lga.id" :value="lga.id">
+                                                                {{ lga.name }}
+                                                            </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="space-y-2 md:col-span-2">
+                                            <Label class="text-sm font-semibold">Residential Address</Label>
+                                            <div class="relative group">
+                                                <MapPin class="absolute left-3 top-3 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                                <Textarea v-model="form.address" class="pl-10 min-h-[80px]" placeholder="Full residential address..." />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+
+                        <!-- Placement & Academic Tab -->
+                        <TabsContent value="placement" class="space-y-6 animate-in fade-in-50 duration-300">
+                            <Card class="border shadow-sm overflow-hidden">
+                                <CardHeader class="bg-slate-50 border-b py-4">
+                                    <CardTitle class="text-base flex items-center gap-2">
+                                        <Building2 class="w-4 h-4 text-primary" />
+                                        Placement & Academic Track
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent class="p-6 space-y-8">
+                                    <div class="space-y-2">
+                                        <Label class="text-sm font-semibold">Highest Qualification</Label>
+                                        <div class="relative group">
+                                            <GraduationCap class="absolute left-3 top-3 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                            <Input v-model="form.highest_qualification" class="pl-10" placeholder="e.g. PhD in Computer Science" />
+                                        </div>
+                                    </div>
+
+                                    <div class="space-y-4 p-4 bg-primary/5 rounded-lg border border-primary/10">
+                                        <div class="flex items-center justify-between">
+                                            <div class="space-y-0.5">
+                                                <Label for="is_academic" class="text-base font-semibold">Academic Position</Label>
+                                                <p class="text-xs text-muted-foreground italic">Enable for faculty/teaching staff.</p>
+                                            </div>
+                                            <Switch 
+                                                id="is_academic" 
+                                                v-model:checked="form.is_academic" 
+                                                class="data-[state=checked]:bg-primary"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <!-- Academic Specific Fields -->
+                                    <div v-if="form.is_academic" class="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in slide-in-from-top-2 duration-300">
+                                        <div class="space-y-2 md:col-span-2">
+                                            <Label class="text-sm font-semibold text-primary">Area of Specialization</Label>
+                                            <div class="relative group">
+                                                <BookOpen class="absolute left-3 top-3 w-4 h-4 text-primary" />
+                                                <Input v-model="form.specialization" class="pl-10 border-primary/20 focus:border-primary" placeholder="e.g. Machine Learning" />
+                                            </div>
+                                        </div>
+
+                                        <div class="space-y-2 md:col-span-2">
+                                            <Label class="text-sm font-semibold text-primary">Research Interests</Label>
+                                            <div class="relative group">
+                                                <ClipboardList class="absolute left-3 top-3 w-4 h-4 text-primary" />
+                                                <Textarea v-model="form.research_interests" class="pl-10 min-h-[100px] border-primary/20 focus:border-primary" placeholder="Research focus areas..." />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
+                                        <div v-if="form.is_academic" class="space-y-2">
+                                            <Label class="text-sm font-semibold">Faculty</Label>
+                                            <Select v-model="selectedFacultyId">
+                                                <SelectTrigger class="bg-white">
+                                                    <SelectValue placeholder="Assign Faculty" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem v-for="faculty in faculties" :key="faculty.id" :value="faculty.id">
+                                                        {{ faculty.name }}
+                                                    </SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div class="space-y-2">
+                                            <Label class="text-sm font-semibold">Department</Label>
+                                            <Select v-model="form.department_id" :disabled="form.is_academic && !selectedFacultyId">
+                                                <SelectTrigger class="bg-white">
+                                                    <SelectValue placeholder="Select Department" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem v-for="dept in availableDepartments" :key="dept.id" :value="dept.id">
+                                                        {{ dept.name }}
+                                                    </SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div class="space-y-2">
+                                            <Label class="text-sm font-semibold">Unit (Optional)</Label>
+                                            <Select v-model="form.unit_id" :disabled="!form.department_id">
+                                                <SelectTrigger class="bg-white">
+                                                    <SelectValue placeholder="Select Unit" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem v-for="unit in availableUnits" :key="unit.id" :value="unit.id">
+                                                        {{ unit.name }}
+                                                    </SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+                    </Tabs>
                 </div>
 
                 <!-- Right Column: Roles & Action -->

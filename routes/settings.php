@@ -132,11 +132,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 
         // Student Management (Creation & Migration)
-        Route::middleware(['permission:manage_staff'])->group(function () {
+        Route::middleware(['permission:create_students'])->group(function () {
             Route::get('/students/create', [StudentController::class, 'create'])->name('students.create');
             Route::post('/students', [StudentController::class, 'store'])->name('students.store');
             Route::post('/students/import', [StudentController::class, 'import'])->name('students.import');
             Route::get('/students/template', [StudentController::class, 'downloadTemplate'])->name('students.template');
+        });
+
+        Route::middleware(['permission:edit_students'])->group(function () {
             Route::get('/students/{student}/edit', [StudentController::class, 'edit'])->name('students.edit');
             Route::put('/students/{student}', [StudentController::class, 'update'])->name('students.update');
         });
@@ -195,27 +198,31 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/sessions/{session}', [SessionController::class, 'show'])->name('sessions.show');
 
             // Timetable Management
-            Route::post('timetables/import', [\App\Http\Controllers\Admin\TimetableController::class, 'import'])->name('timetables.import');
-            Route::get('timetables/template', [\App\Http\Controllers\Admin\TimetableController::class, 'template'])->name('timetables.template');
-            Route::resource('timetables', \App\Http\Controllers\Admin\TimetableController::class)->only(['index', 'store', 'destroy']);
+            Route::middleware(['permission:manage_timetables'])->group(function () {
+                Route::post('timetables/import', [\App\Http\Controllers\Admin\TimetableController::class, 'import'])->name('timetables.import');
+                Route::get('timetables/template', [\App\Http\Controllers\Admin\TimetableController::class, 'template'])->name('timetables.template');
+                Route::resource('timetables', \App\Http\Controllers\Admin\TimetableController::class)->only(['index', 'store', 'destroy']);
+            });
 
             // Hostel Management
-            Route::get('hostels/bookings', [HostelBookingController::class, 'index'])->name('hostels.bookings.index');
-            Route::resource('hostels', HostelController::class);
+            Route::middleware(['permission:manage_hostels'])->group(function () {
+                Route::get('hostels/bookings', [HostelBookingController::class, 'index'])->name('hostels.bookings.index');
+                Route::resource('hostels', HostelController::class);
 
-            Route::post('hostels/{hostel}/blocks', [\App\Http\Controllers\Admin\HostelBlockController::class, 'store'])->name('hostels.blocks.store');
-            Route::delete('hostels/{hostel}/blocks/{block}', [\App\Http\Controllers\Admin\HostelBlockController::class, 'destroy'])->name('hostels.blocks.destroy');
+                Route::post('hostels/{hostel}/blocks', [\App\Http\Controllers\Admin\HostelBlockController::class, 'store'])->name('hostels.blocks.store');
+                Route::delete('hostels/{hostel}/blocks/{block}', [\App\Http\Controllers\Admin\HostelBlockController::class, 'destroy'])->name('hostels.blocks.destroy');
 
-            Route::post('hostels/{hostel}/blocks/{block}/floors', [\App\Http\Controllers\Admin\HostelFloorController::class, 'store'])->name('hostels.floors.store');
-            Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}', [\App\Http\Controllers\Admin\HostelFloorController::class, 'destroy'])->name('hostels.floors.destroy');
+                Route::post('hostels/{hostel}/blocks/{block}/floors', [\App\Http\Controllers\Admin\HostelFloorController::class, 'store'])->name('hostels.floors.store');
+                Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}', [\App\Http\Controllers\Admin\HostelFloorController::class, 'destroy'])->name('hostels.floors.destroy');
 
-            Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms', [\App\Http\Controllers\Admin\HostelRoomController::class, 'store'])->name('hostels.rooms.store');
-            Route::put('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [\App\Http\Controllers\Admin\HostelRoomController::class, 'update'])->name('hostels.rooms.update');
-            Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [\App\Http\Controllers\Admin\HostelRoomController::class, 'destroy'])->name('hostels.rooms.destroy');
+                Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms', [\App\Http\Controllers\Admin\HostelRoomController::class, 'store'])->name('hostels.rooms.store');
+                Route::put('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [\App\Http\Controllers\Admin\HostelRoomController::class, 'update'])->name('hostels.rooms.update');
+                Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [\App\Http\Controllers\Admin\HostelRoomController::class, 'destroy'])->name('hostels.rooms.destroy');
 
-            // Fees
-            Route::post('hostels/fees', [\App\Http\Controllers\Admin\HostelFeeController::class, 'store'])->name('hostels.fees.store');
-            Route::delete('hostels/fees/{fee}', [\App\Http\Controllers\Admin\HostelFeeController::class, 'destroy'])->name('hostels.fees.destroy');
+                // Fees
+                Route::post('hostels/fees', [\App\Http\Controllers\Admin\HostelFeeController::class, 'store'])->name('hostels.fees.store');
+                Route::delete('hostels/fees/{fee}', [\App\Http\Controllers\Admin\HostelFeeController::class, 'destroy'])->name('hostels.fees.destroy');
+            });
 
             // Restricted Session Management
             Route::middleware(['permission:manage_academic_sessions'])->group(function () {

@@ -102,6 +102,7 @@ class StaffController extends Controller
             'nonAcademicDepartments' => AcademicCacheService::getNonAcademicDepartments(),
             'designations' => AcademicCacheService::getDesignations(),
             'roles' => Role::whereNotIn('name', ['student', 'applicant'])->get(['id', 'name']),
+            'states' => AcademicCacheService::getStates(),
         ]);
     }
 
@@ -120,6 +121,18 @@ class StaffController extends Controller
             'unit_id' => 'nullable|exists:units,id',
             'is_academic' => 'boolean',
             'role_id' => 'required|exists:roles,id',
+            'date_joined' => 'nullable|date',
+            'highest_qualification' => 'nullable|string|max:255',
+            'phone_number' => 'nullable|string|max:20',
+            'gender' => 'nullable|string|max:20',
+            'date_of_birth' => 'nullable|date',
+            'marital_status' => 'nullable|string|max:50',
+            'address' => 'nullable|string',
+            'nationality' => 'nullable|string|max:100',
+            'state_id' => 'nullable|exists:states,id',
+            'lga_id' => 'nullable|exists:lgas,id',
+            'specialization' => 'nullable|string|max:255',
+            'research_interests' => 'nullable|string',
         ]);
 
         $password = $request->password ?? Str::random(10);
@@ -143,6 +156,18 @@ class StaffController extends Controller
             'department_id' => $request->department_id,
             'unit_id' => $request->unit_id,
             'is_academic' => $request->is_academic ?? false,
+            'date_joined' => $request->date_joined,
+            'highest_qualification' => $request->highest_qualification,
+            'phone_number' => $request->phone_number,
+            'gender' => $request->gender,
+            'date_of_birth' => $request->date_of_birth,
+            'marital_status' => $request->marital_status,
+            'address' => $request->address,
+            'nationality' => $request->nationality,
+            'state_id' => $request->state_id,
+            'lga_id' => $request->lga_id,
+            'specialization' => $request->specialization,
+            'research_interests' => $request->research_interests,
         ]);
 
         Mail::to($user->email)->send(new StaffAccountCreated($user, $password));
@@ -248,6 +273,7 @@ class StaffController extends Controller
             'designations' => AcademicCacheService::getDesignations(),
             'roles' => Role::whereNotIn('name', ['student', 'applicant'])->get(['id', 'name']),
             'current_role_id' => $currentRole?->id,
+            'states' => AcademicCacheService::getStates(),
         ]);
     }
 
@@ -269,6 +295,18 @@ class StaffController extends Controller
             'unit_id' => 'nullable|exists:units,id',
             'is_academic' => 'boolean',
             'role_id' => 'required|exists:roles,id',
+            'date_joined' => 'nullable|date',
+            'highest_qualification' => 'nullable|string|max:255',
+            'phone_number' => 'nullable|string|max:20',
+            'gender' => 'nullable|string|max:20',
+            'date_of_birth' => 'nullable|date',
+            'marital_status' => 'nullable|string|max:50',
+            'address' => 'nullable|string',
+            'nationality' => 'nullable|string|max:100',
+            'state_id' => 'nullable|exists:states,id',
+            'lga_id' => 'nullable|exists:lgas,id',
+            'specialization' => 'nullable|string|max:255',
+            'research_interests' => 'nullable|string',
         ]);
 
         $staff->update([
@@ -291,6 +329,18 @@ class StaffController extends Controller
             'department_id' => $request->department_id,
             'unit_id' => $request->unit_id,
             'is_academic' => $request->is_academic ?? false,
+            'date_joined' => $request->date_joined,
+            'highest_qualification' => $request->highest_qualification,
+            'phone_number' => $request->phone_number,
+            'gender' => $request->gender,
+            'date_of_birth' => $request->date_of_birth,
+            'marital_status' => $request->marital_status,
+            'address' => $request->address,
+            'nationality' => $request->nationality,
+            'state_id' => $request->state_id,
+            'lga_id' => $request->lga_id,
+            'specialization' => $request->specialization,
+            'research_interests' => $request->research_interests,
         ]);
 
         // Update Role
