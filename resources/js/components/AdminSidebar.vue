@@ -58,6 +58,12 @@ const overviewItems = computed(() => {
 const personalItems = computed(() => {
     return [
         {
+            title: 'My Profile',
+            href: route('staff.profile.edit'),
+            icon: Users,
+            show: hasRole('staff'),
+        },
+        {
             title: 'My Payslips',
             href: route('staff.payslips.index'),
             icon: Wallet,
