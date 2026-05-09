@@ -209,39 +209,49 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function markAsPaid(Invoice $invoice)
+    public function markAsPaid(Request $request, Invoice $invoice)
     {
+        if (!Auth::user()->can('manual_payment_override')) {
+            abort(403, 'You do not have permission to manually override payments.');
+        }
+
+        $request->validate([
+            'amount' => 'nullable|numeric|min:1|max:' . ($invoice->amount - $invoice->paid_amount),
+        ]);
+
         if ($invoice->status === 'paid') {
             return back()->with('error', 'Invoice is already marked as paid.');
         }
 
-        // Calculate pending amount
-        $pendingAmount = $invoice->amount - $invoice->paid_amount;
-        if ($pendingAmount <= 0) {
-            // Should verify why it wasn't marked paid if balance is 0
-            $invoice->update(['status' => 'paid']);
-            return back()->with('success', 'Invoice corrected to Paid status.');
+        $balance = $invoice->amount - $invoice->paid_amount;
+        $amountToRecord = $request->amount ?? $balance;
+
+        if ($amountToRecord <= 0) {
+            return back()->with('error', 'Invalid amount.');
         }
 
         $payment = Payment::create([
             'invoice_id' => $invoice->id,
             'user_id' => $invoice->user_id,
+            'recorded_by' => Auth::id(),
             'gateway_reference' => 'MANUAL-' . strtoupper(uniqid()),
-            'amount' => $pendingAmount,
+            'amount' => $amountToRecord,
             'status' => 'success',
-            'channel' => 'manual', // or 'admin'
+            'channel' => 'manual',
             'paid_at' => now(),
         ]);
 
+        $newTotalPaid = $invoice->paid_amount + $amountToRecord;
+        $newStatus = $newTotalPaid >= $invoice->amount ? 'paid' : 'partial';
+
         $invoice->update([
-            'status' => 'paid',
-            'paid_amount' => $invoice->amount, // Full amount is now paid
+            'status' => $newStatus,
+            'paid_amount' => $newTotalPaid,
         ]);
 
-        // Trigger enrollment if acceptance fee?
-        if ($invoice->type === 'acceptance_fee') {
+        // Trigger enrollment if acceptance fee and now fully paid
+        if ($newStatus === 'paid' && $invoice->type === 'acceptance_fee') {
             $applicant = \App\Models\Applicant::where('user_id', $invoice->user_id)
-                ->with('programme.department.faculty')
                 ->first();
 
             if ($applicant) {
@@ -249,9 +259,7 @@ class InvoiceController extends Controller
             }
         }
 
-        // Send Receipt logic could be here (optional for manual payments?)
-
-        return back()->with('success', 'Invoice marked as paid successfully.');
+        return back()->with('success', 'Manual payment recorded successfully.');
     }
 
     public function verifyPayment(\App\Models\Payment $payment, \App\Services\PaystackService $paystackService)

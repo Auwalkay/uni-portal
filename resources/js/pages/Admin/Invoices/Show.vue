@@ -9,11 +9,33 @@ import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, Printer, CreditCard, CheckCircle2, Clock, Calendar, User, Mail, School, Building, RefreshCw } from 'lucide-vue-next';
 import { type BreadcrumbItem } from '@/types';
 import { route } from 'ziggy-js';
+import { useForm } from '@inertiajs/vue3';
+import { 
+    Dialog, 
+    DialogContent, 
+    DialogDescription, 
+    DialogFooter, 
+    DialogHeader, 
+    DialogTitle, 
+    DialogTrigger 
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ref } from 'vue';
 
 const props = defineProps<{
+    auth: {
+        user: {
+            permissions: string[];
+        };
+    };
     invoice: any;
     payments: any[];
 }>();
+
+const hasPermission = (permission: string) => {
+    return props.auth.user.permissions.includes(permission);
+};
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Invoices', href: '/admin/invoices' },
@@ -44,10 +66,18 @@ const printInvoice = () => {
     window.print();
 };
 
+const manualPaymentForm = useForm({
+    amount: props.invoice.amount - props.invoice.paid_amount,
+});
+
+const isDialogOpen = ref(false);
+
 const markAsPaid = () => {
-    if (confirm('Are you sure you want to mark this invoice as fully paid manually?')) {
-        router.post(route('admin.invoices.mark-as-paid', props.invoice.id));
-    }
+    manualPaymentForm.post(route('admin.invoices.mark-as-paid', props.invoice.id), {
+        onSuccess: () => {
+            isDialogOpen.value = false;
+        },
+    });
 };
 
 const verifyPayment = (paymentId: string) => {
@@ -78,9 +108,41 @@ const verifyPayment = (paymentId: string) => {
                     <Button variant="outline" @click="printInvoice">
                         <Printer class="w-4 h-4 mr-2" /> Print
                     </Button>
-                    <Button v-if="invoice.status !== 'paid'" @click="markAsPaid">
-                        <CreditCard class="w-4 h-4 mr-2" /> Mark as Paid
-                    </Button>
+                    <Dialog v-if="invoice.status !== 'paid' && hasPermission('manual_payment_override')" v-model:open="isDialogOpen">
+                        <DialogTrigger as-child>
+                            <Button>
+                                <CreditCard class="w-4 h-4 mr-2" /> Record Manual Payment
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Record Manual Payment</DialogTitle>
+                                <DialogDescription>
+                                    Enter the amount paid by the student. This will create a manual payment record.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div class="space-y-4 py-4">
+                                <div class="space-y-2">
+                                    <Label for="amount">Amount (₦)</Label>
+                                    <Input 
+                                        id="amount" 
+                                        type="number" 
+                                        v-model="manualPaymentForm.amount"
+                                        :max="invoice.amount - invoice.paid_amount"
+                                    />
+                                    <p class="text-xs text-muted-foreground">
+                                        Max remaining balance: {{ formatCurrency(invoice.amount - invoice.paid_amount) }}
+                                    </p>
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button variant="outline" @click="isDialogOpen = false">Cancel</Button>
+                                <Button :disabled="manualPaymentForm.processing" @click="markAsPaid">
+                                    {{ manualPaymentForm.processing ? 'Recording...' : 'Confirm Payment' }}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                 </div>
             </div>
 

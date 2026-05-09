@@ -260,7 +260,7 @@ const breadcrumbs = [
                             <TableCell>
                                 <div class="flex items-center gap-3">
                                     <Avatar class="h-8 w-8">
-                                        <AvatarImage :src="invoice.user?.profile_photo_url" :alt="invoice.user?.name" />
+                                        <AvatarImage :src="invoice.user?.profile_photo_url || ''" :alt="invoice.user?.name" />
                                         <AvatarFallback>{{ invoice.user?.name?.charAt(0) || 'U' }}</AvatarFallback>
                                     </Avatar>
                                     <div>
@@ -280,7 +280,7 @@ const breadcrumbs = [
                             </TableCell>
                             <TableCell class="text-right">
                                 <div class="flex items-center justify-end gap-2">
-                                    <Button 
+                                    <!-- <Button 
                                         v-if="invoice.status !== 'paid'" 
                                         size="sm" 
                                         variant="outline"
@@ -288,7 +288,7 @@ const breadcrumbs = [
                                         @click="markAsPaid(invoice.id, invoice.reference)"
                                     >
                                         <CheckCircle class="w-4 h-4 mr-2" /> Mark Paid
-                                    </Button>
+                                    </Button> -->
                                     <Button size="sm" variant="secondary" as-child>
                                         <Link :href="route('admin.invoices.show', invoice.id)">
                                             View
