@@ -63,6 +63,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_payments',
             'verify_payments',
             'manage_payments',
+            'manual_payment_override',
             'create_invoices',
             'cancel_invoices',
             'manage_scholarships',
@@ -146,7 +147,10 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // --- FINANCE ROLES ---
         $bursar = Role::firstOrCreate(['name' => 'bursar']);
-        $bursar->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments']);
+        $bursar->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments', 'manual_payment_override']);
+
+        $headOfFinance = Role::firstOrCreate(['name' => 'head_of_finance']);
+        $headOfFinance->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments', 'manual_payment_override']);
 
         $financeOfficer = Role::firstOrCreate(['name' => 'finance_officer']);
         $financeOfficer->syncPermissions(['access_admin_dashboard', 'verify_payments', 'view_payments']);
