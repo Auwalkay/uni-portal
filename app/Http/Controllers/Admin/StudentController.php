@@ -418,6 +418,7 @@ class StudentController extends Controller
             'admitted_session_id' => 'required|exists:academic_sessions,id',
             'entry_mode' => 'required|string',
             'matriculation_number' => 'required|string|unique:students,matriculation_number,' . $student->id,
+            'jamb_registration_number' => 'nullable|string|max:255',
             'jamb_score' => 'nullable|integer',
             'previous_institution' => 'nullable|string|max:255',
             'fee_policy' => 'required|in:admission_session,current_session',

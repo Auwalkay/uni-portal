@@ -5,7 +5,9 @@ namespace App\Services;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
-class PaystackService
+use App\Contracts\PaymentGatewayInterface;
+
+class PaystackService implements PaymentGatewayInterface
 {
     protected $baseUrl = 'https://api.paystack.co';
 
@@ -16,7 +18,7 @@ class PaystackService
         $this->secretKey = config('services.paystack.secret_key', env('PAYSTACK_SECRET_KEY'));
     }
 
-    public function initializeTransaction($email, $amount, $reference, $callbackUrl = null)
+    public function initializeTransaction($email, $amount, $reference, $callbackUrl = null, array $metadata = [])
     {
         // Amount is in kobo
         $response = Http::withToken($this->secretKey)->post("{$this->baseUrl}/transaction/initialize", [
@@ -24,6 +26,7 @@ class PaystackService
             'amount' => $amount * 100,
             'reference' => $reference,
             'callback_url' => $callbackUrl,
+            'metadata' => $metadata,
         ]);
 
         if ($response->successful()) {

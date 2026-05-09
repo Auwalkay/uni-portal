@@ -6,18 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\StudentSession;
-use App\Services\PaystackService;
+use App\Contracts\PaymentGatewayInterface;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class PaymentController extends Controller
 {
-    protected $paystack;
-
-    public function __construct(PaystackService $paystack)
+    protected $gateway;
+    
+    public function __construct(PaymentGatewayInterface $gateway)
     {
-        $this->paystack = $paystack;
+        $this->gateway = $gateway;
     }
 
     public function index()
@@ -100,11 +100,16 @@ class PaymentController extends Controller
         $reference = 'PAY-' . strtoupper(uniqid());
         $payment->update(['gateway_reference' => $reference]);
 
-        $data = $this->paystack->initializeTransaction(
+        $data = $this->gateway->initializeTransaction(
             Auth::user()->email,
             $amountToPay,
             $reference,
-            route('student.payments.callback')
+            route('student.payments.callback'),
+            [
+                'customer_name' => Auth::user()->name,
+                'payment_type' => $invoice->type,
+                'invoice_id' => $invoice->id,
+            ]
         );
 
         if ($data && isset($data['authorization_url'])) {
@@ -116,60 +121,18 @@ class PaymentController extends Controller
 
     public function callback(Request $request)
     {
-        $reference = $request->query('reference');
+        $reference = $request->query('reference') ?? $request->query('transaction_ref');
         if (!$reference) {
             return redirect()->route('student.payments.index')->with('error', 'No reference supplied.');
         }
 
-        $data = $this->paystack->verifyTransaction($reference);
+        $data = $this->gateway->verifyTransaction($reference);
 
         if ($data && $data['status'] === 'success') {
             $payment = Payment::where('gateway_reference', $reference)->first();
 
             if ($payment && $payment->status !== 'success') {
-                $payment->update([
-                    'status' => 'success',
-                    'channel' => $data['channel'],
-                    'paid_at' => now(),
-                ]);
-
-                // Increment paid amount
-                $payment->invoice->increment('paid_amount', $payment->amount);
-
-                // Refresh invoice
-                $payment->invoice->refresh();
-
-                // Check if fully paid (allow small float diff)
-                if ($payment->invoice->paid_amount >= $payment->invoice->amount) {
-                    $payment->invoice->update(['status' => 'paid']);
-                } else {
-                    $payment->invoice->update(['status' => 'partial']);
-                }
-
-                if ($payment->invoice->type === 'acceptance_fee') {
-                    $applicant = \App\Models\Applicant::where('user_id', $payment->user_id)
-                        ->with('programme.department.faculty')
-                        ->first();
-
-                    if ($applicant) {
-                        app(\App\Services\EnrollmentService::class)->enroll($applicant, $payment->user_id);
-                    }
-                }
-
-                if ($payment->invoice->type === 'hostel_fee') {
-                    $booking = \App\Models\HostelBooking::where('invoice_id', $payment->invoice->id)->first();
-                    if ($booking) {
-                        $booking->update(['status' => 'confirmed']);
-                    }
-                }
-
-                // Send Receipt Email
-                try {
-                    \Illuminate\Support\Facades\Mail::to(Auth::user()->email)->send(new \App\Mail\FeeReceipt($payment, $payment->invoice, Auth::user()));
-                    \Illuminate\Support\Facades\Log::info("Fee receipt email queued for payment: {$payment->gateway_reference}");
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::error('Failed to send receipt email: ' . $e->getMessage());
-                }
+                app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($reference, $data);
             }
 
             return redirect()->route('student.payments.index')->with('success', 'Payment successful!');

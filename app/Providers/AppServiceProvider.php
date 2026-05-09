@@ -15,7 +15,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(\App\Contracts\PaymentGatewayInterface::class, function ($app) {
+            $gateway = \App\Models\SystemSetting::get('payment_gateway', env('PAYMENT_GATEWAY', 'paystack'));
+            
+            if ($gateway === 'squadco') {
+                return new \App\Services\SquadcoService();
+            }
+            
+            return new \App\Services\PaystackService();
+        });
     }
 
     /**

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { 
     Shield, 
@@ -14,7 +14,8 @@ import {
     Bell,
     ShieldAlert,
     Award,
-    Hash
+    Hash,
+    CreditCard
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
 import {
@@ -29,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import Swal from 'sweetalert2';
 import { computed } from 'vue';
 
@@ -43,6 +45,7 @@ const props = defineProps<{
         matric_format: string;
         admin_charge_amount: string | number;
         admin_charge_enabled: boolean;
+        payment_gateway: string;
     }
 }>();
 
@@ -58,6 +61,10 @@ const form = useForm({
 const adminChargeForm = useForm({
     amount: props.settings.admin_charge_amount,
     enabled: props.settings.admin_charge_enabled
+});
+
+const gatewayForm = useForm({
+    gateway: props.settings.payment_gateway
 });
 
 const submitSetting = () => {
@@ -78,20 +85,51 @@ const submitSetting = () => {
 };
 
 const submitAdminCharge = () => {
-    // We'll update both settings
-    const amountPromise = axios.post(route('admin.settings.update'), { key: 'admin_charge_amount', value: adminChargeForm.amount });
-    const enabledPromise = axios.post(route('admin.settings.update'), { key: 'admin_charge_enabled', value: adminChargeForm.enabled });
-    
-    Promise.all([amountPromise, enabledPromise]).then(() => {
-        Swal.fire({
-            icon: 'success',
-            title: 'Updated',
-            text: 'Administrative charge settings updated',
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 3000
-        });
+    router.post(route('admin.settings.update'), { 
+        key: 'admin_charge_amount', 
+        value: adminChargeForm.amount 
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            router.post(route('admin.settings.update'), { 
+                key: 'admin_charge_enabled', 
+                value: adminChargeForm.enabled 
+            }, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Updated',
+                        text: 'Administrative charge settings updated',
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 3000
+                    });
+                }
+            });
+        }
+    });
+};
+
+const updateGateway = (gateway: string) => {
+    gatewayForm.gateway = gateway;
+    router.post(route('admin.settings.update'), { 
+        key: 'payment_gateway', 
+        value: gateway 
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            Swal.fire({
+                icon: 'success',
+                title: 'Gateway Switched',
+                text: `System now using ${gateway.charAt(0).toUpperCase() + gateway.slice(1)}`,
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
+            });
+        }
     });
 };
 
@@ -240,6 +278,52 @@ const settingsModules = [
                             Update Financials
                         </Button>
                     </CardContent>
+                </Card>
+
+                <!-- Payment Gateway Card -->
+                <Card class="border-amber-200 bg-amber-50/30">
+                    <CardHeader class="flex flex-row items-center gap-4">
+                        <div class="bg-amber-100 p-3 rounded-xl text-amber-600">
+                            <Database class="w-6 h-6" />
+                        </div>
+                        <div>
+                            <CardTitle>Active Payment Gateway</CardTitle>
+                            <CardDescription>Choose the primary gateway for all student payments.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div class="grid grid-cols-2 gap-4">
+                            <button 
+                                @click="updateGateway('paystack')"
+                                :class="[
+                                    'p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2',
+                                    gatewayForm.gateway === 'paystack' 
+                                        ? 'border-primary bg-primary/10 text-primary shadow-inner' 
+                                        : 'border-slate-200 bg-white hover:border-primary/50'
+                                ]"
+                            >
+                                <span class="font-bold">Paystack</span>
+                                <Badge v-if="gatewayForm.gateway === 'paystack'" variant="default" class="scale-75">Active</Badge>
+                            </button>
+                            <button 
+                                @click="updateGateway('squadco')"
+                                :class="[
+                                    'p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2',
+                                    gatewayForm.gateway === 'squadco' 
+                                        ? 'border-primary bg-primary/10 text-primary shadow-inner' 
+                                        : 'border-slate-200 bg-white hover:border-primary/50'
+                                ]"
+                            >
+                                <span class="font-bold">Squadco</span>
+                                <Badge v-if="gatewayForm.gateway === 'squadco'" variant="default" class="scale-75">Active</Badge>
+                            </button>
+                        </div>
+                    </CardContent>
+                    <CardFooter class="bg-amber-100/50 py-3">
+                        <p class="text-[10px] text-amber-800 font-medium uppercase tracking-wider text-center w-full">
+                            Switching happens instantly across the portal
+                        </p>
+                    </CardFooter>
                 </Card>
 
                 <Card v-for="module in settingsModules" :key="module.title" class="group hover:shadow-lg transition-all border-slate-200 dark:border-slate-800">

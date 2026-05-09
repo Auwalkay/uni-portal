@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Applicant;
-use App\Services\PaystackService;
+use App\Contracts\PaymentGatewayInterface;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -14,11 +14,11 @@ use Illuminate\Support\Facades\Log;
 
 class PaymentController extends Controller
 {
-    protected $paystack;
+    protected $gateway;
 
-    public function __construct(PaystackService $paystack)
+    public function __construct(PaymentGatewayInterface $gateway)
     {
-        $this->paystack = $paystack;
+        $this->gateway = $gateway;
     }
 
     public function index()
@@ -69,11 +69,16 @@ class PaymentController extends Controller
         $reference = 'PAY-' . strtoupper(uniqid());
         $payment->update(['gateway_reference' => $reference]);
 
-        $data = $this->paystack->initializeTransaction(
+        $data = $this->gateway->initializeTransaction(
             $user->email,
             $invoice->amount,
             $reference,
-            route('applicant.payment.callback')
+            route('applicant.payment.callback'),
+            [
+                'customer_name' => $user->name,
+                'payment_type' => 'application_fee',
+                'invoice_id' => $invoice->id,
+            ]
         );
 
         if ($data && isset($data['authorization_url'])) {
@@ -85,42 +90,18 @@ class PaymentController extends Controller
 
     public function callback(Request $request)
     {
-        $reference = $request->query('reference');
+        $reference = $request->query('reference') ?? $request->query('transaction_ref');
         if (!$reference) {
             return redirect()->route('applicant.payment.index')->with('error', 'No reference supplied.');
         }
 
-        $data = $this->paystack->verifyTransaction($reference);
+        $data = $this->gateway->verifyTransaction($reference);
 
         if ($data && $data['status'] === 'success') {
             $payment = Payment::where('gateway_reference', $reference)->first();
 
             if ($payment && $payment->status !== 'success') {
-                $payment->update([
-                    'status' => 'success',
-                    'channel' => $data['channel'],
-                    'paid_at' => now(),
-                    'amount' => $data['amount'] / 100, // Paystack returns kobo
-                ]);
-
-                // Update Invoice
-                $invoice = $payment->invoice;
-                $invoice->update([
-                    'status' => 'paid',
-                    'paid_amount' => $invoice->amount
-                ]);
-
-                // Finalize Application
-                $applicant = Applicant::where('user_id', $payment->user_id)->first();
-                if ($applicant && $applicant->status === 'pending_payment') {
-                    $applicant->update([
-                        'status' => 'submitted',
-                        'application_number' => \App\Helpers\ApplicationNumberHelper::generate(),
-                    ]);
-
-                    // Notify User
-                    $payment->user->notify(new \App\Notifications\ApplicationSubmitted($applicant));
-                }
+                app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($reference, $data);
             }
 
             return redirect()->route('applicant.apply.show')->with('success', 'Payment successful! Application submitted.');
