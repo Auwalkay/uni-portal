@@ -124,6 +124,11 @@ class AdmissionController extends Controller
             'faculty_name' => $applicant->programme?->department->faculty->name ?? 'N/A',
             'programme_name' => $applicant->programme?->name ?? 'N/A',
             'session_name' => \App\Models\Session::current()->name ?? '2025/2026',
+        ])->setOptions([
+            'defaultFont' => 'DejaVu Sans',
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled' => true,
+            'isFontSubsettingEnabled' => true,
         ]);
 
         return $pdf->download("Admission_Letter_{$applicant->jamb_registration_number}.pdf");

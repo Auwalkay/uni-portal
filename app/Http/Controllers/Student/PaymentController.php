@@ -7,6 +7,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\StudentSession;
 use App\Contracts\PaymentGatewayInterface;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -18,6 +19,32 @@ class PaymentController extends Controller
     public function __construct(PaymentGatewayInterface $gateway)
     {
         $this->gateway = $gateway;
+    }
+
+    public function downloadReceipt(Payment $payment)
+    {
+        if ($payment->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        if ($payment->status !== 'success') {
+            return back()->with('error', 'Only successful payments have receipts.');
+        }
+
+        $payment->load(['invoice.session', 'user.student']);
+        
+        $pdf = Pdf::loadView('documents.payment_receipt', [
+            'payment' => $payment,
+            'student' => $payment->user->student,
+            'invoice' => $payment->invoice,
+        ])->setOptions([
+            'defaultFont' => 'DejaVu Sans',
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled' => true,
+            'isFontSubsettingEnabled' => true,
+        ]);
+
+        return $pdf->download("Receipt_{$payment->gateway_reference}.pdf");
     }
 
     public function index()

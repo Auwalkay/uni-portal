@@ -320,7 +320,13 @@ class ProfileController extends Controller
             ];
         }
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.admission_letter', $data);
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.admission_letter', $data)
+            ->setOptions([
+                'defaultFont' => 'DejaVu Sans',
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+                'isFontSubsettingEnabled' => true,
+            ]);
 
         $identifer = $student->matriculation_number ?? $applicant->jamb_registration_number ?? $applicant->application_number ?? 'Letter';
         return $pdf->download("Admission_Letter_{$identifer}.pdf");
@@ -350,6 +356,7 @@ class ProfileController extends Controller
         $adminCharge = \App\Models\SystemSetting::get('admin_charge_enabled', true) 
             ? \App\Models\SystemSetting::get('admin_charge_amount', 250000) : 0;
             
+        $total = $tuition + $adminCharge;
         $discount = 0;
         if ($student->scholarship && ($student->program?->scholarship_eligible ?? true)) {
             $discount = $total * ($student->scholarship->percentage / 100);
