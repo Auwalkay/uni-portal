@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format as formatDate } from 'date-fns';
-import { CreditCard, ChevronDown, ChevronUp, FileText } from 'lucide-vue-next';
+import { CreditCard, ChevronDown, ChevronUp, FileText, Download } from 'lucide-vue-next';
 import { ref, computed, watch } from 'vue';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
@@ -37,7 +37,11 @@ defineProps<{
             name: string;
         };
         payments?: Array<{
+            id: string;
+            gateway_reference: string;
+            amount: number;
             paid_at: string;
+            channel: string;
         }>;
     }>;
     canGenerateInvoice: boolean;
@@ -226,6 +230,29 @@ const getPaymentDate = (invoice: any) => {
                                                 </div>
                                             </div>
                                             <p v-else class="text-sm text-muted-foreground italic">No detailed breakdown available for this invoice.</p>
+
+                                            <!-- Payments List -->
+                                            <div v-if="invoice.payments && invoice.payments.length > 0" class="mt-6">
+                                                <h4 class="mb-3 font-semibold flex items-center gap-2">
+                                                    <CreditCard class="h-4 w-4" /> Payment History
+                                                </h4>
+                                                <div class="space-y-2">
+                                                    <div v-for="payment in invoice.payments" :key="payment.id" class="flex items-center justify-between p-3 rounded-md bg-slate-50 border border-slate-100">
+                                                        <div class="flex flex-col">
+                                                            <span class="font-bold text-sm">{{ formatCurrency(payment.amount) }}</span>
+                                                            <span class="text-[10px] text-muted-foreground uppercase tracking-wider">{{ payment.channel }} • {{ formatDate(new Date(payment.paid_at), 'MMM d, yyyy HH:mm') }}</span>
+                                                            <span class="text-[10px] font-mono text-slate-400">{{ payment.gateway_reference }}</span>
+                                                        </div>
+                                                        <a 
+                                                            :href="route('student.payments.download', payment.id)" 
+                                                            target="_blank"
+                                                            class="inline-flex items-center px-3 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+                                                        >
+                                                            <Download class="w-3 h-3 mr-1.5" /> Receipt
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </TableCell>
                                 </TableRow>
