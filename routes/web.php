@@ -128,7 +128,7 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
     // INVOICES & PAYMENTS
     Route::middleware(['permission:view_payments'])->group(function () {
         Route::get('invoices/search-students', [InvoiceController::class, 'searchStudents'])->name('invoices.search-students');
-        Route::resource('invoices', InvoiceController::class)->only(['index', 'show', 'create', 'store']);
+        Route::resource('invoices', InvoiceController::class)->only(['index', 'show', 'create', 'store', 'destroy']);
         
         Route::middleware(['permission:manage_payments'])->group(function () {
             Route::post('invoices/{invoice}/mark-as-paid', [InvoiceController::class, 'markAsPaid'])->name('invoices.mark-as-paid');

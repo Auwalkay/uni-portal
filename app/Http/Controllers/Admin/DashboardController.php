@@ -25,6 +25,7 @@ class DashboardController extends Controller
 
         if (! $selectedSession) {
             // Fallback if absolutely no session exists
+            $user = $request->user();
             return Inertia::render('Admin/Dashboard', [
                 'stats' => [
                     'total_students' => 0,
@@ -34,6 +35,12 @@ class DashboardController extends Controller
                     'active_courses' => 0,
                     'revenue_growth' => 0,
                     'student_growth' => 0,
+                    'outstanding_fees' => 0,
+                    'registration_compliance' => 0,
+                    'gender_distribution' => ['male' => 0, 'female' => 0],
+                    'total_outflow' => 0,
+                    'net_cash_flow' => 0,
+                    'active_students' => 0,
                 ],
                 'recentActivity' => [],
                 'sessions' => [],
@@ -42,6 +49,20 @@ class DashboardController extends Controller
                 'charts' => [
                     'revenue' => ['labels' => [], 'data' => []],
                     'faculty' => ['labels' => [], 'data' => []],
+                    'financial_trend' => ['labels' => [], 'inflow' => [], 'outflow' => []],
+                    'expense_categories' => ['labels' => [], 'data' => []],
+                    'level' => ['labels' => [], 'data' => []],
+                    'program' => ['labels' => [], 'data' => []],
+                    'staff_department' => ['labels' => [], 'data' => []],
+                ],
+                'userRole' => $user->hasRole('admin') ? 'admin' : 'staff',
+                'can' => [
+                    'manage_students' => $user->can('manage_staff'),
+                    'manage_finance' => $user->can('view_revenue_stats'),
+                    'manage_results' => $user->can('manage_results'),
+                    'manage_settings' => $user->can('manage_system_settings'),
+                    'view_global_analytics' => $user->can('view_global_analytics'),
+                    'view_system_status' => $user->can('view_system_status'),
                 ],
             ]);
         }
