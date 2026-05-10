@@ -34,7 +34,7 @@ const props = defineProps<{
     existingBooking: any | null;
 }>();
 
-const canBook = computed(() => props.hasPaidFees && props.hasRegisteredCourses);
+const canBook = computed(() => props.hasPaidFees);
 
 // Booking State
 const selectedHostelId = ref<string | null>(null);
@@ -257,7 +257,7 @@ const bookRoom = () => {
                                 <p class="text-muted-foreground">Complete the following steps to unlock the room reservation system.</p>
                             </div>
 
-                            <div class="grid gap-6 md:grid-cols-2">
+                            <div class="max-w-md mx-auto">
                                 <Card class="group relative overflow-hidden transition-all hover:shadow-2xl hover:-translate-y-1" :class="hasPaidFees ? 'border-primary' : 'border-border opacity-75'">
                                     <div v-if="hasPaidFees" class="absolute top-0 right-0 w-16 h-16 pointer-events-none">
                                         <div class="absolute top-0 right-0 p-2 text-primary">
@@ -279,26 +279,6 @@ const bookRoom = () => {
                                     </CardFooter>
                                 </Card>
 
-                                <Card class="group relative overflow-hidden transition-all hover:shadow-2xl hover:-translate-y-1" :class="hasRegisteredCourses ? 'border-primary' : 'border-border opacity-75'">
-                                    <div v-if="hasRegisteredCourses" class="absolute top-0 right-0 w-16 h-16 pointer-events-none">
-                                        <div class="absolute top-0 right-0 p-2 text-primary">
-                                            <CheckCircle2 class="h-6 w-6" />
-                                        </div>
-                                    </div>
-                                    <CardHeader>
-                                        <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-2" :class="hasRegisteredCourses ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'">
-                                            <BookOpen class="h-6 w-6" />
-                                        </div>
-                                        <CardTitle class="text-xl">Step 2: Course Registration</CardTitle>
-                                        <CardDescription>Finalize your curriculum for the First Semester to qualify for housing.</CardDescription>
-                                    </CardHeader>
-                                    <CardFooter>
-                                        <Button v-if="!hasRegisteredCourses" variant="outline" class="w-full font-bold group-hover:bg-primary group-hover:text-primary-foreground" @click="router.visit(route('student.courses.index'))">
-                                            Register Courses
-                                        </Button>
-                                        <Badge v-else variant="outline" class="border-primary text-primary px-4">Requirement Met</Badge>
-                                    </CardFooter>
-                                </Card>
                             </div>
                         </div>
                     </div>

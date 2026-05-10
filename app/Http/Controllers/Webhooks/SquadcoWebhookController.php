@@ -21,11 +21,11 @@ class SquadcoWebhookController extends Controller
         }
 
         $data = json_decode($payload, true);
-        $event = $data['event'] ?? null;
+        $event = $data['Event'] ?? $data['event'] ?? null;
 
-        if ($event === 'charge.success') {
-            $body = $data['body'] ?? [];
-            $reference = $body['transaction_ref'] ?? null;
+        if ($event === 'charge_successful' || $event === 'charge.success') {
+            $body = $data['Body'] ?? $data['body'] ?? [];
+            $reference = $body['transaction_ref'] ?? $data['TransactionRef'] ?? null;
             
             if ($reference) {
                 $this->processSuccessfulPayment($reference, $body);
@@ -45,7 +45,9 @@ class SquadcoWebhookController extends Controller
 
     protected function processSuccessfulPayment($reference, $data)
     {
-        $data['channel'] = $data['payment_method'] ?? 'squadco';
+        // Handle different possible keys for channel/method
+        $data['channel'] = $data['transaction_type'] ?? $data['payment_method'] ?? 'squadco';
+        
         app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($reference, $data);
     }
 }

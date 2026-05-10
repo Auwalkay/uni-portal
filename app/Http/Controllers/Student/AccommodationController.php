@@ -37,10 +37,8 @@ class AccommodationController extends Controller
             ->where('session_id', $currentSession->id)
             ->exists();
 
-        // 2. Course Registration Check
-        $hasRegisteredCourses = CourseRegistration::where('student_id', $student->id)
-            ->where('session_id', $currentSession->id)
-            ->exists();
+        // 2. Course Registration Check (Optional for hostel booking)
+        $hasRegisteredCourses = true; // Set to true as it is no longer a blocker
 
         // Check for existing booking
         $existingBooking = HostelBooking::with(['room.floor.block.hostel', 'invoice'])
@@ -49,7 +47,7 @@ class AccommodationController extends Controller
             ->first();
 
         // If they haven't met requirements, just pass the statuses to the view so it can show the red locks
-        if (!$hasPaidFees || !$hasRegisteredCourses) {
+        if (!$hasPaidFees) {
             return Inertia::render('Student/Accommodation/Index', [
                 'hasPaidFees' => $hasPaidFees,
                 'hasRegisteredCourses' => $hasRegisteredCourses,
@@ -112,12 +110,9 @@ class AccommodationController extends Controller
             ->where('session_id', $currentSession->id)
             ->exists();
 
-        $hasRegisteredCourses = CourseRegistration::where('student_id', $student->id)
-            ->where('session_id', $currentSession->id)
-            ->exists();
 
-        if (!$hasPaidFees || !$hasRegisteredCourses) {
-            return back()->with('error', 'You must pay school fees and register courses before booking.');
+        if (!$hasPaidFees) {
+            return back()->with('error', 'You must pay school fees before booking.');
         }
 
         // Check for existing booking

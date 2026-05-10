@@ -35,7 +35,7 @@ import {
   ArcElement
 } from 'chart.js';
 import { Line, Doughnut } from 'vue-chartjs';
-import Pagination from '@/Components/Pagination.vue';
+import Pagination from '@/components/Pagination.vue';
 import { 
     Dialog, 
     DialogContent, 
