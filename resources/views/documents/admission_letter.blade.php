@@ -166,16 +166,19 @@
             text-align: right;
             vertical-align: bottom;
         }
-        .qr-placeholder {
-            display: inline-block;
-            width: 50px;
-            height: 50px;
-            background: #f1f5f9;
-            border: 1px dashed #cbd5e1;
-            padding: 4px;
-            text-align: center;
-            font-size: 6px;
-            color: #94a3b8;
+        .qr-box img {
+            width: 80px;
+            height: 80px;
+            display: block;
+            margin-left: auto;
+        }
+        .qr-box .scan-text {
+            display: block;
+            font-size: 8px;
+            font-weight: bold;
+            color: #64748b;
+            margin-top: 4px;
+            text-transform: uppercase;
         }
         .naira {
             font-family: 'DejaVu Sans', sans-serif !important;
@@ -197,7 +200,7 @@
             <img src="data:image/jpeg;base64,{{ $logoBase64 }}" class="logo" alt="Logo">
             <h1 class="uni-name">Mewar International University Nigeria</h1>
             <p class="uni-address">Km21, Kuchikau I, Abuja - Keffi Expy, New Karu, Nasarawa</p>
-            <p class="uni-address">www.miu.edu.ng | admission@miu.edu.ng | +234 810 804 0392</p>
+            <p class="uni-address">www.miu.edu.ng | admission@miu.edu.ng | +2348183012911| +2348108040392 </p>
         </div>
 
         <!-- Meta Info -->
@@ -230,10 +233,7 @@
         <div class="content-body">
             <p>Dear <strong>{{ ucwords($applicant->first_name) }}</strong>,</p>
 
-            <p>We at the Mewar International University Nigeria would like to firstly congratulate you on showing interest at wanting to study at our
-newly established University besides Abuja the Federal Capital Territory of Nigeria. The University is established by the approval of
-the Federal Executive Council held on the 3rd of Feb 2021 followed by formal licensing by the National Universities Commission on
-the 8th April 2021. The University is the 1st Indian University to establish a University in Africa.</p>
+            <p>The Management of Mewar International University (MIU) Nigeria is pleased to congratulate you on your selection for admission into our esteemed institution. Strategically located within the Federal Capital Territory corridor, MIU was established by the Federal Executive Council on February 3, 2021, and formally licensed by the National Universities Commission (NUC) on April 8, 2021. As the first Indian-established university in Africa, we are committed to providing a world-class educational experience that blends heritage with innovation.</p>
 
             <table class="admission-details">
                 <tr>
@@ -295,9 +295,14 @@ the 8th April 2021. The University is the 1st Indian University to establish a U
         <!-- Instructions -->
         <div class="instructions">
             <strong>IMPORTANT NOTICE:</strong><br>
-            1. This offer will be withdrawn if it is discovered that you do not possess the qualification which you
-            claimed to have obtained.<br>
-            2. You must present original copies of your credentials during the physical clearance.
+            1. This offer will be withdrawn if it is discovered that you do not possess the qualification(s) which you
+            claimed to have obtained, or if there is any falsification of your credentials.<br>
+            2. You must present original copies of your credentials during the physical clearance for verification.<br>
+            3. Inconsistency in names across different documents may lead to the withdrawal of this offer.<br>
+            4. This admission is subject to your being certified medically fit for study by a recognized medical officer.<br>
+            5. Involvement in social vices, cultism, or any form of criminal activity will lead to immediate withdrawal of this offer.<br>
+            6. Failure to complete all registration formalities within the stipulated period will result in the forfeiture of this admission.<br>
+            7. All payments made to the university are strictly non-refundable.
         </div>
 
         <!-- Footer -->
@@ -305,13 +310,12 @@ the 8th April 2021. The University is the 1st Indian University to establish a U
             <div class="signature-box">
                 <img src="data:image/jpeg;base64,{{ $sigBase64 }}" class="signature-img">
                 <div class="signature-line"></div>
-                <div class="registrar-name">{{ env('ADMIN_DIRECTOR_NAME', 'Ahmad Habibu') }}</div>
+                <div class="registrar-name">{{ env('ADMIN_DIRECTOR_NAME', 'Ahmad Habibu Shehu') }}</div>
                 <div class="registrar-title">Director of Admissions</div>
             </div>
             <div class="qr-box">
-                <div class="qr-placeholder">
-                    <br>Scan to Verify<br>Admission
-                </div>
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={{ urlencode(route('verify.admission', encrypt($applicant->id ?? 'unknown'))) }}" alt="Verification QR">
+                <span class="scan-text">Scan to Verify Admission</span>
             </div>
         </div>
     </div>

@@ -308,7 +308,7 @@ const staffChartData = {
                             Welcome back, <span class="text-primary-foreground underline decoration-primary-foreground/30">{{ user?.name.split(' ')[0] }}</span>!
                         </h1>
                         <p class="text-white/80 text-lg max-w-2xl font-medium">
-                            Here's what's happening at Auwalkay University for the <span class="font-bold underline">{{ currentSessionName }}</span> session.
+                            Here's what's happening at Mewar International University for the <span class="font-bold underline">{{ currentSessionName }}</span> session.
                         </p>
                     </div>
 

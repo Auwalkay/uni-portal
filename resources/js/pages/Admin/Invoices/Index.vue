@@ -35,6 +35,16 @@ import {
   ArcElement
 } from 'chart.js';
 import { Line, Doughnut } from 'vue-chartjs';
+import Pagination from '@/Components/Pagination.vue';
+import { 
+    Dialog, 
+    DialogContent, 
+    DialogDescription, 
+    DialogFooter, 
+    DialogHeader, 
+    DialogTitle, 
+    DialogTrigger 
+} from '@/components/ui/dialog';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement);
 
@@ -63,7 +73,44 @@ const filterForm = ref({
     status: props.filters.status || '',
     type: props.filters.type || '',
     session_id: props.filters.session_id || '',
+    sort: props.filters.sort || 'desc',
 });
+
+const manualPaymentForm = ref({
+    invoice_id: '',
+    invoice_ref: '',
+    amount: 0,
+    max_amount: 0,
+    processing: false
+});
+
+const isPaymentDialogOpen = ref(false);
+
+const openPaymentDialog = (invoice: any) => {
+    manualPaymentForm.value = {
+        invoice_id: invoice.id,
+        invoice_ref: invoice.reference,
+        amount: invoice.amount - (invoice.paid_amount || 0),
+        max_amount: invoice.amount - (invoice.paid_amount || 0),
+        processing: false
+    };
+    isPaymentDialogOpen.value = true;
+};
+
+const submitManualPayment = () => {
+    manualPaymentForm.value.processing = true;
+    router.post(route('admin.invoices.mark-as-paid', manualPaymentForm.value.invoice_id), {
+        amount: manualPaymentForm.value.amount
+    }, {
+        onSuccess: () => {
+            isPaymentDialogOpen.value = false;
+            Swal.fire('Paid!', 'Payment has been recorded.', 'success');
+        },
+        onFinish: () => {
+            manualPaymentForm.value.processing = false;
+        }
+    });
+};
 
 const applyFilters = () => {
     router.get(route('admin.invoices.index'), filterForm.value, {
@@ -234,6 +281,16 @@ const breadcrumbs = [
                          </SelectContent>
                     </Select>
                 </div>
+                <div class="space-y-1">
+                    <Label>Sort By Date</Label>
+                    <Select v-model="filterForm.sort">
+                         <SelectTrigger><SelectValue placeholder="Latest First" /></SelectTrigger>
+                         <SelectContent>
+                             <SelectItem value="desc">Latest First</SelectItem>
+                             <SelectItem value="asc">Oldest First</SelectItem>
+                         </SelectContent>
+                    </Select>
+                </div>
                 <Button variant="secondary" @click="applyFilters">
                     <Filter class="w-4 h-4 mr-2" /> Filter
                 </Button>
@@ -280,15 +337,15 @@ const breadcrumbs = [
                             </TableCell>
                             <TableCell class="text-right">
                                 <div class="flex items-center justify-end gap-2">
-                                    <!-- <Button 
+                                    <Button 
                                         v-if="invoice.status !== 'paid'" 
                                         size="sm" 
                                         variant="outline"
                                         class="text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700" 
-                                        @click="markAsPaid(invoice.id, invoice.reference)"
+                                        @click="openPaymentDialog(invoice)"
                                     >
-                                        <CheckCircle class="w-4 h-4 mr-2" /> Mark Paid
-                                    </Button> -->
+                                        <CreditCard class="w-4 h-4 mr-1" /> Pay
+                                    </Button>
                                     <Button size="sm" variant="secondary" as-child>
                                         <Link :href="route('admin.invoices.show', invoice.id)">
                                             View
@@ -305,7 +362,49 @@ const breadcrumbs = [
                     </TableBody>
                 </Table>
             </div>
-             <!-- Pagination could go here -->
+            
+            <div class="flex justify-center py-4">
+                <Pagination :links="invoices.links" />
+            </div>
+
+            <!-- Manual Payment Dialog -->
+            <Dialog v-model:open="isPaymentDialogOpen">
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Record Manual Payment</DialogTitle>
+                        <DialogDescription>
+                            Recording payment for invoice <strong>{{ manualPaymentForm.invoice_ref }}</strong>.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div class="space-y-4 py-4">
+                        <div class="space-y-2">
+                            <Label for="amount">Amount to Record (₦)</Label>
+                            <Input 
+                                id="amount" 
+                                type="number" 
+                                v-model="manualPaymentForm.amount"
+                                :max="manualPaymentForm.max_amount"
+                                step="0.01"
+                            />
+                            <div v-if="manualPaymentForm.amount" class="text-[10px] text-emerald-600 font-bold uppercase tracking-wider mt-1">
+                                Confirming: {{ formatCurrency(manualPaymentForm.amount) }}
+                            </div>
+                            <p class="text-xs text-muted-foreground">
+                                Maximum allowed: {{ formatCurrency(manualPaymentForm.max_amount) }}
+                            </p>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" @click="isPaymentDialogOpen = false">Cancel</Button>
+                        <Button 
+                            :disabled="manualPaymentForm.processing || manualPaymentForm.amount <= 0 || manualPaymentForm.amount > manualPaymentForm.max_amount" 
+                            @click="submitManualPayment"
+                        >
+                            {{ manualPaymentForm.processing ? 'Processing...' : 'Confirm Payment' }}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     </AdminLayout>
 </template>
