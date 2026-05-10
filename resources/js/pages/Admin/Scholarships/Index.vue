@@ -2,7 +2,8 @@
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Head, useForm, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
-import { Award, Plus, Edit, Trash2 } from 'lucide-vue-next';
+import { Award, Plus, Edit, Trash2, CheckCircle2, XCircle } from 'lucide-vue-next';
+import { Checkbox } from '@/components/ui/checkbox';
 import { route } from 'ziggy-js';
 
 import { Button } from '@/components/ui/button';
@@ -33,7 +34,16 @@ import {
 } from '@/components/ui/dialog';
 
 const props = defineProps<{
-    scholarships: Array<{ id: string; name: string; percentage: string }>;
+    scholarships: Array<{ 
+        id: string; 
+        name: string; 
+        percentage: string;
+        covers_admin_charges: boolean;
+        covers_hostel_fees: boolean;
+        is_active: boolean;
+        students_count: number;
+        applicants_count: number;
+    }>;
 }>();
 
 // Create Modal State
@@ -41,6 +51,9 @@ const showCreateModal = ref(false);
 const createForm = useForm({
     name: '',
     percentage: '',
+    covers_admin_charges: false,
+    covers_hostel_fees: false,
+    is_active: true,
 });
 
 const submitCreate = () => {
@@ -58,12 +71,22 @@ const editForm = useForm({
     id: '',
     name: '',
     percentage: '',
+    covers_admin_charges: false,
+    covers_hostel_fees: false,
+    is_active: true,
+    students_count: 0,
+    applicants_count: 0,
 });
 
-const openEditModal = (scholarship: { id: string; name: string; percentage: string }) => {
+const openEditModal = (scholarship: any) => {
     editForm.id = scholarship.id;
     editForm.name = scholarship.name;
     editForm.percentage = scholarship.percentage;
+    editForm.covers_admin_charges = !!scholarship.covers_admin_charges;
+    editForm.covers_hostel_fees = !!scholarship.covers_hostel_fees;
+    editForm.is_active = !!scholarship.is_active;
+    editForm.students_count = scholarship.students_count || 0;
+    editForm.applicants_count = scholarship.applicants_count || 0;
     showEditModal.value = true;
 };
 
@@ -119,6 +142,9 @@ const formatPercentage = (val: string) => {
                             <TableRow>
                                 <TableHead>Name</TableHead>
                                 <TableHead class="text-center">Discount Percentage</TableHead>
+                                <TableHead class="text-center">Covers Admin</TableHead>
+                                <TableHead class="text-center">Covers Hostel</TableHead>
+                                <TableHead class="text-center">Status</TableHead>
                                 <TableHead class="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -128,6 +154,22 @@ const formatPercentage = (val: string) => {
                                 <TableCell class="text-center">
                                     <span class="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-sm font-semibold text-primary">
                                         {{ formatPercentage(scholarship.percentage) }}
+                                    </span>
+                                </TableCell>
+                                <TableCell class="text-center">
+                                    <CheckCircle2 v-if="scholarship.covers_admin_charges" class="w-5 h-5 text-green-500 mx-auto" />
+                                    <XCircle v-else class="w-5 h-5 text-muted-foreground/30 mx-auto" />
+                                </TableCell>
+                                <TableCell class="text-center">
+                                    <CheckCircle2 v-if="scholarship.covers_hostel_fees" class="w-5 h-5 text-green-500 mx-auto" />
+                                    <XCircle v-else class="w-5 h-5 text-muted-foreground/30 mx-auto" />
+                                </TableCell>
+                                <TableCell class="text-center">
+                                    <span v-if="scholarship.is_active" class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
+                                        Active
+                                    </span>
+                                    <span v-else class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+                                        Inactive
                                     </span>
                                 </TableCell>
                                 <TableCell class="text-right">
@@ -142,7 +184,7 @@ const formatPercentage = (val: string) => {
                                 </TableCell>
                             </TableRow>
                             <TableRow v-if="scholarships.length === 0">
-                                <TableCell colspan="3" class="h-24 text-center text-muted-foreground">
+                                <TableCell colspan="6" class="h-24 text-center text-muted-foreground">
                                     No scholarships found. Click "Add Scholarship" to create one.
                                 </TableCell>
                             </TableRow>
@@ -171,6 +213,28 @@ const formatPercentage = (val: string) => {
                             <Input id="percentage" type="number" step="0.01" min="0" max="100" v-model="createForm.percentage" placeholder="e.g 50" required />
                             <p v-if="createForm.errors.percentage" class="text-sm text-destructive">{{ createForm.errors.percentage }}</p>
                         </div>
+
+                        <div class="flex items-center space-x-2 pt-2">
+                            <Checkbox id="covers_admin" :checked="createForm.covers_admin_charges" @update:checked="createForm.covers_admin_charges = $event" />
+                            <Label for="covers_admin" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                Covers Administrative Charges
+                            </Label>
+                        </div>
+
+                        <div class="flex items-center space-x-2">
+                            <Checkbox id="covers_hostel" :checked="createForm.covers_hostel_fees" @update:checked="createForm.covers_hostel_fees = $event" />
+                            <Label for="covers_hostel" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                Covers Hostel Fees
+                            </Label>
+                        </div>
+
+                        <div class="flex items-center space-x-2">
+                            <Checkbox id="is_active" :checked="createForm.is_active" @update:checked="createForm.is_active = $event" />
+                            <Label for="is_active" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                Scholarship is Active
+                            </Label>
+                        </div>
+
                         <DialogFooter class="pt-4">
                             <Button type="button" variant="outline" @click="showCreateModal = false">Cancel</Button>
                             <Button type="submit" :disabled="createForm.processing">Create Scholarship</Button>
@@ -196,9 +260,43 @@ const formatPercentage = (val: string) => {
                         </div>
                         <div class="space-y-2">
                             <Label for="edit-percentage">Discount Percentage (%)</Label>
-                            <Input id="edit-percentage" type="number" step="0.01" min="0" max="100" v-model="editForm.percentage" required />
+                            <Input 
+                                id="edit-percentage" 
+                                type="number" 
+                                step="0.01" 
+                                min="0" 
+                                max="100" 
+                                v-model="editForm.percentage" 
+                                :disabled="editForm.students_count > 0 || editForm.applicants_count > 0"
+                                required 
+                            />
+                            <p v-if="editForm.students_count > 0 || editForm.applicants_count > 0" class="text-[10px] text-amber-600 font-medium uppercase leading-tight">
+                                Percentage locked: Scholarship is in use by {{ editForm.students_count + editForm.applicants_count }} individuals.
+                            </p>
                             <p v-if="editForm.errors.percentage" class="text-sm text-destructive">{{ editForm.errors.percentage }}</p>
                         </div>
+
+                        <div class="flex items-center space-x-2 pt-2">
+                            <Checkbox id="edit_covers_admin" :checked="editForm.covers_admin_charges" @update:checked="editForm.covers_admin_charges = $event" />
+                            <Label for="edit_covers_admin" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                Covers Administrative Charges
+                            </Label>
+                        </div>
+
+                        <div class="flex items-center space-x-2">
+                            <Checkbox id="edit_covers_hostel" :checked="editForm.covers_hostel_fees" @update:checked="editForm.covers_hostel_fees = $event" />
+                            <Label for="edit_covers_hostel" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                Covers Hostel Fees
+                            </Label>
+                        </div>
+
+                        <div class="flex items-center space-x-2">
+                            <Checkbox id="edit_is_active" :checked="editForm.is_active" @update:checked="editForm.is_active = $event" />
+                            <Label for="edit_is_active" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                Scholarship is Active
+                            </Label>
+                        </div>
+
                         <DialogFooter class="pt-4">
                             <Button type="button" variant="outline" @click="showEditModal = false">Cancel</Button>
                             <Button type="submit" :disabled="editForm.processing">Save Changes</Button>

@@ -18,6 +18,6 @@ defineProps<Props>();
         :class="className"
         v-bind="$attrs"
     >
-        <img src="/miu-logo.jpeg" alt="MIU Logo" class="size-full object-contain" />
+        <img src="/miu-logo.png" alt="MIU Logo" class="size-full object-contain" />
     </div>
 </template>

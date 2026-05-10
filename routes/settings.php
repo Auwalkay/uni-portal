@@ -147,6 +147,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Search & View Students (All Staff)
         Route::get('/students', [StudentController::class, 'index'])->name('students.index');
+        Route::get('/students/export', [StudentController::class, 'export'])->name('students.export');
         Route::get('/students/{student}', [StudentController::class, 'show'])->name('students.show');
 
         // Course Registrations & Academic Management

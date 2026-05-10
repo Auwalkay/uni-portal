@@ -194,7 +194,13 @@
             <table class="header-table">
                 <tr>
                     <td width="80">
-                        <img src="data:image/jpeg;base64,{{ base64_encode(file_get_contents(public_path('miu-logo.jpeg'))) }}"
+                        @php
+                            $logoPath = public_path('miu-logo.png');
+                            if (!file_exists($logoPath)) {
+                                $logoPath = public_path('miu-logo.jpeg');
+                            }
+                        @endphp
+                        <img src="data:image/jpeg;base64,{{ base64_encode(file_get_contents($logoPath)) }}"
                             class="logo">
                     </td>
                     <td class="uni-info">

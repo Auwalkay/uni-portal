@@ -26,7 +26,7 @@ const currentYear = new Date().getFullYear();
         <nav class="bg-white border-b border-slate-200 py-4">
             <div class="container mx-auto px-6 flex items-center justify-between">
                 <Link href="/" class="flex items-center gap-3">
-                    <img src="/miu-logo.jpeg" alt="Logo" class="h-10 w-10 object-contain" />
+                    <img src="/miu-logo.png" alt="Logo" class="h-10 w-10 object-contain" />
                     <div class="flex flex-col">
                         <span class="text-lg font-black tracking-tighter uppercase text-slate-900">MIU Nigeria</span>
                         <span class="text-[9px] uppercase tracking-widest text-slate-500 font-bold">University Verification</span>

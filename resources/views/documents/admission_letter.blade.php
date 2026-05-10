@@ -188,7 +188,11 @@
 
 <body>
     @php
-        $logoBase64 = base64_encode(file_get_contents(public_path('miu-logo.jpeg')));
+        $logoPath = public_path('miu-logo.png');
+        if (!file_exists($logoPath)) {
+            $logoPath = public_path('miu-logo.jpeg');
+        }
+        $logoBase64 = base64_encode(file_get_contents($logoPath));
         $sigBase64 = base64_encode(file_get_contents(public_path('images/admission_signature.jpeg')));
     @endphp
 

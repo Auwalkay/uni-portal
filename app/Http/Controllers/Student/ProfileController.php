@@ -357,18 +357,25 @@ class ProfileController extends Controller
         $adminCharge = \App\Models\SystemSetting::get('admin_charge_enabled', true) 
             ? \App\Models\SystemSetting::get('admin_charge_amount', 250000) : 0;
             
-        $total = $tuition + $adminCharge;
+        // Calculate Discount based on Scholarship Coverage
         $discount = 0;
-        if ($student->scholarship && ($student->program?->scholarship_eligible ?? true)) {
-            $discount = $total * ($student->scholarship->percentage / 100);
+        $scholarship = $student->scholarship;
+        if ($scholarship && ($student->program?->scholarship_eligible ?? true)) {
+            $baseForDiscount = $tuition;
+            if ($adminCharge > 0 && $scholarship->covers_admin_charges) {
+                $baseForDiscount += $adminCharge;
+            }
+            $discount = $baseForDiscount * ($scholarship->percentage / 100);
         }
+
+        $total = $tuition + $adminCharge;
 
         return [
             'tuition' => $tuition,
             'admin_charge' => $adminCharge,
             'discount' => $discount,
             'total' => $total - $discount,
-            'scholarship_name' => $student->scholarship?->name
+            'scholarship_name' => $scholarship?->name
         ];
     }
 
@@ -399,18 +406,25 @@ class ProfileController extends Controller
         $adminCharge = \App\Models\SystemSetting::get('admin_charge_enabled', true) 
             ? \App\Models\SystemSetting::get('admin_charge_amount', 250000) : 0;
             
-        $total = $tuition + $adminCharge;
+        // Calculate Discount based on Scholarship Coverage
         $discount = 0;
-        if ($applicant->scholarship && ($applicant->programme?->scholarship_eligible ?? true)) {
-            $discount = $total * ($applicant->scholarship->percentage / 100);
+        $scholarship = $applicant->scholarship;
+        if ($scholarship && ($applicant->programme?->scholarship_eligible ?? true)) {
+            $baseForDiscount = $tuition;
+            if ($adminCharge > 0 && $scholarship->covers_admin_charges) {
+                $baseForDiscount += $adminCharge;
+            }
+            $discount = $baseForDiscount * ($scholarship->percentage / 100);
         }
+
+        $total = $tuition + $adminCharge;
 
         return [
             'tuition' => $tuition,
             'admin_charge' => $adminCharge,
             'discount' => $discount,
             'total' => $total - $discount,
-            'scholarship_name' => $applicant->scholarship?->name
+            'scholarship_name' => $scholarship?->name
         ];
     }
 }

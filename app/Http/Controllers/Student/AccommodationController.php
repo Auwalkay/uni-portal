@@ -132,21 +132,30 @@ class AccommodationController extends Controller
             return back()->with('error', 'This room is already fully booked.');
         }
 
-        // Find Hostel Fee. Fall back to global if no specific fee for this hostel
-        $hostelId = $room->floor->block->hostel->id;
-        $fee = HostelFee::where('session_id', $currentSession->id)
-            ->where(function ($q) use ($hostelId) {
-                $q->where('hostel_id', $hostelId)->orWhereNull('hostel_id');
-            })
-            ->orderBy('hostel_id', 'desc') // specific hostel fee first (null comes last)
-            ->first();
-
-        if (!$fee) {
-            return back()->with('error', 'Accommodation fees have not been configured for this session. Please contact the Bursary.');
-        }
-
         DB::beginTransaction();
         try {
+            // Find Hostel Fee. Fall back to global if no specific fee for this hostel
+            $hostelId = $room->floor->block->hostel->id;
+            $fee = HostelFee::where('session_id', $currentSession->id)
+                ->where(function ($q) use ($hostelId) {
+                    $q->where('hostel_id', $hostelId)->orWhereNull('hostel_id');
+                })
+                ->orderBy('hostel_id', 'desc') // specific hostel fee first (null comes last)
+                ->first();
+
+            if (!$fee) {
+                throw new \Exception('Accommodation fees have not been configured for this session.');
+            }
+
+            // Calculate Scholarship Discount for Hostel
+            $discountAmount = 0;
+            $student->load('scholarship');
+            if ($student->scholarship && $student->scholarship->covers_hostel_fees) {
+                $discountAmount = $fee->amount * ($student->scholarship->percentage / 100);
+            }
+
+            $finalAmount = $fee->amount - $discountAmount;
+
             // Generate Invoice
             $reference = 'HST-' . strtoupper(uniqid());
 
@@ -155,9 +164,9 @@ class AccommodationController extends Controller
                 'session_id' => $currentSession->id,
                 'reference' => $reference,
                 'type' => 'hostel_fee',
-                'amount' => $fee->amount,
+                'amount' => $finalAmount,
                 'status' => 'pending',
-                'due_date' => now()->addDays(7), // Give them 7 days to pay
+                'due_date' => now()->addDays(7),
             ]);
 
             InvoiceItem::create([
@@ -165,6 +174,14 @@ class AccommodationController extends Controller
                 'description' => 'Hostel Accommodation Fee (' . $room->floor->block->hostel->name . ' - Block: ' . $room->floor->block->name . ', Room: ' . $room->room_number . ')',
                 'amount' => $fee->amount,
             ]);
+
+            if ($discountAmount > 0) {
+                InvoiceItem::create([
+                    'invoice_id' => $invoice->id,
+                    'description' => 'Scholarship Discount (' . $student->scholarship->name . ' - ' . floatval($student->scholarship->percentage) . '%)',
+                    'amount' => -$discountAmount,
+                ]);
+            }
 
             // Create Booking
             HostelBooking::create([

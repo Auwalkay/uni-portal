@@ -45,6 +45,7 @@ defineProps<{
         }>;
     }>;
     canGenerateInvoice: boolean;
+    admin_charge_splittable: boolean;
 }>();
 
 const expandedInvoices = ref<string[]>([]);
@@ -75,9 +76,19 @@ const calculateAmount = () => {
     const balance = selectedInvoice.value.amount - (selectedInvoice.value.paid_amount || 0);
     
     if (paymentOption.value === 'half') {
-        const half = selectedInvoice.value.amount / 2;
-        // Ensure we don't pay more than balance (edge case if already partially paid weird amount)
-        paymentAmount.value = (Math.min(half, balance)).toString();
+        const adminChargeItem = selectedInvoice.value.items?.find((i: any) => i.description === 'Administrative Charges');
+        const adminAmount = adminChargeItem ? Number(adminChargeItem.amount) : 0;
+        const totalAmount = Number(selectedInvoice.value.amount);
+        
+        let minPayment = totalAmount / 2;
+
+        if (!props.admin_charge_splittable && adminAmount > 0) {
+            // Min payment = (Total - Admin)/2 + Admin
+            minPayment = ((totalAmount - adminAmount) / 2) + adminAmount;
+        }
+
+        // Ensure we don't pay more than balance
+        paymentAmount.value = (Math.min(minPayment, balance)).toString();
     } else {
         paymentAmount.value = balance.toString();
     }
@@ -89,8 +100,20 @@ watch(paymentOption, () => {
 
 const canPayHalf = computed(() => {
     if (!selectedInvoice.value) return false;
-    // Only allow half payment if nothing has been paid yet
-    return Number(selectedInvoice.value.paid_amount || 0) === 0;
+    
+    // 1. Only allow half payment if nothing has been paid yet
+    const hasNotPaid = Number(selectedInvoice.value.paid_amount || 0) === 0;
+    if (!hasNotPaid) return false;
+
+    // 2. Check if invoice is only admin fee (or scholarship-reduced to just admin fee)
+    const adminChargeItem = selectedInvoice.value.items?.find((i: any) => i.description === 'Administrative Charges');
+    const adminAmount = adminChargeItem ? Number(adminChargeItem.amount) : 0;
+    const totalAmount = Number(selectedInvoice.value.amount);
+
+    // If total is equal to or less than admin amount, it means academic is 0. No split allowed.
+    if (totalAmount <= adminAmount) return false;
+
+    return true;
 });
 
 const submitPayment = () => {
@@ -300,9 +323,9 @@ const getPaymentDate = (invoice: any) => {
                                     for="half"
                                     class="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
                                 >
-                                    <span class="mb-2 text-lg font-semibold">Pay 50%</span>
-                                    <span class="text-sm text-muted-foreground">First Installment</span>
-                                    <span class="mt-2 text-xl font-bold">{{ formatCurrency(selectedInvoice.amount / 2) }}</span>
+                                    <span class="mb-2 text-lg font-semibold">Pay Installment</span>
+                                    <span class="text-sm text-muted-foreground">Minimum Payment</span>
+                                    <span class="mt-2 text-xl font-bold">{{ formatCurrency(Number(paymentAmount)) }}</span>
                                 </Label>
                             </div>
                         </RadioGroup>
