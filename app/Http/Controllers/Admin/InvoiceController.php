@@ -49,6 +49,9 @@ class InvoiceController extends Controller
             $query->where('session_id', $request->session_id);
         }
 
+        $sort = $request->input('sort', 'desc');
+        $query->orderBy('created_at', $sort);
+
         // Clone query for global analytics (respecting filters)
         $statsQuery = clone $query;
         // Reset pagination for aggregation
@@ -121,7 +124,7 @@ class InvoiceController extends Controller
             ]
         ];
 
-        $invoices = $query->latest()->paginate(15)->withQueryString();
+        $invoices = $query->paginate(15)->withQueryString();
 
         return Inertia::render('Admin/Invoices/Index', [
             'invoices' => $invoices,

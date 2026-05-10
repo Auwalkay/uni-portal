@@ -6,7 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, Printer, CreditCard, CheckCircle2, Clock, Calendar, User, Mail, School, Building, RefreshCw } from 'lucide-vue-next';
+import { 
+    ArrowLeft, Printer, CreditCard, CheckCircle2, Clock, Calendar, 
+    User, Mail, School, Building, RefreshCw, Download, ShieldCheck,
+    AlertCircle, Wallet, History
+} from 'lucide-vue-next';
 import { type BreadcrumbItem } from '@/types';
 import { route } from 'ziggy-js';
 import { useForm } from '@inertiajs/vue3';
@@ -21,7 +25,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 
 const props = defineProps<{
     auth: {
@@ -56,18 +60,21 @@ const formatDate = (date: string) => {
 
 const getStatusColor = (status: string) => {
     switch (status) {
-        case 'paid': return 'bg-emerald-500 hover:bg-emerald-600 text-white border-transparent';
-        case 'partial': return 'bg-blue-500 hover:bg-blue-600 text-white border-transparent';
-        default: return 'bg-amber-500 hover:bg-amber-600 text-white border-transparent';
+        case 'paid': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        case 'partial': return 'bg-blue-50 text-blue-700 border-blue-200';
+        default: return 'bg-amber-50 text-amber-700 border-amber-200';
     }
 };
+
+const balance = computed(() => props.invoice.amount - props.invoice.paid_amount);
+const progressPercentage = computed(() => Math.min(100, (props.invoice.paid_amount / props.invoice.amount) * 100));
 
 const printInvoice = () => {
     window.print();
 };
 
 const manualPaymentForm = useForm({
-    amount: props.invoice.amount - props.invoice.paid_amount,
+    amount: balance.value,
 });
 
 const isDialogOpen = ref(false);
@@ -87,58 +94,85 @@ const verifyPayment = (paymentId: string) => {
         }
     });
 };
+
+const downloadReceipt = (paymentId: string) => {
+    window.open(route('student.payments.download', paymentId), '_blank');
+};
 </script>
 
 <template>
     <Head :title="`Invoice ${invoice.reference}`" />
 
     <AdminLayout :breadcrumbs="breadcrumbs">
-        <div class="max-w-5xl mx-auto space-y-6">
-            <!-- Header Actions -->
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 no-print">
-                <div class="flex items-center gap-2">
-                    <Button variant="outline" size="sm" as-child>
-                        <Link :href="route('admin.invoices.index')">
-                            <ArrowLeft class="w-4 h-4 mr-2" /> Back
-                        </Link>
-                    </Button>
-                    <h1 class="text-2xl font-bold tracking-tight">Invoice Details</h1>
+        <div class="w-full space-y-8 p-4 md:p-8">
+            
+            <!-- Executive Header & Actions -->
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 no-print">
+                <div class="space-y-1">
+                    <div class="flex items-center gap-3">
+                        <Button variant="ghost" size="icon" as-child class="rounded-full h-8 w-8">
+                            <Link :href="route('admin.invoices.index')">
+                                <ArrowLeft class="w-4 h-4" />
+                            </Link>
+                        </Button>
+                        <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">Invoice Review</h1>
+                    </div>
+                    <p class="text-slate-500 flex items-center gap-2 pl-11">
+                        <span class="font-mono">{{ invoice.reference }}</span>
+                        <span class="text-slate-300">•</span>
+                        <span>Issued on {{ formatDate(invoice.created_at) }}</span>
+                    </p>
                 </div>
-                <div class="flex gap-2">
-                    <Button variant="outline" @click="printInvoice">
+
+                <div class="flex items-center gap-3 w-full md:w-auto">
+                    <Button variant="outline" @click="printInvoice" class="flex-1 md:flex-none">
                         <Printer class="w-4 h-4 mr-2" /> Print
                     </Button>
+                    
                     <Dialog v-if="invoice.status !== 'paid' && hasPermission('manual_payment_override')" v-model:open="isDialogOpen">
                         <DialogTrigger as-child>
-                            <Button>
-                                <CreditCard class="w-4 h-4 mr-2" /> Record Manual Payment
+                            <Button class="flex-1 md:flex-none bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-50 dark:hover:bg-slate-200 dark:text-slate-900">
+                                <CreditCard class="w-4 h-4 mr-2" /> Record Payment
                             </Button>
                         </DialogTrigger>
-                        <DialogContent>
+                        <DialogContent class="sm:max-w-md">
                             <DialogHeader>
-                                <DialogTitle>Record Manual Payment</DialogTitle>
+                                <DialogTitle>Manual Payment Entry</DialogTitle>
                                 <DialogDescription>
-                                    Enter the amount paid by the student. This will create a manual payment record.
+                                    Record a payment received via offline channels.
                                 </DialogDescription>
                             </DialogHeader>
                             <div class="space-y-4 py-4">
+                                <div class="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border space-y-2 mb-4">
+                                    <div class="flex justify-between text-sm text-slate-500">
+                                        <span>Current Balance:</span>
+                                        <span class="font-bold text-slate-900 dark:text-slate-100">{{ formatCurrency(balance) }}</span>
+                                    </div>
+                                </div>
                                 <div class="space-y-2">
-                                    <Label for="amount">Amount (₦)</Label>
-                                    <Input 
-                                        id="amount" 
-                                        type="number" 
-                                        v-model="manualPaymentForm.amount"
-                                        :max="invoice.amount - invoice.paid_amount"
-                                    />
-                                    <p class="text-xs text-muted-foreground">
-                                        Max remaining balance: {{ formatCurrency(invoice.amount - invoice.paid_amount) }}
+                                    <Label for="amount" class="text-sm font-semibold">Amount to Record (₦)</Label>
+                                    <div class="relative">
+                                        <Input 
+                                            id="amount" 
+                                            type="number" 
+                                            v-model="manualPaymentForm.amount"
+                                            :max="balance"
+                                            class="text-lg font-bold pl-8"
+                                        />
+                                        <span class="absolute left-3 top-2.5 text-slate-400 font-bold">₦</span>
+                                    </div>
+                                    <div v-if="manualPaymentForm.amount" class="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">
+                                        Confirming: {{ formatCurrency(manualPaymentForm.amount) }}
+                                    </div>
+                                    <p class="text-[11px] text-slate-500">
+                                        Note: This will create a permanent manual payment record for this student.
                                     </p>
                                 </div>
                             </div>
-                            <DialogFooter>
-                                <Button variant="outline" @click="isDialogOpen = false">Cancel</Button>
-                                <Button :disabled="manualPaymentForm.processing" @click="markAsPaid">
-                                    {{ manualPaymentForm.processing ? 'Recording...' : 'Confirm Payment' }}
+                            <DialogFooter class="sm:justify-between">
+                                <Button variant="ghost" @click="isDialogOpen = false">Discard</Button>
+                                <Button :disabled="manualPaymentForm.processing" @click="markAsPaid" class="bg-emerald-600 hover:bg-emerald-700 text-white">
+                                    {{ manualPaymentForm.processing ? 'Recording...' : 'Confirm & Post Payment' }}
                                 </Button>
                             </DialogFooter>
                         </DialogContent>
@@ -146,156 +180,250 @@ const verifyPayment = (paymentId: string) => {
                 </div>
             </div>
 
-            <div class="grid md:grid-cols-3 gap-6 print:block print:space-y-6">
-                <!-- Main Invoice Card -->
-                <div class="md:col-span-2 space-y-6">
-                    <Card class="print:shadow-none print:border-none">
-                        <CardHeader class="border-b pb-6">
-                            <div class="flex justify-between items-start">
-                                <div class="space-y-1">
-                                    <p class="text-sm font-medium text-muted-foreground uppercase tracking-wider">Invoice Reference</p>
-                                    <h2 class="text-3xl font-mono font-bold">{{ invoice.reference }}</h2>
-                                    <Badge :class="['mt-2', getStatusColor(invoice.status)]">
-                                        {{ invoice.status.toUpperCase() }}
-                                    </Badge>
+            <!-- Smart Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 no-print">
+                <Card class="bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border-slate-200 shadow-sm">
+                    <CardContent class="p-6">
+                        <div class="flex items-center justify-between">
+                            <div class="space-y-1">
+                                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Billed</p>
+                                <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ formatCurrency(invoice.amount) }}</p>
+                            </div>
+                            <div class="p-3 bg-slate-100 dark:bg-slate-800 rounded-2xl text-slate-600 dark:text-slate-400">
+                                <Wallet class="w-6 h-6" />
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card class="bg-emerald-50/50 dark:bg-emerald-950/10 border-emerald-100 shadow-sm">
+                    <CardContent class="p-6">
+                        <div class="flex items-center justify-between">
+                            <div class="space-y-1">
+                                <p class="text-xs font-semibold uppercase tracking-wider text-emerald-600/80">Total Collected</p>
+                                <p class="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{{ formatCurrency(invoice.paid_amount) }}</p>
+                            </div>
+                            <div class="p-3 bg-emerald-100 dark:bg-emerald-900/50 rounded-2xl text-emerald-600">
+                                <CheckCircle2 class="w-6 h-6" />
+                            </div>
+                        </div>
+                        <div class="mt-4 w-full bg-emerald-100 dark:bg-emerald-900/30 h-1.5 rounded-full overflow-hidden">
+                            <div class="bg-emerald-500 h-full transition-all duration-500" :style="{ width: `${progressPercentage}%` }"></div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card :class="[balance > 0 ? 'bg-amber-50/50 border-amber-100' : 'bg-slate-50 border-slate-100', 'shadow-sm']">
+                    <CardContent class="p-6">
+                        <div class="flex items-center justify-between">
+                            <div class="space-y-1">
+                                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Current Balance</p>
+                                <p :class="['text-2xl font-bold', balance > 0 ? 'text-amber-700' : 'text-slate-400']">
+                                    {{ formatCurrency(balance) }}
+                                </p>
+                            </div>
+                            <div :class="['p-3 rounded-2xl', balance > 0 ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400']">
+                                <AlertCircle class="w-6 h-6" />
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                
+                <!-- Main Content (Invoice View) -->
+                <div class="lg:col-span-8 space-y-6">
+                    <Card class="border-none shadow-xl bg-white dark:bg-slate-900 overflow-hidden relative">
+                        <!-- Decorative top bar -->
+                        <div class="h-1.5 w-full bg-slate-900 dark:bg-slate-50"></div>
+                        
+                        <CardHeader class="px-8 pt-10 pb-8 border-b border-slate-100 dark:border-slate-800">
+                            <div class="flex flex-col md:flex-row justify-between gap-8">
+                                <div class="space-y-6">
+                                    <div class="space-y-2">
+                                        <Badge variant="outline" :class="['text-xs px-3 py-1 font-bold', getStatusColor(invoice.status)]">
+                                            {{ invoice.status.toUpperCase() }}
+                                        </Badge>
+                                        <h2 class="text-4xl font-black tracking-tight text-slate-900 dark:text-white uppercase">Invoice</h2>
+                                    </div>
+                                    
+                                    <div class="space-y-1">
+                                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Student Information</h3>
+                                        <div class="space-y-0.5">
+                                            <p class="text-lg font-bold text-slate-900 dark:text-white">{{ invoice.user.name }}</p>
+                                            <p class="text-sm text-slate-500">{{ invoice.user.student?.matriculation_number || 'N/A' }}</p>
+                                            <p class="text-sm text-slate-500">{{ invoice.user.student?.department?.name || 'N/A' }}</p>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="text-right space-y-1">
-                                    <p class="text-sm text-muted-foreground">Issue Date</p>
-                                    <p class="font-medium">{{ formatDate(invoice.created_at) }}</p>
-                                    <p class="text-sm text-muted-foreground mt-2">Due Date</p>
-                                    <p class="font-medium">{{ formatDate(invoice.due_date) }}</p>
+
+                                <div class="text-left md:text-right space-y-6">
+                                    <div class="space-y-1">
+                                        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Invoice Meta</p>
+                                        <div class="space-y-1 text-sm">
+                                            <p class="text-slate-600 dark:text-slate-400 font-mono"># {{ invoice.reference }}</p>
+                                            <p class="text-slate-600 dark:text-slate-400">Session: <span class="font-bold">{{ invoice.session?.name || 'N/A' }}</span></p>
+                                            <p class="text-slate-600 dark:text-slate-400">Category: <span class="capitalize font-bold">{{ invoice.type.replace('_', ' ') }}</span></p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="pt-4 border-t border-slate-100 dark:border-slate-800 md:border-t-0 md:pt-0">
+                                        <div class="flex md:flex-col justify-between gap-1">
+                                            <span class="text-xs font-bold text-slate-400 uppercase">Payment Due</span>
+                                            <span class="text-lg font-bold text-slate-900 dark:text-white">{{ formatDate(invoice.due_date) }}</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </CardHeader>
-                        <CardContent class="pt-6">
-                            <!-- Bill To Section -->
-                            <div class="grid sm:grid-cols-2 gap-8 mb-8 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
-                                <div class="space-y-3">
-                                    <h3 class="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-2">
-                                        <User class="w-3.5 h-3.5" /> Billed To
-                                    </h3>
-                                    <div class="space-y-1">
-                                        <p class="font-bold text-lg">{{ invoice.user.name }}</p>
-                                        <div class="text-sm text-muted-foreground flex items-center gap-2">
-                                            <Mail class="w-3.5 h-3.5" /> {{ invoice.user.email }}
-                                        </div>
-                                        <div v-if="invoice.user.student" class="text-sm text-muted-foreground space-y-1 mt-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-                                            <p><span class="font-medium text-foreground">Matric No:</span> {{ invoice.user.student.matriculation_number }}</p>
-                                            <p class="flex items-center gap-2">
-                                                <Building class="w-3.5 h-3.5" /> {{ invoice.user.student.department?.name || 'N/A' }}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="space-y-3">
-                                     <h3 class="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-2">
-                                        <School class="w-3.5 h-3.5" /> Session Details
-                                    </h3>
-                                    <div class="space-y-1">
-                                        <p class="font-medium">{{ invoice.session?.name || 'N/A' }} Session</p>
-                                        <p class="text-sm text-muted-foreground capitalize">{{ invoice.type.replace('_', ' ') }}</p>
-                                    </div>
-                                </div>
-                            </div>
 
-                            <!-- Line Items -->
-                            <h3 class="text-sm font-semibold mb-4">Invoice Items</h3>
-                            <div class="rounded-md border overflow-hidden">
-                                <Table>
-                                    <TableHeader class="bg-slate-50 dark:bg-slate-900">
-                                        <TableRow>
-                                            <TableHead>Description</TableHead>
-                                            <TableHead class="text-right">Amount</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        <TableRow v-for="item in invoice.items" :key="item.id">
-                                            <TableCell class="font-medium">{{ item.description }}</TableCell>
-                                            <TableCell class="text-right">{{ formatCurrency(item.amount) }}</TableCell>
-                                        </TableRow>
-                                        <TableRow v-if="!invoice.items || invoice.items.length === 0">
-                                            <TableCell class="font-medium capitalize">{{ invoice.type.replace('_', ' ') }}</TableCell>
-                                            <TableCell class="text-right">{{ formatCurrency(invoice.amount) }}</TableCell>
-                                        </TableRow>
-                                    </TableBody>
-                                </Table>
-                            </div>
+                        <CardContent class="p-0">
+                            <!-- Line Items Table -->
+                            <Table>
+                                <TableHeader class="bg-slate-50 dark:bg-slate-950/50">
+                                    <TableRow class="hover:bg-transparent border-b-0">
+                                        <TableHead class="pl-8 h-12 text-slate-500 font-bold uppercase text-[10px] tracking-wider">Service / Description</TableHead>
+                                        <TableHead class="h-12 text-right pr-8 text-slate-500 font-bold uppercase text-[10px] tracking-wider">Amount (NGN)</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    <TableRow v-for="item in invoice.items" :key="item.id" class="border-b-slate-100 dark:border-b-slate-800">
+                                        <TableCell class="pl-8 py-5">
+                                            <div class="font-semibold text-slate-700 dark:text-slate-200">{{ item.description }}</div>
+                                            <div class="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-tighter">Academic Charge</div>
+                                        </TableCell>
+                                        <TableCell class="text-right pr-8 py-5 font-mono text-slate-900 dark:text-white">
+                                            {{ formatCurrency(item.amount) }}
+                                        </TableCell>
+                                    </TableRow>
+                                    <TableRow v-if="!invoice.items || invoice.items.length === 0" class="border-b-slate-100 dark:border-b-slate-800">
+                                        <TableCell class="pl-8 py-5">
+                                            <div class="font-semibold text-slate-700 dark:text-slate-200 capitalize">{{ invoice.type.replace('_', ' ') }}</div>
+                                            <div class="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-tighter">Full Payment Requirement</div>
+                                        </TableCell>
+                                        <TableCell class="text-right pr-8 py-5 font-mono text-slate-900 dark:text-white">
+                                            {{ formatCurrency(invoice.amount) }}
+                                        </TableCell>
+                                    </TableRow>
+                                </TableBody>
+                            </Table>
 
-                            <!-- Totals -->
-                            <div class="flex flex-col items-end gap-2 mt-6 pt-6 border-t">
-                                <div class="flex justify-between w-full sm:w-64">
-                                    <span class="text-muted-foreground">Subtotal:</span>
-                                    <span class="font-medium">{{ formatCurrency(invoice.amount) }}</span>
+                            <!-- Financial Recap -->
+                            <div class="p-8 bg-slate-50/50 dark:bg-slate-950/20 flex flex-col items-end gap-3">
+                                <div class="flex justify-between w-full sm:w-80 text-sm">
+                                    <span class="text-slate-500 font-medium">Subtotal</span>
+                                    <span class="font-mono font-bold text-slate-700 dark:text-slate-300">{{ formatCurrency(invoice.amount) }}</span>
                                 </div>
-                                <div class="flex justify-between w-full sm:w-64">
-                                    <span class="text-muted-foreground">Paid Amount:</span>
-                                    <span class="font-medium text-emerald-600">- {{ formatCurrency(invoice.paid_amount) }}</span>
+                                <div class="flex justify-between w-full sm:w-80 text-sm">
+                                    <span class="text-slate-500 font-medium">Total Paid to Date</span>
+                                    <span class="font-mono font-bold text-emerald-600">{{ formatCurrency(invoice.paid_amount) }}</span>
                                 </div>
-                                <Separator class="my-2 w-full sm:w-64" />
-                                <div class="flex justify-between w-full sm:w-64">
-                                    <span class="font-bold text-lg">Balance Due:</span>
-                                    <span class="font-bold text-lg">{{ formatCurrency(invoice.amount - invoice.paid_amount) }}</span>
+                                <Separator class="my-2 w-full sm:w-80 bg-slate-200 dark:bg-slate-800 h-[2px]" />
+                                <div class="flex justify-between w-full sm:w-80">
+                                    <span class="font-black text-lg uppercase tracking-tight text-slate-400">Balance Due</span>
+                                    <span class="font-black text-2xl text-slate-900 dark:text-white">{{ formatCurrency(balance) }}</span>
                                 </div>
                             </div>
                         </CardContent>
+
+                        <!-- Footer Note -->
+                        <div class="p-8 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300 no-print">
+                            <div class="flex items-center gap-3 text-xs font-medium text-slate-500">
+                                <ShieldCheck class="w-4 h-4 text-emerald-500" />
+                                <span>Verified MIU Digital Document</span>
+                            </div>
+                            <p class="text-[10px] font-mono text-slate-400 uppercase tracking-widest">Powered by MIU ERP System</p>
+                        </div>
                     </Card>
                 </div>
 
-                <!-- Sidebar / Payment History -->
-                <div class="space-y-6">
-                    <Card class="print:hidden">
-                        <CardHeader>
-                            <CardTitle class="text-base flex items-center gap-2">
-                                <Clock class="w-4 h-4 text-blue-500" /> Payment History
+                <!-- Transaction History Sidebar -->
+                <div class="lg:col-span-4 space-y-6 no-print">
+                    
+                    <Card class="border-slate-200 shadow-sm overflow-hidden">
+                        <CardHeader class="bg-slate-50/80 dark:bg-slate-900/80 border-b py-4">
+                            <CardTitle class="text-sm font-bold flex items-center gap-2">
+                                <History class="w-4 h-4 text-slate-400" /> Transaction History
                             </CardTitle>
                         </CardHeader>
-                        <CardContent>
-                            <div class="relative pl-4 border-l-2 border-slate-100 dark:border-slate-800 space-y-6">
-                                <div v-for="payment in payments" :key="payment.id" class="relative">
-                                    <div class="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-950"></div>
-                                    <div class="space-y-1">
-                                        <div class="flex items-center justify-between gap-2">
-                                            <p class="font-bold">{{ formatCurrency(payment.amount) }}</p>
-                                            <Button 
-                                                v-if="payment.status !== 'success'" 
-                                                variant="outline" 
-                                                size="sm" 
-                                                class="h-6 px-2 text-xs"
-                                                @click="verifyPayment(payment.id)"
-                                            >
-                                                <RefreshCw class="w-3 h-3 mr-1" /> Verify
-                                            </Button>
+                        <CardContent class="p-0">
+                            <div class="divide-y divide-slate-100 dark:divide-slate-800">
+                                <div v-for="payment in payments" :key="payment.id" class="p-5 space-y-3 hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors">
+                                    <div class="flex items-start justify-between">
+                                        <div class="space-y-0.5">
+                                            <p class="text-lg font-black text-slate-900 dark:text-white">{{ formatCurrency(payment.amount) }}</p>
+                                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{{ formatDate(payment.paid_at) }}</p>
                                         </div>
-                                        <p class="text-xs text-muted-foreground">{{ formatDate(payment.paid_at) }}</p>
-                                        <Badge variant="outline" class="text-[10px] h-5 px-1.5 uppercase font-mono">
+                                        <Badge 
+                                            variant="secondary" 
+                                            :class="['text-[10px] font-bold uppercase px-2', payment.status === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']"
+                                        >
+                                            {{ payment.status }}
+                                        </Badge>
+                                    </div>
+
+                                    <div class="flex flex-wrap gap-2">
+                                        <Badge variant="outline" class="text-[10px] h-5 font-mono text-slate-500 capitalize">
                                             {{ payment.channel }}
                                         </Badge>
-                                        <p class="text-[10px] text-muted-foreground font-mono truncate w-full" :title="payment.gateway_reference">
-                                            ref: {{ payment.gateway_reference }}
-                                        </p>
+                                        <div v-if="payment.recorder" class="text-[10px] text-slate-400 flex items-center gap-1">
+                                            <User class="w-3 h-3" /> Recorded by {{ payment.recorder.name.split(' ')[0] }}
+                                        </div>
+                                    </div>
+
+                                    <div class="pt-2 flex items-center gap-2">
+                                        <Button 
+                                            v-if="payment.status === 'success'"
+                                            size="sm" 
+                                            variant="secondary" 
+                                            class="h-8 w-full text-xs font-bold"
+                                            @click="downloadReceipt(payment.id)"
+                                        >
+                                            <Download class="w-3.5 h-3.5 mr-2" /> Receipt
+                                        </Button>
+                                        <Button 
+                                            v-if="payment.status !== 'success'" 
+                                            variant="outline" 
+                                            size="sm" 
+                                            class="h-8 w-full text-xs font-bold text-blue-600 border-blue-100 hover:bg-blue-50"
+                                            @click="verifyPayment(payment.id)"
+                                        >
+                                            <RefreshCw class="w-3.5 h-3.5 mr-2" /> Verify Status
+                                        </Button>
                                     </div>
                                 </div>
-                                <div v-if="payments.length === 0" class="text-sm text-muted-foreground italic">
-                                    No payments recorded yet.
+                                <div v-if="payments.length === 0" class="p-10 text-center space-y-2">
+                                    <div class="mx-auto w-10 h-10 bg-slate-50 dark:bg-slate-900 rounded-full flex items-center justify-center text-slate-300">
+                                        <Clock class="w-5 h-5" />
+                                    </div>
+                                    <p class="text-sm text-slate-400">No payments detected.</p>
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
 
-                    <!-- Contact/Support Info (Optional) -->
-                    <Card class="bg-indigo-50 dark:bg-indigo-950/20 border-indigo-100 dark:border-indigo-900 print:hidden">
-                        <CardContent class="p-4 flex items-start gap-3">
-                            <div class="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg text-indigo-600 dark:text-indigo-400">
-                                <Mail class="w-4 h-4" />
+                    <!-- Administrative Metadata -->
+                    <div class="p-6 rounded-xl border border-slate-200 bg-slate-50/50 dark:bg-slate-900/50 space-y-4">
+                        <div class="flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                            <ShieldCheck class="w-4 h-4 text-slate-400" />
+                            <h4 class="text-xs font-bold uppercase tracking-wider">System Info</h4>
+                        </div>
+                        <div class="space-y-2 text-[11px]">
+                            <div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                                <span class="text-slate-500">Internal ID</span>
+                                <span class="font-mono text-slate-900 dark:text-slate-100">{{ invoice.id.split('-')[0] }}...</span>
                             </div>
-                            <div>
-                                <h4 class="font-medium text-sm text-indigo-900 dark:text-indigo-200">Need Help?</h4>
-                                <p class="text-xs text-indigo-700 dark:text-indigo-400 mt-0.5">
-                                    Issues with this invoice? Contact the Bursary department.
-                                </p>
+                            <div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                                <span class="text-slate-500">Last Modified</span>
+                                <span class="text-slate-900 dark:text-slate-100">{{ formatDate(invoice.updated_at) }}</span>
                             </div>
-                        </CardContent>
-                    </Card>
+                            <div class="flex justify-between">
+                                <span class="text-slate-500">Origin</span>
+                                <span class="text-slate-900 dark:text-slate-100">Student Portal</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -308,7 +436,17 @@ const verifyPayment = (paymentId: string) => {
         display: none !important;
     }
     body {
-        background: white;
+        background: white !important;
     }
+    .max-w-7xl {
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+}
+
+/* Custom transitions */
+.transition-all {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 </style>

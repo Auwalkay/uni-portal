@@ -160,3 +160,6 @@ require __DIR__.'/settings.php';
 
 // Webhooks
 Route::post('webhooks/squadco', [\App\Http\Controllers\Webhooks\SquadcoWebhookController::class, 'handle'])->name('webhooks.squadco');
+
+// Public Verification
+Route::get('verify-admission/{identifier}', [\App\Http\Controllers\Public\AdmissionVerificationController::class, 'verify'])->name('verify.admission');

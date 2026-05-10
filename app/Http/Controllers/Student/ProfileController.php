@@ -289,6 +289,7 @@ class ProfileController extends Controller
             // Map student data to what the template expects
             $data = [
                 'applicant' => (object) [
+                    'id' => $student->id,
                     'user' => $student->user,
                     'first_name' => explode(' ', $student->user->name)[0],
                     'address' => $student->address,
