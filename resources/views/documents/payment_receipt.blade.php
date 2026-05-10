@@ -233,7 +233,7 @@
                 </td>
                 <td class="info-section" align="right">
                     <span class="label">Payment Details:</span>
-                    <div class="value">Date: {{ $payment->paid_at->format('d M, Y') }}</div>
+                    <div class="value">Date: {{ $payment->paid_at->format('d M, Y - h:i A') }}</div>
                     <div class="value">Gateway: {{ strtoupper($payment->gateway ?? 'SQUADCO') }}</div>
                     <div class="value">Method: {{ strtoupper($payment->channel ?? 'N/A') }}</div>
                     <div class="value">Session: {{ $invoice->session->name ?? 'N/A' }}</div>

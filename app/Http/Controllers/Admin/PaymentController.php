@@ -18,7 +18,7 @@ class PaymentController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('reference', 'like', "%{$search}%")
+                $q->where('gateway_reference', 'like', "%{$search}%")
                     ->orWhereHas('user', function ($u) use ($search) {
                         $u->where('name', 'like', "%{$search}%")
                             ->orWhere('email', 'like', "%{$search}%")

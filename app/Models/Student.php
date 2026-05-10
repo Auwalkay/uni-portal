@@ -113,4 +113,9 @@ class Student extends Model
     {
         return $this->belongsTo(Scholarship::class);
     }
+
+    public function invoices()
+    {
+        return $this->hasMany(Invoice::class, 'user_id', 'user_id');
+    }
 }

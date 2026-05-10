@@ -10,6 +10,7 @@ use App\Contracts\PaymentGatewayInterface;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class PaymentController extends Controller
@@ -57,6 +58,16 @@ class PaymentController extends Controller
 
     public function index()
     {
+        $feeService = app(\App\Services\Finance\FeeService::class);
+        $rawInvoices = Invoice::where('user_id', Auth::id())
+            ->where('status', '!=', 'paid')
+            ->where('type', 'school_fee')
+            ->get();
+        
+        foreach ($rawInvoices as $invoice) {
+            $feeService->refreshInvoiceIfUnpaid($invoice);
+        }
+
         $invoices = Invoice::where('user_id', Auth::id())
             ->with([
                 'items',
@@ -89,6 +100,10 @@ class PaymentController extends Controller
 
     public function pay(Request $request, Invoice $invoice)
     {
+        // Auto-refresh invoice if unpaid before proceeding
+        $feeService = app(\App\Services\Finance\FeeService::class);
+        $invoice = $feeService->refreshInvoiceIfUnpaid($invoice);
+
         if ($invoice->status === 'paid') {
             return back()->with('error', 'Invoice already paid.');
         }
@@ -163,6 +178,7 @@ class PaymentController extends Controller
         $payment = Payment::create([
             'invoice_id' => $invoice->id,
             'user_id' => Auth::id(),
+            'transaction_id' => 'MIUPAY' . date('Y') . strtoupper(Str::random(8)),
             'gateway' => $activeGateway,
             'gateway_reference' => 'TEMP-' . uniqid(), // Temporary ref
             'amount' => $amountToPay,
@@ -229,162 +245,18 @@ class PaymentController extends Controller
     public function createSchoolFeeInvoice()
     {
         $user = Auth::user();
-        $student = \App\Models\Student::with(['scholarship', 'admittedSession'])->where('user_id', $user->id)->firstOrFail();
-
-        // Check for pending SCHOOL FEE invoice
-        $pendingInvoice = Invoice::where('user_id', $user->id)
-            ->where('type', 'school_fee')
-            ->where('status', 'pending')
-            ->first();
-
-        if ($pendingInvoice) {
-            return redirect()->route('student.payments.index')->with('info', 'You already have a pending invoice.');
-        }
-
-        // Get current system session
+        $student = \App\Models\Student::where('user_id', $user->id)->firstOrFail();
         $currentSession = \App\Models\Session::current();
+
         if (!$currentSession) {
             return back()->with('error', 'No active academic session found.');
         }
 
-        // Determine which session to use for fee lookup based on policy
-        // If policy is admission_session, we use their original session fees.
-        $targetSessionId = ($student->fee_policy === 'admission_session' && $student->admitted_session_id) 
-            ? $student->admitted_session_id 
-            : $currentSession->id;
+        $feeService = app(\App\Services\Finance\FeeService::class);
+        $invoice = $feeService->generateSchoolFeeInvoice($student, $currentSession);
 
-        // Fetch ALL potentially applicable fees for the target session
-        $allConfigs = \App\Models\FeeConfiguration::where('session_id', $targetSessionId)
-            ->where(function ($q) use ($student) {
-                $q->where('level', $student->current_level)
-                    ->orWhereNull('level');
-            })
-            ->with('feeType')
-            ->get();
-
-        // Specificity Resolver: Group by FeeType and pick the most specific one
-        $resolvedConfigs = collect();
-        $groupedConfigs = $allConfigs->groupBy('fee_type_id');
-
-        foreach ($groupedConfigs as $feeTypeId => $configs) {
-            $resolved = null;
-
-            // 1. Check for Program match
-            if ($student->program_id) {
-                $resolved = $configs->where('program_id', $student->program_id)->first();
-            }
-
-            // 2. Check for Department match
-            if (!$resolved && $student->department_id) {
-                $resolved = $configs->where('department_id', $student->department_id)
-                    ->whereNull('program_id')
-                    ->first();
-            }
-
-            // 3. Check for Faculty match
-            if (!$resolved && $student->faculty_id) {
-                $resolved = $configs->where('faculty_id', $student->faculty_id)
-                    ->whereNull('department_id')
-                    ->whereNull('program_id')
-                    ->first();
-            }
-
-            // 4. Fallback to Global (no faculty/dept/program)
-            if (!$resolved) {
-                $resolved = $configs->whereNull('faculty_id')
-                    ->whereNull('department_id')
-                    ->whereNull('program_id')
-                    ->first();
-            }
-
-            if ($resolved) {
-                $resolvedConfigs->push($resolved);
-            }
-        }
-
-        if ($resolvedConfigs->isEmpty()) {
+        if (!$invoice) {
             return back()->with('error', 'No fee configuration found for your profile. Please contact support.');
-        }
-
-        // 1. Calculate Academic Fees
-        $academicTotal = $resolvedConfigs->sum('amount');
-        
-        // 2. Handle Global Admin Charge
-        $adminChargeEnabled = \App\Models\SystemSetting::get('admin_charge_enabled', true);
-        $adminChargeAmount = \App\Models\SystemSetting::get('admin_charge_amount', 250000);
-        
-        $totalAmountBeforeDiscount = $academicTotal;
-        if ($adminChargeEnabled) {
-            $totalAmountBeforeDiscount += $adminChargeAmount;
-        }
-
-        // 3. Apply Scholarship Discount based on Coverage Configuration
-        $discountAmount = 0;
-        if ($student->scholarship && ($student->program?->scholarship_eligible ?? true)) {
-            $scholarship = $student->scholarship;
-            
-            // Base amount for discount depends on whether it covers admin charges
-            $baseForDiscount = $academicTotal;
-            if ($adminChargeEnabled && $scholarship->covers_admin_charges) {
-                $baseForDiscount += $adminChargeAmount;
-            }
-
-            $discountAmount = $baseForDiscount * ($scholarship->percentage / 100);
-        }
-
-        $finalAmount = $totalAmountBeforeDiscount - $discountAmount;
-
-        // Find or Create StudentSession
-        $studentSession = StudentSession::firstOrCreate(
-            [
-                'student_id' => $student->id,
-                'session_id' => $currentSession->id,
-            ],
-            [
-                'level' => $student->current_level,
-                'status' => 'active',
-            ]
-        );
-
-        $invoice = Invoice::create([
-            'user_id' => $user->id,
-            'session_id' => $currentSession->id,
-            'student_session_id' => $studentSession->id,
-            'type' => 'school_fee',
-            'reference' => 'SCH-' . strtoupper(uniqid()),
-            'amount' => $finalAmount,
-            'status' => 'pending',
-            'due_date' => now()->addWeeks(4),
-        ]);
-
-        // Create Invoice Items
-        foreach ($resolvedConfigs as $config) {
-            \App\Models\InvoiceItem::create([
-                'invoice_id' => $invoice->id,
-                'fee_type_id' => $config->fee_type_id,
-                'description' => $config->feeType->name ?? 'Fee',
-                'amount' => $config->amount,
-            ]);
-        }
-        
-        // Add Admin Charge item
-        if ($adminChargeEnabled) {
-            \App\Models\InvoiceItem::create([
-                'invoice_id' => $invoice->id,
-                'fee_type_id' => null, // Or specific fee type if exists
-                'description' => 'Administrative Charges',
-                'amount' => $adminChargeAmount,
-            ]);
-        }
-
-        // Add discount item if applicable
-        if ($discountAmount > 0) {
-            \App\Models\InvoiceItem::create([
-                'invoice_id' => $invoice->id,
-                'fee_type_id' => null,
-                'description' => 'Scholarship Discount (' . $student->scholarship->name . ' - ' . floatval($student->scholarship->percentage) . '%)',
-                'amount' => -$discountAmount,
-            ]);
         }
 
         return redirect()->route('student.payments.index')->with('success', 'School Fee invoice generated successfully.');

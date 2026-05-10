@@ -43,7 +43,7 @@ class StudentController extends Controller
 
     public function store(Request $request)
     {
-        if ($request->scholarship_id === 'none') {
+        if ($request->scholarship_id === 'none' || $request->scholarship_id === '' || $request->scholarship_id === 'null') {
             $request->merge(['scholarship_id' => null]);
         }
         $validated = $request->validate([
@@ -148,6 +148,10 @@ class StudentController extends Controller
             //             }
 
             Mail::to($user->email)->send(new StudentAccountCreated($user, $password));
+
+            // Auto-generate school fee invoice
+            $feeService = app(\App\Services\Finance\FeeService::class);
+            $feeService->generateSchoolFeeInvoice($student, $currentSession);
         });
 
         return redirect()->route('admin.students.index')->with('success', 'Student created successfully.');
@@ -410,7 +414,7 @@ class StudentController extends Controller
 
     public function update(Request $request, Student $student)
     {
-        if ($request->scholarship_id === 'none') {
+        if ($request->scholarship_id === 'none' || $request->scholarship_id === '' || $request->scholarship_id === 'null') {
             $request->merge(['scholarship_id' => null]);
         }
         $validated = $request->validate([

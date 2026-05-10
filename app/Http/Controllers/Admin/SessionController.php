@@ -94,8 +94,8 @@ class SessionController extends Controller
                 $firstSemester->update(['is_current' => true]);
             }
 
-            // Call Artisan command to handle activation and promotion
-            Artisan::call('student:activate-session', ['sessionId' => $session->id]);
+            // Dispatch background queue job for bulk promotion and invoicing
+            \App\Jobs\Academic\PromoteStudentsJob::dispatch($session->id);
         });
 
         AcademicCacheService::clearAll();

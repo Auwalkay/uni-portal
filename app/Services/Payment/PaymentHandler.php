@@ -23,6 +23,7 @@ class PaymentHandler
         $payment->update([
             'status' => 'success',
             'channel' => $data['channel'] ?? 'unknown',
+            'gateway_id' => $data['id'] ?? $data['transaction_id'] ?? $data['gateway_id'] ?? null,
             'paid_at' => now(),
         ]);
 
