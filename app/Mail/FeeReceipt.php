@@ -54,10 +54,17 @@ class FeeReceipt extends Mailable implements ShouldQueue
      */
     public function attachments(): array
     {
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.receipt', [
+        $student = $this->user->student()->with('program')->first();
+        
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.payment_receipt', [
             'payment' => $this->payment,
             'invoice' => $this->invoice,
             'user' => $this->user,
+            'student' => $student,
+        ])->setOptions([
+            'defaultFont' => 'DejaVu Sans',
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled' => true,
         ]);
 
         return [

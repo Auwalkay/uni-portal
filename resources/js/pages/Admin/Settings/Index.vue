@@ -45,6 +45,7 @@ const props = defineProps<{
         matric_format: string;
         admin_charge_amount: string | number;
         admin_charge_enabled: boolean;
+        admin_charge_splittable: boolean;
         payment_gateway: string;
     }
 }>();
@@ -60,7 +61,8 @@ const form = useForm({
 
 const adminChargeForm = useForm({
     amount: props.settings.admin_charge_amount,
-    enabled: props.settings.admin_charge_enabled
+    enabled: props.settings.admin_charge_enabled,
+    splittable: props.settings.admin_charge_splittable
 });
 
 const gatewayForm = useForm({
@@ -97,14 +99,22 @@ const submitAdminCharge = () => {
             }, {
                 preserveScroll: true,
                 onSuccess: () => {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Updated',
-                        text: 'Administrative charge settings updated',
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 3000
+                    router.post(route('admin.settings.update'), { 
+                        key: 'admin_charge_splittable', 
+                        value: adminChargeForm.splittable 
+                    }, {
+                        preserveScroll: true,
+                        onSuccess: () => {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Updated',
+                                text: 'Administrative charge settings updated',
+                                toast: true,
+                                position: 'top-end',
+                                showConfirmButton: false,
+                                timer: 3000
+                            });
+                        }
                     });
                 }
             });
@@ -262,6 +272,14 @@ const settingsModules = [
                                 <Switch 
                                     id="admin_enabled" 
                                     v-model:checked="adminChargeForm.enabled" 
+                                />
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <Label for="admin_split">Allow Installment Split</Label>
+                                <Switch 
+                                    id="admin_split" 
+                                    v-model:checked="adminChargeForm.splittable" 
+                                    :disabled="!adminChargeForm.enabled"
                                 />
                             </div>
                             <div class="space-y-2">

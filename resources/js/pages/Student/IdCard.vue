@@ -32,7 +32,7 @@ const printCard = () => {
                 <!-- Logo Placeholders -->
                  <div class="absolute inset-0 flex flex-col items-center pt-4 text-white">
                     <div class="h-16 w-auto flex items-center justify-center mb-1">
-                        <img src="/miu-logo.jpeg" alt="Logo" class="h-full object-contain backdrop-blur-sm rounded-md shadow-sm">
+                        <img src="/miu-logo.png" alt="Logo" class="h-full object-contain backdrop-blur-sm rounded-md shadow-sm">
                     </div>
                     <h1 class="text-[10px] font-bold uppercase tracking-widest text-[#E31E24] drop-shadow-md">Mewar International University Nigeria</h1>
                 </div>

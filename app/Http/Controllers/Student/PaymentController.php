@@ -21,6 +21,14 @@ class PaymentController extends Controller
         $this->gateway = $gateway;
     }
 
+    private function getGatewayByName($name)
+    {
+        if ($name === 'squadco') {
+            return new \App\Services\SquadcoService();
+        }
+        return new \App\Services\PaystackService();
+    }
+
     public function downloadReceipt(Payment $payment)
     {
         if ($payment->user_id !== Auth::id()) {
@@ -75,6 +83,7 @@ class PaymentController extends Controller
         return Inertia::render('Student/Finance/Index', [
             'invoices' => $invoices,
             'canGenerateInvoice' => $canGenerateInvoice,
+            'admin_charge_splittable' => (bool) \App\Models\SystemSetting::get('admin_charge_splittable', true),
         ]);
     }
 
@@ -88,34 +97,73 @@ class PaymentController extends Controller
             'amount' => 'required|numeric|min:1',
         ]);
 
-        $balance = $invoice->amount - $invoice->paid_amount;
+        $balance = (float) $invoice->amount - (float) $invoice->paid_amount;
         $amountToPay = (float) $request->input('amount');
 
-        // Strict Validation Rules
-        $isFullPayment = abs($amountToPay - $balance) < 1; // Allow small float diff
+        // Calculate Minimum Required Upfront Payment based on Splittability Rules
+        $adminChargeSplittable = \App\Models\SystemSetting::get('admin_charge_splittable', true);
+        $adminChargeItemAmount = (float) $invoice->items()->where('description', 'Administrative Charges')->sum('amount');
+        $netAcademicPortion = (float) $invoice->amount - $adminChargeItemAmount;
+        
+        $minUpfront = (float) $invoice->amount / 2; // Default 50%
+        if (!$adminChargeSplittable && $adminChargeItemAmount > 0) {
+            // Admin must be paid full, academic can be split
+            $minUpfront = ($netAcademicPortion / 2) + $adminChargeItemAmount;
+        }
 
-        $halfAmount = $invoice->amount / 2;
-        $isHalfPayment = abs($amountToPay - $halfAmount) < 1;
+        // If academic fees are 0 (e.g. 100% scholarship), then min payment is the full balance
+        if ($netAcademicPortion <= 0) {
+            $minUpfront = (float) $invoice->amount;
+        }
 
-        if ($invoice->paid_amount == 0) {
-            // First payment: Can be Full or Half
-            if (!$isFullPayment && !$isHalfPayment) {
-                return back()->with('error', 'You can only pay the full amount (' . number_format($balance) . ') or a 50% installment (' . number_format($halfAmount) . ').');
+        // Flexible Validation Rules
+        $isFullPayment = abs($amountToPay - $balance) < 0.01;
+        $totalPaidIfSuccessful = (float) $invoice->paid_amount + $amountToPay;
+
+        if (!$isFullPayment) {
+            if ($totalPaidIfSuccessful < $minUpfront) {
+                return back()->with('error', 'Minimum required upfront payment is ' . number_format($minUpfront) . '. You have only paid ' . number_format($invoice->paid_amount) . '.');
             }
-        } else {
-            // Subsequent payments: Must be Full Balance
-            if (!$isFullPayment) {
-                return back()->with('error', 'You must pay the remaining balance of ' . number_format($balance, 2));
+            
+            // Optional: Prevent extremely small payments (e.g. less than 1000)
+            if ($amountToPay < 1000) {
+                return back()->with('error', 'The minimum payment amount allowed is 1,000 NGN.');
             }
         }
 
-        if ($amountToPay > $balance) {
-            return back()->with('error', 'Amount exceeds remaining balance.');
+        if ($amountToPay > ($balance + 0.01)) {
+            return back()->with('error', 'Amount exceeds remaining balance of ' . number_format($balance, 2));
         }
+
+        // Check for the last pending payment and verify its status before proceeding
+        $lastPending = Payment::where('invoice_id', $invoice->id)
+            ->where('user_id', Auth::id())
+            ->where('status', 'pending')
+            ->latest()
+            ->first();
+
+        if ($lastPending && !str_starts_with($lastPending->gateway_reference, 'TEMP-')) {
+            // Verify using the gateway that was actually used for this payment
+            $checkGateway = $this->getGatewayByName($lastPending->gateway ?? 'squadco');
+            $verification = $checkGateway->verifyTransaction($lastPending->gateway_reference);
+            
+            if ($verification && $verification['status'] === 'success') {
+                app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($lastPending->gateway_reference, $verification);
+                return Inertia::render('Student/Finance/Success', [
+                    'payment' => $lastPending->fresh(),
+                    'invoice' => $invoice,
+                ]);
+            } elseif ($verification && in_array($verification['status'], ['failed', 'cancelled', 'error'])) {
+                $lastPending->update(['status' => 'failed']);
+            }
+        }
+
+        $activeGateway = \App\Models\SystemSetting::get('payment_gateway', env('PAYMENT_GATEWAY', 'squadco'));
 
         $payment = Payment::create([
             'invoice_id' => $invoice->id,
             'user_id' => Auth::id(),
+            'gateway' => $activeGateway,
             'gateway_reference' => 'TEMP-' . uniqid(), // Temporary ref
             'amount' => $amountToPay,
             'status' => 'pending',
@@ -150,22 +198,32 @@ class PaymentController extends Controller
     {
         $reference = $request->query('reference') ?? $request->query('transaction_ref');
         if (!$reference) {
-            return redirect()->route('student.payments.index')->with('error', 'No reference supplied.');
+            return Inertia::render('Student/Finance/Failure', [
+                'error' => 'No transaction reference was provided by the payment gateway.'
+            ]);
         }
 
         $data = $this->gateway->verifyTransaction($reference);
+        $payment = Payment::where('gateway_reference', $reference)->first();
 
         if ($data && $data['status'] === 'success') {
-            $payment = Payment::where('gateway_reference', $reference)->first();
-
-            if ($payment && $payment->status !== 'success') {
-                app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($reference, $data);
+            if ($payment) {
+                if ($payment->status !== 'success') {
+                    app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($reference, $data);
+                }
+                return Inertia::render('Student/Finance/Success', [
+                    'payment' => $payment,
+                    'invoice' => $payment->invoice,
+                ]);
             }
 
             return redirect()->route('student.payments.index')->with('success', 'Payment successful!');
         }
 
-        return redirect()->route('student.payments.index')->with('error', 'Payment verification failed.');
+        return Inertia::render('Student/Finance/Failure', [
+            'error' => $data['message'] ?? 'The payment gateway could not verify this transaction.',
+            'reference' => $reference
+        ]);
     }
 
     public function createSchoolFeeInvoice()
@@ -248,23 +306,33 @@ class PaymentController extends Controller
             return back()->with('error', 'No fee configuration found for your profile. Please contact support.');
         }
 
-        $totalAmount = $resolvedConfigs->sum('amount');
+        // 1. Calculate Academic Fees
+        $academicTotal = $resolvedConfigs->sum('amount');
         
-        // Add Global Admin Charge if enabled
+        // 2. Handle Global Admin Charge
         $adminChargeEnabled = \App\Models\SystemSetting::get('admin_charge_enabled', true);
         $adminChargeAmount = \App\Models\SystemSetting::get('admin_charge_amount', 250000);
         
+        $totalAmountBeforeDiscount = $academicTotal;
         if ($adminChargeEnabled) {
-            $totalAmount += $adminChargeAmount;
+            $totalAmountBeforeDiscount += $adminChargeAmount;
         }
 
-        // Apply Scholarship Discount
+        // 3. Apply Scholarship Discount based on Coverage Configuration
         $discountAmount = 0;
         if ($student->scholarship && ($student->program?->scholarship_eligible ?? true)) {
-            $discountAmount = $totalAmount * ($student->scholarship->percentage / 100);
+            $scholarship = $student->scholarship;
+            
+            // Base amount for discount depends on whether it covers admin charges
+            $baseForDiscount = $academicTotal;
+            if ($adminChargeEnabled && $scholarship->covers_admin_charges) {
+                $baseForDiscount += $adminChargeAmount;
+            }
+
+            $discountAmount = $baseForDiscount * ($scholarship->percentage / 100);
         }
 
-        $finalAmount = $totalAmount - $discountAmount;
+        $finalAmount = $totalAmountBeforeDiscount - $discountAmount;
 
         // Find or Create StudentSession
         $studentSession = StudentSession::firstOrCreate(

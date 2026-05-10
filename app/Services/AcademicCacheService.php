@@ -38,7 +38,7 @@ class AcademicCacheService
     public static function getScholarships()
     {
         return Cache::remember('all_scholarships', self::TTL, function () {
-            return Scholarship::orderBy('name')->get(['id', 'name']);
+            return Scholarship::where('is_active', true)->orderBy('name')->get(['id', 'name']);
         });
     }
 

@@ -76,6 +76,7 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
         });
 
         Route::get('staff', [StaffController::class, 'index'])->name('staff.index');
+        Route::get('staff/export', [StaffController::class, 'export'])->name('staff.export');
         Route::get('staff/{staff}', [StaffController::class, 'show'])->name('staff.show');
         
         Route::middleware(['permission:manage_staff'])->group(function () {

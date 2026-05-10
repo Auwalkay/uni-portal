@@ -110,6 +110,12 @@ class CourseRegistrationController extends Controller
                 $locks['1'] = true;
             }
         }
+
+        // LOCK 1st Semester if 2nd Semester is CURRENT
+        if ($secondSemester && $secondSemester->is_current) {
+            $locks['1'] = true;
+        }
+
         if ($secondSemester) {
             if ($secondSemester->registration_starts_at && $now->lt($secondSemester->registration_starts_at)) {
                 $locks['2'] = true;
@@ -228,6 +234,24 @@ class CourseRegistrationController extends Controller
         $firstSemester = $semesters->filter(fn($s) => stripos($s->name, 'First') !== false || $s->name == '1')->first();
         $secondSemester = $semesters->filter(fn($s) => stripos($s->name, 'Second') !== false || $s->name == '2')->first();
 
+        // Check if 1st Semester is locked
+        $isFirstSemLocked = false;
+        $now = now();
+        if ($firstSemester) {
+            if ($firstSemester->registration_starts_at && $now->lt($firstSemester->registration_starts_at)) $isFirstSemLocked = true;
+            if ($firstSemester->registration_ends_at && $now->gt($firstSemester->registration_ends_at)) $isFirstSemLocked = true;
+        }
+        if ($secondSemester && $secondSemester->is_current) {
+            $isFirstSemLocked = true;
+        }
+
+        // Check if 2nd Semester is locked
+        $isSecondSemLocked = false;
+        if ($secondSemester) {
+            if ($secondSemester->registration_starts_at && $now->lt($secondSemester->registration_starts_at)) $isSecondSemLocked = true;
+            if ($secondSemester->registration_ends_at && $now->gt($secondSemester->registration_ends_at)) $isSecondSemLocked = true;
+        }
+
         // Max Units Check (Global or Per Semester? Usually Per Semester, but let's assume Global for simplicity requested, or Per Semester)
         // User request was simple "select and show".
         // Let's implement Per Semester Unit Cap if possible, but for now stick to global maxUnits provided in create.
@@ -251,6 +275,26 @@ class CourseRegistrationController extends Controller
         }
         if ($secondSemCourses->sum('units') > $maxUnits) {
             return back()->with('error', "Maximum of {$maxUnits} units allowed for Second Semester.");
+        }
+
+        // Enforce Locks on Semester-specific changes
+        $existingRegistrations = CourseRegistration::where('student_id', $student->id)
+            ->where('session_id', $currentSession->id)
+            ->with('course')
+            ->get();
+
+        $existingFirstSemIds = $existingRegistrations->filter(fn($r) => $r->course->semester === '1')->pluck('course_id')->toArray();
+        $newFirstSemIds = $firstSemCourses->pluck('id')->toArray();
+
+        if ($isFirstSemLocked && (array_diff($existingFirstSemIds, $newFirstSemIds) || array_diff($newFirstSemIds, $existingFirstSemIds))) {
+            return back()->with('error', "First Semester registration is locked and cannot be modified.");
+        }
+
+        $existingSecondSemIds = $existingRegistrations->filter(fn($r) => $r->course->semester === '2')->pluck('course_id')->toArray();
+        $newSecondSemIds = $secondSemCourses->pluck('id')->toArray();
+
+        if ($isSecondSemLocked && (array_diff($existingSecondSemIds, $newSecondSemIds) || array_diff($newSecondSemIds, $existingSecondSemIds))) {
+            return back()->with('error', "Second Semester registration is locked and cannot be modified.");
         }
 
         // DB Transaction
@@ -367,6 +411,19 @@ class CourseRegistrationController extends Controller
 
         if ($registrations->isEmpty()) {
             return response("No registered courses found for {$semester->name} semester, {$session->name} session.", 404);
+        }
+
+        // REQUIREMENT: 2nd Semester Exam Card requires FULL payment
+        if (str_contains(strtolower($semester->name), 'second')) {
+            $isFullyPaid = Invoice::where('user_id', Auth::id())
+                ->where('type', 'school_fee')
+                ->where('session_id', $session->id)
+                ->where('status', 'paid')
+                ->exists();
+
+            if (!$isFullyPaid) {
+                return back()->with('error', 'Second Semester Exam Card is only available after full payment of school fees. Please clear your outstanding balance.');
+            }
         }
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.exam_card', [

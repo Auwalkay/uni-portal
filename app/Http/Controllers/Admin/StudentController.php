@@ -19,9 +19,15 @@ use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Mail\StudentAccountCreated;
 use App\Services\AcademicCacheService;
+use App\Exports\StudentsExport;
 
 class StudentController extends Controller
 {
+    public function export(Request $request)
+    {
+        return Excel::download(new StudentsExport($request->all()), 'students_export_' . now()->format('Y_m_d_His') . '.xlsx');
+    }
+
     public function create()
     {
         return Inertia::render('Admin/Students/Create', [
@@ -217,11 +223,19 @@ class StudentController extends Controller
             }
         }
 
+        // Date Range Filter
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->date_to);
+        }
+
         $students = $query->latest()->paginate(15)->withQueryString();
 
         return Inertia::render('Admin/Students/Index', [
             'students' => $students,
-            'filters' => $request->only(['search', 'session_id', 'faculty_id', 'department_id', 'level', 'program_id', 'program', 'scholarship_id']),
+            'filters' => $request->only(['search', 'session_id', 'faculty_id', 'department_id', 'level', 'program_id', 'program', 'scholarship_id', 'date_from', 'date_to']),
             'sessions' => AcademicCacheService::getSessions(),
             'faculties' => AcademicCacheService::getFaculties(),
             'departments' => AcademicCacheService::getAllDepartments(),

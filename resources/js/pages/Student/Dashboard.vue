@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import StudentLayout from '@/layouts/StudentLayout.vue';
@@ -20,7 +21,7 @@ const props = defineProps<{
     student?: any;
     user?: any;
     isProfileComplete?: boolean;
-    hasPaidSchoolFee?: boolean;
+    schoolFeeStatus?: string; // 'paid', 'partial', 'pending', 'cancelled', etc.
     showRegistrationNotification?: boolean;
     registrationMessage?: string;
     stats?: {
@@ -33,6 +34,20 @@ const props = defineProps<{
     };
     timetable?: Array<any>;
 }>();
+
+const hasPaidEnough = computed(() => {
+    return props.schoolFeeStatus === 'paid' || props.schoolFeeStatus === 'partial';
+});
+
+const paymentStatusText = computed(() => {
+    switch (props.schoolFeeStatus) {
+        case 'paid': return 'Fully Paid';
+        case 'partial': return 'Partially Paid';
+        case 'pending': return 'Unpaid (Pending)';
+        case 'cancelled': return 'Cancelled';
+        default: return 'Unpaid';
+    }
+});
 
 const formatTime = (time: string) => {
     return time.substring(0, 5);
@@ -140,8 +155,9 @@ const greeting = () => {
                         <h3 class="text-sm font-medium text-muted-foreground">Pending Fees</h3>
                         <CreditCard class="h-4 w-4 text-red-500" />
                     </div>
-                    <div class="text-2xl font-bold">{{ hasPaidSchoolFee ? 'Paid' : 'Unpaid' }}</div>
-                     <p v-if="!hasPaidSchoolFee" class="text-xs text-red-500 font-medium">Action Required</p>
+                    <div class="text-2xl font-bold">{{ paymentStatusText }}</div>
+                     <p v-if="!hasPaidEnough" class="text-xs text-red-500 font-medium">Action Required</p>
+                     <p v-else-if="schoolFeeStatus === 'partial'" class="text-xs text-blue-600 font-medium">Split Payment Active</p>
                      <p v-else class="text-xs text-green-600 font-medium">Cleared</p>
                 </div>
             </div>
@@ -225,10 +241,10 @@ const greeting = () => {
                                     <IdCard class="h-4 w-4 text-muted-foreground" />
                                     Student ID Card
                                 </h4>
-                                <p v-if="hasPaidSchoolFee && student?.passport_photo_path" class="text-sm text-muted-foreground mt-1">
+                                <p v-if="hasPaidEnough && student?.passport_photo_path" class="text-sm text-muted-foreground mt-1">
                                     View and print your Student ID Card.
                                 </p>
-                                <p v-else-if="!hasPaidSchoolFee" class="text-sm text-red-500 mt-1">
+                                <p v-else-if="!hasPaidEnough" class="text-sm text-red-500 mt-1">
                                     Pay School Fees to access ID Card.
                                 </p>
                                 <p v-else class="text-sm text-yellow-600 mt-1">
@@ -236,12 +252,12 @@ const greeting = () => {
                                 </p>
                             </div>
                             
-                            <div v-if="hasPaidSchoolFee && student?.passport_photo_path">
+                            <div v-if="hasPaidEnough && student?.passport_photo_path">
                                 <a :href="route('student.id_card.show')" target="_blank" class="mt-4 block text-sm font-medium text-primary underline-offset-4 hover:underline">
                                     View ID Card &rarr;
                                 </a>
                             </div>
-                             <div v-else-if="!hasPaidSchoolFee">
+                             <div v-else-if="!hasPaidEnough">
                                 <Link :href="route('student.payments.index')" class="mt-4 text-sm font-medium text-red-600 underline-offset-4 hover:underline">
                                     Pay Now &rarr;
                                 </Link>
@@ -325,13 +341,17 @@ const greeting = () => {
                         <h3 class="font-semibold text-lg">Notifications</h3>
                     </div>
                     <div class="p-6 space-y-4">
-                         <div v-if="!hasPaidSchoolFee" class="flex items-start gap-3 rounded-lg border border-red-100 bg-red-50 p-3 text-sm">
-                            <CreditCard class="h-4 w-4 text-red-600 mt-0.5" />
-                            <div>
-                                <p class="font-medium text-red-900">School Fees Unpaid</p>
-                                <p class="text-red-700">You have not paid your school fees for this session.</p>
-                                <Link :href="route('student.payments.create_school_fee')" method="post" as="button" class="mt-2 text-xs font-semibold text-red-800 underline hover:text-red-900">
-                                    Pay Now
+                         <div v-if="!hasPaidEnough || schoolFeeStatus === 'partial'" class="flex items-start gap-3 rounded-lg border" :class="schoolFeeStatus === 'partial' ? 'border-blue-100 bg-blue-50' : 'border-red-100 bg-red-50'">
+                            <CreditCard class="h-4 w-4 mt-0.5" :class="schoolFeeStatus === 'partial' ? 'text-blue-600' : 'text-red-600'" />
+                            <div class="text-sm">
+                                <p class="font-medium" :class="schoolFeeStatus === 'partial' ? 'text-blue-900' : 'text-red-900'">
+                                    {{ schoolFeeStatus === 'partial' ? 'Fee Balance Outstanding' : 'School Fees Unpaid' }}
+                                </p>
+                                <p :class="schoolFeeStatus === 'partial' ? 'text-blue-700' : 'text-red-700'">
+                                    {{ schoolFeeStatus === 'partial' ? 'You have a balance remaining on your split payment.' : 'You have not paid your school fees for this session.' }}
+                                </p>
+                                <Link :href="route('student.payments.index')" class="mt-2 text-xs font-semibold underline" :class="schoolFeeStatus === 'partial' ? 'text-blue-800 hover:text-blue-900' : 'text-red-800 hover:text-red-900'">
+                                    {{ schoolFeeStatus === 'partial' ? 'Pay Balance' : 'Pay Now' }}
                                 </Link>
                             </div>
                         </div>

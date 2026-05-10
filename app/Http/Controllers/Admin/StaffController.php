@@ -21,9 +21,15 @@ use App\Models\Designation;
 use Illuminate\Support\Facades\Cache;
 use App\Services\AcademicCacheService;
 use App\Models\Department;
+use App\Exports\StaffExport;
 
 class StaffController extends Controller
 {
+    public function export(Request $request)
+    {
+        return Excel::download(new StaffExport($request->all()), 'staff_export_' . now()->format('Y_m_d_His') . '.xlsx');
+    }
+
 
     /**
      * Display a listing of the resource.
@@ -70,7 +76,7 @@ class StaffController extends Controller
             });
         }
 
-        $staff = $query->latest()->paginate(15)->withQueryString();
+        $staff = $query->orderBy('name', 'asc')->paginate(15)->withQueryString();
 
         return Inertia::render('Admin/Staff/Index', [
             'staff' => $staff,

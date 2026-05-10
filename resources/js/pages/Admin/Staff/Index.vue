@@ -174,6 +174,18 @@ const submitImport = () => {
     });
 };
 
+const handleExport = () => {
+    const params = {
+        search: search.value,
+        role_id: selectedRole.value,
+        faculty_id: selectedFaculty.value,
+        department_id: selectedDepartment.value,
+    };
+    
+    const queryString = new URLSearchParams(params).toString();
+    window.open(route('admin.staff.export') + '?' + queryString, '_blank');
+};
+
 const breadcrumbs = [
     { title: 'Staff Management', href: '/admin/staff' }
 ];
@@ -250,6 +262,10 @@ const breadcrumbs = [
                                 </DialogFooter>
                             </DialogContent>
                         </Dialog>
+
+                        <Button variant="outline" @click="handleExport" class="border-green-600/30 text-green-600 hover:bg-green-600/10 hover:text-green-700">
+                            <FileSpreadsheet class="w-4 h-4 mr-2" /> Export
+                        </Button>
 
                         <Button as-child shadow="md">
                             <Link :href="route('admin.staff.create')">

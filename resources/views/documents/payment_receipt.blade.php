@@ -194,7 +194,13 @@
             <table class="header-table">
                 <tr>
                     <td width="80">
-                        <img src="data:image/jpeg;base64,{{ base64_encode(file_get_contents(public_path('miu-logo.jpeg'))) }}"
+                        @php
+                            $logoPath = public_path('miu-logo.png');
+                            if (!file_exists($logoPath)) {
+                                $logoPath = public_path('miu-logo.jpeg');
+                            }
+                        @endphp
+                        <img src="data:image/jpeg;base64,{{ base64_encode(file_get_contents($logoPath)) }}"
                             class="logo">
                     </td>
                     <td class="uni-info">
@@ -228,7 +234,8 @@
                 <td class="info-section" align="right">
                     <span class="label">Payment Details:</span>
                     <div class="value">Date: {{ $payment->paid_at->format('d M, Y') }}</div>
-                    <div class="value">Gateway: {{ strtoupper($payment->channel ?? 'N/A') }}</div>
+                    <div class="value">Gateway: {{ strtoupper($payment->gateway ?? 'SQUADCO') }}</div>
+                    <div class="value">Method: {{ strtoupper($payment->channel ?? 'N/A') }}</div>
                     <div class="value">Session: {{ $invoice->session->name ?? 'N/A' }}</div>
                     <div class="value">Status: <span style="color: #10b981;">SUCCESSFUL</span></div>
                 </td>
@@ -260,15 +267,19 @@
             <table class="summary-table">
                 <tr>
                     <td class="label">Invoice Total</td>
-                    <td align="right" class="value"><span class="naira">&#x20A6;</span>{{ number_format($invoice->amount, 2) }}</td>
+                    <td align="right" class="value"><span
+                            class="naira">&#x20A6;</span>{{ number_format($invoice->amount, 2) }}</td>
                 </tr>
                 <tr>
                     <td class="label">Total Paid to Date</td>
-                    <td align="right" class="value"><span class="naira">&#x20A6;</span>{{ number_format($invoice->paid_amount, 2) }}</td>
+                    <td align="right" class="value"><span
+                            class="naira">&#x20A6;</span>{{ number_format($invoice->paid_amount, 2) }}</td>
                 </tr>
                 <tr class="total-row">
                     <td style="padding: 15px 0;">Balance Remaining</td>
-                    <td align="right" style="padding: 15px 0;"><span class="naira">&#x20A6;</span>{{ number_format($invoice->amount - $invoice->paid_amount, 2) }}</td>
+                    <td align="right" style="padding: 15px 0;"><span
+                            class="naira">&#x20A6;</span>{{ number_format($invoice->amount - $invoice->paid_amount, 2) }}
+                    </td>
                 </tr>
             </table>
         </div>

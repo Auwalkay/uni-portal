@@ -74,7 +74,7 @@ const events = [
             <div class="container mx-auto flex h-20 items-center justify-between px-6 lg:px-12">
                 <div class="flex items-center gap-4 group">
                     <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-white p-2 shadow-sm border border-slate-100 group-hover:rotate-3 transition-transform duration-300">
-                        <img src="/miu-logo.jpeg" alt="MIU Logo" class="h-full w-full object-contain" />
+                        <img src="/miu-logo.png" alt="MIU Logo" class="h-full w-full object-contain" />
                     </div>
                     <div class="flex flex-col leading-tight">
                         <span class="text-xl font-black tracking-tighter text-slate-900 uppercase">MIU Nigeria</span>

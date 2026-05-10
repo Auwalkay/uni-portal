@@ -75,6 +75,8 @@ const props = defineProps<{
         program?: string;
         program_id?: string;
         scholarship_id?: string;
+        date_from?: string;
+        date_to?: string;
     };
     sessions: Array<{ id: string; name: string }>;
     faculties: Array<{ id: string; name: string }>;
@@ -95,6 +97,8 @@ const selectedDepartment = ref(props.filters.department_id || '');
 const selectedLevel = ref(props.filters.level || '');
 const selectedProgram = ref(props.filters.program_id || '');
 const selectedScholarship = ref(props.filters.scholarship_id || '');
+const dateFrom = ref(props.filters.date_from || '');
+const dateTo = ref(props.filters.date_to || '');
 
 // Computed departments based on selected faculty
 const filteredDepartments = computed(() => {
@@ -112,6 +116,8 @@ const updateFilters = debounce(() => {
         level: selectedLevel.value,
         program_id: selectedProgram.value, // Changed to program_id
         scholarship_id: selectedScholarship.value,
+        date_from: dateFrom.value,
+        date_to: dateTo.value,
     }, {
         preserveState: true,
         replace: true,
@@ -119,7 +125,7 @@ const updateFilters = debounce(() => {
     });
 }, 300);
 
-watch([search, selectedSession, selectedFaculty, selectedDepartment, selectedLevel, selectedProgram, selectedScholarship], () => {
+watch([search, selectedSession, selectedFaculty, selectedDepartment, selectedLevel, selectedProgram, selectedScholarship, dateFrom, dateTo], () => {
      if (selectedFaculty.value && selectedDepartment.value) {
          const dept = props.departments.find(d => d.id === selectedDepartment.value);
          if (dept && dept.faculty_id !== selectedFaculty.value) {
@@ -137,6 +143,8 @@ const clearFilters = () => {
     selectedLevel.value = '';
     selectedProgram.value = '';
     selectedScholarship.value = '';
+    dateFrom.value = '';
+    dateTo.value = '';
 };
 
 const showImportModal = ref(false);
@@ -152,6 +160,23 @@ const submitImport = () => {
             importForm.reset();
         },
     });
+};
+
+const handleExport = () => {
+    const params = {
+        search: search.value,
+        session_id: selectedSession.value,
+        faculty_id: selectedFaculty.value,
+        department_id: selectedDepartment.value,
+        level: selectedLevel.value,
+        program_id: selectedProgram.value,
+        scholarship_id: selectedScholarship.value,
+        date_from: dateFrom.value,
+        date_to: dateTo.value,
+    };
+    
+    const queryString = new URLSearchParams(params).toString();
+    window.open(route('admin.students.export') + '?' + queryString, '_blank');
 };
 </script>
 
@@ -226,6 +251,10 @@ const submitImport = () => {
                                 </DialogFooter>
                             </DialogContent>
                         </Dialog>
+
+                        <Button variant="outline" @click="handleExport" class="border-green-600/30 text-green-600 hover:bg-green-600/10 hover:text-green-700">
+                            <FileSpreadsheet class="w-4 h-4 mr-2" /> Export
+                        </Button>
 
                         <Button as-child shadow="md">
                             <Link :href="route('admin.students.create')">
@@ -355,11 +384,18 @@ const submitImport = () => {
                                 <SelectItem v-for="s in scholarships" :key="s.id" :value="s.id">{{ s.name }}</SelectItem>
                             </SelectContent>
                         </Select>
+
+                        <!-- Date Range -->
+                        <div class="flex items-center gap-2">
+                            <Input type="date" v-model="dateFrom" class="w-[150px]" title="Admitted From" />
+                            <span class="text-muted-foreground">to</span>
+                            <Input type="date" v-model="dateTo" class="w-[150px]" title="Admitted To" />
+                        </div>
                     </div>
                 </div>
 
                 <Button 
-                    v-if="search || selectedSession || selectedFaculty || selectedDepartment || selectedLevel || selectedProgram || selectedScholarship" 
+                    v-if="search || selectedSession || selectedFaculty || selectedDepartment || selectedLevel || selectedProgram || selectedScholarship || dateFrom || dateTo" 
                     variant="ghost" 
                     @click="clearFilters"
                     class="text-destructive hover:text-destructive hover:bg-destructive/10"

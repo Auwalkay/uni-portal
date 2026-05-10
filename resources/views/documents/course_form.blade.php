@@ -194,7 +194,7 @@
 
     <div class="header">
         <div class="logo-box">
-            <img src="{{ public_path('miu-logo.jpeg') }}" alt="Logo"
+            <img src="{{ public_path('miu-logo.png') }}" alt="Logo"
                 style="height: 45px; width: auto; max-width: 150px; margin-top: -5px;">
         </div>
 

@@ -26,6 +26,7 @@ class SystemSettingsController extends Controller
                 'matric_format' => SystemSetting::get('matric_format', 'MIU{YEAR}{SEQUENCE}'),
                 'admin_charge_amount' => SystemSetting::get('admin_charge_amount', 250000),
                 'admin_charge_enabled' => SystemSetting::get('admin_charge_enabled', true),
+                'admin_charge_splittable' => SystemSetting::get('admin_charge_splittable', true),
                 'payment_gateway' => SystemSetting::get('payment_gateway', env('PAYMENT_GATEWAY', 'paystack')),
             ]
         ]);
