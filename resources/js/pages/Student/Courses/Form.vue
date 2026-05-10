@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, useForm, router } from '@inertiajs/vue3';
+import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import StudentLayout from '@/layouts/StudentLayout.vue';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
@@ -34,6 +34,10 @@ const props = defineProps<{
 
 const form = useForm({
     courses: [...props.registeredCourseIds],
+});
+
+const isLocked = computed(() => {
+    return Object.values(props.locks).every(l => l === true);
 });
 
 // Selected Courses Map (for Preview)

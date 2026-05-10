@@ -21,6 +21,14 @@ class PaymentController extends Controller
         $this->gateway = $gateway;
     }
 
+    private function getGatewayByName($name)
+    {
+        if ($name === 'squadco') {
+            return new \App\Services\SquadcoService();
+        }
+        return new \App\Services\PaystackService();
+    }
+
     public function downloadReceipt(Payment $payment)
     {
         if ($payment->user_id !== Auth::id()) {
@@ -89,57 +97,73 @@ class PaymentController extends Controller
             'amount' => 'required|numeric|min:1',
         ]);
 
-        $balance = $invoice->amount - $invoice->paid_amount;
+        $balance = (float) $invoice->amount - (float) $invoice->paid_amount;
         $amountToPay = (float) $request->input('amount');
 
-        // Calculate Minimum First Payment based on Splittability Rules
+        // Calculate Minimum Required Upfront Payment based on Splittability Rules
         $adminChargeSplittable = \App\Models\SystemSetting::get('admin_charge_splittable', true);
+        $adminChargeItemAmount = (float) $invoice->items()->where('description', 'Administrative Charges')->sum('amount');
+        $netAcademicPortion = (float) $invoice->amount - $adminChargeItemAmount;
         
-        // Identify Admin Charge portion in this invoice
-        $adminChargeItemAmount = $invoice->items()->where('description', 'Administrative Charges')->sum('amount');
-        $netAcademicPortion = $invoice->amount - $adminChargeItemAmount;
-        
-        $minFirstPayment = $invoice->amount / 2; // Default 50% split
-        
+        $minUpfront = (float) $invoice->amount / 2; // Default 50%
         if (!$adminChargeSplittable && $adminChargeItemAmount > 0) {
             // Admin must be paid full, academic can be split
-            $minFirstPayment = ($netAcademicPortion / 2) + $adminChargeItemAmount;
+            $minUpfront = ($netAcademicPortion / 2) + $adminChargeItemAmount;
         }
 
-        // If academic fees are 0 (e.g. 100% scholarship), then min payment is just the balance (no split)
+        // If academic fees are 0 (e.g. 100% scholarship), then min payment is the full balance
         if ($netAcademicPortion <= 0) {
-            $minFirstPayment = $invoice->amount;
+            $minUpfront = (float) $invoice->amount;
         }
 
-        // Strict Validation Rules
-        $isFullPayment = abs($amountToPay - $balance) < 1; // Allow small float diff
-        $isInstallmentPayment = abs($amountToPay - $minFirstPayment) < 1;
+        // Flexible Validation Rules
+        $isFullPayment = abs($amountToPay - $balance) < 0.01;
+        $totalPaidIfSuccessful = (float) $invoice->paid_amount + $amountToPay;
 
-        if ($invoice->paid_amount == 0) {
-            // First payment: Can be Full or Minimum Installment
-            if (!$isFullPayment && !$isInstallmentPayment) {
-                $errorMsg = 'You can only pay the full amount (' . number_format($balance) . ')';
-                if ($minFirstPayment < $balance) {
-                    $errorMsg .= ' or a minimum installment of ' . number_format($minFirstPayment) . '.';
-                } else {
-                    $errorMsg .= '.';
-                }
-                return back()->with('error', $errorMsg);
+        if (!$isFullPayment) {
+            if ($totalPaidIfSuccessful < $minUpfront) {
+                return back()->with('error', 'Minimum required upfront payment is ' . number_format($minUpfront) . '. You have only paid ' . number_format($invoice->paid_amount) . '.');
             }
-        } else {
-            // Subsequent payments: Must be Full Balance
-            if (!$isFullPayment) {
-                return back()->with('error', 'You must pay the remaining balance of ' . number_format($balance, 2));
+            
+            // Optional: Prevent extremely small payments (e.g. less than 1000)
+            if ($amountToPay < 1000) {
+                return back()->with('error', 'The minimum payment amount allowed is 1,000 NGN.');
             }
         }
 
-        if ($amountToPay > $balance) {
-            return back()->with('error', 'Amount exceeds remaining balance.');
+        if ($amountToPay > ($balance + 0.01)) {
+            return back()->with('error', 'Amount exceeds remaining balance of ' . number_format($balance, 2));
         }
+
+        // Check for the last pending payment and verify its status before proceeding
+        $lastPending = Payment::where('invoice_id', $invoice->id)
+            ->where('user_id', Auth::id())
+            ->where('status', 'pending')
+            ->latest()
+            ->first();
+
+        if ($lastPending && !str_starts_with($lastPending->gateway_reference, 'TEMP-')) {
+            // Verify using the gateway that was actually used for this payment
+            $checkGateway = $this->getGatewayByName($lastPending->gateway ?? 'squadco');
+            $verification = $checkGateway->verifyTransaction($lastPending->gateway_reference);
+            
+            if ($verification && $verification['status'] === 'success') {
+                app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($lastPending->gateway_reference, $verification);
+                return Inertia::render('Student/Finance/Success', [
+                    'payment' => $lastPending->fresh(),
+                    'invoice' => $invoice,
+                ]);
+            } elseif ($verification && in_array($verification['status'], ['failed', 'cancelled', 'error'])) {
+                $lastPending->update(['status' => 'failed']);
+            }
+        }
+
+        $activeGateway = \App\Models\SystemSetting::get('payment_gateway', env('PAYMENT_GATEWAY', 'squadco'));
 
         $payment = Payment::create([
             'invoice_id' => $invoice->id,
             'user_id' => Auth::id(),
+            'gateway' => $activeGateway,
             'gateway_reference' => 'TEMP-' . uniqid(), // Temporary ref
             'amount' => $amountToPay,
             'status' => 'pending',

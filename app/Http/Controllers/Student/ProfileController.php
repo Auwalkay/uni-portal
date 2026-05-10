@@ -90,20 +90,23 @@ class ProfileController extends Controller
         }
 
         // Check School Fee status for CURRENT session
-        $hasPaidSchoolFee = false;
-        if ($currentSession) {
-            $hasPaidSchoolFee = Invoice::where('user_id', auth()->id())
+        $schoolFeeStatus = 'unpaid';
+        if ($currentSession && $currentStudentSession) {
+            $schoolFeeInvoice = Invoice::where('user_id', auth()->id())
                 ->where('type', 'school_fee')
                 ->where('student_session_id', $currentStudentSession->id)
-                ->whereIn('status', ['paid'])
-                ->exists();
+                ->first();
+            
+            if ($schoolFeeInvoice) {
+                $schoolFeeStatus = $schoolFeeInvoice->status;
+            }
         }
 
         return Inertia::render('Student/Dashboard', [
             'student' => $student->load(['program']),
             'user' => $student ? $student->user : auth()->user(),
             'isProfileComplete' => $isProfileComplete,
-            'hasPaidSchoolFee' => $hasPaidSchoolFee,
+            'schoolFeeStatus' => $schoolFeeStatus,
             'showRegistrationNotification' => $showRegistrationNotification,
             'registrationMessage' => $registrationMessage,
             'stats' => [

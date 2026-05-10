@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
     ArrowLeft, Save, CheckCircle, AlertCircle, Plus, Edit, Trash2, Settings as SettingsIcon, 
-    Calendar, CreditCard, BookOpen, LayoutDashboard, Sliders, Info
+    Calendar, CreditCard, BookOpen, LayoutDashboard, Sliders, Info, Activity
 } from 'lucide-vue-next';
 import Swal from 'sweetalert2';
 import { route } from 'ziggy-js';

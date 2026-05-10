@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
 import { route } from 'ziggy-js';
-import { FileText, PlusCircle, BookOpen, Printer, ChevronRight, GraduationCap, CalendarDays } from 'lucide-vue-next';
+import { FileText, PlusCircle, BookOpen, Printer, ChevronRight, GraduationCap, CalendarDays, History } from 'lucide-vue-next';
 
 const props = defineProps<{
     student: any;
