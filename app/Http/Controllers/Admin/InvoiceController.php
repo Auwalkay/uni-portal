@@ -310,4 +310,18 @@ class InvoiceController extends Controller
 
         return back()->with('success', 'Payment verified and updated successfully.');
     }
+
+    public function destroy(Invoice $invoice)
+    {
+        if ($invoice->paid_amount > 0 || $invoice->payments()->count() > 0) {
+            return back()->with('error', 'Cannot delete an invoice that has payments attached to it.');
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($invoice) {
+            $invoice->items()->delete();
+            $invoice->delete();
+        });
+
+        return back()->with('success', 'Invoice deleted successfully.');
+    }
 }

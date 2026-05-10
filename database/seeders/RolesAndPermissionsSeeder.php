@@ -58,6 +58,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_salaries',
             'manage_salaries',
             'run_payroll',
+            'view_attendance',
+            'manage_attendance',
             
             // Finance & Payments
             'view_payments',
@@ -70,6 +72,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_expenses',
             'create_expenses',
             'approve_expenses',
+            'view_bursary_reports',
             
             // Infrastructure & Utilities
             'manage_hostels',
@@ -120,7 +123,20 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_payments', 
             'manage_staff',
             'manage_academic_sessions',
-            'manage_hostels'
+            'manage_hostels',
+            'view_attendance',
+            'manage_attendance'
+        ]);
+        
+        $hrManager = Role::firstOrCreate(['name' => 'hr_manager']);
+        $hrManager->syncPermissions([
+            'access_admin_dashboard',
+            'view_staff',
+            'manage_staff',
+            'view_attendance',
+            'manage_attendance',
+            'view_salaries',
+            'run_payroll'
         ]);
 
         $dean = Role::firstOrCreate(['name' => 'dean']);
@@ -147,10 +163,10 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // --- FINANCE ROLES ---
         $bursar = Role::firstOrCreate(['name' => 'bursar']);
-        $bursar->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments', 'manual_payment_override']);
+        $bursar->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments', 'manual_payment_override', 'view_bursary_reports']);
 
         $headOfFinance = Role::firstOrCreate(['name' => 'head_of_finance']);
-        $headOfFinance->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments', 'manual_payment_override']);
+        $headOfFinance->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments', 'manual_payment_override', 'view_bursary_reports']);
 
         $financeOfficer = Role::firstOrCreate(['name' => 'finance_officer']);
         $financeOfficer->syncPermissions(['access_admin_dashboard', 'verify_payments', 'view_payments']);

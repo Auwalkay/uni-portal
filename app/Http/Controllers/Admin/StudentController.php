@@ -43,7 +43,7 @@ class StudentController extends Controller
 
     public function store(Request $request)
     {
-        if ($request->scholarship_id === 'none') {
+        if ($request->scholarship_id === 'none' || $request->scholarship_id === '' || $request->scholarship_id === 'null') {
             $request->merge(['scholarship_id' => null]);
         }
         $validated = $request->validate([
@@ -148,6 +148,10 @@ class StudentController extends Controller
             //             }
 
             Mail::to($user->email)->send(new StudentAccountCreated($user, $password));
+
+            // Auto-generate school fee invoice
+            $feeService = app(\App\Services\Finance\FeeService::class);
+            $feeService->generateSchoolFeeInvoice($student, $currentSession);
         });
 
         return redirect()->route('admin.students.index')->with('success', 'Student created successfully.');
@@ -410,7 +414,7 @@ class StudentController extends Controller
 
     public function update(Request $request, Student $student)
     {
-        if ($request->scholarship_id === 'none') {
+        if ($request->scholarship_id === 'none' || $request->scholarship_id === '' || $request->scholarship_id === 'null') {
             $request->merge(['scholarship_id' => null]);
         }
         $validated = $request->validate([
@@ -476,5 +480,33 @@ class StudentController extends Controller
         });
 
         return redirect()->route('admin.students.index')->with('success', 'Student updated successfully.');
+    }
+
+    /**
+     * Manually promote a student to the next level and process their session.
+     */
+    public function promote(Request $request, Student $student)
+    {
+        $currentSession = Session::current();
+        
+        if (!$currentSession) {
+            return back()->with('error', 'No active academic session found for promotion.');
+        }
+
+        $semesterName = $currentSession->semesters()->where('is_current', true)->value('name') ?? 'First Semester';
+
+        try {
+            // We use the Job logic directly or dispatch it
+            // For immediate feedback in UI, we can run it synchronously
+            app(\App\Jobs\Academic\ProcessStudentSessionJob::class, [
+                'student' => $student,
+                'session' => $currentSession,
+                'semesterName' => $semesterName
+            ])->handle(app(\App\Services\Finance\FeeService::class));
+
+            return back()->with('success', "Student promoted to level {$student->fresh()->current_level} for session {$currentSession->name}.");
+        } catch (\Exception $e) {
+            return back()->with('error', 'Promotion failed: ' . $e->getMessage());
+        }
     }
 }

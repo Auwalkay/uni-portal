@@ -26,19 +26,23 @@ class ProfileController extends Controller
         $currentSession = Session::current();
         $currentSemester = Semester::current();
 
-        $currentStudentSession = StudentSession::where('student_id', $student->id)
-            ->where('session_id', $currentSession->id)
-            ->first();
+        $currentStudentSession = null;
+        if ($student && $currentSession) {
+            $currentStudentSession = StudentSession::where('student_id', $student->id)
+                ->where('session_id', $currentSession->id)
+                ->first();
+        }
 
         // Stats Calculations
         $cgpa = 0.00; // Placeholder for now
         $totalUnits = 0;
-        $level = $currentStudentSession->level ?? '0';
+        // Ensure level doesn't 'go down' when viewing historical sessions
+        $level = max((int)($student->current_level ?? 0), (int)($currentStudentSession->level ?? 0));
         $academicStatus = 'Good Standing';
         $showRegistrationNotification = false;
         $registrationMessage = '';
 
-        if ($student && $currentSession) {
+        if ($student && $currentSession && $currentStudentSession) {
             // Assuming we have a relation or through model.
             // Let's use CourseRegistration model directly for now.
             $totalUnits = CourseRegistration::where('student_session_id', $currentStudentSession->id)
@@ -79,7 +83,7 @@ class ProfileController extends Controller
 
         // Fetch Timetable for Registered Courses
         $timetable = [];
-        if ($student && $currentSession) {
+        if ($student && $currentSession && $currentStudentSession) {
             $registeredCourseIds = CourseRegistration::where('student_session_id', $currentStudentSession->id)
                 ->pluck('course_id');
 

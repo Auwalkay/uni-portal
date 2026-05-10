@@ -149,6 +149,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/students', [StudentController::class, 'index'])->name('students.index');
         Route::get('/students/export', [StudentController::class, 'export'])->name('students.export');
         Route::get('/students/{student}', [StudentController::class, 'show'])->name('students.show');
+        Route::post('/students/{student}/promote', [StudentController::class, 'promote'])->name('students.promote');
 
         // Course Registrations & Academic Management
         Route::middleware(['permission:manage_academic_sessions'])->group(function () {

@@ -203,7 +203,7 @@
         <div class="header">
             <img src="data:image/jpeg;base64,{{ $logoBase64 }}" class="logo" alt="Logo">
             <h1 class="uni-name">Mewar International University Nigeria</h1>
-            <p class="uni-address">Km21, Kuchikau I, Abuja - Keffi Expy, New Karu, Nasarawa</p>
+            <p class="uni-address">Km21, Kuchikau I, Abuja - Keffi Expy, Nasarawa</p>
             <p class="uni-address">www.miu.edu.ng | admission@miu.edu.ng | +2348183012911| +2348108040392 </p>
         </div>
 

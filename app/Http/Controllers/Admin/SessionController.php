@@ -55,7 +55,9 @@ class SessionController extends Controller
             ]);
         }
 
-        return to_route('admin.sessions.show', $session)->with('success', 'Session created. Please configure dates.');
+        $this->performActivation($session);
+
+        return to_route('admin.sessions.show', $session)->with('success', 'Session created and activated.');
     }
 
     public function update(Request $request, Session $session)
@@ -67,8 +69,10 @@ class SessionController extends Controller
         ]);
 
         $session->update($validated);
+        
+        $this->performActivation($session);
 
-        return back()->with('success', 'Session updated successfully.');
+        return back()->with('success', 'Session updated and activated successfully.');
     }
 
     public function activate(Session $session)
@@ -77,16 +81,33 @@ class SessionController extends Controller
             return back()->with('info', 'This session is already active.');
         }
 
-        DB::transaction(function () use ($session) {
+        $promoted = $this->performActivation($session);
+
+        AcademicCacheService::clearAll();
+
+        $message = $promoted 
+            ? 'Session activated and students promoted to next level.' 
+            : 'Session activated successfully. Promotion skipped (not the latest regular session).';
+
+        return back()->with('success', $message);
+    }
+
+    /**
+     * Internal activation logic shared between store, update and activate methods.
+     * Returns true if students were promoted.
+     */
+    private function performActivation(Session $session): bool
+    {
+        $promoted = false;
+
+        DB::transaction(function () use ($session, &$promoted) {
             // 1. Deactivate all other sessions
             Session::where('is_current', true)->update(['is_current' => false]);
 
             // 2. Activate target session
             $session->update(['is_current' => true]);
 
-            // 2b. Activate First Semester by default (and deactivate others globally? No, semester isScoped to session usually, but let's be safe)
-            // Deactivate all semesters first? Or just ensure this session's first semester is active.
-            // Let's assume global single active semester relative to session.
+            // 2b. Activate First Semester by default
             Semester::query()->update(['is_current' => false]);
 
             $firstSemester = $session->semesters()->where('name', 'First Semester')->first();
@@ -94,13 +115,19 @@ class SessionController extends Controller
                 $firstSemester->update(['is_current' => true]);
             }
 
-            // Call Artisan command to handle activation and promotion
-            Artisan::call('student:activate-session', ['sessionId' => $session->id]);
+            // Only promote students if it's a "Regular" session and it's the latest session in the system by name
+            $isLatest = !Session::where('name', '>', $session->name)->exists();
+            $promoted = ($session->type === 'regular') && $isLatest;
+
+            if ($promoted) {
+                // Dispatch background queue job for bulk promotion and invoicing
+                \App\Jobs\Academic\PromoteStudentsJob::dispatch($session->id);
+            }
         });
 
         AcademicCacheService::clearAll();
-
-        return back()->with('success', 'Session activated and students promoted to next level.');
+        
+        return $promoted;
     }
 
     public function activateSemester(Session $session, Semester $semester)

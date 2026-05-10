@@ -19,9 +19,12 @@ import {
     Lock,
     FileIcon,
     Download,
-    Check
+    Check,
+    Trash2,
+    TrendingUp
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
+import { router } from '@inertiajs/vue3';
 
 // Shadcn UI Components
 import { Button } from '@/components/ui/button';
@@ -121,6 +124,20 @@ const getStatusClass = (status: string) => {
         default: return '';
     }
 };
+
+const promoteStudent = () => {
+    if (confirm(`Are you sure you want to promote ${props.student.user.name} to the next level? This will create a new session record and generate the corresponding school fee invoice.`)) {
+        router.post(route('admin.students.promote', props.student.id));
+    }
+};
+
+const deleteInvoice = (id: number) => {
+    if (confirm('Are you sure you want to delete this invoice? This action cannot be undone.')) {
+        router.delete(route('admin.invoices.destroy', id), {
+            preserveScroll: true
+        });
+    }
+};
 </script>
 
 <template>
@@ -202,6 +219,10 @@ const getStatusClass = (status: string) => {
                                     <Link :href="route('admin.students.edit', student.id)">
                                         <Edit class="w-4 h-4 mr-2" /> Edit Profile
                                     </Link>
+                                </Button>
+
+                                <Button v-if="student.status !== 'graduated'" variant="outline" size="sm" class="border-blue-200 text-blue-600 hover:bg-blue-50" @click="promoteStudent">
+                                    <TrendingUp class="w-4 h-4 mr-2" /> Promote Student
                                 </Button>
                             </div>
                          </div>
@@ -449,8 +470,18 @@ const getStatusClass = (status: string) => {
                                             <TableRow v-for="invoice in (financialHistory.invoices as any[])" :key="invoice.id">
                                                 <TableCell class="font-mono text-xs">{{ invoice.reference }}</TableCell>
                                                 <TableCell class="font-medium">{{ formatCurrency(invoice.amount) }}</TableCell>
-                                                <TableCell class="text-right">
+                                                <TableCell class="text-right flex items-center justify-end gap-2">
                                                     <Badge :class="getStatusClass(invoice.status)" variant="outline">{{ invoice.status }}</Badge>
+                                                    <Button 
+                                                        v-if="invoice.paid_amount == 0" 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        class="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
+                                                        @click="deleteInvoice(invoice.id)"
+                                                        title="Delete unpaid invoice"
+                                                    >
+                                                        <Trash2 class="w-3.5 h-3.5" />
+                                                    </Button>
                                                 </TableCell>
                                             </TableRow>
                                               <TableRow v-if="financialHistory?.invoices.length === 0">

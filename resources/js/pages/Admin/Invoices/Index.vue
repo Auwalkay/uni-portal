@@ -4,7 +4,7 @@ import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import { route } from 'ziggy-js';
 import { 
-    Filter, Search, CheckCircle, FileText, TrendingUp, TrendingDown, DollarSign, PieChart, Plus
+    Filter, Search, CheckCircle, FileText, TrendingUp, TrendingDown, DollarSign, PieChart, Plus, Trash2, CreditCard
 } from 'lucide-vue-next';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -130,6 +130,26 @@ const getStatusColor = (status: string) => {
         case 'partial': return 'bg-blue-100 text-blue-800 border-blue-200';
         default: return 'bg-gray-100 text-gray-800';
     }
+};
+
+const deleteInvoice = (id: string, ref: string) => {
+    Swal.fire({
+        title: 'Delete Invoice?',
+        text: `Are you sure you want to delete invoice ${ref}? This action cannot be undone.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#3b82f6',
+        confirmButtonText: 'Yes, delete it!'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            router.delete(route('admin.invoices.destroy', id), {
+                onSuccess: () => {
+                    Swal.fire('Deleted!', 'Invoice has been deleted.', 'success');
+                }
+            });
+        }
+    });
 };
 
 const markAsPaid = (id: string, ref: string) => {
@@ -346,10 +366,20 @@ const breadcrumbs = [
                                     >
                                         <CreditCard class="w-4 h-4 mr-1" /> Pay
                                     </Button>
-                                    <Button size="sm" variant="secondary" as-child>
+                                    <Button size="sm" variant="secondary" as-child title="View Details">
                                         <Link :href="route('admin.invoices.show', invoice.id)">
                                             View
                                         </Link>
+                                    </Button>
+                                    <Button 
+                                        v-if="invoice.paid_amount == 0" 
+                                        size="sm" 
+                                        variant="ghost" 
+                                        class="text-red-500 hover:text-red-600 hover:bg-red-50"
+                                        @click="deleteInvoice(invoice.id, invoice.reference)"
+                                        title="Delete Invoice"
+                                    >
+                                        <Trash2 class="w-4 h-4" />
                                     </Button>
                                 </div>
                             </TableCell>

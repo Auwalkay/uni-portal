@@ -65,6 +65,13 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
             Route::get('conf/salaries', [SalaryController::class, 'index'])->name('salary.index');
             Route::put('conf/salaries/{staff}', [SalaryController::class, 'update'])->name('salary.update');
         });
+
+        // Bursary Reports
+        Route::middleware(['permission:view_bursary_reports'])->group(function () {
+            Route::get('bursary/student-fees', [\App\Http\Controllers\Admin\BursaryController::class, 'studentFeesReport'])->name('bursary.student-fees');
+            Route::get('bursary/student-fees/export', [\App\Http\Controllers\Admin\BursaryController::class, 'exportExcel'])->name('bursary.student-fees.export');
+            Route::get('bursary/student-fees/pdf', [\App\Http\Controllers\Admin\BursaryController::class, 'exportPDF'])->name('bursary.student-fees.pdf');
+        });
     });
 
     // STAFF MANAGEMENT
@@ -91,6 +98,23 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
             
             Route::resource('designations', \App\Http\Controllers\Admin\DesignationController::class)->except(['create', 'edit', 'show']);
         });
+
+        // Staff Attendance
+        Route::middleware(['permission:view_attendance'])->group(function () {
+            Route::get('attendance', [\App\Http\Controllers\Admin\AttendanceController::class, 'index'])->name('attendance.index');
+            Route::get('attendance/reports', [\App\Http\Controllers\Admin\AttendanceController::class, 'reports'])->name('attendance.reports');
+            Route::get('attendance/export', [\App\Http\Controllers\Admin\AttendanceController::class, 'exportReport'])->name('attendance.export');
+            Route::get('attendance/calendar', [\App\Http\Controllers\Admin\AttendanceController::class, 'calendar'])->name('attendance.calendar');
+            Route::get('attendance/download-template', [\App\Http\Controllers\Admin\AttendanceController::class, 'downloadTemplate'])->name('attendance.download-template');
+            
+            Route::middleware(['permission:manage_attendance'])->group(function () {
+                Route::post('attendance', [\App\Http\Controllers\Admin\AttendanceController::class, 'store'])->name('attendance.store');
+                Route::post('attendance/import', [\App\Http\Controllers\Admin\AttendanceController::class, 'import'])->name('attendance.import');
+                Route::post('attendance/holidays', [\App\Http\Controllers\Admin\AttendanceController::class, 'storeHoliday'])->name('attendance.holiday.store');
+                Route::delete('attendance/holidays/{holiday}', [\App\Http\Controllers\Admin\AttendanceController::class, 'destroyHoliday'])->name('attendance.holiday.destroy');
+                Route::delete('attendance/{attendance}', [\App\Http\Controllers\Admin\AttendanceController::class, 'destroy'])->name('attendance.destroy');
+            });
+        });
     });
 
 
@@ -104,7 +128,7 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
     // INVOICES & PAYMENTS
     Route::middleware(['permission:view_payments'])->group(function () {
         Route::get('invoices/search-students', [InvoiceController::class, 'searchStudents'])->name('invoices.search-students');
-        Route::resource('invoices', InvoiceController::class)->only(['index', 'show', 'create', 'store']);
+        Route::resource('invoices', InvoiceController::class)->only(['index', 'show', 'create', 'store', 'destroy']);
         
         Route::middleware(['permission:manage_payments'])->group(function () {
             Route::post('invoices/{invoice}/mark-as-paid', [InvoiceController::class, 'markAsPaid'])->name('invoices.mark-as-paid');
@@ -161,6 +185,7 @@ require __DIR__.'/settings.php';
 
 // Webhooks
 Route::post('webhooks/squadco', [\App\Http\Controllers\Webhooks\SquadcoWebhookController::class, 'handle'])->name('webhooks.squadco');
+Route::post('webhooks/paystack', [\App\Http\Controllers\Webhooks\PaystackWebhookController::class, 'handle'])->name('webhooks.paystack');
 
 // Public Verification
 Route::get('verify-admission/{identifier}', [\App\Http\Controllers\Public\AdmissionVerificationController::class, 'verify'])->name('verify.admission');

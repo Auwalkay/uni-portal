@@ -175,6 +175,12 @@ const financeItems = computed(() => {
             icon: Award,
             show: hasPermission('manage_scholarships'),
         },
+        {
+            title: 'Bursary Reports',
+            href: route().has('admin.finance.bursary.student-fees') ? route('admin.finance.bursary.student-fees') : '#',
+            icon: FileText,
+            show: hasPermission('view_bursary_reports'),
+        },
     ].filter(i => i.show);
 });
 
@@ -185,6 +191,12 @@ const administrationItems = computed(() => {
             href: route().has('admin.staff.index') ? route('admin.staff.index') : '#',
             icon: Users,
             show: hasRole('admin') || hasPermission('manage_staff'),
+        },
+        {
+            title: 'Attendance',
+            href: route('admin.attendance.index'),
+            icon: Calendar,
+            show: hasPermission('view_attendance'),
         },
         {
             title: 'Hostels',
