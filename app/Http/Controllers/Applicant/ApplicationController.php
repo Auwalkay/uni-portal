@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Applicant;
 use App\Http\Controllers\Controller;
 use App\Models\Applicant;
 use App\Models\Faculty;
+use App\Models\SystemSetting;
 use DB;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -156,7 +157,7 @@ class ApplicationController extends Controller
                 ],
                 [
                     'reference' => 'APP-' . strtoupper(uniqid()),
-                    'amount' => 50000,
+                    'amount' => SystemSetting::get('application_fee', 100000),
                     'paid_amount' => 0,
                     'status' => 'pending',
                     'due_date' => now()->addDays(7),
@@ -166,7 +167,7 @@ class ApplicationController extends Controller
             if ($invoice->items()->count() === 0) {
                 $invoice->items()->create([
                     'description' => 'Application Fee',
-                    'amount' => 50000,
+                    'amount' => SystemSetting::get('application_fee', 100000),
                     'quantity' => 1,
                 ]);
             }
