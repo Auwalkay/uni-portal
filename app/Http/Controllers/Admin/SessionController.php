@@ -55,9 +55,7 @@ class SessionController extends Controller
             ]);
         }
 
-        $this->performActivation($session);
-
-        return to_route('admin.sessions.show', $session)->with('success', 'Session created and activated.');
+        return to_route('admin.sessions.show', $session)->with('success', 'Session created successfully. Please configure fees and activation.');
     }
 
     public function update(Request $request, Session $session)
@@ -69,10 +67,8 @@ class SessionController extends Controller
         ]);
 
         $session->update($validated);
-        
-        $this->performActivation($session);
 
-        return back()->with('success', 'Session updated and activated successfully.');
+        return back()->with('success', 'Session updated successfully.');
     }
 
     public function activate(Session $session)
