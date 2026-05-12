@@ -28,6 +28,7 @@ class SystemSettingsController extends Controller
                 'admin_charge_enabled' => SystemSetting::get('admin_charge_enabled', true),
                 'admin_charge_splittable' => SystemSetting::get('admin_charge_splittable', true),
                 'payment_gateway' => SystemSetting::get('payment_gateway', env('PAYMENT_GATEWAY', 'paystack')),
+                'application_fee' => SystemSetting::get('application_fee', 100000),
             ]
         ]);
     }

@@ -47,6 +47,7 @@ const props = defineProps<{
         admin_charge_enabled: boolean;
         admin_charge_splittable: boolean;
         payment_gateway: string;
+        application_fee: string | number;
     }
 }>();
 
@@ -67,6 +68,10 @@ const adminChargeForm = useForm({
 
 const gatewayForm = useForm({
     gateway: props.settings.payment_gateway
+});
+
+const appFeeForm = useForm({
+    amount: props.settings.application_fee
 });
 
 const submitSetting = () => {
@@ -134,6 +139,26 @@ const updateGateway = (gateway: string) => {
                 icon: 'success',
                 title: 'Gateway Switched',
                 text: `System now using ${gateway.charAt(0).toUpperCase() + gateway.slice(1)}`,
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
+            });
+        }
+    });
+};
+
+const submitAppFee = () => {
+    router.post(route('admin.settings.update'), { 
+        key: 'application_fee', 
+        value: appFeeForm.amount 
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            Swal.fire({
+                icon: 'success',
+                title: 'Updated',
+                text: 'Application fee updated successfully',
                 toast: true,
                 position: 'top-end',
                 showConfirmButton: false,
@@ -250,6 +275,24 @@ const settingsModules = [
                             <Button @click="submitSetting" :disabled="form.processing" class="w-full">
                                 {{ form.processing ? 'Saving...' : 'Update Format' }}
                             </Button>
+
+                            <div class="pt-4 border-t space-y-4">
+                                <div class="space-y-2">
+                                    <Label for="app_fee" class="flex items-center gap-2">
+                                        <CreditCard class="w-4 h-4" />
+                                        Application Fee (₦)
+                                    </Label>
+                                    <Input 
+                                        id="app_fee" 
+                                        type="number"
+                                        v-model="appFeeForm.amount" 
+                                        placeholder="100000" 
+                                    />
+                                </div>
+                                <Button @click="submitAppFee" variant="outline" class="w-full">
+                                    Update Application Fee
+                                </Button>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>

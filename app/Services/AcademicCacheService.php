@@ -113,6 +113,7 @@ class AcademicCacheService
         Cache::forget('all_programmes');
         Cache::forget('faculties_with_departments_full');
         Cache::forget('non_academic_departments');
+        Cache::forget('all_system_settings');
         Cache::forget('staff_designations_list');
     }
 }

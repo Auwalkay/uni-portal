@@ -14,15 +14,16 @@ class SystemSetting extends Model
 
     public static function get(string $key, $default = null)
     {
-        return Cache::remember("system_setting_{$key}", 3600, function () use ($key, $default) {
-            $setting = self::where('key', $key)->first();
-            return $setting ? $setting->value : $default;
+        $settings = Cache::remember('all_system_settings', 86400, function () {
+            return self::all()->pluck('value', 'key')->toArray();
         });
+
+        return $settings[$key] ?? $default;
     }
 
     public static function set(string $key, $value): void
     {
         self::updateOrCreate(['key' => $key], ['value' => $value]);
-        Cache::forget("system_setting_{$key}");
+        Cache::forget('all_system_settings');
     }
 }
