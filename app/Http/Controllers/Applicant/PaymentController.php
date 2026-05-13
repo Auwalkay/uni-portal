@@ -59,6 +59,7 @@ class PaymentController extends Controller
             ->firstOrFail();
 
         $payment = Payment::create([
+            'transaction_id' => 'TRX-' . strtoupper(uniqid()),
             'invoice_id' => $invoice->id,
             'user_id' => $user->id,
             'gateway_reference' => 'TEMP-' . uniqid(),

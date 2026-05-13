@@ -51,7 +51,6 @@ const form = useForm({
     mode: props.mode || 'UTME',
     programme_id: props.programme_id || '',
     jamb_number: '',
-    scholarship_id: '',
     passport_photo: null as File | null,
     waec_result: null as File | null,
 });
@@ -378,21 +377,6 @@ const submitApplication = () => {
                         </div>
                         
                         <Separator />
-
-                        <div class="space-y-3 max-w-md">
-                            <Label class="font-semibold text-foreground">Scholarship Category (Optional)</Label>
-                            <Select v-model="form.scholarship_id">
-                                <SelectTrigger class="h-12">
-                                    <SelectValue placeholder="Select Scholarship Category" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="NONE">None</SelectItem>
-                                    <SelectItem v-for="scholarship in scholarships" :key="scholarship.id" :value="String(scholarship.id)">
-                                        {{ scholarship.name }} <span class="text-green-600 font-medium tracking-tight">({{ Number(scholarship.percentage) }}% Off)</span>
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
                     </div>
                     </Transition>
 
@@ -458,12 +442,6 @@ const submitApplication = () => {
                                     <span class="font-medium text-base text-foreground bg-muted/30 px-3 py-2 rounded-md block border border-transparent hover:border-border transition-colors flex items-center gap-2">
                                         {{ form.jamb_score || 'N/A' }}
                                         <span v-if="form.jamb_score" class="i-lucide-badge-check text-green-500 w-4 h-4"></span>
-                                    </span>
-                                </div>
-                                <div class="space-y-1">
-                                    <span class="block text-muted-foreground text-xs uppercase tracking-wider font-semibold">Scholarship Selection</span>
-                                    <span class="font-medium text-base text-foreground bg-muted/30 px-3 py-2 rounded-md block border border-transparent hover:border-border transition-colors">
-                                        {{ form.scholarship_id && form.scholarship_id !== 'NONE' ? scholarships?.find(s => String(s.id) === form.scholarship_id)?.name : 'No specific scholarship applied' }}
                                     </span>
                                 </div>
                             </div>

@@ -49,7 +49,6 @@ class ApplicationController extends Controller
             'mode' => $request->query('mode', 'UTME'),
             'programme_id' => $request->query('programme_id'),
             'states' => \App\Models\State::with('lgas')->get(),
-            'scholarships' => \App\Models\Scholarship::all(),
         ]);
     }
 
@@ -73,14 +72,6 @@ class ApplicationController extends Controller
                 'next_of_kin_relationship' => 'required|string',
                 'passport_photo' => 'nullable|file|mimes:jpeg,png,jpg|max:2048',
                 'waec_result' => 'nullable|file|mimes:pdf,jpeg,png,jpg|max:2048',
-                'scholarship_id' => [
-                    'nullable',
-                    function ($attribute, $value, $fail) {
-                        if ($value !== 'NONE' && !\App\Models\Scholarship::where('id', $value)->exists()) {
-                            $fail('The selected scholarship is invalid.');
-                        }
-                    },
-                ],
             ]);
 
             $user = $request->user();
@@ -97,7 +88,6 @@ class ApplicationController extends Controller
                     'application_mode' => $request->input('mode'),
                     'program_choice_1' => $request->input('programme_id'),
                     'status' => 'pending_payment',
-                    'scholarship_id' => $request->input('scholarship_id') === 'NONE' ? null : $request->input('scholarship_id'),
 
                     // Personal
                     'first_name' => $request->first_name,

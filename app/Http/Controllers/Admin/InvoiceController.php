@@ -234,6 +234,7 @@ class InvoiceController extends Controller
         }
 
         $payment = Payment::create([
+            'transaction_id' => 'TRX-' . strtoupper(uniqid()),
             'invoice_id' => $invoice->id,
             'user_id' => $invoice->user_id,
             'recorded_by' => Auth::id(),
