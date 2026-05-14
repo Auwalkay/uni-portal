@@ -97,6 +97,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'issue_official_transcripts',
             'manage_bulk_communications',
             
+            'perform_student_registration',
+            'manage_student_registrations',
+            
             // Personal
             'view_own_payslips',
         ];
@@ -125,7 +128,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage_academic_sessions',
             'manage_hostels',
             'view_attendance',
-            'manage_attendance'
+            'manage_attendance',
+            'perform_student_registration',
+            'manage_student_registrations'
         ]);
         
         $hrManager = Role::firstOrCreate(['name' => 'hr_manager']);
@@ -143,7 +148,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $dean->syncPermissions(['access_admin_dashboard', 'approve_results', 'view_results', 'manage_courses']);
 
         $hod = Role::firstOrCreate(['name' => 'hod']);
-        $hod->syncPermissions(['access_admin_dashboard', 'approve_results', 'view_results', 'manage_courses', 'assign_coordinators']);
+        $hod->syncPermissions(['access_admin_dashboard', 'approve_results', 'view_results', 'manage_courses', 'assign_coordinators', 'perform_student_registration', 'manage_student_registrations']);
 
         $courseCoordinator = Role::firstOrCreate(['name' => 'course_coordinator']);
         $courseCoordinator->syncPermissions(['access_admin_dashboard', 'view_results']);
@@ -160,6 +165,16 @@ class RolesAndPermissionsSeeder extends Seeder
 
         $admissionsClerk = Role::firstOrCreate(['name' => 'admissions_clerk']);
         $admissionsClerk->syncPermissions(['access_admin_dashboard', 'view_applications']);
+
+        $admissionDirector = Role::firstOrCreate(['name' => 'admission_director']);
+        $admissionDirector->syncPermissions([
+            'access_admin_dashboard',
+            'view_applications',
+            'review_applications',
+            'admit_students',
+            'view_students',
+            'edit_students',
+        ]);
 
         // --- FINANCE ROLES ---
         $bursar = Role::firstOrCreate(['name' => 'bursar']);

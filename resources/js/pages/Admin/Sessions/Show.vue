@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
     ArrowLeft, Save, CheckCircle, AlertCircle, Plus, Edit, Trash2, Settings as SettingsIcon, 
-    Calendar, CreditCard, BookOpen, LayoutDashboard, Sliders, Info, Activity
+    Calendar, CreditCard, BookOpen, LayoutDashboard, Sliders, Info, Activity, TrendingUp
 } from 'lucide-vue-next';
 import Swal from 'sweetalert2';
 import { route } from 'ziggy-js';
@@ -165,6 +165,25 @@ const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(val);
 };
 
+const promoteStudents = () => {
+    Swal.fire({
+        title: 'Promote Students?',
+        text: `Trigger academic promotion for students in ${props.session.name}? This will move all eligible students to their next level. This action should only be done once per session.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, Promote',
+        confirmButtonColor: '#10b981',
+    }).then((result) => {
+        if (result.isConfirmed) {
+            router.post(route('admin.sessions.promote', props.session.id), {}, {
+                onSuccess: () => {
+                    Swal.fire('Success', 'Promotion process has been queued.', 'success');
+                }
+            });
+        }
+    });
+};
+
 console.log('SessionSettings mounted', props);
 if (typeof route !== 'function') {
     console.error('Ziggy route function is not available!');
@@ -198,6 +217,10 @@ if (typeof route !== 'function') {
                     </div>
                 </div>
                 <div class="flex items-center gap-3">
+                    <Button v-if="session.is_current && session.type === 'regular'" @click="promoteStudents" variant="outline" class="border-emerald-600 text-emerald-700 hover:bg-emerald-50">
+                        <TrendingUp class="mr-2 h-4 w-4" />
+                        Promote Students
+                    </Button>
                     <Button v-if="!session.is_current" @click="activateSession" class="bg-blue-600 hover:bg-blue-700">
                         <CheckCircle class="mr-2 h-4 w-4" />
                         Set as Current

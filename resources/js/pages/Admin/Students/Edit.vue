@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     ArrowLeft,
@@ -87,9 +88,9 @@ const form = useForm({
     next_of_kin_phone: props.student.next_of_kin_phone || '',
     faculty_id: String(props.student.faculty_id) || '',
     department_id: String(props.student.department_id) || '',
-    program_id: props.student.program_id || '',
-    current_level: props.student.current_level || '',
-    admitted_session_id: props.student.admitted_session_id || '',
+    program_id: props.student.program_id ? String(props.student.program_id) : '',
+    current_level: props.student.current_level ? String(props.student.current_level) : '',
+    admitted_session_id: props.student.admitted_session_id ? String(props.student.admitted_session_id) : '',
     entry_mode: props.student.entry_mode || '',
     matriculation_number: props.student.matriculation_number || '',
     jamb_registration_number: props.student.jamb_registration_number || '',
@@ -161,10 +162,16 @@ const breadcrumbs = [
         <div class="py-10 px-6 space-y-8 w-full max-w-[1200px] mx-auto">
 
             <!-- Header -->
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 class="text-3xl font-bold text-foreground">Edit Student Profile</h1>
-                    <p class="text-muted-foreground">Updating records for {{ student.user.name }} ({{ student.matriculation_number }})</p>
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-card border rounded-2xl p-6 shadow-sm">
+                <div class="flex items-center gap-4">
+                    <Avatar class="w-20 h-20 border-2 border-muted shadow-sm">
+                        <AvatarImage :src="student?.passport_photo_path ? `/storage/${student.passport_photo_path}` : ''" class="object-cover" />
+                        <AvatarFallback class="text-xl bg-muted">{{ student.user.name.charAt(0) }}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                        <h1 class="text-2xl font-bold text-foreground">Edit Student Profile</h1>
+                        <p class="text-muted-foreground">{{ student.user.name }} ({{ student.matriculation_number }})</p>
+                    </div>
                 </div>
                 <div class="flex gap-2">
                     <Button variant="outline" as-child>

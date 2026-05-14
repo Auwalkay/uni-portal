@@ -149,6 +149,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/students', [StudentController::class, 'index'])->name('students.index');
         Route::get('/students/export', [StudentController::class, 'export'])->name('students.export');
         Route::get('/students/{student}', [StudentController::class, 'show'])->name('students.show');
+        
+        Route::middleware(['permission:manage_student_registrations'])->group(function () {
+            Route::get('/course-registration', [CourseRegistrationController::class, 'index'])->name('course_registration.index');
+            Route::get('/course-registration/{student}', [CourseRegistrationController::class, 'manage'])->name('course_registration.manage');
+            Route::get('/course-registration/{student}/form', [CourseRegistrationController::class, 'downloadForm'])->name('course_registration.form');
+            Route::post('/course-registration/{student}', [CourseRegistrationController::class, 'store'])->name('course_registration.store');
+        });
+
+        Route::put('/students/{student}/admission-session', [StudentController::class, 'updateAdmissionSession'])->name('students.update_admission_session');
         Route::post('/students/{student}/promote', [StudentController::class, 'promote'])->name('students.promote');
 
         // Course Registrations & Academic Management
@@ -169,6 +178,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware(['permission:view_payments'])->group(function () {
             Route::get('/payments', [\App\Http\Controllers\Admin\PaymentController::class, 'index'])->name('payments.index');
             Route::get('/payments/{payment}', [\App\Http\Controllers\Admin\PaymentController::class, 'show'])->name('payments.show');
+            Route::get('/payments/{payment}/download', [\App\Http\Controllers\Admin\PaymentController::class, 'downloadReceipt'])->name('payments.download_receipt');
             Route::get('/finance', [\App\Http\Controllers\Admin\FinanceController::class, 'index'])->name('finance.index');
 
             // Restricted Finance Actions
@@ -235,6 +245,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::post('/sessions/{session}/fees', [SessionController::class, 'storeFee'])->name('sessions.fees.store');
                 Route::delete('/sessions/{session}/fees/{feeConfiguration}', [SessionController::class, 'destroyFee'])->name('sessions.fees.destroy');
                 Route::post('/sessions/{session}/activation', [SessionController::class, 'activate'])->name('sessions.activate');
+                Route::post('/sessions/{session}/promote', [SessionController::class, 'promoteStudents'])->name('sessions.promote');
                 Route::post('/sessions/{session}/toggle-registration', [SessionController::class, 'toggleRegistration'])->name('sessions.toggle_registration');
                 Route::post('/sessions/{session}/semesters/{semester}/activate', [SessionController::class, 'activateSemester'])->name('sessions.semesters.activate');
                 Route::put('/sessions/{session}/semesters/{semester}', [SessionController::class, 'updateSemester'])->name('sessions.semesters.update');

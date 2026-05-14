@@ -77,53 +77,57 @@ class SessionController extends Controller
             return back()->with('info', 'This session is already active.');
         }
 
-        $promoted = $this->performActivation($session);
+        $this->performActivation($session);
 
         AcademicCacheService::clearAll();
 
-        $message = $promoted 
-            ? 'Session activated and students promoted to next level.' 
-            : 'Session activated successfully. Promotion skipped (not the latest regular session).';
-
-        return back()->with('success', $message);
+        return back()->with('success', 'Session activated successfully. You can now manually promote students if this is a new regular session.');
     }
 
     /**
      * Internal activation logic shared between store, update and activate methods.
      * Returns true if students were promoted.
      */
-    private function performActivation(Session $session): bool
+    private function performActivation(Session $session): void
     {
-        $promoted = false;
-
-        DB::transaction(function () use ($session, &$promoted) {
+        DB::transaction(function () use ($session) {
             // 1. Deactivate all other sessions
-            Session::where('is_current', true)->update(['is_current' => false]);
+            Session::where('is_current', true)->where('id', '!=', $session->id)->update(['is_current' => false]);
 
             // 2. Activate target session
-            $session->update(['is_current' => true]);
+            $session->is_current = true;
+            $session->save();
 
-            // 2b. Activate First Semester by default
-            Semester::query()->update(['is_current' => false]);
+            // 3. Deactivate all semesters
+            Semester::where('is_current', true)->update(['is_current' => false]);
 
-            $firstSemester = $session->semesters()->where('name', 'First Semester')->first();
-            if ($firstSemester) {
-                $firstSemester->update(['is_current' => true]);
-            }
+            // 4. Activate the first available semester for this session
+            $semesterToActivate = $session->semesters()->where('name', 'First Semester')->first()
+                ?? $session->semesters()->where('name', 'Summer Semester')->first()
+                ?? $session->semesters()->first();
 
-            // Only promote students if it's a "Regular" session and it's the latest session in the system by name
-            $isLatest = !Session::where('name', '>', $session->name)->exists();
-            $promoted = ($session->type === 'regular') && $isLatest;
-
-            if ($promoted) {
-                // Dispatch background queue job for bulk promotion and invoicing
-                \App\Jobs\Academic\PromoteStudentsJob::dispatch($session->id);
+            if ($semesterToActivate) {
+                $semesterToActivate->is_current = true;
+                $semesterToActivate->save();
             }
         });
 
         AcademicCacheService::clearAll();
-        
-        return $promoted;
+    }
+
+    public function promoteStudents(Session $session)
+    {
+        if (!$session->is_current) {
+            return back()->with('error', 'Only the current active session can be used for student promotion.');
+        }
+
+        if ($session->type !== 'regular') {
+            return back()->with('error', 'Promotion can only be triggered for Regular academic sessions.');
+        }
+
+        \App\Jobs\Academic\PromoteStudentsJob::dispatch($session->id);
+
+        return back()->with('success', 'Student promotion process has been queued and is running in the background.');
     }
 
     public function activateSemester(Session $session, Semester $semester)

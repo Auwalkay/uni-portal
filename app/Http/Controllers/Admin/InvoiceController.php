@@ -49,7 +49,7 @@ class InvoiceController extends Controller
             $query->where('session_id', $request->session_id);
         }
 
-        $sort = $request->input('sort', 'desc');
+        $sort = $request->input('order', $request->input('sort', 'desc'));
         $query->orderBy('created_at', $sort);
 
         // Clone query for global analytics (respecting filters)

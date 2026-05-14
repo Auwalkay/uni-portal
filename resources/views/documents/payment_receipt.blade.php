@@ -233,11 +233,15 @@
                 </td>
                 <td class="info-section" align="right">
                     <span class="label">Payment Details:</span>
-                    <div class="value">Date: {{ $payment->paid_at->format('d M, Y - h:i A') }}</div>
-                    <div class="value">Gateway: {{ strtoupper($payment->gateway ?? 'SQUADCO') }}</div>
-                    <div class="value">Method: {{ strtoupper($payment->channel ?? 'N/A') }}</div>
-                    <div class="value">Session: {{ $invoice->session->name ?? 'N/A' }}</div>
-                    <div class="value">Status: <span style="color: #10b981;">SUCCESSFUL</span></div>
+                    <div class="value" style="font-size: 9px;">Date: {{ $payment->paid_at->format('d M, Y - h:i A') }}</div>
+                    <div class="value" style="font-size: 9px;">TRANS ID: {{ $payment->transaction_id }}</div>
+                    <div class="value" style="font-size: 9px;">GATEWAY REF: {{ $payment->gateway_reference }}</div>
+                    @if($payment->gateway_id)
+                    <div class="value" style="font-size: 9px;">GATEWAY ID: {{ $payment->gateway_id }}</div>
+                    @endif
+                    <div class="value" style="font-size: 9px;">METHOD: {{ strtoupper($payment->channel ?? 'N/A') }} ({{ strtoupper($payment->gateway ?? 'SQUADCO') }})</div>
+                    <div class="value" style="font-size: 9px;">SESSION: {{ $invoice->session->name ?? 'N/A' }}</div>
+                    <div class="value" style="margin-top: 4px;">STATUS: <span style="color: #10b981; font-weight: 800;">SUCCESSFUL</span></div>
                 </td>
             </tr>
         </table>

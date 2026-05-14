@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AdminLayout from '@/layouts/AdminLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import { 
     User, 
@@ -62,6 +62,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 
@@ -75,7 +82,9 @@ const props = defineProps<{
     permissions: {
         can_view_finance: boolean;
         can_view_academics: boolean;
+        can_edit_admission: boolean;
     };
+    sessions: Array<any>;
 }>();
 
 const printOpen = ref(false);
@@ -129,6 +138,21 @@ const promoteStudent = () => {
     if (confirm(`Are you sure you want to promote ${props.student.user.name} to the next level? This will create a new session record and generate the corresponding school fee invoice.`)) {
         router.post(route('admin.students.promote', props.student.id));
     }
+};
+
+const sessionForm = useForm({
+    admitted_session_id: props.student.admitted_session_id,
+});
+
+const updateAdmissionSession = () => {
+    sessionForm.put(route('admin.students.update_admission_session', props.student.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            // Close dialog? Dialog closing is handled by state or usually just closing it.
+            // Since we use DialogTrigger, we might need a ref if we want to force close.
+            // But usually just finishing is fine.
+        }
+    });
 };
 
 const deleteInvoice = (id: number) => {
@@ -221,6 +245,18 @@ const deleteInvoice = (id: number) => {
                                     </Link>
                                 </Button>
 
+                                <Button v-if="permissions.manage_student_registrations" variant="secondary" size="sm" as-child>
+                                    <Link :href="route('admin.course_registration.manage', student.id)">
+                                        <GraduationCap class="w-4 h-4 mr-2" /> Manage Registration
+                                    </Link>
+                                </Button>
+
+                                <Button v-if="permissions.manage_student_registrations" variant="outline" size="sm" as-child>
+                                    <a :href="route('admin.course_registration.form', student.id)" target="_blank">
+                                        <FileText class="w-4 h-4 mr-2" /> Preview Form
+                                    </a>
+                                </Button>
+
                                 <Button v-if="student.status !== 'graduated'" variant="outline" size="sm" class="border-blue-200 text-blue-600 hover:bg-blue-50" @click="promoteStudent">
                                     <TrendingUp class="w-4 h-4 mr-2" /> Promote Student
                                 </Button>
@@ -305,7 +341,44 @@ const deleteInvoice = (id: number) => {
                                         </div>
                                          <div class="space-y-1">
                                             <p class="text-xs font-medium text-muted-foreground uppercase">Admitted Session</p>
-                                            <p class="text-sm">{{ student.admitted_session?.name || 'N/A' }}</p>
+                                            <div class="flex items-center gap-2">
+                                                <p class="text-sm">{{ student.admitted_session?.name || 'N/A' }}</p>
+                                                <Dialog v-if="permissions.can_edit_admission">
+                                                    <DialogTrigger as-child>
+                                                        <Button variant="ghost" size="icon" class="h-6 w-6 text-primary hover:text-primary hover:bg-primary/10">
+                                                            <Edit class="w-3.5 h-3.5" />
+                                                        </Button>
+                                                    </DialogTrigger>
+                                                    <DialogContent class="sm:max-w-[425px]">
+                                                        <DialogHeader>
+                                                            <DialogTitle>Change Admission Session</DialogTitle>
+                                                            <DialogDescription>
+                                                                Update the session when this student was officially admitted.
+                                                            </DialogDescription>
+                                                        </DialogHeader>
+                                                        <div class="grid gap-4 py-4">
+                                                            <div class="space-y-2">
+                                                                <Label htmlFor="session">Select Session</Label>
+                                                                <Select v-model="sessionForm.admitted_session_id">
+                                                                    <SelectTrigger id="session">
+                                                                        <SelectValue placeholder="Select a session" />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem v-for="s in sessions" :key="s.id" :value="s.id">
+                                                                            {{ s.name }}
+                                                                        </SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </div>
+                                                        </div>
+                                                        <DialogFooter>
+                                                            <Button type="button" @click="updateAdmissionSession" :disabled="sessionForm.processing">
+                                                                <Check class="w-4 h-4 mr-2" /> Save Changes
+                                                            </Button>
+                                                        </DialogFooter>
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </div>
                                         </div>
                                         <div class="space-y-1">
                                             <p class="text-xs font-medium text-muted-foreground uppercase">Entry Mode</p>
