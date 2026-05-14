@@ -311,8 +311,30 @@ class StudentController extends Controller
             'permissions' => [
                 'can_view_finance' => $canViewFinance,
                 'can_view_academics' => $canViewAcademics,
+                'can_edit_admission' => $user->hasRole('admission_director') || $user->hasRole('admin'),
+                'can_perform_registration' => $user->can('perform_student_registration'),
             ],
+            'sessions' => ($user->hasRole('admission_director') || $user->hasRole('admin')) 
+                ? AcademicCacheService::getSessions() 
+                : [],
         ]);
+    }
+
+    public function updateAdmissionSession(Request $request, Student $student)
+    {
+        if (!auth()->user()->hasRole(['admission_director', 'admin'])) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'admitted_session_id' => 'required|exists:academic_sessions,id',
+        ]);
+
+        $student->update([
+            'admitted_session_id' => $validated['admitted_session_id'],
+        ]);
+
+        return back()->with('success', 'Admission session updated successfully.');
     }
 
     public function import(Request $request)

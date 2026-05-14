@@ -96,7 +96,7 @@ const verifyPayment = (paymentId: string) => {
 };
 
 const downloadReceipt = (paymentId: string) => {
-    window.open(route('student.payments.download', paymentId), '_blank');
+    window.open(route('admin.payments.download_receipt', paymentId), '_blank');
 };
 </script>
 

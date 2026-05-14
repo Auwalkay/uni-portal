@@ -12,7 +12,8 @@ import {
     TrendingUp,
     CheckCircle,
     Clock,
-    AlertCircle
+    AlertCircle,
+    Download
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
 
@@ -145,11 +146,15 @@ const getStatusVariant = (status: string) => {
 
 const getStatusClass = (status: string) => {
      switch(status) {
-        case 'paid': return 'bg-green-100 text-green-800 hover:bg-green-200 border-green-200';
+        case 'success': return 'bg-green-100 text-green-800 hover:bg-green-200 border-green-200';
         case 'pending': return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-yellow-200';
         case 'failed': return 'bg-red-100 text-red-800 hover:bg-red-200 border-red-200';
         default: return 'bg-gray-100 text-gray-800';
     }
+};
+
+const downloadReceipt = (paymentId: string) => {
+    window.open(route('admin.payments.download_receipt', paymentId), '_blank');
 };
 
 </script>
@@ -306,7 +311,7 @@ const getStatusClass = (status: string) => {
                     <TableBody>
                         <TableRow v-for="payment in payments.data" :key="payment.id">
                             <TableCell>
-                                <div class="font-medium font-mono">{{ payment.reference }}</div>
+                                <div class="font-medium font-mono">{{ payment.gateway_reference }}</div>
                                 <div class="text-xs text-muted-foreground capitalize">{{ payment.channel || 'Manual' }}</div>
                             </TableCell>
                             <TableCell>
@@ -343,7 +348,10 @@ const getStatusClass = (status: string) => {
                             <TableCell class="text-muted-foreground text-sm">
                                 {{ formatDate(payment.paid_at) }}
                             </TableCell>
-                            <TableCell class="text-right">
+                            <TableCell class="text-right flex items-center justify-end gap-2">
+                                <Button v-if="payment.status === 'success'" variant="outline" size="sm" @click="downloadReceipt(payment.id)" title="Download Receipt">
+                                    <Download class="w-4 h-4" />
+                                </Button>
                                 <Button variant="outline" size="sm" as-child>
                                     <Link :href="route('admin.payments.show', payment.id)">
                                         View

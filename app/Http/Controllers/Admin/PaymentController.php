@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Payment;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 
 class PaymentController extends Controller
@@ -89,5 +91,27 @@ class PaymentController extends Controller
         return \Inertia\Inertia::render('Admin/Payments/Show', [
             'payment' => $payment
         ]);
+    }
+
+    public function downloadReceipt(Payment $payment)
+    {
+        if ($payment->status !== 'success') {
+            return back()->with('error', 'Only successful payments have receipts.');
+        }
+
+        $payment->load(['invoice.session', 'user.student.program']);
+        
+        $pdf = Pdf::loadView('documents.payment_receipt', [
+            'payment' => $payment,
+            'student' => $payment->user->student,
+            'invoice' => $payment->invoice,
+        ])->setOptions([
+            'defaultFont' => 'DejaVu Sans',
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled' => true,
+            'isFontSubsettingEnabled' => true,
+        ]);
+
+        return $pdf->download("Receipt_{$payment->gateway_reference}.pdf");
     }
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm, router } from '@inertiajs/vue3';
-import { Plus, Edit, CheckCircle, ChevronDown, ChevronUp, Lock, Unlock, Settings } from 'lucide-vue-next';
+import { Plus, Edit, CheckCircle, ChevronDown, ChevronUp, Lock, Unlock, Settings, TrendingUp } from 'lucide-vue-next';
 import Swal from 'sweetalert2';
 import { ref } from 'vue';
 import { route } from 'ziggy-js'; // Fix: Import route
@@ -87,13 +87,32 @@ const submitForm = () => {
 const activateSession = (session: Session) => {
     Swal.fire({
         title: 'Activate Session?',
-        text: `Set ${session.name} as current? This will promote students and activate the First Semester.`,
+        text: `Set ${session.name} as current? This will activate the First Semester for all students. Student promotion must be triggered manually after activation.`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Yes, Activate',
     }).then((result) => {
         if (result.isConfirmed) {
             router.post(route('admin.sessions.activate', session.id));
+        }
+    });
+};
+
+const promoteStudents = (session: Session) => {
+    Swal.fire({
+        title: 'Promote Students?',
+        text: `Trigger academic promotion for students in ${session.name}? This will move all eligible students to their next level. This action should only be done once per session.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, Promote',
+        confirmButtonColor: '#10b981',
+    }).then((result) => {
+        if (result.isConfirmed) {
+            router.post(route('admin.sessions.promote', session.id), {}, {
+                onSuccess: () => {
+                    Swal.fire('Success', 'Promotion process has been queued.', 'success');
+                }
+            });
         }
     });
 };
@@ -170,7 +189,7 @@ const activateSemester = (session: Session, semester: Semester) => {
                                         <Badge v-else variant="outline">Inactive</Badge>
                                     </TableCell>
                                     <TableCell class="text-right space-x-2">
-                                        <Button v-if="!session.is_current" variant="ghost" size="sm" @click.stop="activateSession(session)" title="Activate Session">
+                                         <Button v-if="!session.is_current" variant="ghost" size="sm" @click.stop="activateSession(session)" title="Activate Session">
                                             <CheckCircle class="h-4 w-4 text-green-600" />
                                         </Button>
                                         <Button variant="ghost" size="sm" @click.stop="toggleRegistration(session)" :title="session.registration_enabled ? 'Disable Registration' : 'Enable Registration'">

@@ -122,6 +122,12 @@ const academicsItems = computed(() => {
             icon: FileText,
             show: hasPermission('view_results'),
         },
+        {
+            title: 'Course Registration',
+            href: route('admin.course_registration.index'),
+            icon: BookOpen,
+            show: hasPermission('manage_student_registrations'),
+        },
     ].filter(i => i.show);
 });
 

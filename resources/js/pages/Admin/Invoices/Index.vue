@@ -73,7 +73,7 @@ const filterForm = ref({
     status: props.filters.status || '',
     type: props.filters.type || '',
     session_id: props.filters.session_id || '',
-    sort: props.filters.sort || 'desc',
+    order: props.filters.order || 'desc',
 });
 
 const manualPaymentForm = ref({
@@ -303,7 +303,7 @@ const breadcrumbs = [
                 </div>
                 <div class="space-y-1">
                     <Label>Sort By Date</Label>
-                    <Select v-model="filterForm.sort">
+                    <Select v-model="filterForm.order">
                          <SelectTrigger><SelectValue placeholder="Latest First" /></SelectTrigger>
                          <SelectContent>
                              <SelectItem value="desc">Latest First</SelectItem>
