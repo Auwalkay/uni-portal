@@ -274,6 +274,7 @@ class StudentController extends Controller
         $canViewAcademics = $user->hasAnyPermission(['manage_results', 'approve_results', 'view_results', 'manage_courses', 'assign_coordinators']) || $user->hasRole('admin');
 
         $student->load([
+            'user',
             'academicDepartment.faculty',
             'admittedSession',
             'program',
@@ -313,6 +314,7 @@ class StudentController extends Controller
                 'can_view_academics' => $canViewAcademics,
                 'can_edit_admission' => $user->hasRole('admission_director') || $user->hasRole('admin'),
                 'can_perform_registration' => $user->can('perform_student_registration'),
+                'manage_student_registrations' => $user->can('manage_student_registrations'),
             ],
             'sessions' => ($user->hasRole('admission_director') || $user->hasRole('admin')) 
                 ? AcademicCacheService::getSessions() 
