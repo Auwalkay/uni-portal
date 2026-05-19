@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building, Package, LifeBuoy } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -68,6 +68,18 @@ const personalItems = computed(() => {
             href: route('staff.payslips.index'),
             icon: Wallet,
             show: true, // Visible to all staff members
+        },
+        {
+            title: 'My Inventory',
+            href: route('staff.inventory.index'),
+            icon: Package,
+            show: hasRole('staff'),
+        },
+        {
+            title: 'My Support',
+            href: '/support',
+            icon: LifeBuoy,
+            show: hasRole('staff'),
         },
     ];
 });
@@ -199,6 +211,12 @@ const administrationItems = computed(() => {
             show: hasRole('admin') || hasPermission('manage_staff'),
         },
         {
+            title: 'Support Tickets',
+            href: '/admin/support-tickets',
+            icon: LifeBuoy,
+            show: hasRole('admin') || hasPermission('manage_system_settings'),
+        },
+        {
             title: 'Attendance',
             href: route('admin.attendance.index'),
             icon: Calendar,
@@ -260,6 +278,17 @@ const frontDeskItems = computed(() => {
     ].filter(i => i.show);
 });
 
+const inventoryItems = computed(() => {
+    return [
+        {
+            title: 'Items & Categories',
+            href: '/admin/inventory',
+            icon: Package,
+            show: hasPermission('view_inventory'),
+        },
+    ].filter(i => i.show);
+});
+
 const footerNavItems = computed(() => {
     return [
         {
@@ -294,6 +323,7 @@ const footerNavItems = computed(() => {
             <NavMain v-if="academicsItems.length > 0" :items="academicsItems" label="Academics" />
             <NavMain v-if="financeItems.length > 0" :items="financeItems" label="Finance" />
             <NavMain v-if="administrationItems.length > 0" :items="administrationItems" label="Administration" />
+            <NavMain v-if="inventoryItems.length > 0" :items="inventoryItems" label="Inventory" />
         </SidebarContent>
 
         <SidebarFooter>

@@ -270,8 +270,8 @@ class StudentController extends Controller
             }
         }
 
-        $canViewFinance = $user->hasAnyPermission(['manage_payments', 'verify_payments', 'view_payments']) || $user->hasRole('admin');
-        $canViewAcademics = $user->hasAnyPermission(['manage_results', 'approve_results', 'view_results', 'manage_courses', 'assign_coordinators']) || $user->hasRole('admin');
+        $canViewFinance = $user->can('view_payments');
+        $canViewAcademics = $user->can('view_results');
 
         $student->load([
             'user',
