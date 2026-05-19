@@ -266,6 +266,8 @@ class InvoiceController extends Controller
         return back()->with('success', 'Manual payment recorded successfully.');
     }
 
+
+
     public function verifyPayment(\App\Models\Payment $payment)
     {
         // Resolve the correct gateway service based on the payment's gateway field
@@ -280,6 +282,18 @@ class InvoiceController extends Controller
         // 1. Verify with the gateway
         $paymentData = $gatewayService->verifyTransaction($payment->gateway_reference);
 
+        // $data = $this->gateway->verifyTransaction($reference);
+
+        if ($paymentData && $paymentData['status'] === 'success') {
+            $payment = Payment::where('gateway_reference', $payment->gateway_reference)->first();
+
+            if ($payment && $payment->status !== 'success') {
+                app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($payment->gateway_reference, $paymentData);
+            }
+
+            // return redirect()->route('applicant.apply.show')->with('success', 'Payment successful! Application submitted.');
+        }
+
         if (!$paymentData || $paymentData['status'] !== 'success') {
             $statusMsg = $paymentData['status'] ?? 'no response';
             return back()->with('error', "Payment verification failed. Gateway status: {$statusMsg}.");
@@ -287,34 +301,6 @@ class InvoiceController extends Controller
 
         if ($payment->status === 'success') {
             return back()->with('info', 'Payment is already marked as successful.');
-        }
-
-        // Amount: Squadco & Paystack both return kobo
-        $verifiedAmount = $paymentData['amount'] / 100;
-
-        // 2. Update Payment
-        $payment->update([
-            'status' => 'success',
-            'amount' => $verifiedAmount,
-            'paid_at' => now(),
-            'channel' => $paymentData['channel'] ?? $gatewayName,
-        ]);
-
-        // 3. Update Invoice
-        $invoice = $payment->invoice;
-        $totalPaid = $invoice->payments()->where('status', 'success')->sum('amount');
-
-        $invoice->update([
-            'paid_amount' => $totalPaid,
-            'status' => $totalPaid >= $invoice->amount ? 'paid' : ($totalPaid > 0 ? 'partial' : 'pending'),
-        ]);
-
-        // 4. Trigger Enrollment if applicable
-        if ($invoice->status === 'paid' && $invoice->type === 'acceptance_fee') {
-            $applicant = \App\Models\Applicant::where('user_id', $invoice->user_id)->first();
-            if ($applicant) {
-                app(\App\Services\EnrollmentService::class)->enroll($applicant, $invoice->user_id);
-            }
         }
 
         return back()->with('success', 'Payment verified and updated successfully.');
