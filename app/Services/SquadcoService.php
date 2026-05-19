@@ -62,8 +62,9 @@ class SquadcoService implements PaymentGatewayInterface
         if ($response->successful()) {
             $data = $response->json()['data'];
             // Normalize to match Paystack pattern expected by controller
+            // Squadco returns title-cased statuses e.g. "Success", "Failed", "Abandoned" — lowercase for consistency
             return [
-                'status' => $data['transaction_status'] ?? null,
+                'status' => strtolower($data['transaction_status'] ?? ''),
                 'reference' => $data['transaction_ref'] ?? null,
                 'amount' => $data['amount'] ?? 0, // Keep in kobo to match Paystack pattern
                 'channel' => $data['payment_method'] ?? 'squadco',

@@ -136,6 +136,36 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
         });
     });
 
+    // INVENTORY MANAGEMENT
+    Route::middleware(['permission:view_inventory'])->group(function () {
+        Route::get('inventory', [\App\Http\Controllers\Admin\InventoryController::class, 'index'])->name('inventory.index');
+        Route::get('inventory/staff/search', [\App\Http\Controllers\Admin\InventoryAssignmentController::class, 'searchStaff'])->name('inventory.staff.search');
+        Route::get('inventory/export', [\App\Http\Controllers\Admin\InventoryController::class, 'export'])->name('inventory.export');
+        Route::get('inventory/export-assignments', [\App\Http\Controllers\Admin\InventoryController::class, 'exportAssignments'])->name('inventory.export-assignments');
+        Route::get('inventory/complaints', [\App\Http\Controllers\Admin\InventoryComplaintController::class, 'index'])->name('inventory.complaints.index');
+        
+        Route::middleware(['permission:manage_inventory'])->group(function () {
+            Route::post('inventory', [\App\Http\Controllers\Admin\InventoryController::class, 'store'])->name('inventory.store');
+            Route::put('inventory/{item}', [\App\Http\Controllers\Admin\InventoryController::class, 'update'])->name('inventory.update');
+            Route::delete('inventory/{item}', [\App\Http\Controllers\Admin\InventoryController::class, 'destroy'])->name('inventory.destroy');
+            Route::post('inventory/import', [\App\Http\Controllers\Admin\InventoryController::class, 'import'])->name('inventory.import');
+            Route::post('inventory/categories', [\App\Http\Controllers\Admin\InventoryController::class, 'storeCategory'])->name('inventory.categories.store');
+            
+            // Assignments
+            Route::post('inventory/assignments', [\App\Http\Controllers\Admin\InventoryAssignmentController::class, 'store'])->name('inventory.assignments.store');
+            Route::put('inventory/assignments/{assignment}/return', [\App\Http\Controllers\Admin\InventoryAssignmentController::class, 'returnItem'])->name('inventory.assignments.return');
+            
+            // Complaints
+            Route::put('inventory/complaints/{complaint}', [\App\Http\Controllers\Admin\InventoryComplaintController::class, 'update'])->name('inventory.complaints.update');
+        });
+    });
+
+    // SUPPORT TICKETS (Admin)
+    Route::get('support-tickets', [\App\Http\Controllers\Admin\SupportTicketController::class, 'index'])->name('support.index');
+    Route::get('support-tickets/{ticket}', [\App\Http\Controllers\Admin\SupportTicketController::class, 'show'])->name('support.show');
+    Route::put('support-tickets/{ticket}', [\App\Http\Controllers\Admin\SupportTicketController::class, 'update'])->name('support.update');
+    Route::post('support-tickets/{ticket}/reply', [\App\Http\Controllers\Admin\SupportTicketController::class, 'reply'])->name('support.reply');
+
 });
 
 // Staff Self-Service Routes
@@ -143,6 +173,9 @@ Route::middleware(['auth', 'verified', 'permission:access_staff_portal'])->prefi
     Route::get('payslips', [StaffFinanceController::class, 'index'])->name('payslips.index');
     Route::get('payslips/{payrollItem}/download', [StaffFinanceController::class, 'download'])->name('payslips.download');
     
+    // Inventory
+    Route::get('inventory', [\App\Http\Controllers\Staff\MyInventoryController::class, 'index'])->name('inventory.index');
+    Route::post('inventory/complaints', [\App\Http\Controllers\Staff\MyInventoryController::class, 'storeComplaint'])->name('inventory.complaints.store');
 });
 
 // Staff Profile (Available to all authenticated users with staff records)
@@ -151,6 +184,14 @@ Route::middleware(['auth', 'verified'])->prefix('staff-portal')->name('staff.')-
     Route::post('profile', [\App\Http\Controllers\Staff\StaffProfileController::class, 'update'])->name('profile.update');
     Route::put('profile/password', [\App\Http\Controllers\Staff\StaffProfileController::class, 'updatePassword'])->name('profile.password');
     Route::get('profile/preview', [\App\Http\Controllers\Staff\StaffProfileController::class, 'show'])->name('profile.show');
+});
+
+// Support Tickets (User)
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('support', [\App\Http\Controllers\SupportTicketController::class, 'index'])->name('support.index');
+    Route::post('support', [\App\Http\Controllers\SupportTicketController::class, 'store'])->name('support.store');
+    Route::get('support/{ticket}', [\App\Http\Controllers\SupportTicketController::class, 'show'])->name('support.show');
+    Route::post('support/{ticket}/reply', [\App\Http\Controllers\SupportTicketController::class, 'reply'])->name('support.reply');
 });
 
 Route::get('/', function () {

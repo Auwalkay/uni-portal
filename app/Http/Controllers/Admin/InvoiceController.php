@@ -266,33 +266,41 @@ class InvoiceController extends Controller
         return back()->with('success', 'Manual payment recorded successfully.');
     }
 
-    public function verifyPayment(\App\Models\Payment $payment, \App\Services\PaystackService $paystackService)
+    public function verifyPayment(\App\Models\Payment $payment)
     {
-        // 1. Verify with Paystack
-        $paymentData = $paystackService->verifyTransaction($payment->gateway_reference);
+        // Resolve the correct gateway service based on the payment's gateway field
+        $gatewayName = $payment->gateway ?? 'squadco';
 
-        if (!$paymentData || $paymentData['status'] !== 'success') {
-            return back()->with('error', 'Payment verification failed or transaction not successful.');
+        if ($gatewayName === 'paystack') {
+            $gatewayService = app(\App\Services\PaystackService::class);
+        } else {
+            $gatewayService = app(\App\Services\SquadcoService::class);
         }
 
-        // 2. Check amount match (Paystack amount is in kobo usually, but service returns data. Let's assume service handles formatting or we check raw)
-        // basic check: if verified, we trust it.
-        // Actually PaystackService returns data. data['amount'] is in kobo.
-        $verifiedAmount = $paymentData['amount'] / 100;
+        // 1. Verify with the gateway
+        $paymentData = $gatewayService->verifyTransaction($payment->gateway_reference);
+
+        if (!$paymentData || $paymentData['status'] !== 'success') {
+            $statusMsg = $paymentData['status'] ?? 'no response';
+            return back()->with('error', "Payment verification failed. Gateway status: {$statusMsg}.");
+        }
 
         if ($payment->status === 'success') {
             return back()->with('info', 'Payment is already marked as successful.');
         }
 
-        // 3. Update Payment
+        // Amount: Squadco & Paystack both return kobo
+        $verifiedAmount = $paymentData['amount'] / 100;
+
+        // 2. Update Payment
         $payment->update([
             'status' => 'success',
-            'amount' => $verifiedAmount, // Update amount to actual paid if different? Safe to keep match.
-            'paid_at' => \Carbon\Carbon::parse($paymentData['paid_at']),
-            'channel' => $paymentData['channel'] ?? 'paystack',
+            'amount' => $verifiedAmount,
+            'paid_at' => now(),
+            'channel' => $paymentData['channel'] ?? $gatewayName,
         ]);
 
-        // 4. Update Invoice
+        // 3. Update Invoice
         $invoice = $payment->invoice;
         $totalPaid = $invoice->payments()->where('status', 'success')->sum('amount');
 
@@ -301,7 +309,7 @@ class InvoiceController extends Controller
             'status' => $totalPaid >= $invoice->amount ? 'paid' : ($totalPaid > 0 ? 'partial' : 'pending'),
         ]);
 
-        // 5. Trigger Enrollment if applicable
+        // 4. Trigger Enrollment if applicable
         if ($invoice->status === 'paid' && $invoice->type === 'acceptance_fee') {
             $applicant = \App\Models\Applicant::where('user_id', $invoice->user_id)->first();
             if ($applicant) {

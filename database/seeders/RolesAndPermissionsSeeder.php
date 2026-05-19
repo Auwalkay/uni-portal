@@ -100,6 +100,12 @@ class RolesAndPermissionsSeeder extends Seeder
             'perform_student_registration',
             'manage_student_registrations',
             
+            // Inventory Management
+            'view_inventory',
+            'manage_inventory',
+            'assign_inventory',
+            'manage_inventory_complaints',
+            
             // Personal
             'view_own_payslips',
         ];
