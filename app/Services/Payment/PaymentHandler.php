@@ -27,16 +27,23 @@ class PaymentHandler
             'paid_at' => now(),
         ]);
 
-        // Increment paid amount
-        $payment->invoice->increment('paid_amount', $payment->amount);
-        $payment->invoice->refresh();
+        // Recalculate paid_amount from scratch by summing all successful payments.
+        // Using increment() was fragile — if the stored payment amount was wrong or
+        // paid_amount was stale, the invoice status would never reach 'paid'.
+        $invoice = $payment->invoice;
+        $totalPaid = $invoice->payments()->where('status', 'success')->sum('amount');
 
-        // Update invoice status
-        if ($payment->invoice->paid_amount >= $payment->invoice->amount) {
-            $payment->invoice->update(['status' => 'paid']);
-        } else {
-            $payment->invoice->update(['status' => 'partial']);
-        }
+        $newStatus = $totalPaid >= $invoice->amount
+            ? 'paid'
+            : ($totalPaid > 0 ? 'partial' : 'pending');
+
+        $invoice->update([
+            'paid_amount' => $totalPaid,
+            'status'      => $newStatus,
+        ]);
+
+        // Re-load the fresh invoice onto the payment model for side-effects below
+        $payment->setRelation('invoice', $invoice->fresh());
 
         // Specific Logic based on Invoice Type
         $this->handleInvoiceTypeSideEffects($payment);
