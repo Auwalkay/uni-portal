@@ -12,6 +12,14 @@ class Invoice extends Model
 
     protected $guarded = [];
 
+    protected $casts = [
+        'amount' => 'double',
+        'paid_amount' => 'double',
+        'due_date' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -30,5 +38,10 @@ class Invoice extends Model
     public function session()
     {
         return $this->belongsTo(Session::class);
+    }
+
+    public function studentSession()
+    {
+        return $this->belongsTo(StudentSession::class);
     }
 }

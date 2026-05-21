@@ -1,6 +1,6 @@
 import '../css/app.css';
 
-// Trigger rebuild - new file added
+// Trigger rebuild - new file added (update)
 import { createInertiaApp } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import type { DefineComponent } from 'vue';
@@ -17,8 +17,8 @@ createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
     resolve: (name) =>
         resolvePageComponent(
-            `./Pages/${name}.vue`,
-            import.meta.glob<DefineComponent>('./Pages/**/*.vue'),
+            `./pages/${name}.vue`,
+            import.meta.glob<DefineComponent>('./pages/**/*.vue'),
         ),
     setup({ el, App, props, plugin }) {
         createApp({ render: () => h(App, props) })

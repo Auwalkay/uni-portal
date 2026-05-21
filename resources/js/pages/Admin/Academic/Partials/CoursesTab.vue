@@ -3,7 +3,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Pencil } from 'lucide-vue-next';
+import { Plus, Pencil, Users } from 'lucide-vue-next';
+import { Link } from '@inertiajs/vue3';
+import { route } from 'ziggy-js';
 
 defineProps<{
     courses: {
@@ -50,9 +52,16 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                                 <Switch :checked="course.is_active" @update:checked="emit('toggle', course.id, course.is_active)" />
                         </TableCell>
                         <TableCell class="text-right">
-                            <Button variant="ghost" size="icon" @click="emit('edit', course)">
-                                <Pencil class="h-4 w-4" />
-                            </Button>
+                             <div class="flex items-center justify-end gap-2">
+                                <Link :href="route('admin.courses.registrations.index', course.id)">
+                                    <Button variant="ghost" size="icon" title="View Students">
+                                        <Users class="h-4 w-4" />
+                                    </Button>
+                                </Link>
+                                <Button variant="ghost" size="icon" @click="emit('edit', course)">
+                                    <Pencil class="h-4 w-4" />
+                                </Button>
+                            </div>
                         </TableCell>
                     </TableRow>
                 </TableBody>

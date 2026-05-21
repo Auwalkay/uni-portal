@@ -5,29 +5,76 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Services\PaystackService;
+use App\Models\StudentSession;
+use App\Contracts\PaymentGatewayInterface;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class PaymentController extends Controller
 {
-    protected $paystack;
-
-    public function __construct(PaystackService $paystack)
+    protected $gateway;
+    
+    public function __construct(PaymentGatewayInterface $gateway)
     {
-        $this->paystack = $paystack;
+        $this->gateway = $gateway;
+    }
+
+    private function getGatewayByName($name)
+    {
+        if ($name === 'squadco') {
+            return new \App\Services\SquadcoService();
+        }
+        return new \App\Services\PaystackService();
+    }
+
+    public function downloadReceipt(Payment $payment)
+    {
+        if ($payment->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        if ($payment->status !== 'success') {
+            return back()->with('error', 'Only successful payments have receipts.');
+        }
+
+        $payment->load(['invoice.session', 'user.student']);
+        
+        $pdf = Pdf::loadView('documents.payment_receipt', [
+            'payment' => $payment,
+            'student' => $payment->user->student,
+            'invoice' => $payment->invoice,
+        ])->setOptions([
+            'defaultFont' => 'DejaVu Sans',
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled' => true,
+            'isFontSubsettingEnabled' => true,
+        ]);
+
+        return $pdf->download("Receipt_{$payment->gateway_reference}.pdf");
     }
 
     public function index()
     {
+        $feeService = app(\App\Services\Finance\FeeService::class);
+        $rawInvoices = Invoice::where('user_id', Auth::id())
+            ->where('status', '!=', 'paid')
+            ->where('type', 'school_fee')
+            ->get();
+        
+        foreach ($rawInvoices as $invoice) {
+            $feeService->refreshInvoiceIfUnpaid($invoice);
+        }
+
         $invoices = Invoice::where('user_id', Auth::id())
             ->with([
                 'items',
                 'session',
                 'payments' => function ($query) {
                     $query->where('status', 'success');
-                }
+                },
             ])
             ->latest()
             ->get();
@@ -46,21 +93,95 @@ class PaymentController extends Controller
 
         return Inertia::render('Student/Finance/Index', [
             'invoices' => $invoices,
-            'canGenerateInvoice' => $canGenerateInvoice
+            'canGenerateInvoice' => $canGenerateInvoice,
+            'admin_charge_splittable' => (bool) \App\Models\SystemSetting::get('admin_charge_splittable', true),
         ]);
     }
 
-    public function pay(Invoice $invoice)
+    public function pay(Request $request, Invoice $invoice)
     {
+        // Auto-refresh invoice if unpaid before proceeding
+        $feeService = app(\App\Services\Finance\FeeService::class);
+        $invoice = $feeService->refreshInvoiceIfUnpaid($invoice);
+
         if ($invoice->status === 'paid') {
             return back()->with('error', 'Invoice already paid.');
         }
 
+        $request->validate([
+            'amount' => 'required|numeric|min:1',
+        ]);
+
+        $balance = (float) $invoice->amount - (float) $invoice->paid_amount;
+        $amountToPay = (float) $request->input('amount');
+
+        // Calculate Minimum Required Upfront Payment based on Splittability Rules
+        $adminChargeSplittable = \App\Models\SystemSetting::get('admin_charge_splittable', true);
+        $adminChargeItemAmount = (float) $invoice->items()->where('description', 'Administrative Charges')->sum('amount');
+        $netAcademicPortion = (float) $invoice->amount - $adminChargeItemAmount;
+        
+        $minUpfront = (float) $invoice->amount / 2; // Default 50%
+        if (!$adminChargeSplittable && $adminChargeItemAmount > 0) {
+            // Admin must be paid full, academic can be split
+            $minUpfront = ($netAcademicPortion / 2) + $adminChargeItemAmount;
+        }
+
+        // If academic fees are 0 (e.g. 100% scholarship), then min payment is the full balance
+        if ($netAcademicPortion <= 0) {
+            $minUpfront = (float) $invoice->amount;
+        }
+
+        // Flexible Validation Rules
+        $isFullPayment = abs($amountToPay - $balance) < 0.01;
+        $totalPaidIfSuccessful = (float) $invoice->paid_amount + $amountToPay;
+
+        if (!$isFullPayment) {
+            if ($totalPaidIfSuccessful < $minUpfront) {
+                return back()->with('error', 'Minimum required upfront payment is ' . number_format($minUpfront) . '. You have only paid ' . number_format($invoice->paid_amount) . '.');
+            }
+            
+            // Optional: Prevent extremely small payments (e.g. less than 1000)
+            if ($amountToPay < 1000) {
+                return back()->with('error', 'The minimum payment amount allowed is 1,000 NGN.');
+            }
+        }
+
+        if ($amountToPay > ($balance + 0.01)) {
+            return back()->with('error', 'Amount exceeds remaining balance of ' . number_format($balance, 2));
+        }
+
+        // Check for the last pending payment and verify its status before proceeding
+        $lastPending = Payment::where('invoice_id', $invoice->id)
+            ->where('user_id', Auth::id())
+            ->where('status', 'pending')
+            ->latest()
+            ->first();
+
+        if ($lastPending && !str_starts_with($lastPending->gateway_reference, 'TEMP-')) {
+            // Verify using the gateway that was actually used for this payment
+            $checkGateway = $this->getGatewayByName($lastPending->gateway ?? 'squadco');
+            $verification = $checkGateway->verifyTransaction($lastPending->gateway_reference);
+            
+            if ($verification && $verification['status'] === 'success') {
+                app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($lastPending->gateway_reference, $verification);
+                return Inertia::render('Student/Finance/Success', [
+                    'payment' => $lastPending->fresh(),
+                    'invoice' => $invoice,
+                ]);
+            } elseif ($verification && in_array($verification['status'], ['failed', 'cancelled', 'error'])) {
+                $lastPending->update(['status' => 'failed']);
+            }
+        }
+
+        $activeGateway = \App\Models\SystemSetting::get('payment_gateway', env('PAYMENT_GATEWAY', 'squadco'));
+
         $payment = Payment::create([
             'invoice_id' => $invoice->id,
             'user_id' => Auth::id(),
+            'transaction_id' => 'MIUPAY' . date('Y') . strtoupper(Str::random(8)),
+            'gateway' => $activeGateway,
             'gateway_reference' => 'TEMP-' . uniqid(), // Temporary ref
-            'amount' => $invoice->amount,
+            'amount' => $amountToPay,
             'status' => 'pending',
         ]);
 
@@ -70,11 +191,16 @@ class PaymentController extends Controller
         $reference = 'PAY-' . strtoupper(uniqid());
         $payment->update(['gateway_reference' => $reference]);
 
-        $data = $this->paystack->initializeTransaction(
+        $data = $this->gateway->initializeTransaction(
             Auth::user()->email,
-            $invoice->amount,
+            $amountToPay,
             $reference,
-            route('student.payments.callback')
+            route('student.payments.callback'),
+            [
+                'customer_name' => Auth::user()->name,
+                'payment_type' => $invoice->type,
+                'invoice_id' => $invoice->id,
+            ]
         );
 
         if ($data && isset($data['authorization_url'])) {
@@ -86,154 +212,51 @@ class PaymentController extends Controller
 
     public function callback(Request $request)
     {
-        $reference = $request->query('reference');
+        $reference = $request->query('reference') ?? $request->query('transaction_ref');
         if (!$reference) {
-            return redirect()->route('student.payments.index')->with('error', 'No reference supplied.');
+            return Inertia::render('Student/Finance/Failure', [
+                'error' => 'No transaction reference was provided by the payment gateway.'
+            ]);
         }
 
-        $data = $this->paystack->verifyTransaction($reference);
+        $data = $this->gateway->verifyTransaction($reference);
+        $payment = Payment::where('gateway_reference', $reference)->first();
 
         if ($data && $data['status'] === 'success') {
-            $payment = Payment::where('gateway_reference', $reference)->first();
-
-            if ($payment && $payment->status !== 'success') {
-                $payment->update([
-                    'status' => 'success',
-                    'channel' => $data['channel'],
-                    'paid_at' => now(),
-                ]);
-
-                $payment->invoice->update(['status' => 'paid']);
-
-                if ($payment->invoice->type === 'acceptance_fee') {
-                    $applicant = \App\Models\Applicant::where('user_id', $payment->user_id)
-                        ->with('programme.department.faculty')
-                        ->first();
-
-                    if ($applicant) {
-                        app(\App\Services\EnrollmentService::class)->enroll($applicant, $payment->user_id);
-                    }
+            if ($payment) {
+                if ($payment->status !== 'success') {
+                    app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($reference, $data);
                 }
+                return Inertia::render('Student/Finance/Success', [
+                    'payment' => $payment,
+                    'invoice' => $payment->invoice,
+                ]);
             }
 
-            return redirect()->route('student.payments.index')->with('success', 'Payment successful! Welcome to the University.');
+            return redirect()->route('student.payments.index')->with('success', 'Payment successful!');
         }
 
-        return redirect()->route('student.payments.index')->with('error', 'Payment verification failed.');
+        return Inertia::render('Student/Finance/Failure', [
+            'error' => $data['message'] ?? 'The payment gateway could not verify this transaction.',
+            'reference' => $reference
+        ]);
     }
+
     public function createSchoolFeeInvoice()
     {
         $user = Auth::user();
         $student = \App\Models\Student::where('user_id', $user->id)->firstOrFail();
-
-        // Check for pending SCHOOL FEE invoice
-        $pendingInvoice = Invoice::where('user_id', $user->id)
-            ->where('type', 'school_fee')
-            ->where('status', 'pending')
-            ->first();
-
-        if ($pendingInvoice) {
-            return redirect()->route('student.payments.index')->with('info', 'You already have a pending invoice.');
-        }
-
-        // Get current session
         $currentSession = \App\Models\Session::current();
+
         if (!$currentSession) {
             return back()->with('error', 'No active academic session found.');
         }
 
-        // Resolve IDs for Student Fields (assuming stored as strings or potential future IDs)
-        // We try to find matching Faculty, Dept, Program by Name if UUID not found
-        // Since we haven't migrated Student to use UUIDs yet, we do best effort lookup.
-        $facultyId = null;
-        if ($student->faculty) {
-            $faculty = \App\Models\Faculty::where('name', $student->faculty)->orWhere('id', $student->faculty)->first();
-            $facultyId = $faculty?->id;
-        }
+        $feeService = app(\App\Services\Finance\FeeService::class);
+        $invoice = $feeService->generateSchoolFeeInvoice($student, $currentSession);
 
-        $departmentId = null;
-        if ($student->department) {
-            $department = \App\Models\Department::where('name', $student->department)->orWhere('id', $student->department)->first();
-            $departmentId = $department?->id;
-        }
-
-        $programId = null;
-        if ($student->program) {
-            $program = \App\Models\Programme::where('name', $student->program)->orWhere('id', $student->program)->first();
-            $programId = $program?->id;
-        }
-
-        // Fetch Applicable Fees
-        $configs = \App\Models\FeeConfiguration::where('session_id', $currentSession->id)
-            ->where(function ($query) use ($facultyId, $departmentId, $programId, $student) {
-                // Global Fees
-                $query->where(function ($q) {
-                    $q->whereNull('faculty_id')
-                        ->whereNull('department_id')
-                        ->whereNull('program_id');
-                });
-
-                // Faculty Fees
-                if ($facultyId) {
-                    $query->orWhere(function ($q) use ($facultyId) {
-                        $q->where('faculty_id', $facultyId)
-                            ->whereNull('department_id')
-                            ->whereNull('program_id');
-                    });
-                }
-
-                // Department Fees
-                if ($departmentId) {
-                    $query->orWhere(function ($q) use ($departmentId) {
-                        $q->where('department_id', $departmentId)
-                            ->whereNull('program_id');
-                    });
-                }
-
-                // Program Fees
-                if ($programId) {
-                    $query->orWhere(function ($q) use ($programId) {
-                        $q->where('program_id', $programId);
-                    });
-                }
-            })
-            // Filter by Level (Exact match or Null/Global level?) 
-            // Usually level fees are specific. If level is null, it applies to all levels.
-            ->where(function ($q) use ($student) {
-                $q->where('level', $student->current_level)
-                    ->orWhereNull('level');
-            })
-            ->with('feeType')
-            ->get();
-
-
-        if ($configs->isEmpty()) {
-            // Fallback or Error? 
-            // If no fees configured, maybe error out to avoid zero-invoices?
-            // Or allow zero invoice? 
-            return back()->with('error', 'No fee configuration found for your level/department. Please contact support.');
-        }
-
-        $totalAmount = $configs->sum('amount');
-
-        $invoice = Invoice::create([
-            'user_id' => $user->id,
-            'session_id' => $currentSession->id,
-            'type' => 'school_fee',
-            'reference' => 'SCH-' . strtoupper(uniqid()),
-            'amount' => $totalAmount,
-            'status' => 'pending',
-            'due_date' => now()->addWeeks(4),
-        ]);
-
-        // Create Invoice Items
-        foreach ($configs as $config) {
-            \App\Models\InvoiceItem::create([
-                'invoice_id' => $invoice->id,
-                'fee_type_id' => $config->fee_type_id,
-                'description' => $config->feeType->name ?? 'Fee',
-                'amount' => $config->amount,
-            ]);
+        if (!$invoice) {
+            return back()->with('error', 'No fee configuration found for your profile. Please contact support.');
         }
 
         return redirect()->route('student.payments.index')->with('success', 'School Fee invoice generated successfully.');

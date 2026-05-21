@@ -1,15 +1,27 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import StudentLayout from '@/layouts/StudentLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard } from 'lucide-vue-next';
+import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard, Calendar, CalendarClock, MapPin, FileText } from 'lucide-vue-next';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
-defineProps<{
+const props = defineProps<{
     student?: any;
     user?: any;
     isProfileComplete?: boolean;
-    hasPaidSchoolFee?: boolean;
+    schoolFeeStatus?: string; // 'paid', 'partial', 'pending', 'cancelled', etc.
     showRegistrationNotification?: boolean;
     registrationMessage?: string;
     stats?: {
@@ -20,7 +32,38 @@ defineProps<{
         session: string;
         semester: string;
     };
+    timetable?: Array<any>;
 }>();
+
+const hasPaidEnough = computed(() => {
+    return props.schoolFeeStatus === 'paid' || props.schoolFeeStatus === 'partial';
+});
+
+const paymentStatusText = computed(() => {
+    switch (props.schoolFeeStatus) {
+        case 'paid': return 'Fully Paid';
+        case 'partial': return 'Partially Paid';
+        case 'pending': return 'Unpaid (Pending)';
+        case 'cancelled': return 'Cancelled';
+        default: return 'Unpaid';
+    }
+});
+
+const formatTime = (time: string) => {
+    return time.substring(0, 5);
+};
+
+const getClassesForDay = (day: string) => {
+    if (!props.timetable) return [];
+    return props.timetable.filter((t: any) => t.day === day);
+};
+
+const getTodaysClasses = () => {
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    return getClassesForDay(today);
+};
+
+console.log('Student', props.student?.program)
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -53,7 +96,7 @@ const greeting = () => {
                     <div>
                         <h1 class="text-3xl font-bold tracking-tight">{{ greeting() }}, {{ user?.name.split(' ')[0] }}!</h1>
                         <p class="mt-2 text-blue-100">
-                            {{ student?.matriculation_number || 'Matriculation Pending' }} &bull; {{ student?.program || 'Program N/A' }}
+                            {{ student?.matriculation_number || 'Matriculation Pending' }} &bull; {{ student?.program?.name || 'Program N/A' }}
                         </p>
                         <div class="mt-4 inline-flex items-center rounded-full bg-white/20 px-3 py-1 text-sm backdrop-blur-sm">
                             <CalendarDays class="mr-2 h-4 w-4" />
@@ -112,8 +155,9 @@ const greeting = () => {
                         <h3 class="text-sm font-medium text-muted-foreground">Pending Fees</h3>
                         <CreditCard class="h-4 w-4 text-red-500" />
                     </div>
-                    <div class="text-2xl font-bold">{{ hasPaidSchoolFee ? 'Paid' : 'Unpaid' }}</div>
-                     <p v-if="!hasPaidSchoolFee" class="text-xs text-red-500 font-medium">Action Required</p>
+                    <div class="text-2xl font-bold">{{ paymentStatusText }}</div>
+                     <p v-if="!hasPaidEnough" class="text-xs text-red-500 font-medium">Action Required</p>
+                     <p v-else-if="schoolFeeStatus === 'partial'" class="text-xs text-blue-600 font-medium">Split Payment Active</p>
                      <p v-else class="text-xs text-green-600 font-medium">Cleared</p>
                 </div>
             </div>
@@ -195,12 +239,12 @@ const greeting = () => {
                             <div>
                                 <h4 class="font-medium flex items-center gap-2">
                                     <IdCard class="h-4 w-4 text-muted-foreground" />
-                                    Vehicle / ID Card
+                                    Student ID Card
                                 </h4>
-                                <p v-if="hasPaidSchoolFee && student?.passport_photo_path" class="text-sm text-muted-foreground mt-1">
+                                <p v-if="hasPaidEnough && student?.passport_photo_path" class="text-sm text-muted-foreground mt-1">
                                     View and print your Student ID Card.
                                 </p>
-                                <p v-else-if="!hasPaidSchoolFee" class="text-sm text-red-500 mt-1">
+                                <p v-else-if="!hasPaidEnough" class="text-sm text-red-500 mt-1">
                                     Pay School Fees to access ID Card.
                                 </p>
                                 <p v-else class="text-sm text-yellow-600 mt-1">
@@ -208,12 +252,12 @@ const greeting = () => {
                                 </p>
                             </div>
                             
-                            <div v-if="hasPaidSchoolFee && student?.passport_photo_path">
+                            <div v-if="hasPaidEnough && student?.passport_photo_path">
                                 <a :href="route('student.id_card.show')" target="_blank" class="mt-4 block text-sm font-medium text-primary underline-offset-4 hover:underline">
                                     View ID Card &rarr;
                                 </a>
                             </div>
-                             <div v-else-if="!hasPaidSchoolFee">
+                             <div v-else-if="!hasPaidEnough">
                                 <Link :href="route('student.payments.index')" class="mt-4 text-sm font-medium text-red-600 underline-offset-4 hover:underline">
                                     Pay Now &rarr;
                                 </Link>
@@ -224,22 +268,90 @@ const greeting = () => {
                                 </Link>
                             </div>
                         </div>
+                         <!-- Admission Letter Action -->
+                         <div class="group relative flex flex-col justify-between rounded-lg border p-4 hover:bg-accent/50 transition-colors">
+                            <div>
+                                <h4 class="font-medium flex items-center gap-2">
+                                    <FileText class="h-4 w-4 text-muted-foreground" />
+                                    Admission Letter
+                                </h4>
+                                <p class="text-sm text-muted-foreground mt-1">
+                                    Download your official admission letter.
+                                </p>
+                            </div>
+                            <a :href="route('student.admission_letter.download')" target="_blank" class="mt-4 text-sm font-medium text-primary underline-offset-4 hover:underline">
+                                Download PDF &rarr;
+                            </a>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Recent Activity / Notifications -->
-                <div class="col-span-3 rounded-xl border bg-card shadow-sm">
+                <!-- Recent Activity / Notifications -->
+                <div class="col-span-3 space-y-6">
+                     <!-- Today's Schedule (Mini) -->
+                     <!-- Today's Schedule (Mini) -->
+                     <Card class="bg-indigo-900 text-white border-0 shadow-lg relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-32 h-32 bg-indigo-800/50 rounded-full blur-3xl -mr-10 -mt-10"></div>
+                        <div class="absolute bottom-0 left-0 w-24 h-24 bg-purple-600/30 rounded-full blur-2xl -ml-5 -mb-5"></div>
+                        
+                        <CardHeader>
+                            <div class="flex items-center justify-between">
+                                <CardTitle class="flex items-center gap-2 text-indigo-100 relative z-10">
+                                    <CalendarClock class="w-5 h-5" /> Today's Schedule
+                                </CardTitle>
+                                <!-- View Full Button will go here -->
+                            </div>
+                        </CardHeader>
+                        <CardContent class="relative z-10 space-y-3">
+                             <div v-if="getTodaysClasses().length === 0" class="text-center py-6 text-indigo-200/60">
+                                <div class="bg-indigo-800/50 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <Calendar class="w-6 h-6" />
+                                </div>
+                                <p class="text-sm">No classes scheduled for today.</p>
+                            </div>
+
+                            <div v-else class="space-y-3">
+                                <div v-for="(cls, index) in getTodaysClasses()" :key="cls.id" 
+                                    class="group flex items-start gap-3 bg-white/10 p-3 rounded-lg border border-indigo-400/20 hover:bg-white/20 transition-colors"
+                                >
+                                    <div class="flex flex-col items-center bg-indigo-950/50 rounded p-2 min-w-[3.5rem] border border-indigo-400/10">
+                                        <span class="text-xs font-bold">{{ formatTime(cls.start_time) }}</span>
+                                        <div class="w-px h-2 bg-indigo-400/30 my-0.5"></div>
+                                        <span class="text-[10px] opacity-70">{{ formatTime(cls.end_time) }}</span>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex justify-between items-start">
+                                            <h4 class="font-bold text-white truncate pr-2">{{ cls.course.title }}</h4>
+                                            <Badge variant="outline" class="text-[10px] h-5 border-indigo-300/30 text-indigo-100 bg-indigo-500/20">
+                                                {{ cls.course.code }}
+                                            </Badge>
+                                        </div>
+                                        <div class="flex items-center gap-3 mt-1.5 text-xs text-indigo-200">
+                                            <span class="flex items-center gap-1"><MapPin class="w-3 h-3 opacity-70" /> {{ cls.venue }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <div class="rounded-xl border bg-card shadow-sm">
                     <div class="p-6 border-b">
                         <h3 class="font-semibold text-lg">Notifications</h3>
                     </div>
                     <div class="p-6 space-y-4">
-                         <div v-if="!hasPaidSchoolFee" class="flex items-start gap-3 rounded-lg border border-red-100 bg-red-50 p-3 text-sm">
-                            <CreditCard class="h-4 w-4 text-red-600 mt-0.5" />
-                            <div>
-                                <p class="font-medium text-red-900">School Fees Unpaid</p>
-                                <p class="text-red-700">You have not paid your school fees for this session.</p>
-                                <Link :href="route('student.payments.create_school_fee')" method="post" as="button" class="mt-2 text-xs font-semibold text-red-800 underline hover:text-red-900">
-                                    Pay Now
+                         <div v-if="!hasPaidEnough || schoolFeeStatus === 'partial'" class="flex items-start gap-3 rounded-lg border" :class="schoolFeeStatus === 'partial' ? 'border-blue-100 bg-blue-50' : 'border-red-100 bg-red-50'">
+                            <CreditCard class="h-4 w-4 mt-0.5" :class="schoolFeeStatus === 'partial' ? 'text-blue-600' : 'text-red-600'" />
+                            <div class="text-sm">
+                                <p class="font-medium" :class="schoolFeeStatus === 'partial' ? 'text-blue-900' : 'text-red-900'">
+                                    {{ schoolFeeStatus === 'partial' ? 'Fee Balance Outstanding' : 'School Fees Unpaid' }}
+                                </p>
+                                <p :class="schoolFeeStatus === 'partial' ? 'text-blue-700' : 'text-red-700'">
+                                    {{ schoolFeeStatus === 'partial' ? 'You have a balance remaining on your split payment.' : 'You have not paid your school fees for this session.' }}
+                                </p>
+                                <Link :href="route('student.payments.index')" class="mt-2 text-xs font-semibold underline" :class="schoolFeeStatus === 'partial' ? 'text-blue-800 hover:text-blue-900' : 'text-red-800 hover:text-red-900'">
+                                    {{ schoolFeeStatus === 'partial' ? 'Pay Balance' : 'Pay Now' }}
                                 </Link>
                             </div>
                         </div>
@@ -252,6 +364,7 @@ const greeting = () => {
                             </div>
                         </div>
                     </div>
+                </div>
                 </div>
             </div>
         </div>

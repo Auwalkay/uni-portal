@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, useForm, router } from '@inertiajs/vue3';
+import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import StudentLayout from '@/layouts/StudentLayout.vue';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
@@ -34,6 +34,10 @@ const props = defineProps<{
 
 const form = useForm({
     courses: [...props.registeredCourseIds],
+});
+
+const isLocked = computed(() => {
+    return Object.values(props.locks).every(l => l === true);
 });
 
 // Selected Courses Map (for Preview)
@@ -177,9 +181,9 @@ const getSemesterCourses = (semesterCode: string) => {
     <Head title="Course Registration" />
 
     <StudentLayout>
-        <div class="min-h-screen bg-gray-50/50 pb-20">
+        <div class="min-h-screen bg-gray-50/50 pb-24">
             <!-- Immersive Header -->
-             <div class="relative bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900 pt-12 pb-24 px-6 md:px-10 overflow-hidden shadow-xl">
+             <div class="relative bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900 pt-16 pb-28 px-6 md:px-10 overflow-hidden shadow-xl">
                  <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 contrast-125 mix-blend-overlay"></div>
                  <div class="absolute inset-0 bg-grid-white/5 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.4))]"></div>
                  <div class="absolute -right-20 -top-20 w-96 h-96 bg-emerald-500/30 rounded-full blur-3xl pointer-events-none"></div>
@@ -199,9 +203,9 @@ const getSemesterCourses = (semesterCode: string) => {
                  </div>
             </div>
 
-            <div class="max-w-7xl mx-auto px-4 md:px-8 -mt-16 relative z-20">
+            <div class="max-w-7xl mx-auto px-6 md:px-8 -mt-12 relative z-20">
                 <!-- Smart Notification / Alert -->
-                <div v-if="isLocked" class="mb-6 animate-in slide-in-from-top-4 duration-500 fade-in">
+                <div v-if="isLocked" class="mb-8 animate-in slide-in-from-top-4 duration-500 fade-in">
                     <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg shadow-sm flex items-start gap-3">
                          <ShieldAlert class="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
                          <div>
@@ -211,9 +215,9 @@ const getSemesterCourses = (semesterCode: string) => {
                     </div>
                 </div>
 
-                <!-- PREVIEW SECTION (Sticky functionality handled by parent or just robust layout) -->
-                <div v-show="selectedCourses.length > 0" class="mb-10 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-300">
-                    <div class="bg-gradient-to-r from-gray-50 to-white border-b border-gray-100 p-4 md:p-5 flex flex-wrap items-center justify-between gap-4">
+                <!-- PREVIEW SECTION -->
+                <div v-show="selectedCourses.length > 0" class="mb-8 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+                    <div class="bg-gradient-to-r from-gray-50 to-white border-b border-gray-100 p-5 md:p-6 flex flex-wrap items-center justify-between gap-4">
                         <div class="flex items-center gap-3">
                             <div class="bg-emerald-100/50 p-2.5 rounded-xl text-emerald-600">
                                 <CheckCircle2 class="w-6 h-6" />
@@ -333,18 +337,18 @@ const getSemesterCourses = (semesterCode: string) => {
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8">
                     <!-- Sidebar Area -->
                     <div class="lg:col-span-1 space-y-6">
                         <!-- Smart Filter Card -->
                         <div class="bg-white rounded-xl shadow-sm border border-gray-200/80 sticky top-6">
-                             <div class="p-4 border-b border-gray-100 bg-gray-50/50 rounded-t-xl">
+                             <div class="p-5 border-b border-gray-100 bg-gray-50/50 rounded-t-xl">
                                 <h3 class="font-bold text-gray-900 flex items-center gap-2 text-sm">
                                     <Search class="w-4 h-4 text-gray-400" />
                                     Filter Courses
                                 </h3>
                             </div>
-                            <div class="p-4 space-y-4">
+                            <div class="p-5 space-y-4">
                                 <div class="space-y-1.5">
                                     <Label class="text-xs font-semibold uppercase text-gray-500">Faculty</Label>
                                     <Select v-model="filterForm.faculty_id">
@@ -402,12 +406,12 @@ const getSemesterCourses = (semesterCode: string) => {
                     </div>
 
                     <!-- Main Course Lists -->
-                    <div class="lg:col-span-3 space-y-10">
+                    <div class="lg:col-span-3 space-y-8">
                         <!-- Semester Blocks Loop -->
                          <div v-for="semCode in ['1', '2']" :key="semCode" class="animate-in fade-in slide-in-from-bottom-4 duration-500" :style="{ animationDelay: semCode === '1' ? '0ms' : '150ms' }">
                             
                             <!-- Section Header -->
-                            <div class="flex items-end justify-between mb-4 px-1">
+                            <div class="flex items-end justify-between mb-5 px-1">
                                 <div class="flex items-center gap-3">
                                     <div class="flex items-center justify-center w-10 h-10 rounded-xl shadow-sm text-lg font-bold" :class="semCode === '1' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'">
                                         {{ semCode }}
@@ -438,6 +442,7 @@ const getSemesterCourses = (semesterCode: string) => {
                                             <TableHead class="w-[60px] text-center py-4">Select</TableHead>
                                             <TableHead class="w-[100px] py-4">Code</TableHead>
                                             <TableHead class="py-4">Course Title</TableHead>
+                                            <TableHead class="py-4 w-[180px]">Lecturer</TableHead>
                                             <TableHead class="w-[80px] text-center py-4">Units</TableHead>
                                             <TableHead class="w-[100px] text-center py-4">Type</TableHead>
                                             <TableHead class="w-[120px] text-center py-4">Status</TableHead>
@@ -483,6 +488,12 @@ const getSemesterCourses = (semesterCode: string) => {
                                                 <div class="text-[11px] text-gray-400 mt-0.5 font-medium flex items-center gap-1" v-if="course.department">
                                                     <span class="w-1 h-1 rounded-full bg-gray-300"></span> {{ course.department.name }}
                                                 </div>
+                                            </TableCell>
+                                            <TableCell class="py-4">
+                                                <div v-if="course.allocations && course.allocations.length > 0" class="flex flex-col">
+                                                    <span class="text-xs font-medium text-gray-700">{{ course.allocations[0].staff?.user?.name }}</span>
+                                                </div>
+                                                <span v-else class="text-[10px] text-gray-400 italic">Unassigned</span>
                                             </TableCell>
                                             <TableCell class="text-center font-mono text-gray-600 font-medium bg-gray-50/50 group-hover:bg-transparent transition-colors">
                                                 {{ course.units }}

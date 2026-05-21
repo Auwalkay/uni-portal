@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\CourseRegistration;
-use App\Models\Session;
+use App\Models\Invoice;
 use App\Models\Semester;
+use App\Models\Session;
 use App\Models\Student;
+use App\Models\StudentSession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -34,6 +36,7 @@ class CourseRegistrationController extends Controller
             // Within Session, Group by Semester
             $semesters = $sessionRegistrations->groupBy('semester_id')->map(function ($semesterRegs) {
                 $semester = $semesterRegs->first()->semester;
+
                 return [
                     'id' => $semester->id,
                     'name' => $semester->name,
@@ -47,13 +50,13 @@ class CourseRegistrationController extends Controller
                 'id' => $session->id,
                 'session' => $session->name,
                 'is_current' => $session->is_current,
-                'semesters' => $semesters
+                'semesters' => $semesters,
             ];
         }
 
         return Inertia::render('Student/Courses/Index', [
             'history' => $formattedHistory,
-            'student' => $student
+            'student' => $student,
         ]);
     }
 
@@ -75,9 +78,9 @@ class CourseRegistrationController extends Controller
         }
 
         // Fee Enforcement
-        $hasPaid = \App\Models\Invoice::where('user_id', Auth::id())
+        $hasPaid = Invoice::where('user_id', Auth::id())
             ->where('type', 'school_fee')
-            ->where('status', 'paid')
+            ->whereIn('status', ['paid', 'partial'])
             ->where('session_id', $currentSession->id)
             ->exists();
 
@@ -96,20 +99,30 @@ class CourseRegistrationController extends Controller
         $now = now();
         $locks = [
             '1' => false,
-            '2' => false
+            '2' => false,
         ];
 
         if ($firstSemester) {
-            if ($firstSemester->registration_starts_at && $now->lt($firstSemester->registration_starts_at))
+            if ($firstSemester->registration_starts_at && $now->lt($firstSemester->registration_starts_at)) {
                 $locks['1'] = true;
-            if ($firstSemester->registration_ends_at && $now->gt($firstSemester->registration_ends_at))
+            }
+            if ($firstSemester->registration_ends_at && $now->gt($firstSemester->registration_ends_at)) {
                 $locks['1'] = true;
+            }
         }
+
+        // LOCK 1st Semester if 2nd Semester is CURRENT
+        if ($secondSemester && $secondSemester->is_current) {
+            $locks['1'] = true;
+        }
+
         if ($secondSemester) {
-            if ($secondSemester->registration_starts_at && $now->lt($secondSemester->registration_starts_at))
+            if ($secondSemester->registration_starts_at && $now->lt($secondSemester->registration_starts_at)) {
                 $locks['2'] = true;
-            if ($secondSemester->registration_ends_at && $now->gt($secondSemester->registration_ends_at))
+            }
+            if ($secondSemester->registration_ends_at && $now->gt($secondSemester->registration_ends_at)) {
                 $locks['2'] = true;
+            }
         }
 
         $department = $student->academicDepartment;
@@ -153,7 +166,12 @@ class CourseRegistrationController extends Controller
             }
         }
 
-        $availableCourses = $query->with('department')->orderBy('semester')->orderBy('code')->get();
+        $availableCourses = $query->with([
+            'department',
+            'allocations' => function ($q) use ($currentSession) {
+                $q->where('session_id', $currentSession->id)->with('staff.user');
+            },
+        ])->orderBy('semester')->orderBy('code')->get();
 
         // Apply Programme Overrides (Compulsory)
         if ($programme) {
@@ -165,6 +183,7 @@ class CourseRegistrationController extends Controller
                 if ($overrides->has($course->id)) {
                     $course->is_compulsory = (bool) $overrides->get($course->id);
                 }
+
                 return $course;
             });
         }
@@ -193,7 +212,7 @@ class CourseRegistrationController extends Controller
                 'level' => $level,
                 'faculty_id' => $request->input('faculty_id'),
                 'department_id' => $request->input('department_id'),
-            ]
+            ],
         ]);
     }
 
@@ -214,6 +233,24 @@ class CourseRegistrationController extends Controller
         $semesters = Semester::where('session_id', $currentSession->id)->get();
         $firstSemester = $semesters->filter(fn($s) => stripos($s->name, 'First') !== false || $s->name == '1')->first();
         $secondSemester = $semesters->filter(fn($s) => stripos($s->name, 'Second') !== false || $s->name == '2')->first();
+
+        // Check if 1st Semester is locked
+        $isFirstSemLocked = false;
+        $now = now();
+        if ($firstSemester) {
+            if ($firstSemester->registration_starts_at && $now->lt($firstSemester->registration_starts_at)) $isFirstSemLocked = true;
+            if ($firstSemester->registration_ends_at && $now->gt($firstSemester->registration_ends_at)) $isFirstSemLocked = true;
+        }
+        if ($secondSemester && $secondSemester->is_current) {
+            $isFirstSemLocked = true;
+        }
+
+        // Check if 2nd Semester is locked
+        $isSecondSemLocked = false;
+        if ($secondSemester) {
+            if ($secondSemester->registration_starts_at && $now->lt($secondSemester->registration_starts_at)) $isSecondSemLocked = true;
+            if ($secondSemester->registration_ends_at && $now->gt($secondSemester->registration_ends_at)) $isSecondSemLocked = true;
+        }
 
         // Max Units Check (Global or Per Semester? Usually Per Semester, but let's assume Global for simplicity requested, or Per Semester)
         // User request was simple "select and show".
@@ -240,8 +277,40 @@ class CourseRegistrationController extends Controller
             return back()->with('error', "Maximum of {$maxUnits} units allowed for Second Semester.");
         }
 
+        // Enforce Locks on Semester-specific changes
+        $existingRegistrations = CourseRegistration::where('student_id', $student->id)
+            ->where('session_id', $currentSession->id)
+            ->with('course')
+            ->get();
+
+        $existingFirstSemIds = $existingRegistrations->filter(fn($r) => $r->course->semester === '1')->pluck('course_id')->toArray();
+        $newFirstSemIds = $firstSemCourses->pluck('id')->toArray();
+
+        if ($isFirstSemLocked && (array_diff($existingFirstSemIds, $newFirstSemIds) || array_diff($newFirstSemIds, $existingFirstSemIds))) {
+            return back()->with('error', "First Semester registration is locked and cannot be modified.");
+        }
+
+        $existingSecondSemIds = $existingRegistrations->filter(fn($r) => $r->course->semester === '2')->pluck('course_id')->toArray();
+        $newSecondSemIds = $secondSemCourses->pluck('id')->toArray();
+
+        if ($isSecondSemLocked && (array_diff($existingSecondSemIds, $newSecondSemIds) || array_diff($newSecondSemIds, $existingSecondSemIds))) {
+            return back()->with('error', "Second Semester registration is locked and cannot be modified.");
+        }
+
         // DB Transaction
         \Illuminate\Support\Facades\DB::transaction(function () use ($student, $currentSession, $firstSemester, $secondSemester, $firstSemCourses, $secondSemCourses) {
+
+            // Find or Create StudentSession
+            $studentSession = StudentSession::firstOrCreate(
+                [
+                    'student_id' => $student->id,
+                    'session_id' => $currentSession->id,
+                ],
+                [
+                    'level' => $student->current_level,
+                    'status' => 'active',
+                ]
+            );
 
             // Delete ALL registrations for this session to handle updates (unchecking courses)
             // Or better: Delete for First Sem if we are updating First Sem?
@@ -258,6 +327,7 @@ class CourseRegistrationController extends Controller
                         'course_id' => $course->id,
                         'session_id' => $currentSession->id,
                         'semester_id' => $firstSemester->id,
+                        'student_session_id' => $studentSession->id,
                     ]);
                 }
             }
@@ -270,6 +340,7 @@ class CourseRegistrationController extends Controller
                         'course_id' => $course->id,
                         'session_id' => $currentSession->id,
                         'semester_id' => $secondSemester->id,
+                        'student_session_id' => $studentSession->id,
                     ]);
                 }
             }
@@ -281,7 +352,7 @@ class CourseRegistrationController extends Controller
     public function downloadForm(Request $request)
     {
         $student = Student::where('user_id', Auth::id())
-            ->with(['user', 'academicDepartment'])
+            ->with(['user', 'department.faculty', 'program'])
             ->firstOrFail();
 
         $sessionId = $request->query('session_id');
@@ -296,9 +367,7 @@ class CourseRegistrationController extends Controller
             ->where('session_id', $session->id)
             ->with('course', 'semester')
             ->get()
-            ->sortBy(function ($reg) {
-                return $reg->semester->name . $reg->course->code;
-            });
+            ->groupBy(fn($reg) => $reg->semester->name);
 
         if ($registrations->isEmpty()) {
             return response("No course registration records found for this session ({$session->name}). Please ensure you have registered courses.", 404);
@@ -312,7 +381,58 @@ class CourseRegistrationController extends Controller
             'total_units' => $registrations->sum('course.units'),
         ]);
 
-        $safeSessionName = str_replace(['/', '\\'], '-', $session->name);
-        return $pdf->download("Course_Form_{$student->matriculation_number}_{$safeSessionName}.pdf");
+        // $safeSessionName = str_replace(['/', '\\'], '-', $session->name);
+        return $pdf->download('Course_Form.pdf');
+    }
+
+    public function downloadExamCard(Request $request)
+    {
+        $student = Student::where('user_id', Auth::id())
+            ->with(['user', 'department.faculty', 'program'])
+            ->firstOrFail();
+
+        $sessionId = $request->query('session_id');
+        $semesterId = $request->query('semester_id');
+
+        if ($semesterId) {
+            $semester = Semester::findOrFail($semesterId);
+            $session = $semester->session;
+        } else {
+            $session = $sessionId ? Session::findOrFail($sessionId) : Session::query()->where('is_current', true)->firstOrFail();
+            $semester = Semester::query()->where('session_id', $session->id)->where('is_current', true)->first()
+                ?? Semester::query()->where('session_id', $session->id)->firstOrFail();
+        }
+
+        $registrations = CourseRegistration::where('student_id', $student->id)
+            ->where('session_id', $session->id)
+            ->where('semester_id', $semester->id)
+            ->with('course')
+            ->get();
+
+        if ($registrations->isEmpty()) {
+            return response("No registered courses found for {$semester->name} semester, {$session->name} session.", 404);
+        }
+
+        // REQUIREMENT: 2nd Semester Exam Card requires FULL payment
+        if (str_contains(strtolower($semester->name), 'second')) {
+            $isFullyPaid = Invoice::where('user_id', Auth::id())
+                ->where('type', 'school_fee')
+                ->where('session_id', $session->id)
+                ->where('status', 'paid')
+                ->exists();
+
+            if (!$isFullyPaid) {
+                return back()->with('error', 'Second Semester Exam Card is only available after full payment of school fees. Please clear your outstanding balance.');
+            }
+        }
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.exam_card', [
+            'student' => $student,
+            'registrations' => $registrations,
+            'session' => $session,
+            'semester' => $semester,
+        ]);
+
+        return $pdf->download("Exam_Card_{$semester->name}.pdf");
     }
 }

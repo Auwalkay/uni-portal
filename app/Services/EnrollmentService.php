@@ -4,44 +4,71 @@ namespace App\Services;
 
 use App\Models\Applicant;
 use App\Models\Student;
+use App\Models\StudentSession;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class EnrollmentService
 {
-    public function enroll(Applicant $applicant, int|string $userId)
+    public function enroll(Applicant $applicant, int|string $userId): void
     {
-        if (Student::where('user_id', $userId)->exists()) {
-            return;
-        }
+        DB::transaction(function () use ($applicant, $userId) {
 
-        $year = date('Y');
-        $facCode = $applicant->programme->department->faculty->code ?? 'GEN';
-        $deptCode = $applicant->programme->department->code ?? 'GEN';
+            // Lock the student row check so two concurrent requests don't both pass
+            $alreadyStudent = Student::where('user_id', $userId)
+                ->lockForUpdate()
+                ->exists();
 
-        $pattern = "{$year}/{$facCode}/{$deptCode}/%";
-        $count = Student::where('matriculation_number', 'LIKE', $pattern)->count();
-        $sequence = str_pad($count + 1, 3, '0', STR_PAD_LEFT);
-        $matricNo = "{$year}/{$facCode}/{$deptCode}/{$sequence}";
+            if ($alreadyStudent) {
+                return;
+            }
 
-        $currentSession = \App\Models\Session::current();
+            $year = date('y');
+            $facCode = $applicant->programme?->department?->faculty?->code ?? 'GEN';
+            $deptCode = $applicant->programme?->department?->code ?? 'GEN';
 
-        Student::create([
-            'user_id' => $userId,
-            'matriculation_number' => $matricNo,
-            'program' => $applicant->programme->name ?? 'N/A',
-            'department_id' => $applicant->programme->department->id,
-            'faculty_id' => $applicant->programme->department->faculty->id,
-            'current_level' => 100,
-            'entry_mode' => $applicant->application_mode,
-            'admitted_session_id' => $currentSession?->id,
-            'program_duration' => $applicant->programme->duration ?? 4,
-        ]);
+            $currentSession = \App\Models\Session::current();
+            if (!$currentSession) {
+                throw new \Exception('No active academic session found.');
+            }
 
-        $user = User::find($userId);
-        if ($user) {
-            $user->assignRole('student');
-        }
+            $currenSemester = $currentSession->semesters()->where('is_current', true)->first();
 
-        $applicant->update(['status' => 'enrolled']);
+            $currentLevel = ($applicant->application_mode === 'DE') ? 200 : 100;
+
+            $matricNo = \App\Helpers\MatriculationNumberHelper::generate(['dept_code' => $applicant->programme?->department?->code]);
+
+            $student = Student::create([
+                'user_id' => $userId,
+                'matriculation_number' => $matricNo,
+                'program_id' => $applicant->programme?->id,
+                'department_id' => $applicant->programme?->department?->id,
+                'faculty_id' => $applicant->programme?->department?->faculty?->id,
+                'state_id' => $applicant->state_id,
+                'lga_id' => $applicant->lga_id,
+                'current_level' => $currentLevel,
+                'gender' => $applicant->gender,
+                'entry_mode' => $applicant->application_mode,
+                'admitted_session_id' => $currentSession->id,
+                'program_duration' => $applicant->programme?->duration ?? 4,
+                'scholarship_id' => $applicant->scholarship_id,
+            ]);
+
+            StudentSession::create([
+                'student_id' => $student->id,
+                'session_id' => $currentSession->id,
+                'level' => $currentLevel,
+                'status' => 'active',
+                'semester' => $currenSemester ? $currenSemester->name : '1st Semester',
+            ]);
+
+            $user = User::lockForUpdate()->find($userId);
+            if ($user) {
+                $user->assignRole('student');
+                $user->removeRole('applicant');
+            }
+
+            $applicant->update(['status' => 'enrolled']);
+        });
     }
 }

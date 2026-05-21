@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Payment;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 
 class PaymentController extends Controller
@@ -18,7 +20,7 @@ class PaymentController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('reference', 'like', "%{$search}%")
+                $q->where('gateway_reference', 'like', "%{$search}%")
                     ->orWhereHas('user', function ($u) use ($search) {
                         $u->where('name', 'like', "%{$search}%")
                             ->orWhere('email', 'like', "%{$search}%")
@@ -52,12 +54,34 @@ class PaymentController extends Controller
 
         $payments = $query->latest()->paginate(15)->withQueryString();
 
+        // Calculate Stats (Respecting filters would be cool, but global stats are usually expected on top unless specified. 
+        // Let's do Global Stats for general overview, or Filtered Stats? 
+        // Let's do Filtered Stats so they update as you filter.
+
+        // Clone query for stats to avoid messing up pagination
+        $statsQuery = clone $query;
+        // Removing ordering and pagination for aggregation
+        $statsQuery->getQuery()->orders = null;
+
+        // However, cloning the builder with Eager Loading might be heavy if we just want aggregates.
+        // Let's optimize by just using the base filter logic without eager loads for stats.
+        // Re-applying filters to a fresh query is cleaner.
+
+        $stats = [
+            'total_revenue' => \App\Models\Payment::where('status', 'paid')->sum('amount'), // Global Total
+            'today_revenue' => \App\Models\Payment::where('status', 'paid')->whereDate('paid_at', today())->sum('amount'),
+            'successful_count' => \App\Models\Payment::where('status', 'paid')->count(),
+            'pending_count' => \App\Models\Payment::where('status', 'pending')->count(),
+            'failed_count' => \App\Models\Payment::where('status', 'failed')->count(),
+        ];
+
         return \Inertia\Inertia::render('Admin/Payments/Index', [
             'payments' => $payments,
             'filters' => $filters,
             'sessions' => \App\Models\Session::latest()->get(['id', 'name']),
             'faculties' => \App\Models\Faculty::with('departments:id,name,faculty_id')->get(['id', 'name']),
             'departments' => \App\Models\Department::get(['id', 'name', 'faculty_id']),
+            'stats' => $stats,
         ]);
     }
     public function show(\App\Models\Payment $payment)
@@ -67,5 +91,27 @@ class PaymentController extends Controller
         return \Inertia\Inertia::render('Admin/Payments/Show', [
             'payment' => $payment
         ]);
+    }
+
+    public function downloadReceipt(Payment $payment)
+    {
+        if ($payment->status !== 'success') {
+            return back()->with('error', 'Only successful payments have receipts.');
+        }
+
+        $payment->load(['invoice.session', 'user.student.program']);
+        
+        $pdf = Pdf::loadView('documents.payment_receipt', [
+            'payment' => $payment,
+            'student' => $payment->user->student,
+            'invoice' => $payment->invoice,
+        ])->setOptions([
+            'defaultFont' => 'DejaVu Sans',
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled' => true,
+            'isFontSubsettingEnabled' => true,
+        ]);
+
+        return $pdf->download("Receipt_{$payment->gateway_reference}.pdf");
     }
 }

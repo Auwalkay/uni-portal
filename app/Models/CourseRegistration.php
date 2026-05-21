@@ -26,6 +26,11 @@ class CourseRegistration extends Model
         return $this->belongsTo(Session::class);
     }
 
+    public function studentSession()
+    {
+        return $this->belongsTo(StudentSession::class);
+    }
+
     public function semester()
     {
         return $this->belongsTo(Semester::class);

@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Semester;
 use App\Models\Session;
 use App\Models\Student;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Artisan;
+use App\Services\AcademicCacheService;
 
 class SessionController extends Controller
 {
@@ -16,7 +19,7 @@ class SessionController extends Controller
         $sessions = Session::with('semesters')->orderBy('start_date', 'desc')->get();
 
         return Inertia::render('Admin/Sessions/Index', [
-            'sessions' => $sessions
+            'sessions' => $sessions,
         ]);
     }
 
@@ -26,26 +29,34 @@ class SessionController extends Controller
             'name' => 'required|string|unique:academic_sessions,name',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after:start_date',
+            'type' => 'required|string|in:regular,summer',
         ]);
 
         $session = Session::create($validated);
 
-        // Auto-create Semesters
-        \App\Models\Semester::create([
-            'session_id' => $session->id,
-            'name' => 'First Semester',
-            'is_current' => false,
-        ]);
+        // Auto-create Semesters based on Type
+        if ($session->type === 'summer') {
+            Semester::create([
+                'session_id' => $session->id,
+                'name' => 'Summer Semester',
+                'is_current' => false,
+            ]);
+        } else {
+            Semester::create([
+                'session_id' => $session->id,
+                'name' => 'First Semester',
+                'is_current' => false,
+            ]);
 
-        \App\Models\Semester::create([
-            'session_id' => $session->id,
-            'name' => 'Second Semester',
-            'is_current' => false,
-        ]);
+            Semester::create([
+                'session_id' => $session->id,
+                'name' => 'Second Semester',
+                'is_current' => false,
+            ]);
+        }
 
-        return to_route('admin.sessions.show', $session)->with('success', 'Session created. Please configure dates.');
+        return to_route('admin.sessions.show', $session)->with('success', 'Session created successfully. Please configure fees and activation.');
     }
-
 
     public function update(Request $request, Session $session)
     {
@@ -66,51 +77,60 @@ class SessionController extends Controller
             return back()->with('info', 'This session is already active.');
         }
 
+        $this->performActivation($session);
+
+        AcademicCacheService::clearAll();
+
+        return back()->with('success', 'Session activated successfully. You can now manually promote students if this is a new regular session.');
+    }
+
+    /**
+     * Internal activation logic shared between store, update and activate methods.
+     * Returns true if students were promoted.
+     */
+    private function performActivation(Session $session): void
+    {
         DB::transaction(function () use ($session) {
             // 1. Deactivate all other sessions
-            Session::where('is_current', true)->update(['is_current' => false]);
+            Session::where('is_current', true)->where('id', '!=', $session->id)->update(['is_current' => false]);
 
             // 2. Activate target session
-            $session->update(['is_current' => true]);
+            $session->is_current = true;
+            $session->save();
 
-            // 2b. Activate First Semester by default (and deactivate others globally? No, semester isScoped to session usually, but let's be safe)
-            // Deactivate all semesters first? Or just ensure this session's first semester is active.
-            // Let's assume global single active semester relative to session.
-            \App\Models\Semester::query()->update(['is_current' => false]);
+            // 3. Deactivate all semesters
+            Semester::where('is_current', true)->update(['is_current' => false]);
 
-            $firstSemester = $session->semesters()->where('name', 'First Semester')->first();
-            if ($firstSemester) {
-                $firstSemester->update(['is_current' => true]);
+            // 4. Activate the first available semester for this session
+            $semesterToActivate = $session->semesters()->where('name', 'First Semester')->first()
+                ?? $session->semesters()->where('name', 'Summer Semester')->first()
+                ?? $session->semesters()->first();
+
+            if ($semesterToActivate) {
+                $semesterToActivate->is_current = true;
+                $semesterToActivate->save();
             }
-
-            // 3. Promote Students
-            // Logic: Increment level by 100.
-            // Consider capping or graduating logic? 
-            // For now, simple increment. 
-            // We can add a 'status' check to only promote 'Active' students if needed, 
-            // but for now we assume all active students move up.
-
-            // Note: DB::raw is efficient for bulk updates.
-            // Assuming 'level' is an integer or string castable to int.
-            // Student model cast says? Check model. Usually string in Vue but maybe int in DB.
-            // Based on grep earlier: $student->current_level.
-
-            // Use query update for efficiency
-            Student::query()->each(function ($student) {
-                // If level is numeric-ish
-                $currentLevel = intval($student->current_level); // "100" -> 100
-                if ($currentLevel > 0) {
-                    $newLevel = $currentLevel + 100;
-                    // Optional: Cap at some point? 
-                    // Let's just increment.
-                    $student->update(['current_level' => $newLevel]);
-                }
-            });
         });
 
-        return back()->with('success', "Session activated and students promoted to next level.");
+        AcademicCacheService::clearAll();
     }
-    public function activateSemester(Session $session, \App\Models\Semester $semester)
+
+    public function promoteStudents(Session $session)
+    {
+        if (!$session->is_current) {
+            return back()->with('error', 'Only the current active session can be used for student promotion.');
+        }
+
+        if ($session->type !== 'regular') {
+            return back()->with('error', 'Promotion can only be triggered for Regular academic sessions.');
+        }
+
+        \App\Jobs\Academic\PromoteStudentsJob::dispatch($session->id);
+
+        return back()->with('success', 'Student promotion process has been queued and is running in the background.');
+    }
+
+    public function activateSemester(Session $session, Semester $semester)
     {
         if ($semester->session_id !== $session->id) {
             return back()->with('error', 'Semester does not belong to this session.');
@@ -118,7 +138,7 @@ class SessionController extends Controller
 
         DB::transaction(function () use ($session, $semester) {
             // Deactivate all semesters
-            \App\Models\Semester::query()->update(['is_current' => false]);
+            Semester::query()->update(['is_current' => false]);
 
             // Activate target
             $semester->update(['is_current' => true]);
@@ -131,6 +151,8 @@ class SessionController extends Controller
                 $session->update(['is_current' => true]);
             }
         });
+
+        AcademicCacheService::clearAll();
 
         return back()->with('success', "{$semester->name} is now active.");
     }
@@ -197,19 +219,22 @@ class SessionController extends Controller
     public function destroyFee(Session $session, \App\Models\FeeConfiguration $feeConfiguration)
     {
         $feeConfiguration->delete();
+
         return back()->with('success', 'Fee configuration removed.');
     }
 
     public function toggleRegistration(Session $session)
     {
         $session->update([
-            'registration_enabled' => !$session->registration_enabled
+            'registration_enabled' => !$session->registration_enabled,
         ]);
 
         $status = $session->registration_enabled ? 'enabled' : 'disabled';
+
         return back()->with('success', "Course registration {$status} for {$session->name}.");
     }
-    public function updateSemester(Request $request, Session $session, \App\Models\Semester $semester)
+
+    public function updateSemester(Request $request, Session $session, Semester $semester)
     {
         if ($semester->session_id !== $session->id) {
             abort(403, 'Semester does not belong to session');

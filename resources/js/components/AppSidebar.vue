@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid } from 'lucide-vue-next';
+import { Link, usePage } from '@inertiajs/vue3';
+import { BookOpen, Folder, LayoutGrid, User } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -19,6 +19,9 @@ import { type NavItem } from '@/types';
 
 import AppLogo from './AppLogo.vue';
 
+const page = usePage();
+const user = page.props.auth.user as any;
+
 const mainNavItems: NavItem[] = [
     {
         title: 'Dashboard',
@@ -26,6 +29,14 @@ const mainNavItems: NavItem[] = [
         icon: LayoutGrid,
     },
 ];
+
+if (user?.roles?.includes('staff')) {
+    mainNavItems.push({
+        title: 'My Profile',
+        href: route('staff.profile.edit'),
+        icon: User,
+    });
+}
 
 const footerNavItems: NavItem[] = [
     {

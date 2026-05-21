@@ -1,103 +1,299 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
+    <meta charset="utf-8">
     <title>Course Registration Form</title>
     <style>
+        @page {
+            margin: 1cm;
+        }
+
         body {
-            font-family: sans-serif;
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #333;
+            line-height: 1.4;
+            margin: 0;
+            padding: 0;
+            background: #fff;
+            font-size: 12px;
         }
 
         .header {
             text-align: center;
-            margin-bottom: 30px;
+            border-bottom: 2px solid #E31E24;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            position: relative;
         }
 
-        .logo {
-            width: 80px;
-            height: auto;
+        .logo-box {
+            position: absolute;
+            left: 0;
+            top: 0;
         }
 
-        table {
+        .passport-box {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 100px;
+            height: 110px;
+            border: 1px solid #ddd;
+            padding: 2px;
+            background: #fff;
+        }
+
+        .passport-photo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .uni-name {
+            font-size: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #E31E24;
+            margin: 0;
+            letter-spacing: 1px;
+        }
+
+        .form-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 5px 0;
+            color: #444;
+            text-transform: uppercase;
+        }
+
+        .session-info {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .student-info-section {
+            margin-bottom: 20px;
+            width: calc(100% - 120px);
+            /* Leave space for passport */
+        }
+
+        .info-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
         }
 
-        th,
-        td {
-            border: 1px solid #000;
+        .info-table td {
+            padding: 4px 0;
+            vertical-align: top;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #555;
+            width: 120px;
+        }
+
+        .info-value {
+            color: #000;
+            font-weight: 600;
+        }
+
+        .course-section {
+            margin-top: 10px;
+        }
+
+        .semester-title {
+            background: #eff6ff;
+            color: #E31E24;
+            padding: 6px 12px;
+            font-weight: bold;
+            font-size: 13px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            border-left: 4px solid #E31E24;
+        }
+
+        .course-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+
+        .course-table th {
+            background: #f1f5f9;
+            color: #475569;
             padding: 8px;
             text-align: left;
+            font-weight: bold;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 11px;
+            text-transform: uppercase;
         }
 
-        th {
-            background-color: #f0f0f0;
+        .course-table td {
+            padding: 8px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 11px;
+        }
+
+        .course-code {
+            font-family: monospace;
+            font-weight: bold;
+            color: #E31E24;
+        }
+
+        .total-row {
+            background: #f8fafc;
+            font-weight: bold;
         }
 
         .footer {
-            margin-top: 50px;
-            display: flex;
-            justify-content: space-between;
+            margin-top: 30px;
+            width: 100%;
+            border-top: 1px dashed #cbd5e1;
+            padding-top: 20px;
         }
 
-        .signature {
-            border-top: 1px solid #000;
-            width: 200px;
-            padding-top: 5px;
+        .signature-grid {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .signature-cell {
+            width: 45%;
             text-align: center;
+            vertical-align: bottom;
+        }
+
+        .signature-line {
+            border-top: 1px solid #000;
+            margin-top: 40px;
+            padding-top: 5px;
+            font-size: 11px;
+            color: #666;
+        }
+
+        .watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 80px;
+            color: rgba(0, 0, 0, 0.02);
+            font-weight: bold;
+            z-index: -1;
+            white-space: nowrap;
         }
     </style>
 </head>
 
 <body>
+    <div class="watermark">OFFICIAL COPY</div>
+
     <div class="header">
-        <h2>UNIVERSITY PORTAL</h2>
-        <h3>Course Registration Form</h3>
-        <p>{{ $session->name }} {{ $semester ? '- ' . $semester->name : '' }}</p>
+        <div class="logo-box">
+            <img src="{{ public_path('miu-logo.png') }}" alt="Logo"
+                style="height: 45px; width: auto; max-width: 150px; margin-top: -5px;">
+        </div>
+
+        <h1 class="uni-name">Mewar International University Nigeria</h1>
+        <div class="form-title">Course Registration Form</div>
+        <div class="session-info">
+            {{ $session->name }} Academic Session
+            @if($semester)
+                - {{ $semester->name }}
+            @endif
+        </div>
+
+        <div class="passport-box">
+            @if($student->passport_photo_path)
+                <img src="{{ public_path('storage/' . $student->passport_photo_path) }}" class="passport-photo">
+            @else
+                <div style="text-align: center; pt-10; color: #ccc;">Passport<br>Photo</div>
+            @endif
+        </div>
     </div>
 
-    <div>
-        <p><strong>Name:</strong> {{ $student->user->name }} {{ $student->user->last_name }}</p>
-        <p><strong>Matric No:</strong> {{ $student->matriculation_number }}</p>
-        <p><strong>Department:</strong> {{ $student->department }}</p>
-        <p><strong>Level:</strong> {{ $student->current_level }}</p>
+    <div class="student-info-section">
+        <table class="info-table">
+            <tr>
+                <td class="info-label">Full Name:</td>
+                <td class="info-value">{{ strtoupper($student->user->name . ' ' . $student->user->last_name) }}</td>
+                <td class="info-label">Matric Number:</td>
+                <td class="info-value">{{ $student->matriculation_number }}</td>
+            </tr>
+            <tr>
+                <td class="info-label">Faculty:</td>
+                <td class="info-value">{{ $student->department->faculty->name ?? 'N/A' }}</td>
+                <td class="info-label">Department:</td>
+                <td class="info-value">{{ $student->department->name ?? 'N/A' }}</td>
+            </tr>
+            <tr>
+                <td class="info-label">Programme:</td>
+                <td class="info-value">{{ $student->program->name ?? 'N/A' }}</td>
+                <td class="info-label">Level:</td>
+                <td class="info-value">{{ $student->current_level }}</td>
+            </tr>
+        </table>
     </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Code</th>
-                <th>Course Title</th>
-                <th>Units</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($registrations as $reg)
-                <tr>
-                    <td>{{ $reg->course->code }}</td>
-                    <td>{{ $reg->course->title }}</td>
-                    <td>{{ $reg->course->units }}</td>
-                    <td>Registered</td>
-                </tr>
-            @endforeach
-            <tr>
-                <td colspan="2" style="text-align: right; font-weight: bold;">Total Units</td>
-                <td colspan="2" style="font-weight: bold;">{{ $total_units }}</td>
-            </tr>
-        </tbody>
-    </table>
+    <div class="course-section">
+        @php $grandTotalUnits = 0; @endphp
+        @foreach($registrations as $semesterName => $regs)
+            <div class="semester-title">{{ strtoupper($semesterName) }}</div>
+            <table class="course-table">
+                <thead>
+                    <tr>
+                        <th width="15%">Code</th>
+                        <th width="65%">Course Title</th>
+                        <th width="10%">Units</th>
+                        <th width="10%">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @php $semUnits = 0; @endphp
+                    @foreach($regs as $reg)
+                        <tr>
+                            <td class="course-code">{{ $reg->course->code }}</td>
+                            <td>{{ $reg->course->title }}</td>
+                            <td align="center">{{ $reg->course->units }}</td>
+                            <td align="center">CORE</td>
+                        </tr>
+                        @php $semUnits += $reg->course->units; @endphp
+                    @endforeach
+                    <tr class="total-row">
+                        <td colspan="2" align="right">Semester Total Units:</td>
+                        <td align="center">{{ $semUnits }}</td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+            @php $grandTotalUnits += $semUnits; @endphp
+        @endforeach
+
+        <div
+            style="background: #E31E24; color: white; padding: 10px; border-radius: 4px; text-align: right; font-weight: bold;">
+            Total Registered Units for Session: {{ $grandTotalUnits }}
+        </div>
+    </div>
 
     <div class="footer">
-        <br><br><br>
-        <table style="border: none;">
-            <tr style="border: none;">
-                <td style="border: none;">
-                    <br>___________________________<br>Student Signature
+        <table class="signature-grid">
+            <tr>
+                <td class="signature-cell">
+                    <div class="signature-line">Student's Signature</div>
                 </td>
-                <td style="border: none; text-align: right;">
-                    <br>___________________________<br>Course Adviser
+                <td width="10%"></td>
+                <td class="signature-cell">
+                    <div class="signature-line">Course Adviser's Signature</div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="3" style="padding-top: 30px; text-align: center; font-size: 10px; color: #999;">
+                    Generated on {{ now()->format('d/m/Y H:i:s') }} | Mewar International University Nigeria Course
+                    Management System
                 </td>
             </tr>
         </table>

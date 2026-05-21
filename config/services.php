@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'squadco' => [
+        'public_key' => env('SQUADCO_PUBLIC_KEY'),
+        'secret_key' => env('SQUADCO_SECRET_KEY'),
+        'base_url' => env('SQUADCO_BASE_URL', 'https://sandbox-api-d.squadco.com'),
+    ],
+
 ];

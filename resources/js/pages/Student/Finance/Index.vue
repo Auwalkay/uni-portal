@@ -6,16 +6,23 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { result as format, format as formatDate } from 'date-fns';
-import { CreditCard, ChevronDown, ChevronUp, FileText } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { format as formatDate } from 'date-fns';
+import { CreditCard, ChevronDown, ChevronUp, FileText, Download } from 'lucide-vue-next';
+import { ref, computed, watch } from 'vue';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
-defineProps<{
+const props = defineProps<{
     invoices: Array<{
         id: string;
         reference: string;
         type: string;
         amount: number;
+        paid_amount: number;
         status: string;
         due_date: string;
         created_at: string;
@@ -30,10 +37,15 @@ defineProps<{
             name: string;
         };
         payments?: Array<{
+            id: string;
+            gateway_reference: string;
+            amount: number;
             paid_at: string;
+            channel: string;
         }>;
     }>;
     canGenerateInvoice: boolean;
+    admin_charge_splittable: boolean;
 }>();
 
 const expandedInvoices = ref<string[]>([]);
@@ -47,8 +59,78 @@ const toggleExpand = (id: string) => {
     }
 };
 
-const pay = (invoiceId: string) => {
-    router.post(route('student.payments.pay', invoiceId));
+const isPaymentModalOpen = ref(false);
+const selectedInvoice = ref<any>(null);
+const paymentOption = ref('full'); // 'full' or 'half'
+
+const openPaymentModal = (invoice: any) => {
+    selectedInvoice.value = invoice;
+    paymentOption.value = 'full';
+    isPaymentModalOpen.value = true;
+};
+
+const fullBalance = computed(() => {
+    if (!selectedInvoice.value) return 0;
+    return parseFloat(selectedInvoice.value.amount) - parseFloat(selectedInvoice.value.paid_amount || 0);
+});
+
+const installmentAmount = computed(() => {
+    if (!selectedInvoice.value) return 0;
+    
+    const isSplittable = String(props.admin_charge_splittable) === 'true' || props.admin_charge_splittable === true;
+    const adminChargeItem = selectedInvoice.value.items?.find((i: any) => 
+        i.description.toLowerCase().includes('administrative') || 
+        i.description.toLowerCase().includes('admin charge')
+    );
+    
+    const adminAmount = adminChargeItem ? parseFloat(adminChargeItem.amount) : 0;
+    const totalNetInvoice = parseFloat(selectedInvoice.value.amount);
+    const academicNetPortion = totalNetInvoice - adminAmount;
+    
+    let minPayment = totalNetInvoice / 2;
+
+    if (!isSplittable && adminAmount > 0) {
+        // Formula: Full Admin + 50% of whatever is left (Academic)
+        minPayment = (academicNetPortion / 2) + adminAmount;
+    }
+
+    return Math.min(minPayment, fullBalance.value);
+});
+
+const activePaymentAmount = computed(() => {
+    return paymentOption.value === 'half' ? installmentAmount.value : fullBalance.value;
+});
+
+
+const canPayHalf = computed(() => {
+    if (!selectedInvoice.value) return false;
+    
+    const balance = Number(selectedInvoice.value.amount) - Number(selectedInvoice.value.paid_amount || 0);
+    if (balance <= 1) return false; // Already fully paid
+
+    const adminChargeItem = selectedInvoice.value.items?.find((i: any) => i.description === 'Administrative Charges');
+    const adminAmount = adminChargeItem ? Number(adminChargeItem.amount) : 0;
+    const totalAmount = Number(selectedInvoice.value.amount);
+
+    // If total is equal to or less than admin amount, it means academic is 0. No split allowed.
+    if (totalAmount <= adminAmount) return false;
+
+    // If they have already met the minimum requirement (Admin + 50% Academic), 
+    // they should be able to pay any amount for the rest. 
+    // For now, we'll still offer the "Installment" button which will default to 50% or balance.
+    return true;
+});
+
+const submitPayment = () => {
+    if (!selectedInvoice.value) return;
+    
+    router.post(route('student.payments.pay', selectedInvoice.value.id), {
+        amount: activePaymentAmount.value.toFixed(2)
+    }, {
+        onFinish: () => {
+            isPaymentModalOpen.value = false;
+        }
+    });
 };
 
 const formatCurrency = (amount: number) => {
@@ -59,6 +141,7 @@ const getStatusColor = (status: string) => {
     switch (status) {
         case 'paid': return 'bg-green-100 text-green-800 border-green-200';
         case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+        case 'partial': return 'bg-blue-100 text-blue-800 border-blue-200';
         case 'cancelled': return 'bg-red-100 text-red-800 border-red-200';
         default: return 'bg-gray-100 text-gray-800';
     }
@@ -110,6 +193,8 @@ const getPaymentDate = (invoice: any) => {
                                 <TableHead>Session</TableHead>
                                 <TableHead>Type</TableHead>
                                 <TableHead>Amount</TableHead>
+                                <TableHead>Paid</TableHead>
+                                <TableHead>Balance</TableHead>
                                 <TableHead>Due Date</TableHead>
                                 <TableHead>Paid Date</TableHead>
                                 <TableHead>Status</TableHead>
@@ -134,6 +219,8 @@ const getPaymentDate = (invoice: any) => {
                                     <TableCell>{{ invoice.session?.name || 'N/A' }}</TableCell>
                                     <TableCell>{{ formatType(invoice.type) }}</TableCell>
                                     <TableCell class="font-bold">{{ formatCurrency(invoice.amount) }}</TableCell>
+                                    <TableCell class="text-green-600">{{ formatCurrency(Number(invoice.paid_amount || 0)) }}</TableCell>
+                                    <TableCell class="text-red-600 font-medium">{{ formatCurrency(invoice.amount - Number(invoice.paid_amount || 0)) }}</TableCell>
                                     <TableCell>{{ invoice.due_date ? formatDate(new Date(invoice.due_date), 'MMM d, yyyy') : 'N/A' }}</TableCell>
                                     <TableCell>{{ getPaymentDate(invoice) }}</TableCell>
                                     <TableCell>
@@ -143,8 +230,8 @@ const getPaymentDate = (invoice: any) => {
                                     </TableCell>
                                     <TableCell class="text-right">
                                         <Button 
-                                            v-if="invoice.status === 'pending'" 
-                                            @click.stop="pay(invoice.id)"
+                                            v-if="invoice.status !== 'paid'" 
+                                            @click.stop="openPaymentModal(invoice)"
                                             size="sm"
                                         >
                                             <CreditCard class="mr-2 h-4 w-4" />
@@ -171,6 +258,29 @@ const getPaymentDate = (invoice: any) => {
                                                 </div>
                                             </div>
                                             <p v-else class="text-sm text-muted-foreground italic">No detailed breakdown available for this invoice.</p>
+
+                                            <!-- Payments List -->
+                                            <div v-if="invoice.payments && invoice.payments.length > 0" class="mt-6">
+                                                <h4 class="mb-3 font-semibold flex items-center gap-2">
+                                                    <CreditCard class="h-4 w-4" /> Payment History
+                                                </h4>
+                                                <div class="space-y-2">
+                                                    <div v-for="payment in invoice.payments" :key="payment.id" class="flex items-center justify-between p-3 rounded-md bg-slate-50 border border-slate-100">
+                                                        <div class="flex flex-col">
+                                                            <span class="font-bold text-sm">{{ formatCurrency(payment.amount) }}</span>
+                                                            <span class="text-[10px] text-muted-foreground uppercase tracking-wider">{{ payment.channel }} • {{ formatDate(new Date(payment.paid_at), 'MMM d, yyyy HH:mm') }}</span>
+                                                            <span class="text-[10px] font-mono text-slate-400">{{ payment.gateway_reference }}</span>
+                                                        </div>
+                                                        <a 
+                                                            :href="route('student.payments.download', payment.id)" 
+                                                            target="_blank"
+                                                            class="inline-flex items-center px-3 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+                                                        >
+                                                            <Download class="w-3 h-3 mr-1.5" /> Receipt
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </TableCell>
                                 </TableRow>
@@ -180,5 +290,56 @@ const getPaymentDate = (invoice: any) => {
                 </CardContent>
             </Card>
         </div>
+
+        <Dialog v-model:open="isPaymentModalOpen">
+            <DialogContent class="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle>Make Payment</DialogTitle>
+                    <DialogDescription>
+                        Enter the amount you wish to pay.
+                    </DialogDescription>
+                </DialogHeader>
+                <div class="grid gap-4 py-4">
+                    <div v-if="selectedInvoice" class="space-y-4">
+                        <RadioGroup v-model="paymentOption" class="grid gap-4">
+                            <div>
+                                <RadioGroupItem
+                                    id="full"
+                                    value="full"
+                                    class="peer sr-only"
+                                />
+                                <Label
+                                    for="full"
+                                    class="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
+                                >
+                                    <span class="mb-2 text-lg font-semibold">Pay Balance</span>
+                                    <span class="text-sm text-muted-foreground">Clear remaining debt</span>
+                                    <span class="mt-2 text-xl font-bold">{{ formatCurrency(fullBalance) }}</span>
+                                </Label>
+                            </div>
+                            
+                            <div v-if="canPayHalf">
+                                <RadioGroupItem
+                                    id="half"
+                                    value="half"
+                                    class="peer sr-only"
+                                />
+                                <Label
+                                    for="half"
+                                    class="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
+                                >
+                                    <span class="mb-2 text-lg font-semibold">Pay Installment</span>
+                                    <span class="text-sm text-muted-foreground">Mandatory Upfront Portion</span>
+                                    <span class="mt-2 text-xl font-bold">{{ formatCurrency(installmentAmount) }}</span>
+                                </Label>
+                            </div>
+                        </RadioGroup>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button type="submit" @click="submitPayment">Proceed to Payment</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </StudentLayout>
 </template>

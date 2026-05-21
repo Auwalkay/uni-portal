@@ -7,6 +7,7 @@ import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import PasswordInput from '@/components/PasswordInput.vue';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthBase from '@/layouts/AuthLayout.vue';
@@ -64,6 +65,7 @@ watch(() => page.props.errors, (errors) => {
                         name="name"
                         v-model="form.name"
                         placeholder="Full name"
+                        class="shadow-sm"
                     />
                     <InputError :message="form.errors.name" />
                 </div>
@@ -79,48 +81,49 @@ watch(() => page.props.errors, (errors) => {
                         name="email"
                         v-model="form.email"
                         placeholder="email@example.com"
+                        class="shadow-sm"
                     />
                     <InputError :message="form.errors.email" />
                 </div>
 
                 <div class="grid gap-2">
                     <Label for="password">Password</Label>
-                    <Input
+                    <PasswordInput
                         id="password"
-                        type="password"
                         required
                         :tabindex="3"
                         autocomplete="new-password"
                         name="password"
                         v-model="form.password"
                         placeholder="Password"
+                        :error="form.errors.password"
                     />
                     <InputError :message="form.errors.password" />
                 </div>
 
                 <div class="grid gap-2">
                     <Label for="password_confirmation">Confirm password</Label>
-                    <Input
+                    <PasswordInput
                         id="password_confirmation"
-                        type="password"
                         required
                         :tabindex="4"
                         autocomplete="new-password"
                         name="password_confirmation"
                         v-model="form.password_confirmation"
                         placeholder="Confirm password"
+                        :error="form.errors.password_confirmation"
                     />
                     <InputError :message="form.errors.password_confirmation" />
                 </div>
 
                 <Button
                     type="submit"
-                    class="mt-2 w-full"
+                    class="w-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-md transition-all active:scale-95"
                     tabindex="5"
                     :disabled="form.processing"
                     data-test="register-user-button"
                 >
-                    <Spinner v-if="form.processing" />
+                    <Spinner v-if="form.processing" class="mr-2" />
                     Create account
                 </Button>
             </div>
@@ -129,7 +132,7 @@ watch(() => page.props.errors, (errors) => {
                 Already have an account?
                 <TextLink
                     :href="login().url"
-                    class="underline underline-offset-4"
+                    class="font-medium text-primary hover:underline hover:text-primary/80 transition-colors"
                     :tabindex="6"
                     >Log in</TextLink
                 >

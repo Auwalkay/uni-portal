@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { watch } from 'vue';
+import Swal from 'sweetalert2';
 
 import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
@@ -10,6 +12,22 @@ import { Spinner } from '@/components/ui/spinner';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { login } from '@/routes';
 import { email } from '@/routes/password';
+
+const page = usePage();
+
+watch(() => page.props.errors, (errors) => {
+    if (Object.keys(errors).length > 0) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Request Failed',
+            text: 'Please check your email address.',
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 4000
+        });
+    }
+}, { deep: true });
 
 defineProps<{
     status?: string;
@@ -50,17 +68,18 @@ const submit = () => {
                         autocomplete="off"
                         autofocus
                         placeholder="email@example.com"
+                        class="shadow-sm"
                     />
                     <InputError :message="form.errors.email" />
                 </div>
 
                 <div class="my-6 flex items-center justify-start">
                     <Button
-                        class="w-full"
+                        class="w-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-md transition-all active:scale-95"
                         :disabled="form.processing"
                         data-test="email-password-reset-link-button"
                     >
-                        <Spinner v-if="form.processing" />
+                        <Spinner v-if="form.processing" class="mr-2" />
                         Email password reset link
                     </Button>
                 </div>
@@ -68,7 +87,7 @@ const submit = () => {
 
             <div class="space-x-1 text-center text-sm text-muted-foreground">
                 <span>Or, return to</span>
-                <TextLink :href="login().url">log in</TextLink>
+                <TextLink :href="login().url" class="font-medium text-primary hover:underline hover:text-primary/80 transition-colors">log in</TextLink>
             </div>
         </div>
     </AuthLayout>

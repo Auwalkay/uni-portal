@@ -6,6 +6,7 @@ import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import PasswordInput from '@/components/PasswordInput.vue';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
@@ -50,26 +51,26 @@ const breadcrumbItems: BreadcrumbItem[] = [
                 >
                     <div class="grid gap-2">
                         <Label for="current_password">Current password</Label>
-                        <Input
+                        <PasswordInput
                             id="current_password"
                             name="current_password"
-                            type="password"
                             class="mt-1 block w-full"
                             autocomplete="current-password"
                             placeholder="Current password"
+                            :error="errors.current_password"
                         />
                         <InputError :message="errors.current_password" />
                     </div>
 
                     <div class="grid gap-2">
                         <Label for="password">New password</Label>
-                        <Input
+                        <PasswordInput
                             id="password"
                             name="password"
-                            type="password"
                             class="mt-1 block w-full"
                             autocomplete="new-password"
                             placeholder="New password"
+                            :error="errors.password"
                         />
                         <InputError :message="errors.password" />
                     </div>
@@ -78,13 +79,13 @@ const breadcrumbItems: BreadcrumbItem[] = [
                         <Label for="password_confirmation"
                             >Confirm password</Label
                         >
-                        <Input
+                        <PasswordInput
                             id="password_confirmation"
                             name="password_confirmation"
-                            type="password"
                             class="mt-1 block w-full"
                             autocomplete="new-password"
                             placeholder="Confirm password"
+                            :error="errors.password_confirmation"
                         />
                         <InputError :message="errors.password_confirmation" />
                     </div>

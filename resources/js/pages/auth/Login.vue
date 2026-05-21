@@ -1,17 +1,36 @@
 <script setup lang="ts">
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { watch } from 'vue';
+import Swal from 'sweetalert2';
 
 import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import PasswordInput from '@/components/PasswordInput.vue';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { register } from '@/routes';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
+
+const page = usePage();
+
+watch(() => page.props.errors, (errors) => {
+    if (Object.keys(errors).length > 0) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Login Failed',
+            text: 'Please check your credentials.',
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 4000
+        });
+    }
+}, { deep: true });
 
 defineProps<{
     status?: string;
@@ -46,10 +65,10 @@ const submit = () => {
             {{ status }}
         </div>
 
-        <form @submit.prevent="submit" class="flex flex-col gap-6">
-            <div class="grid gap-6">
-                <div class="grid gap-2">
-                    <Label for="email">Email or Matriculation Number</Label>
+        <form @submit.prevent="submit" class="space-y-6">
+            <div class="space-y-5">
+                <div class="space-y-2">
+                    <Label for="email" class="text-xs font-bold uppercase tracking-widest text-slate-500 ml-1">Account Access</Label>
                     <Input
                         id="email"
                         type="text"
@@ -59,61 +78,63 @@ const submit = () => {
                         autofocus
                         :tabindex="1"
                         autocomplete="username"
-                        placeholder="Email or Matric No"
+                        placeholder="Email or Matriculation Number"
+                        class="h-12 border-slate-200 focus:border-primary focus:ring-primary/5 rounded-xl shadow-sm bg-slate-50/50"
                     />
                     <InputError :message="form.errors.email" />
                 </div>
 
-                <div class="grid gap-2">
-                    <div class="flex items-center justify-between">
-                        <Label for="password">Password</Label>
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between ml-1">
+                        <Label for="password" class="text-xs font-bold uppercase tracking-widest text-slate-500">Security Key</Label>
                         <TextLink
                             v-if="canResetPassword"
                             :href="request().url"
-                            class="text-sm"
+                            class="text-[11px] font-bold text-primary hover:text-primary/70 transition-colors uppercase tracking-tight"
                             :tabindex="5"
                         >
-                            Forgot password?
+                            Recover Password
                         </TextLink>
                     </div>
-                    <Input
+                    <PasswordInput
                         id="password"
-                        type="password"
                         name="password"
                         v-model="form.password"
                         required
                         :tabindex="2"
                         autocomplete="current-password"
-                        placeholder="Password"
+                        placeholder="••••••••"
+                        class="h-12 border-slate-200 focus:border-primary focus:ring-primary/5 rounded-xl shadow-sm bg-slate-50/50"
+                        :error="form.errors.password"
                     />
                     <InputError :message="form.errors.password" />
                 </div>
 
-                <div class="flex items-center justify-between">
-                    <Label for="remember" class="flex items-center space-x-3">
-                        <Checkbox id="remember" name="remember" v-model:checked="form.remember" :tabindex="3" />
-                        <span>Remember me</span>
+                <div class="flex items-center justify-between px-1">
+                    <Label for="remember" class="flex items-center space-x-2 text-xs font-bold text-slate-500 cursor-pointer group">
+                        <Checkbox id="remember" name="remember" v-model:checked="form.remember" :tabindex="3" class="rounded border-slate-300 text-primary focus:ring-primary/20" />
+                        <span class="group-hover:text-slate-700 transition-colors">Keep me signed in</span>
                     </Label>
                 </div>
 
                 <Button
                     type="submit"
-                    class="mt-4 w-full"
+                    class="w-full h-12 bg-slate-900 dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-xl font-bold shadow-xl shadow-slate-900/10 transition-all active:scale-[0.98] mt-2"
                     :tabindex="4"
                     :disabled="form.processing"
                     data-test="login-button"
                 >
-                    <Spinner v-if="form.processing" />
-                    Log in
+                    <Spinner v-if="form.processing" class="mr-2" />
+                    Sign In to Portal
                 </Button>
             </div>
 
             <div
-                class="text-center text-sm text-muted-foreground"
+                class="text-center text-sm font-medium text-slate-500"
                 v-if="canRegister"
             >
-                Don't have an account?
-                <TextLink :href="register().url" :tabindex="5">Sign up</TextLink>
+                New student?
+                <TextLink :href="register().url" :tabindex="5" class="font-bold text-primary hover:text-primary/70 transition-colors underline-offset-4 hover:underline">Apply for Admission</TextLink>
             </div>
         </form>
     </AuthBase>

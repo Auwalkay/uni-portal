@@ -99,7 +99,7 @@ defineProps<{
                             </div>
                         </div>
 
-                        <div v-if="invoice" class="flex items-center justify-between bg-white p-4 rounded-lg border shadow-sm">
+                        <!-- <div v-if="invoice" class="flex items-center justify-between bg-white p-4 rounded-lg border shadow-sm">
                             <div class="flex items-center gap-4">
                                 <div class="h-10 w-10 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600">
                                     <FileText class="h-5 w-5" />
@@ -112,9 +112,9 @@ defineProps<{
                             <Link :href="route('student.payments.pay', invoice.id)" method="post" as="button">
                                 <Button size="lg" class="font-serif">Pay Now</Button>
                             </Link>
-                        </div>
+                        </div> -->
                         
-                        <div v-else class="flex items-center justify-between bg-white p-4 rounded-lg border shadow-sm">
+                        <div class="flex items-center justify-between bg-white p-4 rounded-lg border shadow-sm">
                             <div class="flex items-center gap-4">
                                 <div class="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
                                     <CheckCircle class="h-5 w-5" />
@@ -141,7 +141,12 @@ defineProps<{
                                 <p class="text-sm text-gray-500">Your application is currently under review.</p>
                             </div>
                         </div>
-                         <Button variant="outline" disabled>Under Review</Button>
+                         <div class="flex gap-2">
+                             <Link :href="route('applicant.apply.show')">
+                                <Button variant="outline">View Application</Button>
+                             </Link>
+                             <Button variant="ghost" disabled class="text-yellow-600 bg-yellow-50">Under Review</Button>
+                         </div>
                     </div>
 
                     <!-- START NEW -->

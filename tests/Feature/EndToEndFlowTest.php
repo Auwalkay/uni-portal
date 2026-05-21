@@ -39,6 +39,7 @@ class EndToEndFlowTest extends TestCase
 
         // Re-run AcademicRecordsSeeder to ensure courses link to this dept
         $this->seed(\Database\Seeders\AcademicRecordsSeeder::class);
+        $this->seed(\Database\Seeders\NigeriaStateLgaSeeder::class);
     }
 
     public function test_full_application_to_result_flow()
@@ -55,6 +56,9 @@ class EndToEndFlowTest extends TestCase
         $this->actingAs($user);
 
         // Submit Application
+        $state = \App\Models\State::first();
+        $lga = \App\Models\Lga::where('state_id', $state->id)->first();
+
         $response = $this->post(route('applicant.apply.store'), [
             'first_name' => 'John',
             'last_name' => 'Doe',
@@ -63,13 +67,16 @@ class EndToEndFlowTest extends TestCase
             'programme_id' => Programme::first()->id,
             'mode' => 'UTME',
             'phone' => '08012345678',
-            'nin' => '12345678901',
-            'address' => '123 Street',
-            'state_of_origin' => 'Lagos',
-            'lga_of_origin' => 'Ikeja',
+            'state_id' => $state->id,
+            'lga_id' => $lga->id,
             'jamb_number' => '2025JAMB001',
             'jamb_score' => 250,
+            'next_of_kin_name' => 'Jane Doe',
+            'next_of_kin_phone' => '08087654321',
+            'next_of_kin_relationship' => 'Mother',
         ]);
+
+        $response->assertSessionHasNoErrors();
 
         // Check if Applicant record created
         $this->assertDatabaseHas('applicants', ['user_id' => $user->id]);
@@ -89,49 +96,11 @@ class EndToEndFlowTest extends TestCase
             'status' => 'admitted'
         ]);
 
-        // Check Invoice Generation
-        $this->assertDatabaseHas('invoices', [
-            'user_id' => $user->id,
-            'type' => 'acceptance_fee',
-            'amount' => 50000.00
-        ]);
-
-        // 3. Payment & Matriculation
+        // 3. Admission Acceptance & Matriculation
         $this->actingAs($user);
-        $invoice = Invoice::where('user_id', $user->id)->first();
 
-        // Mock Paystack Service
-        $this->mock(PaystackService::class, function ($mock) {
-            $mock->shouldReceive('initializeTransaction')->andReturn(['authorization_url' => 'https://paystack.com/pay/xxx']);
-            $mock->shouldReceive('verifyTransaction')->andReturn([
-                'status' => 'success',
-                'channel' => 'card',
-                'amount' => 5000000 // kobo
-            ]);
-        });
-
-        // Init Payment
-        $this->post(route('student.payments.pay', $invoice->id));
-
-        // Verify Callback (Manually triggering what PaymentController does)
-        // We need the payment record created in `pay` method, but `pay` redirects.
-        // In test, creating payment manually or relying on controller logic:
-        // The controller creates payment before redirect.
-
-        // Let's create the payment record manually to simulate the state before callback
-        $payment = \App\Models\Payment::create([
-            'invoice_id' => $invoice->id,
-            'user_id' => $user->id,
-            'gateway_reference' => 'TEST-REF',
-            'amount' => $invoice->amount,
-            'status' => 'pending'
-        ]);
-
-        $response = $this->get(route('student.payments.callback', ['reference' => 'TEST-REF']));
-        $response->assertRedirect(route('student.payments.index'));
-
-        // Assert Invoice Paid
-        $this->assertEquals('paid', $invoice->fresh()->status);
+        $response = $this->post(route('applicant.accept.offer'));
+        $response->assertRedirect(route('student.dashboard'));
 
         // Assert Student Record Created (Matriculation)
         $this->assertDatabaseHas('students', ['user_id' => $user->id]);
@@ -143,9 +112,15 @@ class EndToEndFlowTest extends TestCase
         $semester = Semester::where('is_current', true)->first();
         $courses = Course::take(3)->get();
 
+        $user->refresh();
+        $this->actingAs($user);
+
         $response = $this->post(route('student.courses.store'), [
             'courses' => $courses->pluck('id')->toArray()
         ]);
+
+        $response->assertSessionHasNoErrors();
+        $response->assertRedirect();
 
         $this->assertDatabaseCount('course_registrations', 3);
 

@@ -24,18 +24,12 @@ class Semester extends Model
 
     public static function current()
     {
-        return \Illuminate\Support\Facades\Cache::remember('current_semester', 3600, function () {
-            return self::where('is_current', true)->with('session')->first();
-        });
+        return \App\Services\AcademicCacheService::getCurrentSemester();
     }
 
     protected static function booted()
     {
-        static::saved(function ($semester) {
-            \Illuminate\Support\Facades\Cache::forget('current_semester');
-            if ($semester->session_id) {
-                \Illuminate\Support\Facades\Cache::forget('current_session');
-            }
-        });
+        static::saved(fn() => \App\Services\AcademicCacheService::clearAll());
+        static::deleted(fn() => \App\Services\AcademicCacheService::clearAll());
     }
 }

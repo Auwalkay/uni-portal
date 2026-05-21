@@ -3,6 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import { Plus, Pencil } from 'lucide-vue-next';
 
 defineProps<{
@@ -31,6 +32,7 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                         <TableHead>Code</TableHead>
                         <TableHead>Name</TableHead>
                         <TableHead>Faculty</TableHead>
+                        <TableHead>Type</TableHead>
                         <TableHead>Programmes</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead class="text-right">Actions</TableHead>
@@ -40,7 +42,12 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                     <TableRow v-for="dept in departments.data" :key="dept.id">
                         <TableCell class="font-mono font-medium">{{ dept.code }}</TableCell>
                         <TableCell>{{ dept.name }}</TableCell>
-                        <TableCell>{{ dept.faculty?.name }}</TableCell>
+                        <TableCell>{{ dept.faculty?.name || 'N/A' }}</TableCell>
+                        <TableCell>
+                            <Badge :variant="dept.is_academic ? 'default' : 'secondary'">
+                                {{ dept.is_academic ? 'Academic' : 'Non-Academic' }}
+                            </Badge>
+                        </TableCell>
                         <TableCell>{{ dept.programmes_count }}</TableCell>
                         <TableCell>
                                 <Switch :checked="dept.is_active" @update:checked="emit('toggle', dept.id, dept.is_active)" />

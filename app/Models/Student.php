@@ -12,16 +12,22 @@ class Student extends Model
 
     protected $fillable = [
         'user_id',
-        'matric_number',
+        'matriculation_number',
         'department_id',
+        'faculty_id',
+        'program_id',
         'admitted_session_id',
         'program_duration',
-        'level',
+        'current_level',
         'status',
         'gender',
         'dob',
         'phone_number',
         'address',
+        'entry_mode',
+        'jamb_registration_number',
+        'jamb_score',
+        'previous_institution',
         'state_id',
         'lga_id',
         'passport_photo_path',
@@ -30,6 +36,8 @@ class Student extends Model
         'next_of_kin_phone',
         'next_of_kin_address',
         'next_of_kin_relationship',
+        'scholarship_id',
+        'fee_policy',
     ];
 
     protected $casts = [
@@ -51,6 +59,21 @@ class Student extends Model
         return $this->belongsTo(Department::class, 'department_id');
     }
 
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'department_id');
+    }
+
+    public function program()
+    {
+        return $this->belongsTo(Programme::class, 'program_id');
+    }
+
+    public function faculty(): BelongsTo
+    {
+        return $this->belongsTo(Faculty::class, 'faculty_id');
+    }
+
     public function registrations()
     {
         return $this->hasMany(CourseRegistration::class);
@@ -64,5 +87,35 @@ class Student extends Model
     public function lga()
     {
         return $this->belongsTo(Lga::class);
+    }
+
+    public function oLevelResults()
+    {
+        return $this->hasMany(OLevelResult::class);
+    }
+
+    public function currentSession()
+    {
+        return $this->hasOne(StudentSession::class)->where('status', 'active')->latest();
+    }
+
+    public function hostelBookings()
+    {
+        return $this->hasMany(HostelBooking::class);
+    }
+
+    public function sessions()
+    {
+        return $this->hasMany(StudentSession::class);
+    }
+
+    public function scholarship(): BelongsTo
+    {
+        return $this->belongsTo(Scholarship::class);
+    }
+
+    public function invoices()
+    {
+        return $this->hasMany(Invoice::class, 'user_id', 'user_id');
     }
 }

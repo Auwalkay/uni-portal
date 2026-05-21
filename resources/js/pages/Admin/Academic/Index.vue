@@ -19,12 +19,14 @@ import FacultiesTab from './Partials/FacultiesTab.vue';
 import DepartmentsTab from './Partials/DepartmentsTab.vue';
 import ProgrammesTab from './Partials/ProgrammesTab.vue';
 import CoursesTab from './Partials/CoursesTab.vue';
+import UnitsTab from './Partials/UnitsTab.vue';
 
 const props = defineProps<{
-    faculties: any[];
+    faculties: any;
     departments: any; // Updated for pagination
     programmes: any; // Updated for pagination
     courses: any; 
+    units: any;
     allFaculties: any[];
     allDepartments: any[];
     allProgrammes: any[];
@@ -33,7 +35,7 @@ const props = defineProps<{
 
 const isModalOpen = ref(false);
 const modalMode = ref<'create' | 'edit'>('create');
-const activeType = ref<'faculty' | 'department' | 'programme' | 'course'>('faculty');
+const activeType = ref<'faculty' | 'department' | 'programme' | 'course' | 'unit'>('faculty');
 
 // Filter State
 import { watch } from 'vue';
@@ -43,6 +45,7 @@ const filterForm = ref({
     search: props.filters?.search || '',
     faculty_id: props.filters?.faculty_id || '',
     department_id: props.filters?.department_id || '',
+    tab: props.filters?.tab || 'faculties',
 });
 
 const filterDepartments = computed(() => {
@@ -72,6 +75,8 @@ const form = useForm({
     department_id: '',
     programme_id: '',
     program_type: 'UG',
+    is_academic: true,
+    scholarship_eligible: true,
 });
 
 // Computed properties for filtering
@@ -87,17 +92,32 @@ const filteredProgrammes = computed(() => {
     return props.allProgrammes.filter((prog: any) => prog.department_id === form.department_id);
 });
 
+const handleFacultyChange = (val: string) => {
+    if (activeType.value === 'department') {
+        form.faculty_id = val === 'none' ? '' : val;
+        // If a faculty is selected (and not 'none'), it's likely an academic department
+        if (val && val !== 'none') {
+            form.is_academic = true;
+        } else if (modalMode.value === 'create') {
+            form.is_academic = false;
+        }
+    } else {
+        form.faculty_id = val === 'none' ? '' : val;
+    }
+};
 
-const openCreate = (type: 'faculty' | 'department' | 'programme' | 'course') => {
+
+const openCreate = (type: 'faculty' | 'department' | 'programme' | 'course' | 'unit') => {
     // ... function content
     modalMode.value = 'create';
     activeType.value = type;
     form.reset();
     form.type = type;
+    if (type === 'department') form.is_academic = true;
     isModalOpen.value = true;
 };
 
-const openEdit = (type: 'faculty' | 'department' | 'programme' | 'course', item: any) => {
+const openEdit = (type: 'faculty' | 'department' | 'programme' | 'course' | 'unit', item: any) => {
     // ... function content
     modalMode.value = 'edit';
     activeType.value = type;
@@ -122,6 +142,8 @@ const openEdit = (type: 'faculty' | 'department' | 'programme' | 'course', item:
     }
    
     form.program_type = item.type || 'UG';
+    form.is_academic = item.is_academic === undefined ? true : !!item.is_academic;
+    form.scholarship_eligible = item.scholarship_eligible === undefined ? true : !!item.scholarship_eligible;
     isModalOpen.value = true;
 };
 
@@ -203,20 +225,23 @@ const toggleActive = (type: string, id: string, currentState: boolean) => {
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-search"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                      </span>
                 </div>
-                <div>
+                <!-- Faculty Filter - Hidden on Faculties tab, visible on others -->
+                <div v-if="filterForm.tab !== 'faculties'">
                      <Select v-model="filterForm.faculty_id" @update:model-value="filterForm.department_id = ''">
                         <SelectTrigger>
                             <SelectValue placeholder="All Faculties" />
                         </SelectTrigger>
                         <SelectContent>
                              <SelectItem value="ALL">All Faculties</SelectItem>
+                             <SelectItem value="NON_ACADEMIC">Non-Academic Departments</SelectItem>
                              <SelectItem v-for="fac in allFaculties" :key="fac.id" :value="fac.id">
                                 {{ fac.name }}
                             </SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
-                 <div>
+                 <!-- Department Filter - Visible on Programmes and Courses tabs -->
+                 <div v-if="['programmes', 'courses'].includes(filterForm.tab)">
                      <Select v-model="filterForm.department_id">
                         <SelectTrigger>
                             <SelectValue placeholder="All Departments" />
@@ -231,12 +256,13 @@ const toggleActive = (type: string, id: string, currentState: boolean) => {
                 </div>
             </div>
 
-            <Tabs defaultValue="faculties" class="space-y-4">
+            <Tabs v-model="filterForm.tab" class="space-y-4">
                 <TabsList>
                     <TabsTrigger value="faculties">Faculties</TabsTrigger>
                     <TabsTrigger value="departments">Departments</TabsTrigger>
                     <TabsTrigger value="programmes">Programmes</TabsTrigger>
                     <TabsTrigger value="courses">Courses</TabsTrigger>
+                    <TabsTrigger value="units">Units</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="faculties" class="space-y-4">
@@ -272,6 +298,15 @@ const toggleActive = (type: string, id: string, currentState: boolean) => {
                         @create="openCreate('course')" 
                         @edit="(item) => openEdit('course', item)"
                          @toggle="(id, state) => toggleActive('course', id, state)"
+                    />
+                </TabsContent>
+
+                <TabsContent value="units" class="space-y-4">
+                    <UnitsTab 
+                        :units="units" 
+                        @create="openCreate('unit')" 
+                        @edit="(item) => openEdit('unit', item)"
+                         @toggle="(id, state) => toggleActive('unit', id, state)"
                     />
                 </TabsContent>
             </Tabs>
@@ -311,13 +346,45 @@ const toggleActive = (type: string, id: string, currentState: boolean) => {
                             </div>
                             <div class="space-y-1">
                                 <Label>Faculty</Label>
-                                <Select v-model="form.faculty_id">
+                                <Select :model-value="form.faculty_id || 'none'" @update:model-value="handleFacultyChange">
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select Faculty" />
+                                        <SelectValue placeholder="Select Faculty (Optional for non-academic)" />
                                     </SelectTrigger>
                                     <SelectContent>
+                                        <SelectItem value="none">None (Non-Academic)</SelectItem>
                                         <SelectItem v-for="fac in allFaculties" :key="fac.id" :value="fac.id">
                                             {{ fac.name }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div class="flex items-center space-x-2 pt-2">
+                                <Switch :checked="form.is_academic" @update:checked="(val) => form.is_academic = val" id="is_academic_dept" />
+                                <Label for="is_academic_dept" class="cursor-pointer font-medium">
+                                    {{ form.is_academic ? 'Academic Department' : 'Non-Academic Department' }}
+                                </Label>
+                            </div>
+                        </div>
+
+                         <!-- UNIT FORM -->
+                        <div v-if="activeType === 'unit'" class="space-y-3">
+                            <div class="space-y-1">
+                                <Label>Unit Name</Label>
+                                <Input v-model="form.name" placeholder="Payroll Unit" />
+                            </div>
+                             <div class="space-y-1">
+                                <Label>Code</Label>
+                                <Input v-model="form.code" placeholder="PAY" />
+                            </div>
+                            <div class="space-y-1">
+                                <Label>Department</Label>
+                                <Select v-model="form.department_id">
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Department" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem v-for="dept in allDepartments" :key="dept.id" :value="dept.id">
+                                            {{ dept.name }}
                                         </SelectItem>
                                     </SelectContent>
                                 </Select>
@@ -368,6 +435,12 @@ const toggleActive = (type: string, id: string, currentState: boolean) => {
                                         </SelectItem>
                                     </SelectContent>
                                 </Select>
+                            </div>
+                            <div class="flex items-center space-x-2 pt-2">
+                                <Switch :checked="form.scholarship_eligible" @update:checked="(val) => form.scholarship_eligible = val" id="scholarship_eligible" />
+                                <Label for="scholarship_eligible" class="cursor-pointer font-medium">
+                                    Eligible for Scholarships
+                                </Label>
                             </div>
                         </div>
 
