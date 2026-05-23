@@ -241,6 +241,12 @@ const administrationItems = computed(() => {
             show: hasPermission('manage_system_settings'),
         },
         {
+            title: 'Audit Logs',
+            href: route('admin.activity-logs.index'),
+            icon: Shield,
+            show: hasPermission('manage_system_settings'),
+        },
+        {
             title: 'Designations',
             href: route().has('admin.designations.index') ? route('admin.designations.index') : '/admin/designations',
             icon: Award,
