@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { Head, useForm, usePage, router } from '@inertiajs/vue3';
 import { watch } from 'vue';
 import Swal from 'sweetalert2';
 
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { login } from '@/routes';
 import { store } from '@/routes/register';
@@ -46,12 +47,18 @@ watch(() => page.props.errors, (errors) => {
 
 <template>
     <AuthBase
-        title="Create an account"
-        description="Enter your details below to create your account"
+        title="Welcome to Portal"
+        description="Access your account or apply for admission"
     >
         <Head title="Register" />
 
-        <form @submit.prevent="submit" class="flex flex-col gap-6">
+        <Tabs defaultValue="register" @update:modelValue="(v) => v === 'login' && router.visit(login().url)" class="w-full">
+            <TabsList class="grid w-full grid-cols-2 mb-6">
+                <TabsTrigger value="login">Sign In</TabsTrigger>
+                <TabsTrigger value="register">Register</TabsTrigger>
+            </TabsList>
+            <TabsContent value="register">
+                <form @submit.prevent="submit" class="flex flex-col gap-6">
             <div class="grid gap-6">
                 <div class="grid gap-2">
                     <Label for="name">Name</Label>
@@ -126,17 +133,9 @@ watch(() => page.props.errors, (errors) => {
                     <Spinner v-if="form.processing" class="mr-2" />
                     Create account
                 </Button>
-            </div>
-
-            <div class="text-center text-sm text-muted-foreground">
-                Already have an account?
-                <TextLink
-                    :href="login().url"
-                    class="font-medium text-primary hover:underline hover:text-primary/80 transition-colors"
-                    :tabindex="6"
-                    >Log in</TextLink
-                >
-            </div>
-        </form>
+                </div>
+                </form>
+            </TabsContent>
+        </Tabs>
     </AuthBase>
 </template>
