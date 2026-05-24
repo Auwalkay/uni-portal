@@ -10,7 +10,7 @@ import { GraduationCap } from 'lucide-vue-next';
     </div>
     <div class="ml-1 grid flex-1 text-left text-sm">
         <span class="mb-0.5 truncate leading-tight font-bold text-white"
-            >MIU Nigeria</span
+            >Mewar Int'l University</span
         >
         <span class="text-xs text-white/80 font-normal">University Portal</span>
     </div>

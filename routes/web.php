@@ -212,9 +212,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'canRegister' => Features::enabled(Features::registration()),
-    ]);
+    return redirect()->route('login');
 })->name('home');
 
 Route::get('dashboard', function () {
