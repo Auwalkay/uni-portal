@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { Head, useForm, usePage, router } from '@inertiajs/vue3';
 import { watch } from 'vue';
 import Swal from 'sweetalert2';
 
@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { register } from '@/routes';
 import { store } from '@/routes/login';
@@ -53,8 +54,8 @@ const submit = () => {
 
 <template>
     <AuthBase
-        title="Log in to your account"
-        description="Enter your email or matriculation number to log in"
+        title="Welcome to Portal"
+        description="Access your account or apply for admission"
     >
         <Head title="Log in" />
 
@@ -65,7 +66,13 @@ const submit = () => {
             {{ status }}
         </div>
 
-        <form @submit.prevent="submit" class="space-y-6">
+        <Tabs defaultValue="login" @update:modelValue="(v) => v === 'register' && router.visit(register().url)" class="w-full">
+            <TabsList class="grid w-full grid-cols-2 mb-6" v-if="canRegister">
+                <TabsTrigger value="login">Sign In</TabsTrigger>
+                <TabsTrigger value="register">Register</TabsTrigger>
+            </TabsList>
+            <TabsContent value="login">
+                <form @submit.prevent="submit" class="space-y-6">
             <div class="space-y-5">
                 <div class="space-y-2">
                     <Label for="email" class="text-xs font-bold uppercase tracking-widest text-slate-500 ml-1">Account Access</Label>
@@ -127,15 +134,9 @@ const submit = () => {
                     <Spinner v-if="form.processing" class="mr-2" />
                     Sign In to Portal
                 </Button>
-            </div>
-
-            <div
-                class="text-center text-sm font-medium text-slate-500"
-                v-if="canRegister"
-            >
-                New student?
-                <TextLink :href="register().url" :tabindex="5" class="font-bold text-primary hover:text-primary/70 transition-colors underline-offset-4 hover:underline">Apply for Admission</TextLink>
-            </div>
-        </form>
+                    </div>
+                </form>
+            </TabsContent>
+        </Tabs>
     </AuthBase>
 </template>

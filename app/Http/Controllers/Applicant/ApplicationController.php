@@ -200,7 +200,11 @@ class ApplicationController extends Controller
         $user = $request->user();
         $applicant = Applicant::where('user_id', $user->id)
             ->with(['programme', 'state', 'lga', 'documents'])
-            ->firstOrFail();
+            ->first();
+
+        if (!$applicant) {
+            return redirect()->route('applicant.apply.start');
+        }
 
         return Inertia::render('Applicant/Application/Show', [
             'applicant' => $applicant,

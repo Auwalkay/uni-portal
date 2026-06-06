@@ -108,6 +108,19 @@ class RolesAndPermissionsSeeder extends Seeder
             
             // Personal
             'view_own_payslips',
+
+            // Library Management
+            'view_library',
+            'manage_library_books',
+            'manage_library_borrows',
+            'request_library_book',
+
+            // Sickbay Management
+            'view_sickbay_portal',
+            'register_walk_in',
+            'write_sickbay_medical_logs',
+            'manage_observation_beds',
+            'manage_sickbay_inventory',
         ];
 
         foreach ($permissions as $permission) {
@@ -119,6 +132,26 @@ class RolesAndPermissionsSeeder extends Seeder
         // --- ADMIN (Super User) ---
         $admin = Role::firstOrCreate(['name' => 'admin']);
         $admin->syncPermissions(Permission::all());
+
+        // --- LIBRARIAN ---
+        $librarian = Role::firstOrCreate(['name' => 'librarian']);
+        $librarian->syncPermissions([
+            'access_admin_dashboard',
+            'view_library',
+            'manage_library_books',
+            'manage_library_borrows',
+        ]);
+
+        // --- SICKBAY NURSE ---
+        $sickbayNurse = Role::firstOrCreate(['name' => 'sickbay_nurse']);
+        $sickbayNurse->syncPermissions([
+            'access_admin_dashboard',
+            'view_sickbay_portal',
+            'register_walk_in',
+            'write_sickbay_medical_logs',
+            'manage_observation_beds',
+            'manage_sickbay_inventory',
+        ]);
 
         // --- ACADEMIC ROLES ---
         $registrar = Role::firstOrCreate(['name' => 'registrar']);
@@ -201,7 +234,7 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // --- CORE ROLES ---
         $staff = Role::firstOrCreate(['name' => 'staff']);
-        $staff->syncPermissions(['access_staff_portal', 'view_own_payslips']);
+        $staff->syncPermissions(['access_staff_portal', 'view_own_payslips', 'view_library', 'request_library_book', 'view_sickbay_portal']);
 
         // --- NON-ACADEMIC SPECIFIC ROLES ---
         $nonAcademicRoles = [
@@ -215,11 +248,11 @@ class RolesAndPermissionsSeeder extends Seeder
 
         foreach ($nonAcademicRoles as $roleName) {
             $role = Role::firstOrCreate(['name' => $roleName]);
-            $role->syncPermissions(['access_staff_portal', 'view_own_payslips']);
+            $role->syncPermissions(['access_staff_portal', 'view_own_payslips', 'view_library', 'request_library_book', 'view_sickbay_portal']);
         }
 
         $student = Role::firstOrCreate(['name' => 'student']);
-        $student->syncPermissions(['access_student_portal']);
+        $student->syncPermissions(['access_student_portal', 'view_library', 'request_library_book', 'view_sickbay_portal']);
 
         $applicant = Role::firstOrCreate(['name' => 'applicant']);
         $applicant->syncPermissions(['access_applicant_portal']);

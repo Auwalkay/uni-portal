@@ -11,10 +11,13 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Sanctum\HasApiTokens;
 
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
+
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, TwoFactorAuthenticatable, HasRoles, HasUuids, HasApiTokens;
+    use HasFactory, Notifiable, TwoFactorAuthenticatable, HasRoles, HasUuids, HasApiTokens, LogsActivity;
 
     /**
      * The attributes that are mass assignable.
@@ -86,7 +89,18 @@ class User extends Authenticatable
 
     public function auditLogs(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
-        return $this->hasMany(AuditLog::class);
+        // Keeping this method if it was used anywhere, but point it to Spatie's model or remove it?
+        // Since we removed AuditLog model, I will comment this out or remove it to avoid errors.
+        // return $this->hasMany(AuditLog::class);
+        return $this->hasMany(\Spatie\Activitylog\Models\Activity::class, 'causer_id');
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
     }
 
     /**

@@ -118,7 +118,7 @@ defineProps<{
                             <span class="text-slate-200">|</span>
                             <a href="#" class="hover:text-primary transition-colors">Privacy</a>
                             <span class="text-slate-200">|</span>
-                            <a href="#" class="hover:text-primary transition-colors">Support</a>
+                            <a href="mailto:support@miu.edu.ng" class="hover:text-primary transition-colors">Support</a>
                         </div>
                     </div>
                 </div>

@@ -25,7 +25,7 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'My Application',
-        href: '/applicant/application',
+        href: '/applicant/application/preview',
         icon: FileText,
     },
     {

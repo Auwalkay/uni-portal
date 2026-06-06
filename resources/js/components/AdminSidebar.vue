@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building, Package, LifeBuoy } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building, Package, LifeBuoy, Library, Activity } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -241,6 +241,12 @@ const administrationItems = computed(() => {
             show: hasPermission('manage_system_settings'),
         },
         {
+            title: 'Audit Logs',
+            href: route('admin.activity-logs.index'),
+            icon: Shield,
+            show: hasPermission('manage_system_settings'),
+        },
+        {
             title: 'Designations',
             href: route().has('admin.designations.index') ? route('admin.designations.index') : '/admin/designations',
             icon: Award,
@@ -289,6 +295,35 @@ const inventoryItems = computed(() => {
     ].filter(i => i.show);
 });
 
+const libraryItems = computed(() => {
+    return [
+        {
+            title: 'Library System',
+            href: '/admin/library',
+            icon: Library,
+            show: hasPermission('view_library'),
+        },
+    ].filter(i => i.show);
+});
+
+const sickbayItems = computed(() => {
+    return [
+        {
+            title: 'Sickbay Hub',
+            icon: Activity,
+            show: hasPermission('view_sickbay_portal'),
+            items: [
+                { title: 'Active Queue', href: '/admin/sickbay' },
+                { title: 'Observation Beds', href: '/admin/sickbay/beds' },
+                { title: 'Treatment Logs', href: '/admin/sickbay/logs' },
+                { title: 'Supplies Ledger', href: '/admin/sickbay/supplies' },
+                { title: 'Patient Search', href: '/admin/sickbay/patients' },
+                { title: 'Reports & Stats', href: '/admin/sickbay/reports' },
+            ]
+        },
+    ].filter(i => i.show);
+});
+
 const footerNavItems = computed(() => {
     return [
         {
@@ -324,6 +359,8 @@ const footerNavItems = computed(() => {
             <NavMain v-if="financeItems.length > 0" :items="financeItems" label="Finance" />
             <NavMain v-if="administrationItems.length > 0" :items="administrationItems" label="Administration" />
             <NavMain v-if="inventoryItems.length > 0" :items="inventoryItems" label="Inventory" />
+            <NavMain v-if="libraryItems.length > 0" :items="libraryItems" label="Library" />
+            <NavMain v-if="sickbayItems.length > 0" :items="sickbayItems" label="Sickbay" />
         </SidebarContent>
 
         <SidebarFooter>

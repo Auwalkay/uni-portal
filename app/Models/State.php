@@ -7,8 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class State extends Model
 {
-    use HasUuids;
-
     protected static function booted()
     {
         static::saved(fn() => \App\Services\AcademicCacheService::clearAll());

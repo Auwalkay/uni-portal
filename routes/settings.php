@@ -1,24 +1,35 @@
 <?php
 
+use App\Http\Controllers\Admin\AcademicController;
 use App\Http\Controllers\Admin\AdmissionController;
+use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\CourseRegistrationController;
 use App\Http\Controllers\Admin\DocumentController;
 use App\Http\Controllers\Admin\FrontDesk\ComplaintController;
 use App\Http\Controllers\Admin\FrontDesk\DashboardController;
 use App\Http\Controllers\Admin\FrontDesk\EnquiryController;
 use App\Http\Controllers\Admin\FrontDesk\VisitorController;
+use App\Http\Controllers\Admin\HostelBlockController;
 use App\Http\Controllers\Admin\HostelBookingController;
 use App\Http\Controllers\Admin\HostelController;
+use App\Http\Controllers\Admin\HostelFeeController;
+use App\Http\Controllers\Admin\HostelFloorController;
+use App\Http\Controllers\Admin\HostelRoomController;
 use App\Http\Controllers\Admin\ResultController;
+use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\ScholarshipController;
 use App\Http\Controllers\Admin\SessionController;
 use App\Http\Controllers\Admin\StudentController;
+use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Applicant\ApplicationController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
 use App\Http\Controllers\Staff\CourseController;
+use App\Http\Controllers\Student\AccommodationController;
+use App\Http\Controllers\Student\IdCardController;
 use App\Http\Controllers\Student\PaymentController;
+use App\Http\Controllers\Student\TimetableController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -84,17 +95,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/courses/form', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'downloadForm'])->name('courses.form');
         Route::get('/courses/exam-card', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'downloadExamCard'])->name('courses.exam_card');
 
-        Route::get('/timetable', [\App\Http\Controllers\Student\TimetableController::class, 'index'])->name('timetable.index');
+        Route::get('/timetable', [TimetableController::class, 'index'])->name('timetable.index');
 
         Route::get('/results', [\App\Http\Controllers\Student\ResultController::class, 'index'])->name('results.index');
 
-        Route::get('/accommodation', [\App\Http\Controllers\Student\AccommodationController::class, 'index'])->name('accommodation.index');
-        Route::post('/accommodation', [\App\Http\Controllers\Student\AccommodationController::class, 'store'])->name('accommodation.store');
-        Route::get('/accommodation/download-slip', [\App\Http\Controllers\Student\AccommodationController::class, 'downloadAccommodationSlip'])->name('accommodation.download-slip');
-        Route::get('/accommodation/download-payment', [\App\Http\Controllers\Student\AccommodationController::class, 'downloadPaymentSlip'])->name('accommodation.download-payment');
+        Route::get('/accommodation', [AccommodationController::class, 'index'])->name('accommodation.index');
+        Route::post('/accommodation', [AccommodationController::class, 'store'])->name('accommodation.store');
+        Route::get('/accommodation/download-slip', [AccommodationController::class, 'downloadAccommodationSlip'])->name('accommodation.download-slip');
+        Route::get('/accommodation/download-payment', [AccommodationController::class, 'downloadPaymentSlip'])->name('accommodation.download-payment');
 
-        Route::get('/id-card', [\App\Http\Controllers\Student\IdCardController::class, 'show'])->name('id_card.show');
+        Route::get('/id-card', [IdCardController::class, 'show'])->name('id_card.show');
         Route::get('/admission-letter', [\App\Http\Controllers\Student\ProfileController::class, 'downloadAdmissionLetter'])->name('admission_letter.download');
+
+        // Library routes
+        Route::get('/library', [\App\Http\Controllers\Student\LibraryController::class, 'index'])->name('library.index');
+        Route::post('/library/request', [\App\Http\Controllers\Student\LibraryController::class, 'requestBook'])->name('library.request');
+        Route::get('/library/books/{book}/download', [\App\Http\Controllers\Student\LibraryController::class, 'downloadEbook'])->name('library.books.download');
+
+        // Sickbay routes
+        Route::get('/sickbay', [\App\Http\Controllers\Student\SickbayController::class, 'index'])->name('sickbay.index');
     });
 
     // ADMIN & STAFF ROUTES
@@ -149,7 +168,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/students', [StudentController::class, 'index'])->name('students.index');
         Route::get('/students/export', [StudentController::class, 'export'])->name('students.export');
         Route::get('/students/{student}', [StudentController::class, 'show'])->name('students.show');
-        
+
         Route::middleware(['permission:manage_student_registrations'])->group(function () {
             Route::get('/course-registration', [CourseRegistrationController::class, 'index'])->name('course_registration.index');
             Route::get('/course-registration/{student}', [CourseRegistrationController::class, 'manage'])->name('course_registration.manage');
@@ -202,40 +221,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // General Academics & Sessions
         Route::middleware(['permission:manage_academic_sessions'])->group(function () {
-            Route::get('/academics', [\App\Http\Controllers\Admin\AcademicController::class, 'index'])->name('academics.index');
-            Route::post('/academics/store', [\App\Http\Controllers\Admin\AcademicController::class, 'store'])->name('academics.store');
-            Route::post('/academics/update', [\App\Http\Controllers\Admin\AcademicController::class, 'update'])->name('academics.update');
-            Route::post('/academics/toggle', [\App\Http\Controllers\Admin\AcademicController::class, 'toggle'])->name('academics.toggle');
+            Route::get('/academics', [AcademicController::class, 'index'])->name('academics.index');
+            Route::post('/academics/store', [AcademicController::class, 'store'])->name('academics.store');
+            Route::post('/academics/update', [AcademicController::class, 'update'])->name('academics.update');
+            Route::post('/academics/toggle', [AcademicController::class, 'toggle'])->name('academics.toggle');
 
             Route::get('/sessions', [SessionController::class, 'index'])->name('sessions.index');
             Route::get('/sessions/{session}', [SessionController::class, 'show'])->name('sessions.show');
-
-            // Timetable Management
-            Route::middleware(['permission:manage_timetables'])->group(function () {
-                Route::post('timetables/import', [\App\Http\Controllers\Admin\TimetableController::class, 'import'])->name('timetables.import');
-                Route::get('timetables/template', [\App\Http\Controllers\Admin\TimetableController::class, 'template'])->name('timetables.template');
-                Route::resource('timetables', \App\Http\Controllers\Admin\TimetableController::class)->only(['index', 'store', 'destroy']);
-            });
-
-            // Hostel Management
-            Route::middleware(['permission:manage_hostels'])->group(function () {
-                Route::get('hostels/bookings', [HostelBookingController::class, 'index'])->name('hostels.bookings.index');
-                Route::resource('hostels', HostelController::class);
-
-                Route::post('hostels/{hostel}/blocks', [\App\Http\Controllers\Admin\HostelBlockController::class, 'store'])->name('hostels.blocks.store');
-                Route::delete('hostels/{hostel}/blocks/{block}', [\App\Http\Controllers\Admin\HostelBlockController::class, 'destroy'])->name('hostels.blocks.destroy');
-
-                Route::post('hostels/{hostel}/blocks/{block}/floors', [\App\Http\Controllers\Admin\HostelFloorController::class, 'store'])->name('hostels.floors.store');
-                Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}', [\App\Http\Controllers\Admin\HostelFloorController::class, 'destroy'])->name('hostels.floors.destroy');
-
-                Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms', [\App\Http\Controllers\Admin\HostelRoomController::class, 'store'])->name('hostels.rooms.store');
-                Route::put('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [\App\Http\Controllers\Admin\HostelRoomController::class, 'update'])->name('hostels.rooms.update');
-                Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [\App\Http\Controllers\Admin\HostelRoomController::class, 'destroy'])->name('hostels.rooms.destroy');
-
-                // Fees
-                Route::post('hostels/fees', [\App\Http\Controllers\Admin\HostelFeeController::class, 'store'])->name('hostels.fees.store');
-                Route::delete('hostels/fees/{fee}', [\App\Http\Controllers\Admin\HostelFeeController::class, 'destroy'])->name('hostels.fees.destroy');
-            });
 
             // Restricted Session Management
             Route::middleware(['permission:manage_academic_sessions'])->group(function () {
@@ -252,24 +244,86 @@ Route::middleware(['auth', 'verified'])->group(function () {
             });
         });
 
+        // Timetable Management
+        Route::middleware(['permission:manage_timetables'])->group(function () {
+            Route::post('timetables/import', [\App\Http\Controllers\Admin\TimetableController::class, 'import'])->name('timetables.import');
+            Route::get('timetables/template', [\App\Http\Controllers\Admin\TimetableController::class, 'template'])->name('timetables.template');
+            Route::resource('timetables', \App\Http\Controllers\Admin\TimetableController::class)->only(['index', 'store', 'destroy']);
+        });
+
+        // Hostel Management
+        Route::middleware(['permission:manage_hostels'])->group(function () {
+            Route::get('hostels/bookings', [HostelBookingController::class, 'index'])->name('hostels.bookings.index');
+            Route::resource('hostels', HostelController::class);
+
+            Route::post('hostels/{hostel}/blocks', [HostelBlockController::class, 'store'])->name('hostels.blocks.store');
+            Route::delete('hostels/{hostel}/blocks/{block}', [HostelBlockController::class, 'destroy'])->name('hostels.blocks.destroy');
+
+            Route::post('hostels/{hostel}/blocks/{block}/floors', [HostelFloorController::class, 'store'])->name('hostels.floors.store');
+            Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}', [HostelFloorController::class, 'destroy'])->name('hostels.floors.destroy');
+
+            Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms', [HostelRoomController::class, 'store'])->name('hostels.rooms.store');
+            Route::put('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [HostelRoomController::class, 'update'])->name('hostels.rooms.update');
+            Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [HostelRoomController::class, 'destroy'])->name('hostels.rooms.destroy');
+
+            // Fees
+            Route::post('hostels/fees', [HostelFeeController::class, 'store'])->name('hostels.fees.store');
+            Route::delete('hostels/fees/{fee}', [HostelFeeController::class, 'destroy'])->name('hostels.fees.destroy');
+        });
+
+
         // System Settings & RBAC Management
         Route::middleware(['permission:manage_system_settings'])->group(function () {
             Route::get('/settings', [\App\Http\Controllers\Admin\SystemSettingsController::class, 'index'])->name('settings.index');
             Route::post('/settings/update', [\App\Http\Controllers\Admin\SystemSettingsController::class, 'updateSetting'])->name('settings.update');
 
-            Route::get('/settings/roles', [\App\Http\Controllers\Admin\RoleController::class, 'index'])->name('settings.roles.index');
-            Route::get('/settings/roles/create', [\App\Http\Controllers\Admin\RoleController::class, 'create'])->name('settings.roles.create');
-            Route::post('/settings/roles', [\App\Http\Controllers\Admin\RoleController::class, 'store'])->name('settings.roles.store');
-            Route::get('/settings/roles/{role}/edit', [\App\Http\Controllers\Admin\RoleController::class, 'edit'])->name('settings.roles.edit');
-            Route::put('/settings/roles/{role}', [\App\Http\Controllers\Admin\RoleController::class, 'update'])->name('settings.roles.update');
-            Route::get('/settings/logs', [\App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('settings.logs.index');
+            Route::get('/settings/roles', [RoleController::class, 'index'])->name('settings.roles.index');
+            Route::get('/settings/roles/create', [RoleController::class, 'create'])->name('settings.roles.create');
+            Route::post('/settings/roles', [RoleController::class, 'store'])->name('settings.roles.store');
+            Route::get('/settings/roles/{role}/edit', [RoleController::class, 'edit'])->name('settings.roles.edit');
+            Route::put('/settings/roles/{role}', [RoleController::class, 'update'])->name('settings.roles.update');
+            Route::get('/settings/logs', [AuditLogController::class, 'index'])->name('settings.logs.index');
 
-            Route::patch('/users/{user}/roles', [\App\Http\Controllers\Admin\UserController::class, 'updateRoles'])->name('users.roles.update');
-            Route::patch('/users/{user}/status', [\App\Http\Controllers\Admin\UserController::class, 'toggleStatus'])->name('users.status.toggle');
+            Route::patch('/users/{user}/roles', [UserController::class, 'updateRoles'])->name('users.roles.update');
+            Route::patch('/users/{user}/status', [UserController::class, 'toggleStatus'])->name('users.status.toggle');
 
-            Route::get('/users', [\App\Http\Controllers\Admin\UserController::class, 'index'])->name('users.index');
-            Route::post('/users', [\App\Http\Controllers\Admin\UserController::class, 'store'])->name('users.store');
-            Route::delete('/users/{user}', [\App\Http\Controllers\Admin\UserController::class, 'destroy'])->name('users.destroy');
+            Route::get('/users', [UserController::class, 'index'])->name('users.index');
+            Route::post('/users', [UserController::class, 'store'])->name('users.store');
+            Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+        });
+
+        // Library Management
+        Route::middleware(['permission:view_library'])->group(function () {
+            Route::get('/library', [\App\Http\Controllers\Admin\LibraryController::class, 'index'])->name('library.index');
+            Route::post('/library/books', [\App\Http\Controllers\Admin\LibraryController::class, 'store'])->name('library.books.store')->middleware('permission:manage_library_books');
+            Route::post('/library/books/{book}', [\App\Http\Controllers\Admin\LibraryController::class, 'update'])->name('library.books.update')->middleware('permission:manage_library_books');
+            Route::delete('/library/books/{book}', [\App\Http\Controllers\Admin\LibraryController::class, 'destroy'])->name('library.books.destroy')->middleware('permission:manage_library_books');
+            Route::post('/library/categories', [\App\Http\Controllers\Admin\LibraryController::class, 'storeCategory'])->name('library.categories.store')->middleware('permission:manage_library_books');
+
+            // Loan Actions
+            Route::post('/library/loans/{loan}/approve', [\App\Http\Controllers\Admin\LibraryController::class, 'approveLoan'])->name('library.loans.approve')->middleware('permission:manage_library_borrows');
+            Route::post('/library/loans/{loan}/reject', [\App\Http\Controllers\Admin\LibraryController::class, 'rejectLoan'])->name('library.loans.reject')->middleware('permission:manage_library_borrows');
+            Route::post('/library/loans/{loan}/return', [\App\Http\Controllers\Admin\LibraryController::class, 'returnBook'])->name('library.loans.return')->middleware('permission:manage_library_borrows');
+        });
+
+        // Sickbay Management
+        Route::middleware(['permission:view_sickbay_portal'])->group(function () {
+            Route::get('/sickbay', [\App\Http\Controllers\Admin\SickbayController::class, 'index'])->name('sickbay.index');
+            Route::get('/sickbay/beds', [\App\Http\Controllers\Admin\SickbayController::class, 'bedsIndex'])->name('sickbay.beds.index');
+            Route::get('/sickbay/logs', [\App\Http\Controllers\Admin\SickbayController::class, 'logsIndex'])->name('sickbay.logs.index');
+            Route::get('/sickbay/supplies', [\App\Http\Controllers\Admin\SickbayController::class, 'suppliesIndex'])->name('sickbay.supplies.index');
+            Route::get('/sickbay/patients', [\App\Http\Controllers\Admin\SickbayController::class, 'patientsIndex'])->name('sickbay.patients.index');
+            Route::get('/sickbay/reports', [\App\Http\Controllers\Admin\SickbayController::class, 'reportsIndex'])->name('sickbay.reports.index');
+            Route::get('/sickbay/visits/{visit}/prescription', [\App\Http\Controllers\Admin\SickbayController::class, 'prescriptionSlip'])->name('sickbay.prescription');
+
+            Route::get('/sickbay/students/search', [\App\Http\Controllers\Admin\SickbayController::class, 'searchStudents'])->name('sickbay.students.search')->middleware('permission:register_walk_in');
+            Route::post('/sickbay/check-in', [\App\Http\Controllers\Admin\SickbayController::class, 'registerPatient'])->name('sickbay.check_in')->middleware('permission:register_walk_in');
+            Route::post('/sickbay/treatment/{visit}', [\App\Http\Controllers\Admin\SickbayController::class, 'updateVitalsAndTreatment'])->name('sickbay.treatment.store')->middleware('permission:write_sickbay_medical_logs');
+            Route::post('/sickbay/beds/{visit}/assign', [\App\Http\Controllers\Admin\SickbayController::class, 'assignBed'])->name('sickbay.beds.assign')->middleware('permission:manage_observation_beds');
+            Route::post('/sickbay/beds/{visit}/discharge', [\App\Http\Controllers\Admin\SickbayController::class, 'dischargeBed'])->name('sickbay.beds.discharge')->middleware('permission:manage_observation_beds');
+            Route::post('/sickbay/inventory', [\App\Http\Controllers\Admin\SickbayController::class, 'storeInventory'])->name('sickbay.inventory.store')->middleware('permission:manage_sickbay_inventory');
+            Route::get('/sickbay/patients/{user}/history', [\App\Http\Controllers\Admin\SickbayController::class, 'patientHistory'])->name('sickbay.patient_history');
+            Route::post('/sickbay/beds', [\App\Http\Controllers\Admin\SickbayController::class, 'storeBed'])->name('sickbay.beds.store')->middleware('permission:manage_observation_beds');
         });
     });
 
