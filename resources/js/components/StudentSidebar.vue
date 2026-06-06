@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { LayoutGrid, BookOpen, CreditCard, FileText, User, GraduationCap, CalendarClock, Home, LifeBuoy } from 'lucide-vue-next';
+import { LayoutGrid, BookOpen, CreditCard, FileText, User, GraduationCap, CalendarClock, Home, LifeBuoy, Library, Activity } from 'lucide-vue-next';
 
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -52,6 +52,16 @@ const mainNavItems: NavItem[] = [
         title: 'Payments',
         href: '/student/payments',
         icon: CreditCard,
+    },
+    {
+        title: 'Library Catalog',
+        href: '/student/library',
+        icon: Library,
+    },
+    {
+        title: 'Sickbay Logs',
+        href: '/student/sickbay',
+        icon: Activity,
     },
     {
         title: 'Support Tickets',

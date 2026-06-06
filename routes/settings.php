@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AcademicController;
 use App\Http\Controllers\Admin\AdmissionController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\CourseRegistrationController;
@@ -105,6 +106,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/id-card', [IdCardController::class, 'show'])->name('id_card.show');
         Route::get('/admission-letter', [\App\Http\Controllers\Student\ProfileController::class, 'downloadAdmissionLetter'])->name('admission_letter.download');
+
+        // Library routes
+        Route::get('/library', [\App\Http\Controllers\Student\LibraryController::class, 'index'])->name('library.index');
+        Route::post('/library/request', [\App\Http\Controllers\Student\LibraryController::class, 'requestBook'])->name('library.request');
+        Route::get('/library/books/{book}/download', [\App\Http\Controllers\Student\LibraryController::class, 'downloadEbook'])->name('library.books.download');
+
+        // Sickbay routes
+        Route::get('/sickbay', [\App\Http\Controllers\Student\SickbayController::class, 'index'])->name('sickbay.index');
     });
 
     // ADMIN & STAFF ROUTES
@@ -212,40 +221,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // General Academics & Sessions
         Route::middleware(['permission:manage_academic_sessions'])->group(function () {
-            Route::get('/academics', [\App\Http\Controllers\Admin\AcademicController::class, 'index'])->name('academics.index');
-            Route::post('/academics/store', [\App\Http\Controllers\Admin\AcademicController::class, 'store'])->name('academics.store');
-            Route::post('/academics/update', [\App\Http\Controllers\Admin\AcademicController::class, 'update'])->name('academics.update');
-            Route::post('/academics/toggle', [\App\Http\Controllers\Admin\AcademicController::class, 'toggle'])->name('academics.toggle');
+            Route::get('/academics', [AcademicController::class, 'index'])->name('academics.index');
+            Route::post('/academics/store', [AcademicController::class, 'store'])->name('academics.store');
+            Route::post('/academics/update', [AcademicController::class, 'update'])->name('academics.update');
+            Route::post('/academics/toggle', [AcademicController::class, 'toggle'])->name('academics.toggle');
 
             Route::get('/sessions', [SessionController::class, 'index'])->name('sessions.index');
             Route::get('/sessions/{session}', [SessionController::class, 'show'])->name('sessions.show');
-
-            // Timetable Management
-            Route::middleware(['permission:manage_timetables'])->group(function () {
-                Route::post('timetables/import', [\App\Http\Controllers\Admin\TimetableController::class, 'import'])->name('timetables.import');
-                Route::get('timetables/template', [\App\Http\Controllers\Admin\TimetableController::class, 'template'])->name('timetables.template');
-                Route::resource('timetables', \App\Http\Controllers\Admin\TimetableController::class)->only(['index', 'store', 'destroy']);
-            });
-
-            // Hostel Management
-            Route::middleware(['permission:manage_hostels'])->group(function () {
-                Route::get('hostels/bookings', [HostelBookingController::class, 'index'])->name('hostels.bookings.index');
-                Route::resource('hostels', HostelController::class);
-
-                Route::post('hostels/{hostel}/blocks', [HostelBlockController::class, 'store'])->name('hostels.blocks.store');
-                Route::delete('hostels/{hostel}/blocks/{block}', [HostelBlockController::class, 'destroy'])->name('hostels.blocks.destroy');
-
-                Route::post('hostels/{hostel}/blocks/{block}/floors', [HostelFloorController::class, 'store'])->name('hostels.floors.store');
-                Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}', [HostelFloorController::class, 'destroy'])->name('hostels.floors.destroy');
-
-                Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms', [HostelRoomController::class, 'store'])->name('hostels.rooms.store');
-                Route::put('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [HostelRoomController::class, 'update'])->name('hostels.rooms.update');
-                Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [HostelRoomController::class, 'destroy'])->name('hostels.rooms.destroy');
-
-                // Fees
-                Route::post('hostels/fees', [HostelFeeController::class, 'store'])->name('hostels.fees.store');
-                Route::delete('hostels/fees/{fee}', [HostelFeeController::class, 'destroy'])->name('hostels.fees.destroy');
-            });
 
             // Restricted Session Management
             Route::middleware(['permission:manage_academic_sessions'])->group(function () {
@@ -261,6 +243,34 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::put('/sessions/{session}/semesters/{semester}', [SessionController::class, 'updateSemester'])->name('sessions.semesters.update');
             });
         });
+
+        // Timetable Management
+        Route::middleware(['permission:manage_timetables'])->group(function () {
+            Route::post('timetables/import', [\App\Http\Controllers\Admin\TimetableController::class, 'import'])->name('timetables.import');
+            Route::get('timetables/template', [\App\Http\Controllers\Admin\TimetableController::class, 'template'])->name('timetables.template');
+            Route::resource('timetables', \App\Http\Controllers\Admin\TimetableController::class)->only(['index', 'store', 'destroy']);
+        });
+
+        // Hostel Management
+        Route::middleware(['permission:manage_hostels'])->group(function () {
+            Route::get('hostels/bookings', [HostelBookingController::class, 'index'])->name('hostels.bookings.index');
+            Route::resource('hostels', HostelController::class);
+
+            Route::post('hostels/{hostel}/blocks', [HostelBlockController::class, 'store'])->name('hostels.blocks.store');
+            Route::delete('hostels/{hostel}/blocks/{block}', [HostelBlockController::class, 'destroy'])->name('hostels.blocks.destroy');
+
+            Route::post('hostels/{hostel}/blocks/{block}/floors', [HostelFloorController::class, 'store'])->name('hostels.floors.store');
+            Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}', [HostelFloorController::class, 'destroy'])->name('hostels.floors.destroy');
+
+            Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms', [HostelRoomController::class, 'store'])->name('hostels.rooms.store');
+            Route::put('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [HostelRoomController::class, 'update'])->name('hostels.rooms.update');
+            Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [HostelRoomController::class, 'destroy'])->name('hostels.rooms.destroy');
+
+            // Fees
+            Route::post('hostels/fees', [HostelFeeController::class, 'store'])->name('hostels.fees.store');
+            Route::delete('hostels/fees/{fee}', [HostelFeeController::class, 'destroy'])->name('hostels.fees.destroy');
+        });
+
 
         // System Settings & RBAC Management
         Route::middleware(['permission:manage_system_settings'])->group(function () {
@@ -280,6 +290,40 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/users', [UserController::class, 'index'])->name('users.index');
             Route::post('/users', [UserController::class, 'store'])->name('users.store');
             Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+        });
+
+        // Library Management
+        Route::middleware(['permission:view_library'])->group(function () {
+            Route::get('/library', [\App\Http\Controllers\Admin\LibraryController::class, 'index'])->name('library.index');
+            Route::post('/library/books', [\App\Http\Controllers\Admin\LibraryController::class, 'store'])->name('library.books.store')->middleware('permission:manage_library_books');
+            Route::post('/library/books/{book}', [\App\Http\Controllers\Admin\LibraryController::class, 'update'])->name('library.books.update')->middleware('permission:manage_library_books');
+            Route::delete('/library/books/{book}', [\App\Http\Controllers\Admin\LibraryController::class, 'destroy'])->name('library.books.destroy')->middleware('permission:manage_library_books');
+            Route::post('/library/categories', [\App\Http\Controllers\Admin\LibraryController::class, 'storeCategory'])->name('library.categories.store')->middleware('permission:manage_library_books');
+
+            // Loan Actions
+            Route::post('/library/loans/{loan}/approve', [\App\Http\Controllers\Admin\LibraryController::class, 'approveLoan'])->name('library.loans.approve')->middleware('permission:manage_library_borrows');
+            Route::post('/library/loans/{loan}/reject', [\App\Http\Controllers\Admin\LibraryController::class, 'rejectLoan'])->name('library.loans.reject')->middleware('permission:manage_library_borrows');
+            Route::post('/library/loans/{loan}/return', [\App\Http\Controllers\Admin\LibraryController::class, 'returnBook'])->name('library.loans.return')->middleware('permission:manage_library_borrows');
+        });
+
+        // Sickbay Management
+        Route::middleware(['permission:view_sickbay_portal'])->group(function () {
+            Route::get('/sickbay', [\App\Http\Controllers\Admin\SickbayController::class, 'index'])->name('sickbay.index');
+            Route::get('/sickbay/beds', [\App\Http\Controllers\Admin\SickbayController::class, 'bedsIndex'])->name('sickbay.beds.index');
+            Route::get('/sickbay/logs', [\App\Http\Controllers\Admin\SickbayController::class, 'logsIndex'])->name('sickbay.logs.index');
+            Route::get('/sickbay/supplies', [\App\Http\Controllers\Admin\SickbayController::class, 'suppliesIndex'])->name('sickbay.supplies.index');
+            Route::get('/sickbay/patients', [\App\Http\Controllers\Admin\SickbayController::class, 'patientsIndex'])->name('sickbay.patients.index');
+            Route::get('/sickbay/reports', [\App\Http\Controllers\Admin\SickbayController::class, 'reportsIndex'])->name('sickbay.reports.index');
+            Route::get('/sickbay/visits/{visit}/prescription', [\App\Http\Controllers\Admin\SickbayController::class, 'prescriptionSlip'])->name('sickbay.prescription');
+
+            Route::get('/sickbay/students/search', [\App\Http\Controllers\Admin\SickbayController::class, 'searchStudents'])->name('sickbay.students.search')->middleware('permission:register_walk_in');
+            Route::post('/sickbay/check-in', [\App\Http\Controllers\Admin\SickbayController::class, 'registerPatient'])->name('sickbay.check_in')->middleware('permission:register_walk_in');
+            Route::post('/sickbay/treatment/{visit}', [\App\Http\Controllers\Admin\SickbayController::class, 'updateVitalsAndTreatment'])->name('sickbay.treatment.store')->middleware('permission:write_sickbay_medical_logs');
+            Route::post('/sickbay/beds/{visit}/assign', [\App\Http\Controllers\Admin\SickbayController::class, 'assignBed'])->name('sickbay.beds.assign')->middleware('permission:manage_observation_beds');
+            Route::post('/sickbay/beds/{visit}/discharge', [\App\Http\Controllers\Admin\SickbayController::class, 'dischargeBed'])->name('sickbay.beds.discharge')->middleware('permission:manage_observation_beds');
+            Route::post('/sickbay/inventory', [\App\Http\Controllers\Admin\SickbayController::class, 'storeInventory'])->name('sickbay.inventory.store')->middleware('permission:manage_sickbay_inventory');
+            Route::get('/sickbay/patients/{user}/history', [\App\Http\Controllers\Admin\SickbayController::class, 'patientHistory'])->name('sickbay.patient_history');
+            Route::post('/sickbay/beds', [\App\Http\Controllers\Admin\SickbayController::class, 'storeBed'])->name('sickbay.beds.store')->middleware('permission:manage_observation_beds');
         });
     });
 
