@@ -19,6 +19,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 
@@ -33,6 +34,7 @@ const form = useForm({
         id: reg.id,
         ca_score: reg.ca_score,
         exam_score: reg.exam_score,
+        is_absent: !!reg.is_absent,
     })),
 });
 
@@ -84,10 +86,12 @@ const getMatricNo = (regId: string) => {
 
 const calculateTotal = (index: number) => {
     const s = form.scores[index];
+    if (s.is_absent) return 0;
     return (Number(s.ca_score) || 0) + (Number(s.exam_score) || 0);
 };
 
-const getGrade = (total: number) => {
+const getGrade = (total: number, isAbsent = false) => {
+    if (isAbsent) return { grade: 'ABS', color: 'bg-rose-50 text-rose-700 border-rose-200' };
     if (total >= 70) return { grade: 'A', color: 'bg-green-50 text-green-700 border-green-200' };
     if (total >= 60) return { grade: 'B', color: 'bg-blue-50 text-blue-700 border-blue-200' };
     if (total >= 50) return { grade: 'C', color: 'bg-yellow-50 text-yellow-700 border-yellow-200' };
@@ -97,8 +101,14 @@ const getGrade = (total: number) => {
 
 const stats = computed(() => {
     const total = form.scores.length;
-    const graded = form.scores.filter(s => s.ca_score !== null || s.exam_score !== null).length;
-    const avgTotal = form.scores.reduce((sum, s, idx) => sum + calculateTotal(idx), 0) / (total || 1);
+    const graded = form.scores.filter(s => s.is_absent || s.ca_score !== null || s.exam_score !== null).length;
+    const gradedForAvg = form.scores.filter(s => !s.is_absent && (s.ca_score !== null || s.exam_score !== null));
+    const avgTotal = gradedForAvg.length > 0 
+        ? gradedForAvg.reduce((sum, s) => {
+            const idx = form.scores.findIndex(x => x.id === s.id);
+            return sum + calculateTotal(idx);
+          }, 0) / gradedForAvg.length
+        : 0;
 
     return {
         total,
@@ -240,6 +250,7 @@ const downloadTemplate = () => {
                                     <TableHead class="h-12 w-[50px]">#</TableHead>
                                     <TableHead class="h-12 w-[150px]">Matric No</TableHead>
                                     <TableHead class="h-12">Student Name</TableHead>
+                                    <TableHead class="h-12 w-[80px]">Absent</TableHead>
                                     <TableHead class="h-12 w-[140px]">CA (40)</TableHead>
                                     <TableHead class="h-12 w-[140px]">Exam (60)</TableHead>
                                     <TableHead class="h-12 w-[120px]">Total (100)</TableHead>
@@ -252,12 +263,20 @@ const downloadTemplate = () => {
                                     <TableCell class="font-mono font-medium text-primary">{{ getMatricNo(score.id) }}</TableCell>
                                     <TableCell class="font-medium">{{ getStudentName(score.id) }}</TableCell>
                                     <TableCell>
+                                        <Checkbox 
+                                            v-model:checked="score.is_absent" 
+                                            @update:checked="(val) => { if (val) { score.ca_score = null; score.exam_score = null; } }" 
+                                        />
+                                    </TableCell>
+                                    <TableCell>
                                         <Input
                                             type="number"
                                             v-model="score.ca_score"
                                             min="0" max="40" step="0.5"
-                                            class="w-28 font-medium"
+                                            class="w-28 font-medium transition-opacity"
                                             placeholder="0"
+                                            :disabled="score.is_absent"
+                                            :class="{'opacity-40 pointer-events-none': score.is_absent}"
                                         />
                                     </TableCell>
                                     <TableCell>
@@ -265,25 +284,29 @@ const downloadTemplate = () => {
                                             type="number"
                                             v-model="score.exam_score"
                                             min="0" max="60" step="0.5"
-                                            class="w-28 font-medium"
+                                            class="w-28 font-medium transition-opacity"
                                             placeholder="0"
+                                            :disabled="score.is_absent"
+                                            :class="{'opacity-40 pointer-events-none': score.is_absent}"
                                         />
                                     </TableCell>
                                     <TableCell>
-                                        <span class="text-lg font-bold">{{ calculateTotal(index) }}</span>
+                                        <span class="text-lg font-bold" :class="{'text-muted-foreground opacity-50': score.is_absent}">
+                                            {{ score.is_absent ? 'ABS' : calculateTotal(index) }}
+                                        </span>
                                     </TableCell>
                                     <TableCell>
                                         <Badge
                                             variant="outline"
-                                            :class="getGrade(calculateTotal(index)).color"
+                                            :class="getGrade(calculateTotal(index), score.is_absent).color"
                                             class="font-semibold"
                                         >
-                                            {{ getGrade(calculateTotal(index)).grade }}
+                                            {{ getGrade(calculateTotal(index), score.is_absent).grade }}
                                         </Badge>
                                     </TableCell>
                                 </TableRow>
                                  <tr v-if="form.scores.length === 0">
-                                    <td colspan="7" class="p-12 text-center text-muted-foreground">
+                                    <td colspan="8" class="p-12 text-center text-muted-foreground">
                                         <div class="flex flex-col items-center gap-3">
                                             <div class="p-4 rounded-full bg-muted/50">
                                                 <FileSpreadsheet class="h-8 w-8 text-muted-foreground/50" />

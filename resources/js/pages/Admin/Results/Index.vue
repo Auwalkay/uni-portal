@@ -4,6 +4,7 @@ import { throttle } from 'lodash';
 import { Search, Filter, BookOpen, Home, GraduationCap, FileText } from 'lucide-vue-next';
 import { ref, watch } from 'vue';
 import { route } from 'ziggy-js';
+import Swal from 'sweetalert2';
 
 import Pagination from '@/components/Pagination.vue';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +40,7 @@ const props = defineProps<{
             program: { name: string };
             graded_count: number;
             total_students: number;
+            published_count: number;
         }>;
         links: any[];
     };
@@ -47,6 +49,9 @@ const props = defineProps<{
         department_id: string;
         level: string;
         has_registrations: boolean;
+    };
+    can: {
+        publish_results: boolean;
     };
 }>();
 
@@ -83,6 +88,55 @@ const getProgressColor = (course: any) => {
     if (course.graded_count === course.total_students) return 'bg-green-50 text-green-700 border-green-200';
     return 'bg-yellow-50 text-yellow-700 border-yellow-200';
 };
+
+const handlePublishSession = (isPublish: boolean) => {
+    const sessionName = props.sessions.find(s => s.id === form.value.session_id)?.name || '';
+    const deptName = form.value.department_id !== 'ALL' 
+        ? props.departments.find(d => d.id === form.value.department_id)?.name 
+        : null;
+    const levelName = form.value.level !== 'ALL' ? `${form.value.level} Level` : null;
+
+    let filterDesc = `for ${sessionName}`;
+    if (deptName && levelName) {
+        filterDesc += ` (${deptName}, ${levelName})`;
+    } else if (deptName) {
+        filterDesc += ` (${deptName})`;
+    } else if (levelName) {
+        filterDesc += ` (${levelName})`;
+    }
+
+    const actionText = isPublish ? 'Publish' : 'Unpublish';
+    const confirmButtonColor = isPublish ? '#10b981' : '#f43f5e';
+
+    Swal.fire({
+        title: `${actionText} Results?`,
+        text: `Are you sure you want to ${actionText.toLowerCase()} results ${filterDesc}? Only graded courses will be affected when publishing.`,
+        icon: isPublish ? 'question' : 'warning',
+        showCancelButton: true,
+        confirmButtonText: `Yes, ${actionText}`,
+        confirmButtonColor: confirmButtonColor,
+        cancelButtonText: 'Cancel',
+    }).then((result) => {
+        if (result.isConfirmed) {
+            router.post(route('admin.results.publish-session', { session: form.value.session_id }), {
+                is_published: isPublish,
+                department_id: form.value.department_id === 'ALL' ? null : form.value.department_id,
+                level: form.value.level === 'ALL' ? null : form.value.level,
+            }, {
+                onSuccess: () => {
+                    Swal.fire(
+                        isPublish ? 'Published!' : 'Unpublished!',
+                        `Results have been successfully ${isPublish ? 'published' : 'unpublished'}.`,
+                        'success'
+                    );
+                },
+                onError: () => {
+                    Swal.fire('Error', 'An error occurred while updating the publishing status.', 'error');
+                }
+            });
+        }
+    });
+};
 </script>
 
 <template>
@@ -118,6 +172,22 @@ const getProgressColor = (course: any) => {
                             {{ courses.data.length }} Courses
                         </Badge>
                     </div>
+                </div>
+                <div v-if="props.can.publish_results && form.session_id !== 'ALL'" class="flex gap-2 self-end md:self-start">
+                    <Button 
+                        variant="outline" 
+                        class="border-rose-200 text-rose-700 hover:bg-rose-50"
+                        @click="handlePublishSession(false)"
+                    >
+                        Unpublish Session
+                    </Button>
+                    <Button 
+                        variant="default" 
+                        class="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        @click="handlePublishSession(true)"
+                    >
+                        Publish Session
+                    </Button>
                 </div>
             </div>
 
@@ -197,12 +267,13 @@ const getProgressColor = (course: any) => {
                                 <TableHead class="h-12">Department</TableHead>
                                 <TableHead class="h-12 w-[100px]">Level</TableHead>
                                 <TableHead class="h-12 w-[180px]">Grading Progress</TableHead>
+                                <TableHead class="h-12 w-[150px]">Publish Status</TableHead>
                                 <TableHead class="h-12 w-[160px] text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             <tr v-if="courses.data.length === 0">
-                                <td colspan="6" class="p-12 text-center text-muted-foreground">
+                                <td colspan="7" class="p-12 text-center text-muted-foreground">
                                     <div class="flex flex-col items-center gap-3">
                                         <div class="p-4 rounded-full bg-muted/50">
                                             <BookOpen class="h-8 w-8 text-muted-foreground/50" />
@@ -232,6 +303,36 @@ const getProgressColor = (course: any) => {
                                         :class="getProgressColor(course)"
                                     >
                                         {{ course.graded_count }} / {{ course.total_students }} Graded
+                                    </Badge>
+                                </TableCell>
+                                <TableCell>
+                                    <Badge 
+                                        v-if="course.total_students === 0"
+                                        variant="outline"
+                                        class="bg-gray-50 text-gray-500 border-gray-200"
+                                    >
+                                        No Students
+                                    </Badge>
+                                    <Badge 
+                                        v-else-if="course.published_count === course.total_students"
+                                        variant="default"
+                                        class="bg-green-600 hover:bg-green-600 text-white"
+                                    >
+                                        Published
+                                    </Badge>
+                                    <Badge 
+                                        v-else-if="course.published_count > 0"
+                                        variant="secondary"
+                                        class="bg-yellow-50 text-yellow-700 border-yellow-200"
+                                    >
+                                        Partial ({{ course.published_count }}/{{ course.total_students }})
+                                    </Badge>
+                                    <Badge 
+                                        v-else
+                                        variant="outline"
+                                        class="bg-gray-100 text-gray-700 border-gray-300"
+                                    >
+                                        Unpublished
                                     </Badge>
                                 </TableCell>
                                 <TableCell class="text-right">

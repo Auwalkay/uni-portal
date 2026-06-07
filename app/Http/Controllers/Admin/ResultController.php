@@ -62,7 +62,10 @@ class ResultController extends Controller
             ->withCount([
                 'registrations as graded_count' => function ($query) use ($selectedSessionId) {
                     $query->where('session_id', $selectedSessionId)
-                        ->whereNotNull('score');
+                        ->where(function ($q) {
+                            $q->whereNotNull('score')
+                              ->orWhere('is_absent', true);
+                        });
                 }
             ])
             ->withCount([
@@ -116,6 +119,72 @@ class ResultController extends Controller
         return back()->with('success', "Results for {$course->code} have been {$status}.");
     }
 
+    public function publishSession(Request $request, Session $session)
+    {
+        $user = auth()->user();
+        if (!$user->can('publish_results') && !$user->hasRole('admin')) {
+            abort(403, 'You do not have permission to publish results.');
+        }
+
+        $request->validate([
+            'is_published' => 'required|boolean',
+            'department_id' => 'nullable|exists:departments,id',
+            'level' => 'nullable|string',
+        ]);
+
+        $isPublished = $request->boolean('is_published');
+        $departmentId = $request->input('department_id');
+        $level = $request->input('level');
+
+        // Build base query for Course Registrations
+        $query = CourseRegistration::query()
+            ->where('session_id', $session->id);
+
+        if ($departmentId || $level) {
+            $query->whereHas('course', function ($q) use ($departmentId, $level) {
+                if ($departmentId) {
+                    $q->where('department_id', $departmentId);
+                }
+                if ($level) {
+                    $q->where('level', $level);
+                }
+            });
+        }
+
+        if ($isPublished) {
+            // Find graded courses matching selected filters in this session
+            $gradedCourseIds = CourseRegistration::where('session_id', $session->id)
+                ->where(function ($q) {
+                    $q->whereNotNull('score')
+                      ->orWhere('is_absent', true);
+                })
+                ->when($departmentId || $level, function ($q) use ($departmentId, $level) {
+                    $q->whereHas('course', function ($cq) use ($departmentId, $level) {
+                        if ($departmentId) {
+                            $cq->where('department_id', $departmentId);
+                        }
+                        if ($level) {
+                            $cq->where('level', $level);
+                        }
+                    });
+                })
+                ->distinct()
+                ->pluck('course_id');
+
+            $query->whereIn('course_id', $gradedCourseIds)
+                ->update(['is_published' => true]);
+
+            $message = 'Results successfully published for graded courses matching selected filters.';
+        } else {
+            // Unpublish all registrations matching filters
+            $query->update(['is_published' => false]);
+
+            $message = 'Results successfully unpublished for registrations matching selected filters.';
+        }
+
+        return back()->with('success', $message);
+    }
+
     public function edit(Course $course, Request $request)
     {
         $user = auth()->user();
@@ -167,28 +236,41 @@ class ResultController extends Controller
             'scores.*.id' => 'required|exists:course_registrations,id',
             'scores.*.ca_score' => 'nullable|numeric|min:0|max:40',
             'scores.*.exam_score' => 'nullable|numeric|min:0|max:100',
+            'scores.*.is_absent' => 'nullable|boolean',
         ]);
 
         foreach ($request->scores as $data) {
             $reg = CourseRegistration::find($data['id']);
 
-            $ca = $data['ca_score'] ?? 0;
-            $exam = $data['exam_score'] ?? 0;
-            $total = $ca + $exam;
+            if (!empty($data['is_absent'])) {
+                $reg->update([
+                    'ca_score' => 0,
+                    'exam_score' => 0,
+                    'score' => null,
+                    'grade' => 'ABS',
+                    'grade_point' => 0.00,
+                    'is_absent' => true,
+                ]);
+            } else {
+                $ca = $data['ca_score'] ?? 0;
+                $exam = $data['exam_score'] ?? 0;
+                $total = $ca + $exam;
 
-            // Simple validation clamp
-            if ($total > 100)
-                $total = 100;
+                // Simple validation clamp
+                if ($total > 100)
+                    $total = 100;
 
-            $grading = $this->gradingService->calculate($total);
+                $grading = $this->gradingService->calculate($total);
 
-            $reg->update([
-                'ca_score' => $ca,
-                'exam_score' => $exam,
-                'score' => $total,
-                'grade' => $grading['grade'],
-                'grade_point' => $grading['point'],
-            ]);
+                $reg->update([
+                    'ca_score' => $ca,
+                    'exam_score' => $exam,
+                    'score' => $total,
+                    'grade' => $grading['grade'],
+                    'grade_point' => $grading['point'],
+                    'is_absent' => false,
+                ]);
+            }
         }
 
         return back()->with('success', 'Results updated successfully.');

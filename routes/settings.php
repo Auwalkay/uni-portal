@@ -149,6 +149,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/results/{course}', [ResultController::class, 'update'])->name('results.update');
             Route::post('/results/{course}/upload', [ResultController::class, 'upload'])->name('results.upload');
             Route::post('/results/{course}/publish', [ResultController::class, 'publish'])->name('results.publish');
+            Route::post('/results/sessions/{session}/publish', [ResultController::class, 'publishSession'])->name('results.publish-session');
         });
 
         // Student Management (Creation & Migration)
@@ -220,7 +221,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 
         // General Academics & Sessions
-        Route::middleware(['permission:manage_academic_sessions'])->group(function () {
+            Route::middleware(['permission:manage_academic_sessions'])->group(function () {
             Route::get('/academics', [AcademicController::class, 'index'])->name('academics.index');
             Route::post('/academics/store', [AcademicController::class, 'store'])->name('academics.store');
             Route::post('/academics/update', [AcademicController::class, 'update'])->name('academics.update');
@@ -254,6 +255,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Hostel Management
         Route::middleware(['permission:manage_hostels'])->group(function () {
             Route::get('hostels/bookings', [HostelBookingController::class, 'index'])->name('hostels.bookings.index');
+            Route::post('hostels/bookings', [HostelBookingController::class, 'store'])->name('hostels.bookings.store');
+            Route::get('hostels/search-students', [HostelBookingController::class, 'searchStudents'])->name('hostels.search-students');
+            Route::get('hostels/rooms/available', [HostelBookingController::class, 'getAvailableRooms'])->name('hostels.rooms.available');
             Route::resource('hostels', HostelController::class);
 
             Route::post('hostels/{hostel}/blocks', [HostelBlockController::class, 'store'])->name('hostels.blocks.store');
