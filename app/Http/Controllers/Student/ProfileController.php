@@ -34,7 +34,14 @@ class ProfileController extends Controller
         }
 
         // Stats Calculations
-        $cgpa = 0.00; // Placeholder for now
+        $cgpa = '0.00';
+        if ($student) {
+            $allRegs = CourseRegistration::where('student_id', $student->id)
+                ->where('is_published', true)
+                ->with('course')
+                ->get();
+            $cgpa = number_format(app(\App\Services\GradingService::class)->calculateGPA($allRegs), 2);
+        }
         $totalUnits = 0;
         // Ensure level doesn't 'go down' when viewing historical sessions
         $level = max((int)($student->current_level ?? 0), (int)($currentStudentSession->level ?? 0));
