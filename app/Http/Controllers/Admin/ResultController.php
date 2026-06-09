@@ -8,6 +8,7 @@ use App\Models\CourseRegistration;
 use App\Models\Session;
 use App\Models\Department;
 use App\Models\Faculty;
+use App\Models\Semester;
 use App\Services\GradingService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
