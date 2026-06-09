@@ -14,8 +14,20 @@ use Inertia\Inertia;
 
 class SickbayController extends Controller
 {
+    private function checkSickbayManager(Request $request)
+    {
+        if (!$request->user()->hasAnyPermission(['register_walk_in', 'write_sickbay_medical_logs', 'manage_observation_beds', 'manage_sickbay_inventory']) && !$request->user()->hasRole('admin')) {
+            return redirect()->route('admin.sickbay.history');
+        }
+        return null;
+    }
+
     public function index(Request $request)
     {
+        if ($redirect = $this->checkSickbayManager($request)) {
+            return $redirect;
+        }
+
         Gate::authorize('view_sickbay_portal');
 
         $activeVisits = SickbayVisit::with(['patient.student', 'patient.staff', 'attendant'])
@@ -43,6 +55,10 @@ class SickbayController extends Controller
 
     public function bedsIndex(Request $request)
     {
+        if ($redirect = $this->checkSickbayManager($request)) {
+            return $redirect;
+        }
+
         Gate::authorize('view_sickbay_portal');
 
         $beds = \App\Models\SickbayBed::where('is_active', true)->get();
@@ -58,6 +74,10 @@ class SickbayController extends Controller
 
     public function logsIndex(Request $request)
     {
+        if ($redirect = $this->checkSickbayManager($request)) {
+            return $redirect;
+        }
+
         Gate::authorize('view_sickbay_portal');
 
         $completedVisits = SickbayVisit::with(['patient.student', 'patient.staff', 'attendant', 'medicalLog'])
@@ -73,6 +93,10 @@ class SickbayController extends Controller
 
     public function suppliesIndex(Request $request)
     {
+        if ($redirect = $this->checkSickbayManager($request)) {
+            return $redirect;
+        }
+
         Gate::authorize('view_sickbay_portal');
 
         $supplies = SickbayItem::latest()->paginate(15)->withQueryString();
@@ -88,6 +112,10 @@ class SickbayController extends Controller
 
     public function patientsIndex(Request $request)
     {
+        if ($redirect = $this->checkSickbayManager($request)) {
+            return $redirect;
+        }
+
         Gate::authorize('view_sickbay_portal');
 
         return Inertia::render('Admin/Sickbay/Patients');
@@ -95,6 +123,10 @@ class SickbayController extends Controller
 
     public function reportsIndex(Request $request)
     {
+        if ($redirect = $this->checkSickbayManager($request)) {
+            return $redirect;
+        }
+
         Gate::authorize('view_sickbay_portal');
 
         $startDate = $request->query('start_date', now()->subDays(30)->toDateString());
@@ -164,8 +196,12 @@ class SickbayController extends Controller
         ]);
     }
 
-    public function prescriptionSlip(SickbayVisit $visit)
+    public function prescriptionSlip(Request $request, SickbayVisit $visit)
     {
+        if ($redirect = $this->checkSickbayManager($request)) {
+            return $redirect;
+        }
+
         Gate::authorize('view_sickbay_portal');
 
         $visit->load(['patient.student', 'patient.staff', 'attendant', 'medicalLog']);
@@ -407,5 +443,25 @@ class SickbayController extends Controller
         ]);
 
         return redirect()->back()->with('success', 'Bed added successfully.');
+    }
+
+    public function history(Request $request)
+    {
+        Gate::authorize('view_sickbay_portal');
+
+        $user = auth()->user();
+        
+        $visits = SickbayVisit::with(['attendant', 'medicalLog'])
+            ->where('user_id', $user->id)
+            ->latest()
+            ->paginate(10)
+            ->withQueryString();
+
+        $staff = $user->staff;
+
+        return Inertia::render('Admin/Sickbay/History', [
+            'visits' => $visits,
+            'staff' => $staff,
+        ]);
     }
 }

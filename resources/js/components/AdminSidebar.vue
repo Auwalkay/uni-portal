@@ -296,32 +296,61 @@ const inventoryItems = computed(() => {
 });
 
 const libraryItems = computed(() => {
-    return [
-        {
-            title: 'Library System',
-            href: '/admin/library',
-            icon: Library,
-            show: hasPermission('view_library'),
-        },
-    ].filter(i => i.show);
+    const hasManageLibrary = hasPermission('manage_library_books') || hasPermission('manage_library_borrows');
+    if (hasManageLibrary) {
+        return [
+            {
+                title: 'Library System',
+                href: '/admin/library',
+                icon: Library,
+                show: true,
+            },
+        ];
+    } else if (hasPermission('view_library')) {
+        return [
+            {
+                title: 'Library History',
+                href: '/admin/library/history',
+                icon: Library,
+                show: true,
+            },
+        ];
+    }
+    return [];
 });
 
 const sickbayItems = computed(() => {
-    return [
-        {
-            title: 'Sickbay Hub',
-            icon: Activity,
-            show: hasPermission('view_sickbay_portal'),
-            items: [
-                { title: 'Active Queue', href: '/admin/sickbay' },
-                { title: 'Observation Beds', href: '/admin/sickbay/beds' },
-                { title: 'Treatment Logs', href: '/admin/sickbay/logs' },
-                { title: 'Supplies Ledger', href: '/admin/sickbay/supplies' },
-                { title: 'Patient Search', href: '/admin/sickbay/patients' },
-                { title: 'Reports & Stats', href: '/admin/sickbay/reports' },
-            ]
-        },
-    ].filter(i => i.show);
+    const hasManageSickbay = hasPermission('register_walk_in') || 
+                             hasPermission('write_sickbay_medical_logs') || 
+                             hasPermission('manage_observation_beds') || 
+                             hasPermission('manage_sickbay_inventory');
+    if (hasManageSickbay) {
+        return [
+            {
+                title: 'Sickbay Hub',
+                icon: Activity,
+                show: true,
+                items: [
+                    { title: 'Active Queue', href: '/admin/sickbay' },
+                    { title: 'Observation Beds', href: '/admin/sickbay/beds' },
+                    { title: 'Treatment Logs', href: '/admin/sickbay/logs' },
+                    { title: 'Supplies Ledger', href: '/admin/sickbay/supplies' },
+                    { title: 'Patient Search', href: '/admin/sickbay/patients' },
+                    { title: 'Reports & Stats', href: '/admin/sickbay/reports' },
+                ]
+            },
+        ];
+    } else if (hasPermission('view_sickbay_portal')) {
+        return [
+            {
+                title: 'My Sickbay History',
+                href: '/admin/sickbay/history',
+                icon: Activity,
+                show: true,
+            },
+        ];
+    }
+    return [];
 });
 
 const footerNavItems = computed(() => {
