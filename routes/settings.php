@@ -116,6 +116,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/sickbay', [\App\Http\Controllers\Student\SickbayController::class, 'index'])->name('sickbay.index');
     });
 
+    // Admin/Staff Personal History Routes (accessible by all staff and admin users with view_library / view_sickbay_portal)
+    Route::prefix('admin')->name('admin.')->group(function () {
+        Route::middleware(['permission:view_library'])->group(function () {
+            Route::get('/library/history', [\App\Http\Controllers\Admin\LibraryController::class, 'history'])->name('library.history');
+            Route::post('/library/history/request', [\App\Http\Controllers\Admin\LibraryController::class, 'requestBook'])->name('library.history.request');
+            Route::get('/library/books/{book}/download', [\App\Http\Controllers\Admin\LibraryController::class, 'downloadEbook'])->name('library.books.download');
+        });
+
+        Route::middleware(['permission:view_sickbay_portal'])->group(function () {
+            Route::get('/sickbay/history', [\App\Http\Controllers\Admin\SickbayController::class, 'history'])->name('sickbay.history');
+        });
+    });
+
     // ADMIN & STAFF ROUTES
     Route::prefix('admin')->name('admin.')->middleware(['permission:access_admin_dashboard'])->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');

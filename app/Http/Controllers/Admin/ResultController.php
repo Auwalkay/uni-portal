@@ -32,12 +32,26 @@ class ResultController extends Controller
         $currentSession = Session::where('is_current', true)->first();
 
         $selectedSessionId = $request->input('session_id', $currentSession?->id);
+        $selectedSemesterId = $request->input('semester_id');
         $selectedDepartmentId = $request->input('department_id');
         $selectedLevel = $request->input('level');
         $hasRegistrations = $request->boolean('has_registrations');
+        $publishStatus = $request->input('publish_status', 'all');
+        $sortBy = $request->input('sort_by', 'code');
+        $sortDir = $request->input('sort_dir', 'asc');
+
+        if (!in_array($sortBy, ['code', 'level', 'department'])) {
+            $sortBy = 'code';
+        }
+        if (!in_array($sortDir, ['asc', 'desc'])) {
+            $sortDir = 'asc';
+        }
+
+        $semesters = Semester::when($selectedSessionId, fn($q) => $q->where('session_id', $selectedSessionId))->get();
 
         $user = auth()->user();
         $courses = Course::query()
+            ->select('courses.*')
             ->with(['department', 'program'])
             ->when(!$user->can('manage_results'), function ($query) use ($user, $selectedSessionId) {
                 $query->whereHas('allocations', function ($q) use ($user, $selectedSessionId) {
@@ -48,20 +62,42 @@ class ResultController extends Controller
                 });
             })
             ->when($selectedDepartmentId, function ($query, $deptId) {
-                $query->where('department_id', $deptId);
+                $query->where('courses.department_id', $deptId);
             })
             ->when($selectedLevel, function ($query, $level) {
-                $query->where('level', $level);
+                $query->where('courses.level', $level);
             })
-            ->when($hasRegistrations, function ($query) use ($selectedSessionId) {
-                $query->whereHas('registrations', function ($q) use ($selectedSessionId) {
-                    $q->where('session_id', $selectedSessionId);
+            ->when($hasRegistrations, function ($query) use ($selectedSessionId, $selectedSemesterId) {
+                $query->whereHas('registrations', function ($q) use ($selectedSessionId, $selectedSemesterId) {
+                    $q->where('session_id', $selectedSessionId)
+                      ->when($selectedSemesterId, fn($sq) => $sq->where('semester_id', $selectedSemesterId));
                 });
             })
-            // Optimization: Load results stats for the selected session
+            ->when($selectedSemesterId, function ($query, $semesterId) use ($selectedSessionId) {
+                $query->whereHas('registrations', function ($q) use ($selectedSessionId, $semesterId) {
+                    $q->where('session_id', $selectedSessionId)
+                      ->where('semester_id', $semesterId);
+                });
+            })
+            ->when($publishStatus === 'published', function ($query) use ($selectedSessionId, $selectedSemesterId) {
+                $query->whereHas('registrations', function ($q) use ($selectedSessionId, $selectedSemesterId) {
+                    $q->where('session_id', $selectedSessionId)
+                      ->when($selectedSemesterId, fn($sq) => $sq->where('semester_id', $selectedSemesterId))
+                      ->where('is_published', true);
+                });
+            })
+            ->when($publishStatus === 'unpublished', function ($query) use ($selectedSessionId, $selectedSemesterId) {
+                $query->whereDoesntHave('registrations', function ($q) use ($selectedSessionId, $selectedSemesterId) {
+                    $q->where('session_id', $selectedSessionId)
+                      ->when($selectedSemesterId, fn($sq) => $sq->where('semester_id', $selectedSemesterId))
+                      ->where('is_published', true);
+                });
+            })
+            // Optimization: Load results stats for the selected session and semester
             ->withCount([
-                'registrations as graded_count' => function ($query) use ($selectedSessionId) {
+                'registrations as graded_count' => function ($query) use ($selectedSessionId, $selectedSemesterId) {
                     $query->where('session_id', $selectedSessionId)
+                        ->when($selectedSemesterId, fn($q) => $q->where('semester_id', $selectedSemesterId))
                         ->where(function ($q) {
                             $q->whereNotNull('score')
                               ->orWhere('is_absent', true);
@@ -69,29 +105,42 @@ class ResultController extends Controller
                 }
             ])
             ->withCount([
-                'registrations as total_students' => function ($query) use ($selectedSessionId) {
-                    $query->where('session_id', $selectedSessionId);
+                'registrations as total_students' => function ($query) use ($selectedSessionId, $selectedSemesterId) {
+                    $query->where('session_id', $selectedSessionId)
+                        ->when($selectedSemesterId, fn($q) => $q->where('semester_id', $selectedSemesterId));
                 }
             ])
             ->withCount([
-                'registrations as published_count' => function ($query) use ($selectedSessionId) {
+                'registrations as published_count' => function ($query) use ($selectedSessionId, $selectedSemesterId) {
                     $query->where('session_id', $selectedSessionId)
+                        ->when($selectedSemesterId, fn($q) => $q->where('semester_id', $selectedSemesterId))
                         ->where('is_published', true);
                 }
             ])
+            ->when($sortBy === 'department', function ($query) use ($sortDir) {
+                $query->leftJoin('departments', 'courses.department_id', '=', 'departments.id')
+                    ->orderBy('departments.name', $sortDir);
+            }, function ($query) use ($sortBy, $sortDir) {
+                $query->orderBy('courses.' . $sortBy, $sortDir);
+            })
             ->paginate(20)
             ->withQueryString();
 
         return Inertia::render('Admin/Results/Index', [
             'sessions' => $sessions,
+            'semesters' => $semesters,
             'departments' => $departments,
             'faculties' => $faculties, // Optional if we want filtering by faculty
             'courses' => $courses,
             'filters' => [
                 'session_id' => $selectedSessionId,
+                'semester_id' => $selectedSemesterId,
                 'department_id' => $selectedDepartmentId,
                 'level' => $selectedLevel,
                 'has_registrations' => $hasRegistrations,
+                'publish_status' => $publishStatus,
+                'sort_by' => $sortBy,
+                'sort_dir' => $sortDir,
             ],
             'can' => [
                 'publish_results' => $user->can('publish_results') || $user->hasRole('admin'),

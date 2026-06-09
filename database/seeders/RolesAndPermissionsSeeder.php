@@ -213,6 +213,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'admit_students',
             'view_students',
             'edit_students',
+            'manage_users',
+            'create_students'
         ]);
 
         // --- FINANCE ROLES ---

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { throttle } from 'lodash';
-import { Search, Filter, BookOpen, Home, GraduationCap, FileText } from 'lucide-vue-next';
-import { ref, watch } from 'vue';
+import { Search, Filter, BookOpen, Home, GraduationCap, FileText, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-vue-next';
+import { ref, watch, computed } from 'vue';
 import { route } from 'ziggy-js';
 import Swal from 'sweetalert2';
 
@@ -27,6 +27,7 @@ import AdminLayout from '@/layouts/AdminLayout.vue';
 
 const props = defineProps<{
     sessions: Array<{ id: string; name: string }>;
+    semesters: Array<{ id: string; name: string; session_id: string }>;
     departments: Array<{ id: string; name: string }>;
     faculties: Array<{ id: string; name: string }>;
     courses: {
@@ -46,9 +47,13 @@ const props = defineProps<{
     };
     filters: {
         session_id: string;
+        semester_id: string;
         department_id: string;
         level: string;
         has_registrations: boolean;
+        publish_status: string;
+        sort_by: string;
+        sort_dir: string;
     };
     can: {
         publish_results: boolean;
@@ -57,9 +62,13 @@ const props = defineProps<{
 
 const form = ref({
     session_id: props.filters.session_id || 'ALL',
+    semester_id: props.filters.semester_id || 'ALL',
     department_id: props.filters.department_id || 'ALL',
     level: props.filters.level || 'ALL',
     has_registrations: props.filters.has_registrations || false,
+    publish_status: props.filters.publish_status || 'all',
+    sort_by: props.filters.sort_by || 'code',
+    sort_dir: props.filters.sort_dir || 'asc',
 });
 
 // Watch for changes and update results
@@ -74,6 +83,34 @@ watch(form, throttle(() => {
         replace: true,
     });
 }, 500), { deep: true });
+
+const filteredSemesters = computed(() => {
+    if (form.value.session_id === 'ALL') {
+        return [];
+    }
+    return props.semesters.filter(s => s.session_id === form.value.session_id);
+});
+
+// Watch session_id to reset semester_id if necessary
+watch(() => form.value.session_id, (newSession) => {
+    if (newSession === 'ALL') {
+        form.value.semester_id = 'ALL';
+    } else {
+        const exists = props.semesters.some(s => s.id === form.value.semester_id && s.session_id === newSession);
+        if (!exists) {
+            form.value.semester_id = 'ALL';
+        }
+    }
+});
+
+const toggleSort = (field: string) => {
+    if (form.value.sort_by === field) {
+        form.value.sort_dir = form.value.sort_dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        form.value.sort_by = field;
+        form.value.sort_dir = 'asc';
+    }
+};
 
 const levels = ['100', '200', '300', '400', '500', '600'];
 
@@ -197,7 +234,7 @@ const handlePublishSession = (isPublish: boolean) => {
                     <CardTitle class="text-lg font-medium">Filter Courses</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
                         <div class="space-y-2">
                             <Label class="text-xs font-medium uppercase text-muted-foreground">Academic Session</Label>
                             <Select v-model="form.session_id">
@@ -208,6 +245,20 @@ const handlePublishSession = (isPublish: boolean) => {
                                     <SelectItem value="ALL">All Sessions</SelectItem>
                                     <SelectItem v-for="session in sessions" :key="session.id" :value="session.id">
                                         {{ session.name }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div class="space-y-2">
+                            <Label class="text-xs font-medium uppercase text-muted-foreground">Semester</Label>
+                            <Select v-model="form.semester_id" :disabled="form.session_id === 'ALL'">
+                                <SelectTrigger class="bg-card w-full">
+                                    <SelectValue placeholder="Select Semester" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="ALL">All Semesters</SelectItem>
+                                    <SelectItem v-for="sem in filteredSemesters" :key="sem.id" :value="sem.id">
+                                        {{ sem.name }}
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
@@ -241,6 +292,19 @@ const handlePublishSession = (isPublish: boolean) => {
                             </Select>
                         </div>
                         <div class="space-y-2">
+                            <Label class="text-xs font-medium uppercase text-muted-foreground">Publish Status</Label>
+                            <Select v-model="form.publish_status">
+                                <SelectTrigger class="bg-card w-full">
+                                    <SelectValue placeholder="All Results" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Results</SelectItem>
+                                    <SelectItem value="published">Published Only</SelectItem>
+                                    <SelectItem value="unpublished">Unpublished Only</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div class="space-y-2">
                             <Label class="text-xs font-medium uppercase text-muted-foreground">Filter Options</Label>
                             <div class="flex items-center space-x-2 h-10 px-3 rounded-md border bg-card">
                                 <Switch
@@ -262,10 +326,31 @@ const handlePublishSession = (isPublish: boolean) => {
                     <Table>
                         <TableHeader>
                             <TableRow class="hover:bg-transparent border-b">
-                                <TableHead class="h-12 w-[140px]">Course Code</TableHead>
+                                <TableHead class="h-12 w-[140px] cursor-pointer select-none" @click="toggleSort('code')">
+                                    <div class="flex items-center gap-1">
+                                        Course Code
+                                        <ArrowUpDown v-if="form.sort_by !== 'code'" class="h-3 w-3" />
+                                        <ArrowUp v-else-if="form.sort_dir === 'asc'" class="h-3 w-3 text-primary" />
+                                        <ArrowDown v-else class="h-3 w-3 text-primary" />
+                                    </div>
+                                </TableHead>
                                 <TableHead class="h-12">Course Title</TableHead>
-                                <TableHead class="h-12">Department</TableHead>
-                                <TableHead class="h-12 w-[100px]">Level</TableHead>
+                                <TableHead class="h-12 cursor-pointer select-none" @click="toggleSort('department')">
+                                    <div class="flex items-center gap-1">
+                                        Department
+                                        <ArrowUpDown v-if="form.sort_by !== 'department'" class="h-3 w-3" />
+                                        <ArrowUp v-else-if="form.sort_dir === 'asc'" class="h-3 w-3 text-primary" />
+                                        <ArrowDown v-else class="h-3 w-3 text-primary" />
+                                    </div>
+                                </TableHead>
+                                <TableHead class="h-12 w-[110px] cursor-pointer select-none" @click="toggleSort('level')">
+                                    <div class="flex items-center gap-1">
+                                        Level
+                                        <ArrowUpDown v-if="form.sort_by !== 'level'" class="h-3 w-3" />
+                                        <ArrowUp v-else-if="form.sort_dir === 'asc'" class="h-3 w-3 text-primary" />
+                                        <ArrowDown v-else class="h-3 w-3 text-primary" />
+                                    </div>
+                                </TableHead>
                                 <TableHead class="h-12 w-[180px]">Grading Progress</TableHead>
                                 <TableHead class="h-12 w-[150px]">Publish Status</TableHead>
                                 <TableHead class="h-12 w-[160px] text-right">Actions</TableHead>

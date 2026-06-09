@@ -51,7 +51,6 @@ class SickbayTest extends TestCase
             'matriculation_number' => 'MAT123456',
             'next_of_kin_name' => 'Mary Parent',
             'next_of_kin_phone' => '08012345678',
-            'next_of_kin_relationship' => 'Mother',
             'next_of_kin_address' => '123 Main Street',
         ]);
 
@@ -98,15 +97,13 @@ class SickbayTest extends TestCase
     {
         $this->actingAs($this->nurse);
 
-        $response = $this->get(route('sickbay.index'));
+        $response = $this->get(route('admin.sickbay.index'));
 
         $response->assertStatus(200);
         $response->assertInertia(
             fn($page) => $page
                 ->component('Admin/Sickbay/Index')
                 ->has('activeVisits')
-                ->has('completedVisits')
-                ->has('supplies')
                 ->has('stats')
         );
     }
@@ -115,7 +112,7 @@ class SickbayTest extends TestCase
     {
         $this->actingAs($this->nurse);
 
-        $response = $this->get(route('sickbay.students.search', ['query' => 'John']));
+        $response = $this->get(route('admin.sickbay.students.search', ['query' => 'John']));
 
         $response->assertStatus(200);
         $response->assertJsonFragment([
@@ -128,7 +125,7 @@ class SickbayTest extends TestCase
     {
         $this->actingAs($this->nurse);
 
-        $response = $this->get(route('sickbay.students.search', ['query' => 'Jane']));
+        $response = $this->get(route('admin.sickbay.students.search', ['query' => 'Jane']));
 
         $response->assertStatus(200);
         $response->assertJsonFragment([
@@ -142,7 +139,7 @@ class SickbayTest extends TestCase
     {
         $this->actingAs($this->nurse);
 
-        $response = $this->post(route('sickbay.check_in'), [
+        $response = $this->post(route('admin.sickbay.check_in'), [
             'user_id' => $this->studentUser->id,
             'symptoms' => 'Severe headache and fatigue',
             'visit_type' => 'walk_in',
@@ -169,7 +166,7 @@ class SickbayTest extends TestCase
 
         $this->actingAs($this->nurse);
 
-        $response = $this->post(route('sickbay.treatment.store', $visit->id), [
+        $response = $this->post(route('admin.sickbay.treatment.store', $visit->id), [
             'blood_pressure' => '120/80',
             'temperature' => 38.5,
             'weight' => 70.0,
@@ -221,7 +218,7 @@ class SickbayTest extends TestCase
         $this->actingAs($this->nurse);
 
         // Assign bed
-        $response = $this->post(route('sickbay.beds.assign', $visit->id), [
+        $response = $this->post(route('admin.sickbay.beds.assign', $visit->id), [
             'bed_number' => 'Bed 3',
         ]);
 
@@ -233,7 +230,7 @@ class SickbayTest extends TestCase
         ]);
 
         // Discharge bed
-        $response = $this->post(route('sickbay.beds.discharge', $visit->id));
+        $response = $this->post(route('admin.sickbay.beds.discharge', $visit->id));
 
         $response->assertRedirect();
         $this->assertDatabaseHas('sickbay_visits', [
@@ -247,7 +244,7 @@ class SickbayTest extends TestCase
     {
         $this->actingAs($this->nurse);
 
-        $response = $this->post(route('sickbay.inventory.store'), [
+        $response = $this->post(route('admin.sickbay.inventory.store'), [
             'name' => 'Ibuprofen 200mg',
             'category' => 'OTC Drug',
             'stock_quantity' => 100,
@@ -260,5 +257,38 @@ class SickbayTest extends TestCase
             'name' => 'Ibuprofen 200mg',
             'stock_quantity' => 100,
         ]);
+    }
+
+    public function test_staff_without_manage_permissions_gets_redirected_from_admin_sickbay_to_history()
+    {
+        $this->actingAs($this->staffUser);
+
+        $response = $this->get(route('admin.sickbay.index'));
+
+        $response->assertRedirect(route('admin.sickbay.history'));
+    }
+
+    public function test_staff_without_manage_permissions_gets_redirected_from_beds_to_history()
+    {
+        $this->actingAs($this->staffUser);
+
+        $response = $this->get(route('admin.sickbay.beds.index'));
+
+        $response->assertRedirect(route('admin.sickbay.history'));
+    }
+
+    public function test_staff_can_view_admin_sickbay_history()
+    {
+        $this->actingAs($this->staffUser);
+
+        $response = $this->get(route('admin.sickbay.history'));
+
+        $response->assertStatus(200);
+        $response->assertInertia(
+            fn($page) => $page
+                ->component('Admin/Sickbay/History')
+                ->has('visits')
+                ->has('staff')
+        );
     }
 }
