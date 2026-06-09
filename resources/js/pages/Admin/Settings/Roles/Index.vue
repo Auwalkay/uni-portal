@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AdminLayout from '@/layouts/AdminLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { 
     Shield, 
     ShieldCheck, 
@@ -11,7 +11,8 @@ import {
     Plus,
     Info,
     Search,
-    ShieldAlert
+    ShieldAlert,
+    X
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
 import {
@@ -23,6 +24,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -34,6 +36,8 @@ import {
 
 import { useForm } from '@inertiajs/vue3';
 import Swal from 'sweetalert2';
+import { ref, watch } from 'vue';
+import { debounce } from 'lodash';
 
 const props = defineProps<{
     roles: Array<{
@@ -41,7 +45,30 @@ const props = defineProps<{
         name: string;
         users_count: number;
     }>;
+    filters?: {
+        search?: string;
+    };
 }>();
+
+const search = ref(props.filters?.search || '');
+
+const updateFilters = debounce(() => {
+    router.get(route('admin.settings.roles.index'), {
+        search: search.value,
+    }, {
+        preserveState: true,
+        replace: true,
+        preserveScroll: true,
+    });
+}, 300);
+
+watch(search, () => {
+    updateFilters();
+});
+
+const clearFilters = () => {
+    search.value = '';
+};
 
 const breadcrumbs = [
     { title: 'System Settings', href: route('admin.settings.index') },
@@ -93,6 +120,22 @@ const getRoleDescription = (name: string) => {
                         </Link>
                     </Button>
                 </div>
+            </div>
+
+            <!-- Search Filter -->
+            <div class="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+                <div class="relative flex-1 w-full">
+                    <Search class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        type="search"
+                        placeholder="Search roles by name..."
+                        class="pl-10 h-10 border-slate-200"
+                        v-model="search"
+                    />
+                </div>
+                <Button v-if="search" variant="ghost" @click="clearFilters" class="text-destructive h-10">
+                    <X class="w-4 h-4 mr-2" /> Reset
+                </Button>
             </div>
 
             <div class="grid gap-6">
@@ -147,6 +190,19 @@ const getRoleDescription = (name: string) => {
                                             <Settings2 class="w-4 h-4 mr-2" /> Permissions
                                         </Link>
                                     </Button>
+                                </TableCell>
+                            </TableRow>
+                            <TableRow v-if="roles.length === 0">
+                                <TableCell colspan="4" class="h-48 text-center">
+                                    <div class="flex flex-col items-center justify-center space-y-2">
+                                        <div class="p-3 bg-slate-50 dark:bg-slate-900 rounded-full">
+                                            <ShieldAlert class="w-6 h-6 text-muted-foreground" />
+                                        </div>
+                                        <div class="space-y-1">
+                                            <p class="font-bold">No roles found</p>
+                                            <p class="text-sm text-muted-foreground">Try adjusting your search keywords.</p>
+                                        </div>
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         </TableBody>
