@@ -262,7 +262,7 @@
                 </tr>
             </table>
 
-            @if(isset($fees) && $fees['total'] > 0)
+            @if(isset($fees))
                 <div style="margin-top: 8px; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc;">
                     <h3 style="margin-top: 0; color: #1e293b; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #cbd5e1; padding-bottom: 2px; margin-bottom: 4px;">
                         Financial Information</h3>

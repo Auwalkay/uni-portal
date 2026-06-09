@@ -215,21 +215,21 @@ const formatPercentage = (val: string) => {
                         </div>
 
                         <div class="flex items-center space-x-2 pt-2">
-                            <Checkbox id="covers_admin" :checked="createForm.covers_admin_charges" @update:checked="createForm.covers_admin_charges = $event" />
+                            <Checkbox id="covers_admin" v-model:checked="createForm.covers_admin_charges" />
                             <Label for="covers_admin" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                                 Covers Administrative Charges
                             </Label>
                         </div>
 
                         <div class="flex items-center space-x-2">
-                            <Checkbox id="covers_hostel" :checked="createForm.covers_hostel_fees" @update:checked="createForm.covers_hostel_fees = $event" />
+                            <Checkbox id="covers_hostel" v-model:checked="createForm.covers_hostel_fees" />
                             <Label for="covers_hostel" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                                 Covers Hostel Fees
                             </Label>
                         </div>
 
                         <div class="flex items-center space-x-2">
-                            <Checkbox id="is_active" :checked="createForm.is_active" @update:checked="createForm.is_active = $event" />
+                            <Checkbox id="is_active" v-model:checked="createForm.is_active" />
                             <Label for="is_active" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                                 Scholarship is Active
                             </Label>
@@ -277,21 +277,21 @@ const formatPercentage = (val: string) => {
                         </div>
 
                         <div class="flex items-center space-x-2 pt-2">
-                            <Checkbox id="edit_covers_admin" :checked="editForm.covers_admin_charges" @update:checked="editForm.covers_admin_charges = $event" />
+                            <Checkbox id="edit_covers_admin" v-model:checked="editForm.covers_admin_charges" />
                             <Label for="edit_covers_admin" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                                 Covers Administrative Charges
                             </Label>
                         </div>
 
                         <div class="flex items-center space-x-2">
-                            <Checkbox id="edit_covers_hostel" :checked="editForm.covers_hostel_fees" @update:checked="editForm.covers_hostel_fees = $event" />
+                            <Checkbox id="edit_covers_hostel" v-model:checked="editForm.covers_hostel_fees" />
                             <Label for="edit_covers_hostel" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                                 Covers Hostel Fees
                             </Label>
                         </div>
 
                         <div class="flex items-center space-x-2">
-                            <Checkbox id="edit_is_active" :checked="editForm.is_active" @update:checked="editForm.is_active = $event" />
+                            <Checkbox id="edit_is_active" v-model:checked="editForm.is_active" />
                             <Label for="edit_is_active" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                                 Scholarship is Active
                             </Label>

@@ -108,6 +108,27 @@ class PaymentController extends Controller
             return back()->with('error', 'Invoice already paid.');
         }
 
+        $balance = (float) $invoice->amount - (float) $invoice->paid_amount;
+
+        if ($balance <= 0.01) {
+            $payment = Payment::create([
+                'invoice_id' => $invoice->id,
+                'user_id' => Auth::id(),
+                'transaction_id' => 'SCHOLARSHIP' . date('Y') . strtoupper(Str::random(8)),
+                'gateway' => 'scholarship',
+                'gateway_reference' => 'SCH-' . strtoupper(uniqid()),
+                'amount' => 0,
+                'status' => 'pending',
+            ]);
+
+            app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($payment->gateway_reference, [
+                'channel' => 'scholarship',
+                'id' => $payment->transaction_id,
+            ]);
+
+            return redirect()->route('student.payments.index')->with('success', 'Zero-fee scholarship invoice marked as paid.');
+        }
+
         $request->validate([
             'amount' => 'required|numeric|min:1',
         ]);

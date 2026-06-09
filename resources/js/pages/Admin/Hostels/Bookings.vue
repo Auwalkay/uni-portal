@@ -1,10 +1,21 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { Head, router, useForm } from '@inertiajs/vue3';
+import { ref, watch, computed } from 'vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { 
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from '@/components/ui/dialog';
 import { 
     Search, 
     Download, 
@@ -13,9 +24,14 @@ import {
     ChevronRight,
     BadgeCheck,
     Clock,
-    XCircle
+    XCircle,
+    Plus,
+    X,
+    Loader2
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
+import { debounce } from 'lodash';
+import axios from 'axios';
 
 const props = defineProps<{
     bookings: any[];
@@ -27,6 +43,137 @@ const props = defineProps<{
 
 const searchTerm = ref('');
 const selectedSessionId = ref(props.filters.session_id);
+
+// --- Admin Booking Modal State ---
+const isBookModalOpen = ref(false);
+const searchQuery = ref('');
+const searchResults = ref<any[]>([]);
+const isSearching = ref(false);
+const selectedStudent = ref<any>(null);
+const showResults = ref(false);
+
+const selectedHostelId = ref<string | null>(null);
+const selectedBlockId = ref<string | null>(null);
+const selectedFloorId = ref<string | null>(null);
+const selectedRoomId = ref<string | null>(null);
+
+const availableHostels = ref<any[]>([]);
+const isLoadingRooms = ref(false);
+
+const form = useForm({
+    student_id: '',
+    hostel_room_id: '',
+    mark_as_paid: false,
+});
+
+// Cascading computed selectors
+const activeHostel = computed(() => {
+    return availableHostels.value.find(h => h.id === selectedHostelId.value);
+});
+
+const activeBlock = computed(() => {
+    return activeHostel.value?.blocks.find(b => b.id === selectedBlockId.value);
+});
+
+const activeFloor = computed(() => {
+    return activeBlock.value?.floors.find(f => f.id === selectedFloorId.value);
+});
+
+// Watch student query
+const handleStudentSearch = debounce(async (query: string) => {
+    if (!query || query.length < 2) {
+        searchResults.value = [];
+        return;
+    }
+    
+    isSearching.value = true;
+    try {
+        const response = await axios.get(route('admin.hostels.search-students'), {
+            params: { query }
+        });
+        searchResults.value = response.data;
+        showResults.value = true;
+    } catch (error) {
+        console.error('Student search failed', error);
+    } finally {
+        isSearching.value = false;
+    }
+}, 300);
+
+watch(searchQuery, (newVal) => {
+    if (!selectedStudent.value) {
+        handleStudentSearch(newVal);
+    }
+});
+
+// Watch selected student to load their available rooms (based on gender)
+watch(selectedStudent, async (newStudent) => {
+    selectedHostelId.value = null;
+    selectedBlockId.value = null;
+    selectedFloorId.value = null;
+    selectedRoomId.value = null;
+    availableHostels.value = [];
+    form.hostel_room_id = '';
+
+    if (!newStudent || !newStudent.student) {
+        return;
+    }
+
+    isLoadingRooms.value = true;
+    try {
+        const response = await axios.get(route('admin.hostels.rooms.available'), {
+            params: { student_id: newStudent.student.id }
+        });
+        availableHostels.value = response.data;
+    } catch (e) {
+        console.error('Failed loading rooms', e);
+    } finally {
+        isLoadingRooms.value = false;
+    }
+});
+
+const openBookModal = () => {
+    form.reset();
+    form.clearErrors();
+    selectedStudent.value = null;
+    searchQuery.value = '';
+    searchResults.value = [];
+    selectedHostelId.value = null;
+    selectedBlockId.value = null;
+    selectedFloorId.value = null;
+    selectedRoomId.value = null;
+    availableHostels.value = [];
+    isBookModalOpen.value = true;
+};
+
+const selectStudent = (student: any) => {
+    selectedStudent.value = student;
+    form.student_id = student.student.id;
+    searchQuery.value = student.name;
+    showResults.value = false;
+};
+
+const clearStudentSelection = () => {
+    selectedStudent.value = null;
+    form.student_id = '';
+    searchQuery.value = '';
+    searchResults.value = [];
+    availableHostels.value = [];
+};
+
+const handleRoomChange = (roomId: string) => {
+    selectedRoomId.value = roomId;
+    form.hostel_room_id = roomId;
+};
+
+const submitBooking = () => {
+    form.post(route('admin.hostels.bookings.store'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            isBookModalOpen.value = false;
+        },
+    });
+};
 
 const handleSessionChange = (val: string) => {
     selectedSessionId.value = val;
@@ -89,6 +236,10 @@ const formatCurrency = (amount: any) => {
                     <Button variant="outline" class="gap-2 shadow-sm border-primary/20 hover:bg-primary/5 text-primary font-semibold">
                         <Download class="h-4 w-4" />
                         Export CSV
+                    </Button>
+                    <Button @click="openBookModal" class="gap-2 font-semibold">
+                        <Plus class="h-4 w-4" />
+                        Book for Student
                     </Button>
                 </div>
             </div>
@@ -209,5 +360,181 @@ const formatCurrency = (amount: any) => {
                 </div>
             </div>
         </div>
+
+        <!-- Book for Student Dialog -->
+        <Dialog :open="isBookModalOpen" @update:open="isBookModalOpen = $event">
+            <DialogContent class="sm:max-w-[500px]">
+                <DialogHeader>
+                    <DialogTitle>Allocate Hostel Room</DialogTitle>
+                    <DialogDescription>
+                        Manually assign a hostel room to a student for the current active session.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <form @submit.prevent="submitBooking" class="space-y-5 py-4">
+                    <!-- Student Search -->
+                    <div class="space-y-2 relative">
+                        <Label>Search Student <span class="text-red-500">*</span></Label>
+                        
+                        <div v-if="selectedStudent" class="flex items-center justify-between p-3 border rounded-lg bg-slate-50 dark:bg-slate-900">
+                            <div class="flex items-center gap-3">
+                                <Avatar class="h-10 w-10">
+                                    <AvatarImage :src="selectedStudent.profile_photo_url" />
+                                    <AvatarFallback>{{ selectedStudent.name.charAt(0) }}</AvatarFallback>
+                                </Avatar>
+                                <div>
+                                    <p class="font-semibold text-sm">{{ selectedStudent.name }}</p>
+                                    <p class="text-xs text-muted-foreground">{{ selectedStudent.email }}</p>
+                                    <p v-if="selectedStudent.student" class="text-xs font-mono text-primary font-bold uppercase">
+                                        Matric: {{ selectedStudent.student.matriculation_number }} • {{ selectedStudent.student.gender }}
+                                    </p>
+                                </div>
+                            </div>
+                            <Button type="button" variant="ghost" size="icon" @click="clearStudentSelection" class="rounded-full h-8 w-8 hover:bg-destructive/10 hover:text-destructive">
+                                <X class="w-4 h-4" />
+                            </Button>
+                        </div>
+
+                        <div v-else class="relative">
+                            <Search class="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                                v-model="searchQuery" 
+                                placeholder="Type student name, matric number, or email..." 
+                                class="pl-9 h-10"
+                                @focus="showResults = true"
+                            />
+                            <div v-if="isSearching" class="absolute right-3 top-3">
+                                <Loader2 class="w-4 h-4 animate-spin text-muted-foreground" />
+                            </div>
+
+                            <!-- Search Results List -->
+                            <div v-if="showResults && searchResults.length > 0" class="absolute z-50 w-full mt-1 bg-white dark:bg-slate-950 border rounded-md shadow-lg max-h-56 overflow-y-auto">
+                                <div 
+                                    v-for="student in searchResults" 
+                                    :key="student.id"
+                                    class="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer flex items-center gap-3 transition-colors border-b last:border-0"
+                                    @click="selectStudent(student)"
+                                >
+                                    <Avatar class="h-8 w-8">
+                                        <AvatarImage :src="student.profile_photo_url" />
+                                        <AvatarFallback>{{ student.name.charAt(0) }}</AvatarFallback>
+                                    </Avatar>
+                                    <div>
+                                        <p class="text-sm font-semibold">{{ student.name }}</p>
+                                        <div class="flex items-center gap-2 text-xs text-muted-foreground">
+                                            <span>{{ student.email }}</span>
+                                            <span v-if="student.student" class="text-primary font-mono uppercase">• {{ student.student.matriculation_number }} ({{ student.student.gender }})</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-if="showResults && searchQuery.length > 2 && !isSearching && searchResults.length === 0" class="absolute z-50 w-full mt-1 bg-white dark:bg-slate-950 border rounded-md shadow-lg p-4 text-center text-sm text-muted-foreground">
+                                No students found.
+                            </div>
+                        </div>
+                        <p v-if="form.errors.student_id" class="text-xs text-destructive mt-1 font-semibold">{{ form.errors.student_id }}</p>
+                    </div>
+
+                    <!-- Room Selection -->
+                    <div v-if="selectedStudent" class="space-y-4">
+                        <div v-if="isLoadingRooms" class="flex items-center justify-center p-6">
+                            <Loader2 class="h-6 w-6 animate-spin text-primary mr-2" />
+                            <span class="text-sm text-muted-foreground font-medium">Fetching rooms matching student gender...</span>
+                        </div>
+
+                        <div v-else-if="availableHostels.length === 0" class="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg text-center">
+                            <p class="text-xs text-amber-800 dark:text-amber-300 font-medium">
+                                No available hostels found matching student gender ({{ selectedStudent.student.gender }}).
+                            </p>
+                        </div>
+
+                        <div v-else class="grid grid-cols-1 gap-4">
+                            <!-- Select Hostel -->
+                            <div class="space-y-1.5">
+                                <Label>Hostel <span class="text-red-500">*</span></Label>
+                                <Select v-model="selectedHostelId">
+                                    <SelectTrigger class="w-full">
+                                        <SelectValue placeholder="Select Hostel" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem v-for="hostel in availableHostels" :key="hostel.id" :value="hostel.id">
+                                            {{ hostel.name }} ({{ hostel.gender_type }})
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <!-- Select Block -->
+                            <div v-if="selectedHostelId" class="space-y-1.5">
+                                <Label>Wing / Block <span class="text-red-500">*</span></Label>
+                                <Select v-model="selectedBlockId">
+                                    <SelectTrigger class="w-full">
+                                        <SelectValue placeholder="Select Block" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem v-for="block in activeHostel?.blocks || []" :key="block.id" :value="block.id">
+                                            {{ block.name }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <!-- Select Floor -->
+                            <div v-if="selectedBlockId" class="space-y-1.5">
+                                <Label>Floor <span class="text-red-500">*</span></Label>
+                                <Select v-model="selectedFloorId">
+                                    <SelectTrigger class="w-full">
+                                        <SelectValue placeholder="Select Floor" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem v-for="floor in activeBlock?.floors || []" :key="floor.id" :value="floor.id">
+                                            {{ floor.name }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <!-- Select Room -->
+                            <div v-if="selectedFloorId" class="space-y-1.5">
+                                <Label>Room <span class="text-red-500">*</span></Label>
+                                <Select v-model="selectedRoomId" @update:modelValue="handleRoomChange">
+                                    <SelectTrigger class="w-full">
+                                        <SelectValue placeholder="Select Room" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem v-for="room in activeFloor?.rooms || []" :key="room.id" :value="room.id">
+                                            Room {{ room.room_number }} ({{ room.available_beds }} beds available)
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <p v-if="form.errors.hostel_room_id" class="text-xs text-destructive mt-1 font-semibold">{{ form.errors.hostel_room_id }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Direct Confirmation Toggle -->
+                    <div v-if="selectedRoomId" class="flex items-start space-x-3 p-3 bg-primary/5 rounded-lg border border-primary/10">
+                        <Checkbox id="mark_as_paid" v-model:checked="form.mark_as_paid" class="mt-1" />
+                        <div class="space-y-0.5">
+                            <Label for="mark_as_paid" class="text-sm font-bold text-foreground cursor-pointer select-none">
+                                Confirm & Mark as Paid Immediately
+                            </Label>
+                            <p class="text-[11px] text-muted-foreground leading-normal">
+                                Direct allocation bypasses online payment. A manual invoice/payment record will be generated and set to confirmed.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Action buttons -->
+                    <DialogFooter class="border-t pt-4">
+                        <Button type="button" variant="outline" @click="isBookModalOpen = false">Cancel</Button>
+                        <Button type="submit" :disabled="form.processing || !form.student_id || !form.hostel_room_id">
+                            <Loader2 v-if="form.processing" class="h-4 w-4 mr-2 animate-spin" />
+                            Allocate Room
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     </AdminLayout>
 </template>

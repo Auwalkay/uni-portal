@@ -59,6 +59,7 @@ class ResultImport implements ToCollection, WithHeadingRow
                     'score' => $total,
                     'grade' => $grading['grade'],
                     'grade_point' => $grading['point'],
+                    'is_absent' => false,
                 ]);
             }
         }

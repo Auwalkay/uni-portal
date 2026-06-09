@@ -58,11 +58,13 @@ const getGradeColor = (grade: string) => {
         case 'C': return 'text-yellow-600 font-bold';
         case 'D': return 'text-orange-600 font-bold';
         case 'F': return 'text-red-600 font-bold';
+        case 'ABS': return 'text-rose-600 font-bold';
         default: return 'text-gray-600';
     }
 };
 
-const getScoreColor = (score: number) => {
+const getScoreColor = (score: number | null) => {
+    if (score === null || score === undefined) return 'text-gray-400 bg-gray-50';
     if (score >= 70) return 'text-emerald-600 bg-emerald-50';
     if (score >= 60) return 'text-blue-600 bg-blue-50';
     if (score >= 50) return 'text-yellow-600 bg-yellow-50';

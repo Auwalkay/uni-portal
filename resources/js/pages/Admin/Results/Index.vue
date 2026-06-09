@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { throttle } from 'lodash';
-import { Search, Filter, BookOpen, Home, GraduationCap, FileText } from 'lucide-vue-next';
-import { ref, watch } from 'vue';
+import { Search, Filter, BookOpen, Home, GraduationCap, FileText, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-vue-next';
+import { ref, watch, computed } from 'vue';
 import { route } from 'ziggy-js';
+import Swal from 'sweetalert2';
 
 import Pagination from '@/components/Pagination.vue';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +27,7 @@ import AdminLayout from '@/layouts/AdminLayout.vue';
 
 const props = defineProps<{
     sessions: Array<{ id: string; name: string }>;
+    semesters: Array<{ id: string; name: string; session_id: string }>;
     departments: Array<{ id: string; name: string }>;
     faculties: Array<{ id: string; name: string }>;
     courses: {
@@ -39,22 +41,34 @@ const props = defineProps<{
             program: { name: string };
             graded_count: number;
             total_students: number;
+            published_count: number;
         }>;
         links: any[];
     };
     filters: {
         session_id: string;
+        semester_id: string;
         department_id: string;
         level: string;
         has_registrations: boolean;
+        publish_status: string;
+        sort_by: string;
+        sort_dir: string;
+    };
+    can: {
+        publish_results: boolean;
     };
 }>();
 
 const form = ref({
     session_id: props.filters.session_id || 'ALL',
+    semester_id: props.filters.semester_id || 'ALL',
     department_id: props.filters.department_id || 'ALL',
     level: props.filters.level || 'ALL',
     has_registrations: props.filters.has_registrations || false,
+    publish_status: props.filters.publish_status || 'all',
+    sort_by: props.filters.sort_by || 'code',
+    sort_dir: props.filters.sort_dir || 'asc',
 });
 
 // Watch for changes and update results
@@ -70,6 +84,34 @@ watch(form, throttle(() => {
     });
 }, 500), { deep: true });
 
+const filteredSemesters = computed(() => {
+    if (form.value.session_id === 'ALL') {
+        return [];
+    }
+    return props.semesters.filter(s => s.session_id === form.value.session_id);
+});
+
+// Watch session_id to reset semester_id if necessary
+watch(() => form.value.session_id, (newSession) => {
+    if (newSession === 'ALL') {
+        form.value.semester_id = 'ALL';
+    } else {
+        const exists = props.semesters.some(s => s.id === form.value.semester_id && s.session_id === newSession);
+        if (!exists) {
+            form.value.semester_id = 'ALL';
+        }
+    }
+});
+
+const toggleSort = (field: string) => {
+    if (form.value.sort_by === field) {
+        form.value.sort_dir = form.value.sort_dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        form.value.sort_by = field;
+        form.value.sort_dir = 'asc';
+    }
+};
+
 const levels = ['100', '200', '300', '400', '500', '600'];
 
 const getProgressVariant = (course: any) => {
@@ -82,6 +124,55 @@ const getProgressColor = (course: any) => {
     if (course.graded_count === 0) return '';
     if (course.graded_count === course.total_students) return 'bg-green-50 text-green-700 border-green-200';
     return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+};
+
+const handlePublishSession = (isPublish: boolean) => {
+    const sessionName = props.sessions.find(s => s.id === form.value.session_id)?.name || '';
+    const deptName = form.value.department_id !== 'ALL' 
+        ? props.departments.find(d => d.id === form.value.department_id)?.name 
+        : null;
+    const levelName = form.value.level !== 'ALL' ? `${form.value.level} Level` : null;
+
+    let filterDesc = `for ${sessionName}`;
+    if (deptName && levelName) {
+        filterDesc += ` (${deptName}, ${levelName})`;
+    } else if (deptName) {
+        filterDesc += ` (${deptName})`;
+    } else if (levelName) {
+        filterDesc += ` (${levelName})`;
+    }
+
+    const actionText = isPublish ? 'Publish' : 'Unpublish';
+    const confirmButtonColor = isPublish ? '#10b981' : '#f43f5e';
+
+    Swal.fire({
+        title: `${actionText} Results?`,
+        text: `Are you sure you want to ${actionText.toLowerCase()} results ${filterDesc}? Only graded courses will be affected when publishing.`,
+        icon: isPublish ? 'question' : 'warning',
+        showCancelButton: true,
+        confirmButtonText: `Yes, ${actionText}`,
+        confirmButtonColor: confirmButtonColor,
+        cancelButtonText: 'Cancel',
+    }).then((result) => {
+        if (result.isConfirmed) {
+            router.post(route('admin.results.publish-session', { session: form.value.session_id }), {
+                is_published: isPublish,
+                department_id: form.value.department_id === 'ALL' ? null : form.value.department_id,
+                level: form.value.level === 'ALL' ? null : form.value.level,
+            }, {
+                onSuccess: () => {
+                    Swal.fire(
+                        isPublish ? 'Published!' : 'Unpublished!',
+                        `Results have been successfully ${isPublish ? 'published' : 'unpublished'}.`,
+                        'success'
+                    );
+                },
+                onError: () => {
+                    Swal.fire('Error', 'An error occurred while updating the publishing status.', 'error');
+                }
+            });
+        }
+    });
 };
 </script>
 
@@ -119,6 +210,22 @@ const getProgressColor = (course: any) => {
                         </Badge>
                     </div>
                 </div>
+                <div v-if="props.can.publish_results && form.session_id !== 'ALL'" class="flex gap-2 self-end md:self-start">
+                    <Button 
+                        variant="outline" 
+                        class="border-rose-200 text-rose-700 hover:bg-rose-50"
+                        @click="handlePublishSession(false)"
+                    >
+                        Unpublish Session
+                    </Button>
+                    <Button 
+                        variant="default" 
+                        class="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        @click="handlePublishSession(true)"
+                    >
+                        Publish Session
+                    </Button>
+                </div>
             </div>
 
             <!-- Filters -->
@@ -127,7 +234,7 @@ const getProgressColor = (course: any) => {
                     <CardTitle class="text-lg font-medium">Filter Courses</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
                         <div class="space-y-2">
                             <Label class="text-xs font-medium uppercase text-muted-foreground">Academic Session</Label>
                             <Select v-model="form.session_id">
@@ -138,6 +245,20 @@ const getProgressColor = (course: any) => {
                                     <SelectItem value="ALL">All Sessions</SelectItem>
                                     <SelectItem v-for="session in sessions" :key="session.id" :value="session.id">
                                         {{ session.name }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div class="space-y-2">
+                            <Label class="text-xs font-medium uppercase text-muted-foreground">Semester</Label>
+                            <Select v-model="form.semester_id" :disabled="form.session_id === 'ALL'">
+                                <SelectTrigger class="bg-card w-full">
+                                    <SelectValue placeholder="Select Semester" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="ALL">All Semesters</SelectItem>
+                                    <SelectItem v-for="sem in filteredSemesters" :key="sem.id" :value="sem.id">
+                                        {{ sem.name }}
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
@@ -171,6 +292,19 @@ const getProgressColor = (course: any) => {
                             </Select>
                         </div>
                         <div class="space-y-2">
+                            <Label class="text-xs font-medium uppercase text-muted-foreground">Publish Status</Label>
+                            <Select v-model="form.publish_status">
+                                <SelectTrigger class="bg-card w-full">
+                                    <SelectValue placeholder="All Results" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Results</SelectItem>
+                                    <SelectItem value="published">Published Only</SelectItem>
+                                    <SelectItem value="unpublished">Unpublished Only</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div class="space-y-2">
                             <Label class="text-xs font-medium uppercase text-muted-foreground">Filter Options</Label>
                             <div class="flex items-center space-x-2 h-10 px-3 rounded-md border bg-card">
                                 <Switch
@@ -192,17 +326,39 @@ const getProgressColor = (course: any) => {
                     <Table>
                         <TableHeader>
                             <TableRow class="hover:bg-transparent border-b">
-                                <TableHead class="h-12 w-[140px]">Course Code</TableHead>
+                                <TableHead class="h-12 w-[140px] cursor-pointer select-none" @click="toggleSort('code')">
+                                    <div class="flex items-center gap-1">
+                                        Course Code
+                                        <ArrowUpDown v-if="form.sort_by !== 'code'" class="h-3 w-3" />
+                                        <ArrowUp v-else-if="form.sort_dir === 'asc'" class="h-3 w-3 text-primary" />
+                                        <ArrowDown v-else class="h-3 w-3 text-primary" />
+                                    </div>
+                                </TableHead>
                                 <TableHead class="h-12">Course Title</TableHead>
-                                <TableHead class="h-12">Department</TableHead>
-                                <TableHead class="h-12 w-[100px]">Level</TableHead>
+                                <TableHead class="h-12 cursor-pointer select-none" @click="toggleSort('department')">
+                                    <div class="flex items-center gap-1">
+                                        Department
+                                        <ArrowUpDown v-if="form.sort_by !== 'department'" class="h-3 w-3" />
+                                        <ArrowUp v-else-if="form.sort_dir === 'asc'" class="h-3 w-3 text-primary" />
+                                        <ArrowDown v-else class="h-3 w-3 text-primary" />
+                                    </div>
+                                </TableHead>
+                                <TableHead class="h-12 w-[110px] cursor-pointer select-none" @click="toggleSort('level')">
+                                    <div class="flex items-center gap-1">
+                                        Level
+                                        <ArrowUpDown v-if="form.sort_by !== 'level'" class="h-3 w-3" />
+                                        <ArrowUp v-else-if="form.sort_dir === 'asc'" class="h-3 w-3 text-primary" />
+                                        <ArrowDown v-else class="h-3 w-3 text-primary" />
+                                    </div>
+                                </TableHead>
                                 <TableHead class="h-12 w-[180px]">Grading Progress</TableHead>
+                                <TableHead class="h-12 w-[150px]">Publish Status</TableHead>
                                 <TableHead class="h-12 w-[160px] text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             <tr v-if="courses.data.length === 0">
-                                <td colspan="6" class="p-12 text-center text-muted-foreground">
+                                <td colspan="7" class="p-12 text-center text-muted-foreground">
                                     <div class="flex flex-col items-center gap-3">
                                         <div class="p-4 rounded-full bg-muted/50">
                                             <BookOpen class="h-8 w-8 text-muted-foreground/50" />
@@ -232,6 +388,36 @@ const getProgressColor = (course: any) => {
                                         :class="getProgressColor(course)"
                                     >
                                         {{ course.graded_count }} / {{ course.total_students }} Graded
+                                    </Badge>
+                                </TableCell>
+                                <TableCell>
+                                    <Badge 
+                                        v-if="course.total_students === 0"
+                                        variant="outline"
+                                        class="bg-gray-50 text-gray-500 border-gray-200"
+                                    >
+                                        No Students
+                                    </Badge>
+                                    <Badge 
+                                        v-else-if="course.published_count === course.total_students"
+                                        variant="default"
+                                        class="bg-green-600 hover:bg-green-600 text-white"
+                                    >
+                                        Published
+                                    </Badge>
+                                    <Badge 
+                                        v-else-if="course.published_count > 0"
+                                        variant="secondary"
+                                        class="bg-yellow-50 text-yellow-700 border-yellow-200"
+                                    >
+                                        Partial ({{ course.published_count }}/{{ course.total_students }})
+                                    </Badge>
+                                    <Badge 
+                                        v-else
+                                        variant="outline"
+                                        class="bg-gray-100 text-gray-700 border-gray-300"
+                                    >
+                                        Unpublished
                                     </Badge>
                                 </TableCell>
                                 <TableCell class="text-right">
