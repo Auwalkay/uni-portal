@@ -11,12 +11,22 @@ use Illuminate\Support\Facades\DB;
 
 class RoleController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $roles = Role::withCount('users')->get();
+        $search = $request->input('search');
+
+        $roles = Role::withCount('users')
+            ->when($search, function ($query, $search) {
+                $query->where('name', 'like', "%{$search}%");
+            })
+            ->orderBy('name', 'asc')
+            ->get();
 
         return Inertia::render('Admin/Settings/Roles/Index', [
-            'roles' => $roles
+            'roles' => $roles,
+            'filters' => [
+                'search' => $search
+            ]
         ]);
     }
 
