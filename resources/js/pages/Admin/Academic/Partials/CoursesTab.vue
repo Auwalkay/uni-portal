@@ -12,6 +12,7 @@ defineProps<{
         data: Array<any>;
         links: Array<any>;
     };
+    canManage: boolean;
 }>();
 
 const emit = defineEmits(['create', 'edit', 'toggle']);
@@ -24,10 +25,10 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                 <CardTitle>Courses</CardTitle>
                 <CardDescription>Manage all courses.</CardDescription>
             </div>
-                <Button @click="emit('create')"><Plus class="mr-2 h-4 w-4" /> Add Course</Button>
+            <Button v-if="canManage" @click="emit('create')"><Plus class="mr-2 h-4 w-4" /> Add Course</Button>
         </CardHeader>
         <CardContent>
-                <Table>
+            <Table>
                 <TableHeader>
                     <TableRow>
                         <TableHead>Code</TableHead>
@@ -37,7 +38,7 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                         <TableHead>Level</TableHead>
                         <TableHead>Sem</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead class="text-right">Actions</TableHead>
+                        <TableHead class="text-right" v-if="canManage">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -46,12 +47,12 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                         <TableCell>{{ course.title }}</TableCell>
                         <TableCell>{{ course.units }}</TableCell>
                         <TableCell>{{ course.department?.name }}</TableCell>
-                            <TableCell>{{ course.level }}</TableCell>
-                            <TableCell>{{ course.semester }}</TableCell>
+                        <TableCell>{{ course.level }}</TableCell>
+                        <TableCell>{{ course.semester }}</TableCell>
                         <TableCell>
-                                <Switch :checked="course.is_active" @update:checked="emit('toggle', course.id, course.is_active)" />
+                                <Switch :disabled="!canManage" :checked="course.is_active" @update:checked="emit('toggle', course.id, course.is_active)" />
                         </TableCell>
-                        <TableCell class="text-right">
+                        <TableCell class="text-right" v-if="canManage">
                              <div class="flex items-center justify-end gap-2">
                                 <Link :href="route('admin.courses.registrations.index', course.id)">
                                     <Button variant="ghost" size="icon" title="View Students">

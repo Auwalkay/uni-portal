@@ -342,11 +342,22 @@ class StudentController extends Controller
     public function import(Request $request)
     {
         $request->validate([
-            'file' => 'required|mimes:csv,txt|max:10240',
+            'file' => 'required|mimes:csv,txt,xlsx|max:10240',
+            'session_id' => 'required|exists:academic_sessions,id',
+            'faculty_id' => 'required|exists:faculties,id',
+            'department_id' => 'required|exists:departments,id',
+            'program_id' => 'required|exists:programmes,id',
+            'level' => 'required|in:100,200,300,400,500',
         ]);
 
         try {
-            $import = new StudentImport;
+            $import = new StudentImport(
+                $request->faculty_id,
+                $request->department_id,
+                $request->program_id,
+                $request->session_id,
+                $request->level
+            );
             Excel::import($import, $request->file('file'));
 
             return redirect()->route('admin.students.index')->with('success', $import->getProcessedCount() . ' students imported successfully.');
@@ -357,63 +368,51 @@ class StudentController extends Controller
 
     public function downloadTemplate()
     {
-        $headers = [
-            'first_name',
-            'last_name',
-            'email',
-            'phone_number',
-            'gender',
-            'dob',
-            'address',
-            'state',
-            'lga',
-            'faculty',
-            'department',
-            'programme',
-            'session',
-            'level',
-            'entry_mode',
-            'matric_number',
-            'jamb_reg',
-            'jamb_score',
-            'previous_institution',
-        ];
+        $export = new class implements \Maatwebsite\Excel\Concerns\FromCollection, \Maatwebsite\Excel\Concerns\WithHeadings {
+            public function collection()
+            {
+                return collect([
+                    [
+                        'first_name' => 'John',
+                        'last_name' => 'Doe',
+                        'email' => 'john.doe@example.com',
+                        'phone_number' => '08012345678',
+                        'gender' => 'male',
+                        'dob' => '2000-01-01',
+                        'address' => '123 University Road',
+                        'state' => 'Lagos',
+                        'lga' => 'Ikeja',
+                        'entry_mode' => 'UTME',
+                        'matric_number' => 'UNI/2024/0001',
+                        'jamb_reg' => '2024123456AB',
+                        'jamb_score' => '280',
+                        'previous_institution' => '',
+                    ]
+                ]);
+            }
 
-        $callback = function () use ($headers) {
-            $file = fopen('php://output', 'w');
-            fputcsv($file, $headers);
-            // Add a sample row
-            fputcsv($file, [
-                'John',
-                'Doe',
-                'john.doe@example.com',
-                '08012345678',
-                'male',
-                '2000-01-01',
-                '123 University Road',
-                'Lagos',
-                'Ikeja',
-                'Faculty of Science',
-                'Computer Science',
-                'Computer Science (B.Sc)',
-                '2024/2025',
-                '100',
-                'UTME',
-                'UNI/2024/0001',
-                '2024123456AB',
-                '280',
-                '',
-            ]);
-            fclose($file);
+            public function headings(): array
+            {
+                return [
+                    'first_name',
+                    'last_name',
+                    'email',
+                    'phone_number',
+                    'gender',
+                    'dob',
+                    'address',
+                    'state',
+                    'lga',
+                    'entry_mode',
+                    'matric_number',
+                    'jamb_reg',
+                    'jamb_score',
+                    'previous_institution',
+                ];
+            }
         };
 
-        return response()->stream($callback, 200, [
-            'Content-type' => 'text/csv',
-            'Content-Disposition' => 'attachment; filename=student_import_template.csv',
-            'Pragma' => 'no-cache',
-            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
-            'Expires' => '0',
-        ]);
+        return Excel::download($export, 'student_import_template.xlsx');
     }
 
     public function edit(Student $student)

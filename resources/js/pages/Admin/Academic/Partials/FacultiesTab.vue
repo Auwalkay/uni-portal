@@ -10,6 +10,7 @@ defineProps<{
         data: Array<any>;
         links: Array<any>;
     };
+    canManage: boolean;
 }>();
 
 const emit = defineEmits(['create', 'edit', 'toggle']);
@@ -22,7 +23,7 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                 <CardTitle>Faculties</CardTitle>
                 <CardDescription>Manage university faculties.</CardDescription>
             </div>
-            <Button @click="emit('create')"><Plus class="mr-2 h-4 w-4" /> Add Faculty</Button>
+            <Button v-if="canManage" @click="emit('create')"><Plus class="mr-2 h-4 w-4" /> Add Faculty</Button>
         </CardHeader>
         <CardContent>
             <Table>
@@ -32,7 +33,7 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                         <TableHead>Name</TableHead>
                         <TableHead>Departments</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead class="text-right">Actions</TableHead>
+                        <TableHead class="text-right" v-if="canManage">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -42,10 +43,10 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                         <TableCell>{{ faculty.departments_count }}</TableCell>
                         <TableCell>
                             <div class="flex items-center space-x-2">
-                                <Switch :checked="faculty.is_active" @update:checked="emit('toggle', faculty.id, faculty.is_active)" />
+                                <Switch :disabled="!canManage" :checked="faculty.is_active" @update:checked="emit('toggle', faculty.id, faculty.is_active)" />
                             </div>
                         </TableCell>
-                        <TableCell class="text-right">
+                        <TableCell class="text-right" v-if="canManage">
                             <Button variant="ghost" size="icon" @click="emit('edit', faculty)">
                                 <Pencil class="h-4 w-4" />
                             </Button>

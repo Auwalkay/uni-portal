@@ -38,8 +38,10 @@ class CourseAllocationController extends Controller
             'currentSessionId' => $currentSessionId,
             'courses' => Course::select('id', 'code', 'title', 'department_id')->orderBy('code')->get(),
             'programmes' => \App\Models\Programme::select('id', 'name')->orderBy('name')->get(),
-            'lecturers' => Staff::with('user:id,name')
-                ->where('staff.is_academic', 1)
+            'lecturers' => Staff::with(['user:id,name', 'department:id,code'])
+                ->whereHas('user', function ($q) {
+                    $q->role('lecturer');
+                })
                 ->get()->map(function ($s) {
                     return [
                         'id' => $s->id,
@@ -67,12 +69,16 @@ class CourseAllocationController extends Controller
 
         \App\Models\CourseAllocation::create($validated);
 
+        \App\Services\AcademicCacheService::clearTimetableCache();
+
         return back()->with('success', 'Course assigned successfully.');
     }
 
     public function destroy($id)
     {
         \App\Models\CourseAllocation::findOrFail($id)->delete();
+
+        \App\Services\AcademicCacheService::clearTimetableCache();
 
         return back()->with('success', 'Allocation removed successfully.');
     }
@@ -86,6 +92,8 @@ class CourseAllocationController extends Controller
         try {
             $import = new \App\Imports\CourseAllocationImport;
             \Maatwebsite\Excel\Facades\Excel::import($import, $request->file('file'));
+
+            \App\Services\AcademicCacheService::clearTimetableCache();
 
             $stats = $import->getStats();
             $msg = "Import processed: {$stats['created']} created, {$stats['skipped']} skipped.";

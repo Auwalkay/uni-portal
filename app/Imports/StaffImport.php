@@ -56,6 +56,41 @@ class StaffImport implements ToModel, WithChunkReading, WithHeadingRow, WithVali
             // Department Lookup
             $departmentId = $this->getDepartmentId($row['department']);
 
+            // State & LGA Lookup
+            $stateId = null;
+            if (!empty($row['state'])) {
+                $stateId = \App\Models\State::where('name', 'like', '%' . trim($row['state']) . '%')->value('id');
+            }
+            $lgaId = null;
+            if (!empty($row['lga']) && $stateId) {
+                $lgaId = \App\Models\Lga::where('name', 'like', '%' . trim($row['lga']) . '%')
+                    ->where('state_id', $stateId)
+                    ->value('id');
+            }
+
+            // Date processing
+            $dateOfBirth = null;
+            if (!empty($row['date_of_birth'])) {
+                try {
+                    $dateOfBirth = is_numeric($row['date_of_birth'])
+                        ? \Carbon\Carbon::instance(\PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($row['date_of_birth']))->format('Y-m-d')
+                        : \Carbon\Carbon::parse($row['date_of_birth'])->format('Y-m-d');
+                } catch (\Exception $e) {
+                    $dateOfBirth = null;
+                }
+            }
+
+            $dateJoined = null;
+            if (!empty($row['date_joined'])) {
+                try {
+                    $dateJoined = is_numeric($row['date_joined'])
+                        ? \Carbon\Carbon::instance(\PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($row['date_joined']))->format('Y-m-d')
+                        : \Carbon\Carbon::parse($row['date_joined'])->format('Y-m-d');
+                } catch (\Exception $e) {
+                    $dateJoined = null;
+                }
+            }
+
             // Create or Update Staff Profile
             $staff = Staff::updateOrCreate(
                 ['user_id' => $user->id],
@@ -64,6 +99,18 @@ class StaffImport implements ToModel, WithChunkReading, WithHeadingRow, WithVali
                     'designation' => $row['designation'] ?? null,
                     'department_id' => $departmentId,
                     'is_academic' => filter_var($row['is_academic'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                    'phone_number' => $row['phone_number'] ?? null,
+                    'gender' => strtolower($row['gender'] ?? 'male'),
+                    'date_of_birth' => $dateOfBirth,
+                    'marital_status' => $row['marital_status'] ?? null,
+                    'address' => $row['address'] ?? null,
+                    'nationality' => $row['nationality'] ?? null,
+                    'state_id' => $stateId,
+                    'lga_id' => $lgaId,
+                    'specialization' => $row['specialization'] ?? null,
+                    'research_interests' => $row['research_interests'] ?? null,
+                    'highest_qualification' => $row['highest_qualification'] ?? null,
+                    'date_joined' => $dateJoined,
                 ]
             );
 
@@ -97,7 +144,19 @@ class StaffImport implements ToModel, WithChunkReading, WithHeadingRow, WithVali
     {
         return [
             'name' => 'required|string',
-            'email' => 'required|email',
+            'email' => [
+                'required',
+                'email',
+                function ($attribute, $value, $fail) {
+                    $exists = \App\Models\User::where('email', $value)
+                        ->whereHas('roles', function ($q) {
+                            $q->where('name', 'student');
+                        })->exists();
+                    if ($exists) {
+                        $fail("The email {$value} is already associated with a student.");
+                    }
+                }
+            ],
             'staff_number' => 'required|string',
             'department' => 'nullable|string',
         ];

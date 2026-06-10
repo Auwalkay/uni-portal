@@ -4,16 +4,18 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil } from 'lucide-vue-next';
+import { Plus, Pencil, BookOpen } from 'lucide-vue-next';
 
 defineProps<{
     programmes: {
         data: Array<any>;
         links: Array<any>;
     };
+    canManage: boolean;
+    canManageCourses: boolean;
 }>();
 
-const emit = defineEmits(['create', 'edit', 'toggle']);
+const emit = defineEmits(['create', 'edit', 'toggle', 'manage-courses']);
 </script>
 
 <template>
@@ -23,7 +25,7 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                 <CardTitle>Programmes</CardTitle>
                 <CardDescription>Manage degree programmes.</CardDescription>
             </div>
-            <Button @click="emit('create')"><Plus class="mr-2 h-4 w-4" /> Add Programme</Button>
+            <Button v-if="canManage" @click="emit('create')"><Plus class="mr-2 h-4 w-4" /> Add Programme</Button>
         </CardHeader>
         <CardContent>
             <Table>
@@ -34,7 +36,7 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                         <TableHead>Department</TableHead>
                         <TableHead>Faculty</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead class="text-right">Actions</TableHead>
+                        <TableHead class="text-right" v-if="canManage || canManageCourses">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -44,12 +46,17 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                         <TableCell>{{ prog.department?.name }}</TableCell>
                         <TableCell>{{ prog.department?.faculty?.name }}</TableCell>
                         <TableCell>
-                                <Switch :checked="prog.is_active" @update:checked="emit('toggle', prog.id, prog.is_active)" />
+                                <Switch :disabled="!canManage" :checked="prog.is_active" @update:checked="emit('toggle', prog.id, prog.is_active)" />
                         </TableCell>
-                        <TableCell class="text-right">
-                            <Button variant="ghost" size="icon" @click="emit('edit', prog)">
-                                <Pencil class="h-4 w-4" />
-                            </Button>
+                        <TableCell class="text-right" v-if="canManage || canManageCourses">
+                            <div class="flex justify-end gap-1">
+                                <Button v-if="canManageCourses" variant="ghost" size="icon" @click="emit('manage-courses', prog)" title="Manage Courses">
+                                    <BookOpen class="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                                </Button>
+                                <Button v-if="canManage" variant="ghost" size="icon" @click="emit('edit', prog)" title="Edit">
+                                    <Pencil class="h-4 w-4" />
+                                </Button>
+                            </div>
                         </TableCell>
                     </TableRow>
                 </TableBody>

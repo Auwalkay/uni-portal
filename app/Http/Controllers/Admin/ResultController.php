@@ -3,17 +3,17 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Imports\ResultImport;
 use App\Models\Course;
 use App\Models\CourseRegistration;
-use App\Models\Session;
 use App\Models\Department;
 use App\Models\Faculty;
 use App\Models\Semester;
+use App\Models\Session;
 use App\Services\GradingService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
-use App\Imports\ResultImport;
 
 class ResultController extends Controller
 {
@@ -41,22 +41,22 @@ class ResultController extends Controller
         $sortBy = $request->input('sort_by', 'code');
         $sortDir = $request->input('sort_dir', 'asc');
 
-        if (!in_array($sortBy, ['code', 'level', 'department'])) {
+        if (! in_array($sortBy, ['code', 'level', 'department'])) {
             $sortBy = 'code';
         }
-        if (!in_array($sortDir, ['asc', 'desc'])) {
+        if (! in_array($sortDir, ['asc', 'desc'])) {
             $sortDir = 'asc';
         }
 
-        $semesters = Semester::when($selectedSessionId, fn($q) => $q->where('session_id', $selectedSessionId))->get();
+        $semesters = Semester::when($selectedSessionId, fn ($q) => $q->where('session_id', $selectedSessionId))->get();
 
         $user = auth()->user();
         $courses = Course::query()
             ->select('courses.*')
             ->with(['department', 'program'])
-            ->when(!$user->can('manage_results'), function ($query) use ($user, $selectedSessionId) {
+            ->when(! $user->can('manage_results'), function ($query) use ($user, $selectedSessionId) {
                 $query->whereHas('allocations', function ($q) use ($user, $selectedSessionId) {
-                    $q->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
+                    $q->whereHas('staff', fn ($sq) => $sq->where('user_id', $user->id));
                     if ($selectedSessionId) {
                         $q->where('session_id', $selectedSessionId);
                     }
@@ -71,58 +71,58 @@ class ResultController extends Controller
             ->when($hasRegistrations, function ($query) use ($selectedSessionId, $selectedSemesterId) {
                 $query->whereHas('registrations', function ($q) use ($selectedSessionId, $selectedSemesterId) {
                     $q->where('session_id', $selectedSessionId)
-                      ->when($selectedSemesterId, fn($sq) => $sq->where('semester_id', $selectedSemesterId));
+                        ->when($selectedSemesterId, fn ($sq) => $sq->where('semester_id', $selectedSemesterId));
                 });
             })
             ->when($selectedSemesterId, function ($query, $semesterId) use ($selectedSessionId) {
                 $query->whereHas('registrations', function ($q) use ($selectedSessionId, $semesterId) {
                     $q->where('session_id', $selectedSessionId)
-                      ->where('semester_id', $semesterId);
+                        ->where('semester_id', $semesterId);
                 });
             })
             ->when($publishStatus === 'published', function ($query) use ($selectedSessionId, $selectedSemesterId) {
                 $query->whereHas('registrations', function ($q) use ($selectedSessionId, $selectedSemesterId) {
                     $q->where('session_id', $selectedSessionId)
-                      ->when($selectedSemesterId, fn($sq) => $sq->where('semester_id', $selectedSemesterId))
-                      ->where('is_published', true);
+                        ->when($selectedSemesterId, fn ($sq) => $sq->where('semester_id', $selectedSemesterId))
+                        ->where('is_published', true);
                 });
             })
             ->when($publishStatus === 'unpublished', function ($query) use ($selectedSessionId, $selectedSemesterId) {
                 $query->whereDoesntHave('registrations', function ($q) use ($selectedSessionId, $selectedSemesterId) {
                     $q->where('session_id', $selectedSessionId)
-                      ->when($selectedSemesterId, fn($sq) => $sq->where('semester_id', $selectedSemesterId))
-                      ->where('is_published', true);
+                        ->when($selectedSemesterId, fn ($sq) => $sq->where('semester_id', $selectedSemesterId))
+                        ->where('is_published', true);
                 });
             })
             // Optimization: Load results stats for the selected session and semester
             ->withCount([
                 'registrations as graded_count' => function ($query) use ($selectedSessionId, $selectedSemesterId) {
                     $query->where('session_id', $selectedSessionId)
-                        ->when($selectedSemesterId, fn($q) => $q->where('semester_id', $selectedSemesterId))
+                        ->when($selectedSemesterId, fn ($q) => $q->where('semester_id', $selectedSemesterId))
                         ->where(function ($q) {
                             $q->whereNotNull('score')
-                              ->orWhere('is_absent', true);
+                                ->orWhere('is_absent', true);
                         });
-                }
+                },
             ])
             ->withCount([
                 'registrations as total_students' => function ($query) use ($selectedSessionId, $selectedSemesterId) {
                     $query->where('session_id', $selectedSessionId)
-                        ->when($selectedSemesterId, fn($q) => $q->where('semester_id', $selectedSemesterId));
-                }
+                        ->when($selectedSemesterId, fn ($q) => $q->where('semester_id', $selectedSemesterId));
+                },
             ])
             ->withCount([
                 'registrations as published_count' => function ($query) use ($selectedSessionId, $selectedSemesterId) {
                     $query->where('session_id', $selectedSessionId)
-                        ->when($selectedSemesterId, fn($q) => $q->where('semester_id', $selectedSemesterId))
+                        ->when($selectedSemesterId, fn ($q) => $q->where('semester_id', $selectedSemesterId))
                         ->where('is_published', true);
-                }
+                },
             ])
             ->when($sortBy === 'department', function ($query) use ($sortDir) {
                 $query->leftJoin('departments', 'courses.department_id', '=', 'departments.id')
                     ->orderBy('departments.name', $sortDir);
             }, function ($query) use ($sortBy, $sortDir) {
-                $query->orderBy('courses.' . $sortBy, $sortDir);
+                $query->orderBy('courses.'.$sortBy, $sortDir);
             })
             ->paginate(20)
             ->withQueryString();
@@ -145,20 +145,20 @@ class ResultController extends Controller
             ],
             'can' => [
                 'publish_results' => $user->can('publish_results') || $user->hasRole('admin'),
-            ]
+            ],
         ]);
     }
 
     public function publish(Request $request, Course $course)
     {
         $user = auth()->user();
-        if (!$user->can('publish_results') && !$user->hasRole('admin')) {
+        if (! $user->can('publish_results') && ! $user->hasRole('admin')) {
             abort(403, 'You do not have permission to publish results.');
         }
 
         $request->validate([
             'session_id' => 'required|exists:academic_sessions,id',
-            'is_published' => 'required|boolean'
+            'is_published' => 'required|boolean',
         ]);
 
         CourseRegistration::where('course_id', $course->id)
@@ -166,13 +166,14 @@ class ResultController extends Controller
             ->update(['is_published' => $request->is_published]);
 
         $status = $request->is_published ? 'published' : 'unpublished';
+
         return back()->with('success', "Results for {$course->code} have been {$status}.");
     }
 
     public function publishSession(Request $request, Session $session)
     {
         $user = auth()->user();
-        if (!$user->can('publish_results') && !$user->hasRole('admin')) {
+        if (! $user->can('publish_results') && ! $user->hasRole('admin')) {
             abort(403, 'You do not have permission to publish results.');
         }
 
@@ -206,7 +207,7 @@ class ResultController extends Controller
             $gradedCourseIds = CourseRegistration::where('session_id', $session->id)
                 ->where(function ($q) {
                     $q->whereNotNull('score')
-                      ->orWhere('is_absent', true);
+                        ->orWhere('is_absent', true);
                 })
                 ->when($departmentId || $level, function ($q) use ($departmentId, $level) {
                     $q->whereHas('course', function ($cq) use ($departmentId, $level) {
@@ -238,12 +239,12 @@ class ResultController extends Controller
     public function edit(Course $course, Request $request)
     {
         $user = auth()->user();
-        if (!$user->can('manage_results')) {
+        if (! $user->can('manage_results')) {
             $allocated = \App\Models\CourseAllocation::where('course_id', $course->id)
-                ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
+                ->whereHas('staff', fn ($q) => $q->where('user_id', $user->id))
                 ->exists();
-            
-            if (!$allocated) {
+
+            if (! $allocated) {
                 abort(403, 'You are not allocated to this course.');
             }
         }
@@ -272,12 +273,12 @@ class ResultController extends Controller
     public function update(Request $request, Course $course)
     {
         $user = auth()->user();
-        if (!$user->can('manage_results')) {
+        if (! $user->can('manage_results')) {
             $allocated = \App\Models\CourseAllocation::where('course_id', $course->id)
-                ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
+                ->whereHas('staff', fn ($q) => $q->where('user_id', $user->id))
                 ->exists();
-            
-            if (!$allocated) {
+
+            if (! $allocated) {
                 abort(403, 'You are not allocated to this course.');
             }
         }
@@ -292,7 +293,7 @@ class ResultController extends Controller
         foreach ($request->scores as $data) {
             $reg = CourseRegistration::find($data['id']);
 
-            if (!empty($data['is_absent'])) {
+            if (! empty($data['is_absent'])) {
                 $reg->update([
                     'ca_score' => 0,
                     'exam_score' => 0,
@@ -307,8 +308,9 @@ class ResultController extends Controller
                 $total = $ca + $exam;
 
                 // Simple validation clamp
-                if ($total > 100)
+                if ($total > 100) {
                     $total = 100;
+                }
 
                 $grading = $this->gradingService->calculate($total);
 
@@ -329,27 +331,28 @@ class ResultController extends Controller
     public function upload(Request $request, Course $course)
     {
         $user = auth()->user();
-        if (!$user->can('manage_results')) {
+        if (! $user->can('manage_results')) {
             $allocated = \App\Models\CourseAllocation::where('course_id', $course->id)
-                ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
+                ->whereHas('staff', fn ($q) => $q->where('user_id', $user->id))
                 ->exists();
-            
-            if (!$allocated) {
+
+            if (! $allocated) {
                 abort(403, 'You are not allocated to this course.');
             }
         }
         $request->validate([
             'file' => 'required|mimes:xlsx,xls,csv',
-            'session_id' => 'required|exists:academic_sessions,id'
+            'session_id' => 'required|exists:academic_sessions,id',
         ]);
 
         $session = Session::findOrFail($request->session_id);
 
         try {
             Excel::import(new ResultImport($course, $session, $this->gradingService), $request->file('file'));
+
             return back()->with('success', 'Results imported successfully.');
         } catch (\Exception $e) {
-            return back()->with('error', 'Import failed: ' . $e->getMessage());
+            return back()->with('error', 'Import failed: '.$e->getMessage());
         }
     }
 }
