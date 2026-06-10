@@ -117,7 +117,7 @@ const academicsItems = computed(() => {
             show: hasPermission('manage_courses'),
         },
         {
-            title: 'Allocations',
+            title: 'Course Allocations',
             href: route().has('admin.course-allocations.index') ? route('admin.course-allocations.index') : '#',
             icon: CalendarRange,
             show: hasPermission('assign_coordinators'),

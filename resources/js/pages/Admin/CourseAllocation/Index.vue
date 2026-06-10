@@ -24,6 +24,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import AdminLayout from '@/layouts/AdminLayout.vue';
+import SearchableSelect from '@/components/SearchableSelect.vue';
 const props = defineProps<{
   allocations: { data: Array<any>; links: Array<any>; from: number; to: number; total: number };
   sessions: Array<{ id: string; name: string }>;
@@ -34,6 +35,20 @@ const props = defineProps<{
   filters: { session_id?: string; department_id?: string; search?: string; faculty_id?: string };
   currentSessionId?: string;
 }>();
+
+const sessionItems = computed(() => props.sessions.map(s => ({ value: String(s.id), label: s.name })));
+const courseItems = computed(() => props.courses.map(c => ({ value: String(c.id), label: `${c.code} - ${c.title}` })));
+const lecturerItems = computed(() => props.lecturers.map(l => ({ value: String(l.id), label: l.name })));
+const departmentItems = computed(() => {
+  const list: Array<{ value: string; label: string }> = [];
+  props.faculties.forEach(f => {
+    f.departments.forEach(d => {
+      list.push({ value: String(d.id), label: `${d.name} (${f.name})` });
+    });
+  });
+  return list;
+});
+const programmeItems = computed(() => props.programmes.map(p => ({ value: String(p.id), label: p.name })));
 
 const search = ref(props.filters.search || '');
 const selectedSession = ref(props.filters.session_id || props.currentSessionId || '');
@@ -190,16 +205,13 @@ const getLecturerName = (staffId: string) => {
                 <div class="grid grid-cols-4 items-center gap-4">
                   <Label class="text-right">Session</Label>
                   <div class="col-span-3">
-                    <Select v-model="form.session_id">
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Session" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem v-for="s in sessions" :key="s.id" :value="String(s.id)">
-                          {{ s.name }}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      v-model="form.session_id"
+                      :items="sessionItems"
+                      placeholder="Select Session"
+                      search-placeholder="Search sessions..."
+                      :error-class="!!form.errors.session_id"
+                    />
                   </div>
                 </div>
 
@@ -207,16 +219,13 @@ const getLecturerName = (staffId: string) => {
                 <div class="grid grid-cols-4 items-center gap-4">
                   <Label class="text-right">Course</Label>
                   <div class="col-span-3">
-                    <Select v-model="form.course_id">
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Course" />
-                      </SelectTrigger>
-                      <SelectContent class="max-h-[200px]">
-                        <SelectItem v-for="c in courses" :key="c.id" :value="String(c.id)">
-                          {{ c.code }} - {{ c.title }}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      v-model="form.course_id"
+                      :items="courseItems"
+                      placeholder="Select Course"
+                      search-placeholder="Search courses..."
+                      :error-class="!!form.errors.course_id"
+                    />
                   </div>
                 </div>
 
@@ -224,16 +233,13 @@ const getLecturerName = (staffId: string) => {
                 <div class="grid grid-cols-4 items-center gap-4">
                   <Label class="text-right">Lecturer</Label>
                   <div class="col-span-3">
-                    <Select v-model="form.staff_id">
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Lecturer" />
-                      </SelectTrigger>
-                      <SelectContent class="max-h-[200px]">
-                        <SelectItem v-for="l in lecturers" :key="l.id" :value="String(l.id)">
-                          {{ l.name }}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      v-model="form.staff_id"
+                      :items="lecturerItems"
+                      placeholder="Select Lecturer"
+                      search-placeholder="Search lecturers..."
+                      :error-class="!!form.errors.staff_id"
+                    />
                   </div>
                 </div>
 
@@ -241,23 +247,13 @@ const getLecturerName = (staffId: string) => {
                 <div class="grid grid-cols-4 items-center gap-4">
                   <Label class="text-right">Department</Label>
                   <div class="col-span-3">
-                    <Select v-model="form.department_id">
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Department (Optional)" />
-                      </SelectTrigger>
-                      <SelectContent class="max-h-[200px]">
-                        <SelectGroup v-for="f in faculties" :key="f.id">
-                          <SelectLabel>{{ f.name }}</SelectLabel>
-                          <SelectItem
-                            v-for="d in f.departments"
-                            :key="d.id"
-                            :value="String(d.id)"
-                          >
-                            {{ d.name }}
-                          </SelectItem>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      v-model="form.department_id"
+                      :items="departmentItems"
+                      placeholder="Select Department (Optional)"
+                      search-placeholder="Search departments..."
+                      :error-class="!!form.errors.department_id"
+                    />
                     <p class="text-[0.8rem] text-muted-foreground mt-1">
                       Specify if this allocation is for a specific department.
                     </p>
@@ -268,16 +264,13 @@ const getLecturerName = (staffId: string) => {
                 <div class="grid grid-cols-4 items-center gap-4">
                   <Label class="text-right">Programme</Label>
                   <div class="col-span-3">
-                    <Select v-model="form.program_id">
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Programme (Optional)" />
-                      </SelectTrigger>
-                      <SelectContent class="max-h-[200px]">
-                        <SelectItem v-for="p in programmes" :key="p.id" :value="String(p.id)">
-                          {{ p.name }}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      v-model="form.program_id"
+                      :items="programmeItems"
+                      placeholder="Select Programme (Optional)"
+                      search-placeholder="Search programmes..."
+                      :error-class="!!form.errors.program_id"
+                    />
                     <p class="text-[0.8rem] text-muted-foreground mt-1">
                       Specify if this allocation is for a specific programme.
                     </p>

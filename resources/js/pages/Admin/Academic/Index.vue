@@ -12,9 +12,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Swal from 'sweetalert2';
-import { Plus, Pencil } from 'lucide-vue-next';
+import { Plus, Pencil, BookOpen, Trash2, Loader2 } from 'lucide-vue-next';
 import { ref } from 'vue';
 import { route } from 'ziggy-js'; 
+import SearchableSelect from '@/components/SearchableSelect.vue';
 import FacultiesTab from './Partials/FacultiesTab.vue';
 import DepartmentsTab from './Partials/DepartmentsTab.vue';
 import ProgrammesTab from './Partials/ProgrammesTab.vue';
@@ -30,8 +31,11 @@ const props = defineProps<{
     allFaculties: any[];
     allDepartments: any[];
     allProgrammes: any[];
+    allCourses: any[];
     filters: any;
 }>();
+
+const courseSearchItems = computed(() => props.allCourses.map(c => ({ value: c.id, label: `${c.code} - ${c.title} (${c.units} Units)` })));
 
 const isModalOpen = ref(false);
 const modalMode = ref<'create' | 'edit'>('create');
@@ -204,6 +208,189 @@ const toggleActive = (type: string, id: string, currentState: boolean) => {
         })
     });
 };
+
+// Programme Courses Management State & Methods
+const isProgrammeCoursesOpen = ref(false);
+watch(isProgrammeCoursesOpen, (isOpen) => {
+    if (!isOpen) {
+        if (document.activeElement && document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+        }
+    }
+});
+const selectedProgrammeForCourses = ref<any>(null);
+const programmeCoursesList = ref<any[]>([]);
+const isFetchingCourses = ref(false);
+
+const newProgrammeCourseForm = ref({
+    course_id: '',
+    is_compulsory: false,
+});
+const isSubmittingProgrammeCourse = ref(false);
+
+const importProgrammeId = ref('');
+const isImportingCourses = ref(false);
+const assignedSearchQuery = ref('');
+
+const importProgrammeSearchItems = computed(() => {
+    if (!selectedProgrammeForCourses.value) return [];
+    return props.allProgrammes
+        .filter(p => p.id !== selectedProgrammeForCourses.value.id)
+        .map(p => ({ value: p.id, label: p.name }));
+});
+
+const filteredAssignedCourses = computed(() => {
+    if (!assignedSearchQuery.value) return programmeCoursesList.value;
+    const q = assignedSearchQuery.value.toLowerCase();
+    return programmeCoursesList.value.filter(c => 
+        c.code.toLowerCase().includes(q) || 
+        c.title.toLowerCase().includes(q)
+    );
+});
+
+const openManageProgrammeCourses = async (prog: any) => {
+    selectedProgrammeForCourses.value = prog;
+    isProgrammeCoursesOpen.value = true;
+    newProgrammeCourseForm.value.course_id = '';
+    newProgrammeCourseForm.value.is_compulsory = false;
+    importProgrammeId.value = '';
+    assignedSearchQuery.value = '';
+    await fetchProgrammeCourses(prog.id);
+};
+
+const fetchProgrammeCourses = async (progId: string) => {
+    isFetchingCourses.value = true;
+    try {
+        const res = await window.fetch(route('admin.academics.programmes.courses', progId));
+        if (res.ok) {
+            programmeCoursesList.value = await res.json();
+        } else {
+            Swal.fire('Error', 'Failed to load programme courses', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        Swal.fire('Error', 'Failed to load programme courses', 'error');
+    } finally {
+        isFetchingCourses.value = false;
+    }
+};
+
+const submitAddProgrammeCourse = async () => {
+    if (!newProgrammeCourseForm.value.course_id) {
+        Swal.fire('Validation Error', 'Please select a course to add', 'warning');
+        return;
+    }
+    isSubmittingProgrammeCourse.value = true;
+    try {
+        const res = await window.fetch(route('admin.academics.programmes.courses.store', selectedProgrammeForCourses.value.id), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+            },
+            body: JSON.stringify(newProgrammeCourseForm.value),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Added',
+                text: data.message || 'Course added successfully',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
+            });
+            newProgrammeCourseForm.value.course_id = '';
+            newProgrammeCourseForm.value.is_compulsory = false;
+            await fetchProgrammeCourses(selectedProgrammeForCourses.value.id);
+        } else {
+            Swal.fire('Error', data.message || 'Failed to add course', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        Swal.fire('Error', 'Failed to add course', 'error');
+    } finally {
+        isSubmittingProgrammeCourse.value = false;
+    }
+};
+
+const submitImportProgrammeCourses = async () => {
+    if (!importProgrammeId.value) {
+        Swal.fire('Validation Error', 'Please select a programme to import from', 'warning');
+        return;
+    }
+    const confirmResult = window.confirm('Import courses from the selected programme? Existing course mappings will be preserved.');
+    if (!confirmResult) return;
+
+    isImportingCourses.value = true;
+    try {
+        const res = await window.fetch(route('admin.academics.programmes.courses.import', selectedProgrammeForCourses.value.id), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+            },
+            body: JSON.stringify({ source_programme_id: importProgrammeId.value }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Imported',
+                text: data.message || 'Courses imported successfully',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
+            });
+            importProgrammeId.value = '';
+            await fetchProgrammeCourses(selectedProgrammeForCourses.value.id);
+        } else {
+            Swal.fire('Error', data.message || 'Failed to import courses', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        Swal.fire('Error', 'Failed to import courses', 'error');
+    } finally {
+        isImportingCourses.value = false;
+    }
+};
+
+const removeProgrammeCourse = async (courseId: string) => {
+    const confirmResult = window.confirm('Are you sure you want to remove this course from the programme?');
+    if (!confirmResult) return;
+
+    try {
+        const res = await window.fetch(route('admin.academics.programmes.courses.destroy', {
+            programme: selectedProgrammeForCourses.value.id,
+            course: courseId
+        }), {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+            },
+        });
+        const data = await res.json();
+        if (res.ok) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Removed',
+                text: data.message || 'Course removed successfully',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
+            });
+            await fetchProgrammeCourses(selectedProgrammeForCourses.value.id);
+        } else {
+            Swal.fire('Error', data.message || 'Failed to remove course', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        Swal.fire('Error', 'Failed to remove course', 'error');
+    }
+};
 </script>
 
 <template>
@@ -288,7 +475,8 @@ const toggleActive = (type: string, id: string, currentState: boolean) => {
                         :programmes="programmes" 
                         @create="openCreate('programme')" 
                         @edit="(item) => openEdit('programme', item)"
-                         @toggle="(id, state) => toggleActive('programme', id, state)"
+                        @toggle="(id, state) => toggleActive('programme', id, state)"
+                        @manage-courses="openManageProgrammeCourses"
                     />
                 </TabsContent>
 
@@ -533,6 +721,187 @@ const toggleActive = (type: string, id: string, currentState: boolean) => {
                     <DialogFooter>
                         <Button variant="outline" @click="isModalOpen = false">Cancel</Button>
                         <Button @click="submitForm" :disabled="form.processing">Save changes</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <!-- PROGRAMME COURSES MANAGEMENT DIALOG -->
+            <Dialog v-model:open="isProgrammeCoursesOpen">
+                <DialogContent 
+                    @pointer-down-outside.prevent
+                    class="sm:max-w-[95vw] md:max-w-[90vw] lg:max-w-[1100px] xl:max-w-[1200px] max-h-[90vh] flex flex-col p-6 overflow-hidden bg-card/95 backdrop-blur-md border border-border/80 shadow-2xl rounded-2xl"
+                >
+                    <DialogHeader class="pb-4 border-b border-border/50">
+                        <div class="flex items-center space-x-3">
+                            <div class="p-2.5 bg-primary/10 text-primary rounded-xl">
+                                <BookOpen class="h-6 w-6 animate-pulse" />
+                            </div>
+                            <div>
+                                <DialogTitle class="text-xl font-bold tracking-tight text-foreground">
+                                    {{ selectedProgrammeForCourses?.name || 'Programme Courses' }}
+                                </DialogTitle>
+                                <DialogDescription class="text-sm text-muted-foreground mt-0.5">
+                                    Manage assigned courses and academic requirements for this programme.
+                                </DialogDescription>
+                            </div>
+                        </div>
+                    </DialogHeader>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 overflow-hidden py-4 min-h-0">
+                        <!-- LEFT COLUMN: Assigned Courses List -->
+                        <div class="lg:col-span-7 flex flex-col min-h-0 space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <h3 class="text-sm font-semibold tracking-wide uppercase text-muted-foreground/80">Assigned Courses</h3>
+                                    <Badge variant="secondary" class="font-semibold bg-muted hover:bg-muted text-muted-foreground text-xs py-0.5 px-2">
+                                        {{ programmeCoursesList.length }} Assigned
+                                    </Badge>
+                                </div>
+                                <div class="relative w-48 sm:w-64">
+                                     <Input v-slot="input" v-model="assignedSearchQuery" placeholder="Search assigned courses..." class="h-8 text-xs pl-8 pr-3" />
+                                     <span class="absolute left-2.5 top-2 text-muted-foreground/60">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                     </span>
+                                </div>
+                            </div>
+                            
+                            <div v-if="isFetchingCourses" class="flex flex-col items-center justify-center flex-1 py-12 space-y-3 border border-dashed rounded-xl bg-card">
+                                <Loader2 class="h-8 w-8 text-primary animate-spin" />
+                                <p class="text-sm text-muted-foreground animate-pulse">Loading programme courses...</p>
+                            </div>
+
+                            <div v-else-if="programmeCoursesList.length === 0" class="flex flex-col items-center justify-center flex-1 py-12 border border-dashed rounded-xl bg-card text-center px-4">
+                                <div class="p-3 bg-muted rounded-full text-muted-foreground/60 mb-3">
+                                    <BookOpen class="h-6 w-6" />
+                                </div>
+                                <p class="text-sm font-medium text-foreground">No courses assigned yet</p>
+                                <p class="text-xs text-muted-foreground mt-1 max-w-[280px]">Choose a course or import them using the options on the right.</p>
+                            </div>
+
+                            <div v-else-if="filteredAssignedCourses.length === 0" class="flex flex-col items-center justify-center flex-1 py-12 border border-dashed rounded-xl bg-card text-center px-4">
+                                <p class="text-sm font-medium text-foreground">No matching courses found</p>
+                                <p class="text-xs text-muted-foreground mt-1">Try checking your search spelling or change the search query.</p>
+                            </div>
+
+                            <div v-else class="flex-1 overflow-y-auto border rounded-xl bg-card/50 min-h-0">
+                                <Table>
+                                    <TableHeader class="bg-muted/30 sticky top-0 z-10">
+                                        <TableRow>
+                                            <TableHead class="font-semibold text-xs text-muted-foreground/80 py-3">Code</TableHead>
+                                            <TableHead class="font-semibold text-xs text-muted-foreground/80 py-3">Title</TableHead>
+                                            <TableHead class="font-semibold text-xs text-muted-foreground/80 py-3">Units</TableHead>
+                                            <TableHead class="font-semibold text-xs text-muted-foreground/80 py-3">Type</TableHead>
+                                            <TableHead class="w-[80px] text-right py-3"></TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        <TableRow 
+                                            v-for="course in filteredAssignedCourses" 
+                                            :key="course.id"
+                                            class="hover:bg-muted/20 transition-colors duration-150"
+                                        >
+                                            <TableCell class="font-mono font-bold text-sm text-foreground/90 py-3.5">{{ course.code }}</TableCell>
+                                            <TableCell class="font-medium text-sm text-foreground/90 py-3.5 max-w-[220px] truncate" :title="course.title">{{ course.title }}</TableCell>
+                                            <TableCell class="text-sm text-muted-foreground py-3.5">{{ course.units }} Units</TableCell>
+                                            <TableCell class="py-3.5">
+                                                <span 
+                                                    :class="[
+                                                        'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold select-none border',
+                                                        course.is_compulsory 
+                                                            ? 'bg-rose-500/10 text-rose-500 border-rose-500/20' 
+                                                            : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                                                    ]"
+                                                >
+                                                    {{ course.is_compulsory ? 'Core' : 'Elective' }}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell class="text-right py-3.5">
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    @click="removeProgrammeCourse(course.id)"
+                                                    class="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all"
+                                                    title="Remove from programme"
+                                                >
+                                                    <Trash2 class="h-4 w-4" />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </div>
+
+                        <!-- RIGHT COLUMN: Add / Import Tools -->
+                        <div class="lg:col-span-5 flex flex-col space-y-6 min-h-0 overflow-y-auto pr-1">
+                            <!-- Assign New Course Panel -->
+                            <div class="p-5 bg-muted/40 border border-muted/80 rounded-xl space-y-4 shadow-sm">
+                                <h3 class="text-sm font-semibold tracking-wide uppercase text-muted-foreground/80">Assign New Course</h3>
+                                <form @submit.prevent="submitAddProgrammeCourse" class="space-y-4">
+                                    <div class="space-y-1.5 w-full">
+                                        <Label class="text-xs font-medium text-muted-foreground">Select Course</Label>
+                                        <SearchableSelect 
+                                            v-model="newProgrammeCourseForm.course_id" 
+                                            :items="courseSearchItems" 
+                                            placeholder="Search and select course..." 
+                                            disable-portal 
+                                        />
+                                    </div>
+                                    
+                                    <div class="flex items-center justify-between h-10 px-4 bg-background border rounded-lg w-full select-none">
+                                        <span class="text-sm font-medium text-foreground">Core / Compulsory Course</span>
+                                        <Switch 
+                                            :checked="newProgrammeCourseForm.is_compulsory" 
+                                            @update:checked="(val) => newProgrammeCourseForm.is_compulsory = val" 
+                                            id="is_compulsory" 
+                                        />
+                                    </div>
+
+                                    <Button 
+                                        type="submit" 
+                                        :disabled="isSubmittingProgrammeCourse || !newProgrammeCourseForm.course_id" 
+                                        class="w-full h-10 px-5 bg-gradient-to-r from-primary to-indigo-600 text-white font-medium hover:from-primary/90 hover:to-indigo-600/90 active:scale-95 transition-all duration-150 shadow-md flex items-center justify-center gap-2"
+                                    >
+                                        <Loader2 v-if="isSubmittingProgrammeCourse" class="h-4 w-4 animate-spin" />
+                                        <Plus v-else class="h-4 w-4" />
+                                        Add Course
+                                    </Button>
+                                </form>
+                            </div>
+
+                            <!-- Import Courses Panel -->
+                            <div class="p-5 bg-muted/40 border border-muted/80 rounded-xl space-y-4 shadow-sm">
+                                <h3 class="text-sm font-semibold tracking-wide uppercase text-muted-foreground/80">Import from Programme</h3>
+                                <p class="text-xs text-muted-foreground leading-normal">
+                                    Quickly copy and assign all courses from another programme. Duplicates will be bypassed automatically.
+                                </p>
+                                <form @submit.prevent="submitImportProgrammeCourses" class="space-y-4">
+                                    <div class="space-y-1.5 w-full">
+                                        <Label class="text-xs font-medium text-muted-foreground">Select Source Programme</Label>
+                                        <SearchableSelect 
+                                            v-model="importProgrammeId" 
+                                            :items="importProgrammeSearchItems" 
+                                            placeholder="Select programme to copy from..." 
+                                            disable-portal 
+                                        />
+                                    </div>
+
+                                    <Button 
+                                        type="submit" 
+                                        :disabled="isImportingCourses || !importProgrammeId" 
+                                        class="w-full h-10 px-5 bg-gradient-to-r from-indigo-500 to-indigo-700 text-white font-medium hover:from-indigo-500/90 hover:to-indigo-700/90 active:scale-95 transition-all duration-150 shadow-md flex items-center justify-center gap-2"
+                                    >
+                                        <Loader2 v-if="isImportingCourses" class="h-4 w-4 animate-spin" />
+                                        <Plus v-else class="h-4 w-4" />
+                                        Import All Courses
+                                    </Button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter class="pt-4 border-t border-border/50">
+                        <Button variant="outline" @click="isProgrammeCoursesOpen = false" class="border-border/80 hover:bg-muted">Close</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

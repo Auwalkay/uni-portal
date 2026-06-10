@@ -259,7 +259,7 @@
                             <td class="course-code">{{ $reg->course->code }}</td>
                             <td>{{ $reg->course->title }}</td>
                             <td align="center">{{ $reg->course->units }}</td>
-                            <td align="center">CORE</td>
+                            <td align="center">{{ $reg->course->is_compulsory ? 'CORE' : 'ELECTIVE' }}</td>
                         </tr>
                         @php $semUnits += $reg->course->units; @endphp
                     @endforeach

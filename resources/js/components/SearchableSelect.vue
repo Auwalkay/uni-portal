@@ -1,92 +1,120 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import {
-  ComboboxRoot,
-  ComboboxInput,
-  ComboboxTrigger,
-  ComboboxContent,
-  ComboboxViewport,
-  ComboboxItem,
-  ComboboxItemIndicator,
-  ComboboxPortal,
-  ComboboxEmpty,
-  ComboboxGroup,
-  ComboboxLabel
-} from 'radix-vue'
-import { Check, ChevronsUpDown, Search } from 'lucide-vue-next'
-import { cn } from '@/lib/utils'
+import { ref, computed } from 'vue';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Search, ChevronDown, Check } from 'lucide-vue-next';
+import { cn } from '@/lib/utils';
 
-const props = defineProps<{
-  modelValue?: string | number | null
-  options: Array<{ value: string | number; label: string }>
-  placeholder?: string
-  disabled?: boolean
-}>()
+const props = withDefaults(defineProps<{
+    modelValue: string | number | null;
+    items: Array<{ value: string | number; label: string }>;
+    placeholder?: string;
+    searchPlaceholder?: string;
+    emptyText?: string;
+    disabled?: boolean;
+    errorClass?: boolean;
+}>(), {
+    placeholder: 'Select...',
+    searchPlaceholder: 'Search...',
+    emptyText: 'No results found.',
+    disabled: false,
+    errorClass: false,
+});
 
-const emits = defineEmits(['update:modelValue'])
+const emit = defineEmits<{
+    (e: 'update:modelValue', value: string | number): void;
+}>();
 
-const searchTerm = ref('')
-const filteredOptions = computed(() => {
-    if (!searchTerm.value) return props.options
-    return props.options.filter(option => 
-        option.label.toLowerCase().includes(searchTerm.value.toLowerCase())
-    )
-})
+const open = ref(false);
+const searchQuery = ref('');
 
-const displayValue = (v: any) => {
-    if (!v) return ''
-    const option = props.options.find(o => String(o.value) === String(v))
-    return option ? option.label : ''
-}
+const selectedItem = computed(() => {
+    return props.items.find(item => String(item.value) === String(props.modelValue));
+});
+
+const filteredItems = computed(() => {
+    if (!searchQuery.value) return props.items;
+    const q = searchQuery.value.toLowerCase();
+    return props.items.filter(item => 
+        item.label.toLowerCase().includes(q)
+    );
+});
+
+const selectItem = (value: string | number) => {
+    emit('update:modelValue', value);
+    open.value = false;
+    searchQuery.value = '';
+};
 </script>
 
 <template>
-  <ComboboxRoot
-    :model-value="modelValue ? String(modelValue) : ''"
-    @update:model-value="(v) => emits('update:modelValue', v)"
-    v-model:search-term="searchTerm"
-    class="relative w-full"
-    :display-value="displayValue"
-    :disabled="disabled"
-  >
-    <div class="relative w-full">
-        <div class="relative w-full">
-            <ComboboxInput
-            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 pr-10"
-            :placeholder="placeholder || 'Select option...'"
-            />
-            <ComboboxTrigger class="absolute top-0 right-0 h-full px-3 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer">
-                <ChevronsUpDown class="h-4 w-4 opacity-50" />
-            </ComboboxTrigger>
-        </div>
-    </div>
-
-    <ComboboxPortal>
-      <ComboboxContent 
-        class="z-[100] min-w-[200px] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 w-[--radix-combobox-trigger-width]"
+  <Popover v-model:open="open">
+    <PopoverTrigger as-child>
+      <Button
+        type="button"
+        variant="outline"
+        role="combobox"
+        :aria-expanded="open"
+        :disabled="disabled"
+        :class="cn(
+          'w-full justify-between text-left font-normal bg-background hover:bg-background border-input px-3 h-10',
+          errorClass && 'border-red-500 text-red-500',
+          !modelValue && 'text-muted-foreground',
+        )"
       >
-        <ComboboxViewport class="p-1 max-h-[200px]">
-            <ComboboxEmpty class="py-6 text-center text-sm text-muted-foreground">
-                No results found.
-            </ComboboxEmpty>
-            
-            <ComboboxGroup>
-                <ComboboxItem
-                    v-for="option in filteredOptions"
-                    :key="option.value"
-                    :value="String(option.value)"
-                    :text-value="option.label"
-                    class="relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
-                >
-                    <ComboboxItemIndicator class="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-                        <Check class="h-4 w-4" />
-                    </ComboboxItemIndicator>
-                    <span>{{ option.label }}</span>
-                </ComboboxItem>
-            </ComboboxGroup>
-
-        </ComboboxViewport>
-      </ComboboxContent>
-    </ComboboxPortal>
-  </ComboboxRoot>
+        <span class="truncate">
+          {{ selectedItem ? selectedItem.label : placeholder }}
+        </span>
+        <ChevronDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+      </Button>
+    </PopoverTrigger>
+    <PopoverContent 
+      class="w-[var(--radix-popover-trigger-width)] p-0 bg-popover text-popover-foreground border shadow-md rounded-md" 
+      align="start"
+      disable-portal
+      @pointerdown.stop
+      @mousedown.stop
+      @touchstart.stop
+    >
+      <div class="flex items-center border-b px-3">
+        <Search class="mr-2 h-4 w-4 shrink-0 opacity-50" />
+        <Input
+          v-model="searchQuery"
+          type="search"
+          :placeholder="searchPlaceholder"
+          class="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none border-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 shadow-none focus-visible:border-none focus:outline-none focus:ring-0"
+        />
+      </div>
+      
+      <div class="max-h-[200px] overflow-y-auto p-1 space-y-0.5">
+        <div 
+          v-if="filteredItems.length === 0" 
+          class="py-6 text-center text-sm text-muted-foreground"
+        >
+          {{ emptyText }}
+        </div>
+        
+        <button
+          v-else
+          v-for="item in filteredItems"
+          :key="item.value"
+          type="button"
+          @click="selectItem(item.value)"
+          :class="cn(
+            'relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground text-left',
+            String(item.value) === String(modelValue) && 'bg-accent text-accent-foreground font-medium'
+          )"
+        >
+          <Check
+            :class="cn(
+              'mr-2 h-4 w-4 shrink-0',
+              String(item.value) === String(modelValue) ? 'opacity-100' : 'opacity-0'
+            )"
+          />
+          <span class="truncate">{{ item.label }}</span>
+        </button>
+      </div>
+    </PopoverContent>
+  </Popover>
 </template>
