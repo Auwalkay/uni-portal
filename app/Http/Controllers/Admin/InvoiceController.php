@@ -253,13 +253,34 @@ class InvoiceController extends Controller
             'paid_amount' => $newTotalPaid,
         ]);
 
-        // Trigger enrollment if acceptance fee and now fully paid
-        if ($newStatus === 'paid' && $invoice->type === 'acceptance_fee') {
-            $applicant = \App\Models\Applicant::where('user_id', $invoice->user_id)
-                ->first();
+        // Trigger side-effects if now fully paid
+        if ($newStatus === 'paid') {
+            if ($invoice->type === 'acceptance_fee') {
+                $applicant = \App\Models\Applicant::where('user_id', $invoice->user_id)
+                    ->first();
 
-            if ($applicant) {
-                app(\App\Services\EnrollmentService::class)->enroll($applicant, $invoice->user_id);
+                if ($applicant) {
+                    app(\App\Services\EnrollmentService::class)->enroll($applicant, $invoice->user_id);
+                }
+            }
+
+            if ($invoice->type === 'hostel_fee') {
+                $booking = \App\Models\HostelBooking::where('invoice_id', $invoice->id)->first();
+                if ($booking) {
+                    $booking->update(['status' => 'confirmed']);
+                }
+            }
+
+            if ($invoice->type === 'application_fee') {
+                $applicant = \App\Models\Applicant::where('user_id', $invoice->user_id)->first();
+                if ($applicant && $applicant->status === 'pending_payment') {
+                    $applicant->update([
+                        'status' => 'submitted',
+                        'application_number' => \App\Helpers\ApplicationNumberHelper::generate(),
+                    ]);
+                    
+                    $invoice->user->notify(new \App\Notifications\ApplicationSubmitted($applicant));
+                }
             }
         }
 

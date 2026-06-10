@@ -277,4 +277,55 @@ class HostelBookingTest extends TestCase
             $response->assertRedirect();
         }
     }
+
+    public function test_manual_invoice_payment_confirms_hostel_booking()
+    {
+        $this->actingAs($this->admin);
+
+        // 1. Simulate school fees payment
+        $schoolInvoice = Invoice::create([
+            'user_id' => $this->studentUser->id,
+            'session_id' => $this->session->id,
+            'reference' => 'SCH-FEES-1',
+            'type' => 'school_fee',
+            'amount' => 100000.00,
+            'status' => 'paid',
+            'due_date' => now()->addDays(7),
+        ]);
+
+        // 2. Allocate Room (creates booking in pending status and hostel_fee invoice in pending status)
+        $this->post(route('admin.hostels.bookings.store'), [
+            'student_id' => $this->student->id,
+            'hostel_room_id' => $this->maleRoom->id,
+        ]);
+
+        $hostelInvoice = Invoice::where('user_id', $this->studentUser->id)
+            ->where('type', 'hostel_fee')
+            ->firstOrFail();
+
+        $this->assertDatabaseHas('hostel_bookings', [
+            'student_id' => $this->student->id,
+            'hostel_room_id' => $this->maleRoom->id,
+            'status' => 'pending',
+        ]);
+
+        // 3. Mark the hostel_fee invoice as paid manually by admin
+        $response = $this->post(route('admin.invoices.mark-as-paid', $hostelInvoice->id), [
+            'amount' => $hostelInvoice->amount,
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $response->assertStatus(302); // redirects back
+
+        // 4. Assert booking status is updated to confirmed
+        $this->assertDatabaseHas('hostel_bookings', [
+            'student_id' => $this->student->id,
+            'hostel_room_id' => $this->maleRoom->id,
+            'status' => 'confirmed',
+        ]);
+
+        // 5. Assert invoice status is updated to paid
+        $hostelInvoice->refresh();
+        $this->assertEquals('paid', $hostelInvoice->status);
+    }
 }
