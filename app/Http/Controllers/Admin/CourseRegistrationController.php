@@ -184,6 +184,8 @@ class CourseRegistrationController extends Controller
             }
         });
 
+        \App\Services\AcademicCacheService::clearTimetableCache();
+
         return to_route('admin.course_registration.manage', $student->id)->with('success', 'Course registration processed successfully.');
     }
 

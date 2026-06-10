@@ -22,18 +22,24 @@ use Maatwebsite\Excel\Concerns\WithValidation;
 class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithValidation
 {
     protected $processedCount = 0;
-
-    protected $faculties = [];
-
-    protected $departments = [];
-
-    protected $programmes = [];
-
-    protected $sessions = [];
+    protected $facultyId;
+    protected $departmentId;
+    protected $programmeId;
+    protected $sessionId;
+    protected $level;
 
     protected $states = [];
 
     protected $lgas = [];
+
+    public function __construct($facultyId, $departmentId, $programmeId, $sessionId, $level)
+    {
+        $this->facultyId = $facultyId;
+        $this->departmentId = $departmentId;
+        $this->programmeId = $programmeId;
+        $this->sessionId = $sessionId;
+        $this->level = $level;
+    }
 
     public function model(array $row)
     {
@@ -60,12 +66,6 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
                 $user->assignRole('student');
             }
 
-            // Lookups with caching
-            $facultyId = $this->getLookupId('faculty', $row['faculty']);
-            $departmentId = $this->getLookupId('department', $row['department']);
-            $programmeId = $this->getLookupId('programme', $row['programme']);
-            $sessionId = $this->getLookupId('session', $row['session']);
-
             // State & LGA (Optional)
             $stateId = null;
             if (! empty($row['state'])) {
@@ -90,17 +90,28 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
             // Generate or use provided matric number
             $matricNumber = $row['matric_number'] ?? MatriculationNumberHelper::generate();
 
+            $dob = null;
+            if (!empty($row['dob'])) {
+                try {
+                    $dob = is_numeric($row['dob'])
+                        ? \Carbon\Carbon::instance(\PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($row['dob']))->format('Y-m-d')
+                        : \Carbon\Carbon::parse($row['dob'])->format('Y-m-d');
+                } catch (\Exception $e) {
+                    $dob = $row['dob'];
+                }
+            }
+
             $student = Student::updateOrCreate(
                 ['user_id' => $user->id],
                 [
                     'matriculation_number' => $matricNumber,
-                    'faculty_id' => $facultyId,
-                    'department_id' => $departmentId,
-                    'program_id' => $programmeId,
-                    'admitted_session_id' => $sessionId,
-                    'current_level' => $row['level'] ?? '100',
+                    'faculty_id' => $this->facultyId,
+                    'department_id' => $this->departmentId,
+                    'program_id' => $this->programmeId,
+                    'admitted_session_id' => $this->sessionId,
+                    'current_level' => $this->level,
                     'gender' => strtolower($row['gender'] ?? 'male'),
-                    'dob' => $row['dob'] ?? null,
+                    'dob' => $dob,
                     'phone_number' => $row['phone_number'] ?? null,
                     'address' => $row['address'] ?? null,
                     'entry_mode' => $row['entry_mode'] ?? 'UTME',
@@ -113,14 +124,14 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
             );
 
 
-            $currentSession = \App\Models\Session::find($student->admitted_session_id);
+            $currentSession = \App\Models\Session::find($this->sessionId);
 
             $currenSemester = $currentSession->semesters()->where('is_current', true)->first();
 
             StudentSession::create([
                 'student_id' => $student->id,
-                'session_id' => $sessionId,
-                'level' => $student->current_level,
+                'session_id' => $this->sessionId,
+                'level' => $this->level,
                 'status' => 'active',
                 'semester' => $currenSemester->name,
             ]);
@@ -166,11 +177,19 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
         return [
             'first_name' => 'required|string',
             'last_name' => 'required|string',
-            'email' => 'required|email',
-            'faculty' => 'required|string',
-            'department' => 'required|string',
-            'programme' => 'required|string|exists:programmes,name',
-            'session' => 'required|string|exists:academic_sessions,name',
+            'email' => [
+                'required',
+                'email',
+                function ($attribute, $value, $fail) {
+                    $exists = \App\Models\User::where('email', $value)
+                        ->whereHas('roles', function ($q) {
+                            $q->where('name', 'staff');
+                        })->exists();
+                    if ($exists) {
+                        $fail("The email {$value} is already associated with a staff member.");
+                    }
+                }
+            ],
         ];
     }
 

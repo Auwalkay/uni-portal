@@ -92,6 +92,9 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
         Route::middleware(['permission:manage_staff'])->group(function () {
             Route::get('staff/create', [StaffController::class, 'create'])->name('staff.create');
             Route::post('staff', [StaffController::class, 'store'])->name('staff.store');
+            Route::post('staff/import', [StaffController::class, 'import'])->name('staff.import');
+            Route::get('staff/template', [StaffController::class, 'downloadTemplate'])->name('staff.template');
+            Route::post('staff/resend-all', [StaffController::class, 'resendAllCredentials'])->name('staff.resend_all');
         });
 
         Route::get('staff', [StaffController::class, 'index'])->name('staff.index');
@@ -103,9 +106,6 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
             Route::put('staff/{staff}', [StaffController::class, 'update'])->name('staff.update');
             Route::delete('staff/{staff}', [StaffController::class, 'destroy'])->name('staff.destroy');
 
-            Route::post('staff/import', [StaffController::class, 'import'])->name('staff.import');
-            Route::get('staff/template', [StaffController::class, 'downloadTemplate'])->name('staff.template');
-            Route::post('staff/resend-all', [StaffController::class, 'resendAllCredentials'])->name('staff.resend_all');
             Route::post('staff/{staff}/reset-password', [StaffController::class, 'resetPassword'])->name('staff.reset_password');
 
             Route::resource('designations', DesignationController::class)->except(['create', 'edit', 'show']);

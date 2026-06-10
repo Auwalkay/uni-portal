@@ -91,13 +91,7 @@ class ProfileController extends Controller
         // Fetch Timetable for Registered Courses
         $timetable = [];
         if ($student && $currentSession && $currentStudentSession) {
-            $registeredCourseIds = CourseRegistration::where('student_session_id', $currentStudentSession->id)
-                ->pluck('course_id');
-
-            $timetable = Timetable::whereIn('course_id', $registeredCourseIds)
-                ->where('session_id', $currentStudentSession->session_id)
-                ->with(['course'])
-                ->get();
+            $timetable = \App\Services\AcademicCacheService::getStudentTimetable($student->id, $currentStudentSession->session_id);
         }
 
         // Check School Fee status for CURRENT session

@@ -231,21 +231,22 @@ const breadcrumbs = [
                                         <p v-if="importForm.errors.file" class="text-xs text-destructive">{{ importForm.errors.file }}</p>
                                     </div>
                                     <div class="bg-muted p-3 rounded-md text-xs space-y-2">
-                                        <p class="font-bold flex items-center gap-1 text-foreground">
-                                            <FileSpreadsheet class="w-3 h-3 text-primary" /> Data Format Requirements:
-                                        </p>
-                                        <ul class="list-disc list-inside space-y-1 text-muted-foreground font-medium">
-                                            <li>Headers: name, email, staff_number, designation, department, role, is_academic</li>
-                                            <li>Departments and Roles must exist in the system</li>
-                                            <li>Emails must be unique</li>
-                                        </ul>
+                                         <p class="font-bold flex items-center gap-1 text-foreground">
+                                             <FileSpreadsheet class="w-3 h-3 text-primary" /> Data Format Requirements:
+                                         </p>
+                                         <ul class="list-disc list-inside space-y-1 text-muted-foreground font-medium">
+                                             <li>Required Headers: name, email, staff_number, designation, department, role, is_academic</li>
+                                             <li>Optional Headers: phone_number, gender, date_of_birth, marital_status, address, nationality, state, lga, highest_qualification, date_joined, specialization, research_interests</li>
+                                             <li>Departments, Roles, States, and LGAs must exist in the system</li>
+                                             <li>Emails and staff numbers must be unique</li>
+                                         </ul>
                                         <div class="pt-2">
                                             <a 
                                                 :href="route('admin.staff.template')" 
                                                 class="text-primary hover:underline inline-flex items-center gap-1 font-semibold"
                                                 target="_blank"
                                             >
-                                                <Download class="w-3 h-3" /> Download CSV Template
+                                                <Download class="w-3 h-3" /> Download Excel Template
                                             </a>
                                         </div>
                                     </div>

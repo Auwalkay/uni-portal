@@ -194,7 +194,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/students/{student}/promote', [StudentController::class, 'promote'])->name('students.promote');
 
         // Course Registrations & Academic Management
-        Route::middleware(['permission:manage_academic_sessions'])->group(function () {
+        Route::middleware(['permission:manage_courses|manage_academic_sessions'])->group(function () {
             Route::get('/courses/{course}/registrations', [CourseRegistrationController::class, 'index'])->name('courses.registrations.index');
             Route::get('/courses/{course}/registrations/export', [CourseRegistrationController::class, 'export'])->name('courses.registrations.export');
 
@@ -234,7 +234,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 
         // General Academics & Sessions
-            Route::middleware(['permission:manage_academic_sessions'])->group(function () {
+        Route::middleware(['permission:manage_faculties|manage_departments|manage_programmes|manage_courses|manage_academic_sessions'])->group(function () {
             Route::get('/academics', [AcademicController::class, 'index'])->name('academics.index');
             Route::post('/academics/store', [AcademicController::class, 'store'])->name('academics.store');
             Route::post('/academics/update', [AcademicController::class, 'update'])->name('academics.update');
@@ -243,23 +243,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/academics/programmes/{programme}/courses', [AcademicController::class, 'storeProgrammeCourse'])->name('academics.programmes.courses.store');
             Route::post('/academics/programmes/{programme}/courses/import', [AcademicController::class, 'importProgrammeCourses'])->name('academics.programmes.courses.import');
             Route::delete('/academics/programmes/{programme}/courses/{course}', [AcademicController::class, 'destroyProgrammeCourse'])->name('academics.programmes.courses.destroy');
+        });
 
+        Route::middleware(['permission:manage_academic_sessions'])->group(function () {
             Route::get('/sessions', [SessionController::class, 'index'])->name('sessions.index');
             Route::get('/sessions/{session}', [SessionController::class, 'show'])->name('sessions.show');
 
             // Restricted Session Management
-            Route::middleware(['permission:manage_academic_sessions'])->group(function () {
-                Route::post('/sessions', [SessionController::class, 'store'])->name('sessions.store');
-                Route::put('/sessions/{session}', [SessionController::class, 'update'])->name('sessions.update');
-                Route::put('/sessions/{session}/settings', [SessionController::class, 'updateSettings'])->name('sessions.settings');
-                Route::post('/sessions/{session}/fees', [SessionController::class, 'storeFee'])->name('sessions.fees.store');
-                Route::delete('/sessions/{session}/fees/{feeConfiguration}', [SessionController::class, 'destroyFee'])->name('sessions.fees.destroy');
-                Route::post('/sessions/{session}/activation', [SessionController::class, 'activate'])->name('sessions.activate');
-                Route::post('/sessions/{session}/promote', [SessionController::class, 'promoteStudents'])->name('sessions.promote');
-                Route::post('/sessions/{session}/toggle-registration', [SessionController::class, 'toggleRegistration'])->name('sessions.toggle_registration');
-                Route::post('/sessions/{session}/semesters/{semester}/activate', [SessionController::class, 'activateSemester'])->name('sessions.semesters.activate');
-                Route::put('/sessions/{session}/semesters/{semester}', [SessionController::class, 'updateSemester'])->name('sessions.semesters.update');
-            });
+            Route::post('/sessions', [SessionController::class, 'store'])->name('sessions.store');
+            Route::put('/sessions/{session}', [SessionController::class, 'update'])->name('sessions.update');
+            Route::put('/sessions/{session}/settings', [SessionController::class, 'updateSettings'])->name('sessions.settings');
+            Route::post('/sessions/{session}/fees', [SessionController::class, 'storeFee'])->name('sessions.fees.store');
+            Route::delete('/sessions/{session}/fees/{feeConfiguration}', [SessionController::class, 'destroyFee'])->name('sessions.fees.destroy');
+            Route::post('/sessions/{session}/activation', [SessionController::class, 'activate'])->name('sessions.activate');
+            Route::post('/sessions/{session}/promote', [SessionController::class, 'promoteStudents'])->name('sessions.promote');
+            Route::post('/sessions/{session}/toggle-registration', [SessionController::class, 'toggleRegistration'])->name('sessions.toggle_registration');
+            Route::post('/sessions/{session}/semesters/{semester}/activate', [SessionController::class, 'activateSemester'])->name('sessions.semesters.activate');
+            Route::put('/sessions/{session}/semesters/{semester}', [SessionController::class, 'updateSemester'])->name('sessions.semesters.update');
         });
 
         // Timetable Management

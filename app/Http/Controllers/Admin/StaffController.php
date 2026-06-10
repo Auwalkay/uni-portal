@@ -200,21 +200,61 @@ class StaffController extends Controller
 
     public function downloadTemplate()
     {
-        $headers = ['name', 'email', 'staff_number', 'designation', 'department', 'role', 'is_academic'];
-        $callback = function () use ($headers) {
-            $file = fopen('php://output', 'w');
-            fputcsv($file, $headers);
-            fputcsv($file, ['John Doe', 'john.doe@example.com', 'STF001', 'Lecturer I', 'Computer Science', 'lecturer', '1']);
-            fclose($file);
+        $export = new class implements \Maatwebsite\Excel\Concerns\FromCollection, \Maatwebsite\Excel\Concerns\WithHeadings {
+            public function collection()
+            {
+                return collect([
+                    [
+                        'name' => 'John Doe',
+                        'email' => 'john.doe@example.com',
+                        'staff_number' => 'STF001',
+                        'designation' => 'Lecturer I',
+                        'department' => 'Computer Science',
+                        'role' => 'lecturer',
+                        'is_academic' => '1',
+                        'phone_number' => '08012345678',
+                        'gender' => 'male',
+                        'date_of_birth' => '1985-05-15',
+                        'marital_status' => 'married',
+                        'address' => '123 University Crescent, Campus',
+                        'nationality' => 'Nigerian',
+                        'state' => 'Lagos',
+                        'lga' => 'Ikeja',
+                        'highest_qualification' => 'PhD',
+                        'date_joined' => '2020-01-10',
+                        'specialization' => 'Artificial Intelligence',
+                        'research_interests' => 'Machine Learning, Neural Networks',
+                    ]
+                ]);
+            }
+
+            public function headings(): array
+            {
+                return [
+                    'name',
+                    'email',
+                    'staff_number',
+                    'designation',
+                    'department',
+                    'role',
+                    'is_academic',
+                    'phone_number',
+                    'gender',
+                    'date_of_birth',
+                    'marital_status',
+                    'address',
+                    'nationality',
+                    'state',
+                    'lga',
+                    'highest_qualification',
+                    'date_joined',
+                    'specialization',
+                    'research_interests',
+                ];
+            }
         };
 
-        return response()->stream($callback, 200, [
-            'Content-type' => 'text/csv',
-            'Content-Disposition' => 'attachment; filename=staff_import_template.csv',
-            'Pragma' => 'no-cache',
-            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
-            'Expires' => '0',
-        ]);
+        return Excel::download($export, 'staff_import_template.xlsx');
     }
 
     /**
@@ -232,12 +272,7 @@ class StaffController extends Controller
         if ($staff->staff && $staff->staff->is_academic) {
             $currentSession = \App\Models\Session::current();
             if ($currentSession) {
-                $courseIds = $staff->staff->allocations->where('session_id', $currentSession->id)->pluck('course_id');
-
-                $timetable = \App\Models\Timetable::whereIn('course_id', $courseIds)
-                    ->where('session_id', $currentSession->id)
-                    ->with(['course'])
-                    ->get();
+                $timetable = \App\Services\AcademicCacheService::getStaffTimetable($staff->staff->id, $currentSession->id);
             }
         }
 

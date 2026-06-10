@@ -69,12 +69,16 @@ class CourseAllocationController extends Controller
 
         \App\Models\CourseAllocation::create($validated);
 
+        \App\Services\AcademicCacheService::clearTimetableCache();
+
         return back()->with('success', 'Course assigned successfully.');
     }
 
     public function destroy($id)
     {
         \App\Models\CourseAllocation::findOrFail($id)->delete();
+
+        \App\Services\AcademicCacheService::clearTimetableCache();
 
         return back()->with('success', 'Allocation removed successfully.');
     }
@@ -88,6 +92,8 @@ class CourseAllocationController extends Controller
         try {
             $import = new \App\Imports\CourseAllocationImport;
             \Maatwebsite\Excel\Facades\Excel::import($import, $request->file('file'));
+
+            \App\Services\AcademicCacheService::clearTimetableCache();
 
             $stats = $import->getStats();
             $msg = "Import processed: {$stats['created']} created, {$stats['skipped']} skipped.";

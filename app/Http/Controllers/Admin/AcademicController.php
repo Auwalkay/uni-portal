@@ -24,6 +24,22 @@ class AcademicController extends Controller
 
         $faculties = $departments = $programmes = $courses = $units = null;
 
+        $user = $request->user();
+
+        // Security check for tabs
+        if ($tab === 'faculties' && !$user->can('view_faculties') && !$user->can('manage_faculties') && !$user->can('manage_academic_sessions')) {
+            $tab = 'denied';
+        }
+        if ($tab === 'departments' && !$user->can('view_departments') && !$user->can('manage_departments') && !$user->can('manage_academic_sessions')) {
+            $tab = 'denied';
+        }
+        if ($tab === 'programmes' && !$user->can('view_programmes') && !$user->can('manage_programmes') && !$user->can('manage_academic_sessions')) {
+            $tab = 'denied';
+        }
+        if ($tab === 'units' && !$user->can('view_departments') && !$user->can('manage_departments') && !$user->can('manage_academic_sessions')) {
+            $tab = 'denied';
+        }
+
         if ($tab === 'faculties') {
             $faculties = Faculty::withCount('departments')
                 ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
@@ -67,10 +83,9 @@ class AcademicController extends Controller
                 ->withQueryString();
         }
 
-        $user = $request->user();
         if ($tab === 'courses') {
             $courses = Course::with('department', 'programme')
-                ->when(!$user->can('manage_courses'), function ($q) use ($user) {
+                ->when(!$user->can('manage_courses') && !$user->can('view_courses') && !$user->can('manage_academic_sessions'), function ($q) use ($user) {
                     $q->whereHas('allocations', function ($aq) use ($user) {
                         $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
                     });
@@ -108,6 +123,19 @@ class AcademicController extends Controller
             'is_active' => 'required|boolean',
         ]);
 
+        $user = $request->user();
+        if ($request->type === 'faculty' && !$user->can('manage_faculties') && !$user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'department' && !$user->can('manage_departments') && !$user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'unit' && !$user->can('manage_departments') && !$user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'programme' && !$user->can('manage_programmes') && !$user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'course' && !$user->can('manage_courses') && !$user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        }
+
         $modelClass = match ($request->type) {
             'faculty' => Faculty::class,
             'department' => Department::class,
@@ -127,6 +155,19 @@ class AcademicController extends Controller
         $request->validate([
             'type' => 'required|in:faculty,department,programme,course,unit',
         ]);
+
+        $user = $request->user();
+        if ($request->type === 'faculty' && !$user->can('manage_faculties') && !$user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'department' && !$user->can('manage_departments') && !$user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'unit' && !$user->can('manage_departments') && !$user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'programme' && !$user->can('manage_programmes') && !$user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'course' && !$user->can('manage_courses') && !$user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        }
 
         if ($request->type === 'faculty') {
             $data = $request->validate([
@@ -186,6 +227,19 @@ class AcademicController extends Controller
             'id' => 'required|uuid',
         ]);
 
+        $user = $request->user();
+        if ($request->type === 'faculty' && !$user->can('manage_faculties') && !$user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'department' && !$user->can('manage_departments') && !$user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'unit' && !$user->can('manage_departments') && !$user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'programme' && !$user->can('manage_programmes') && !$user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'course' && !$user->can('manage_courses') && !$user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        }
+
         if ($request->type === 'faculty') {
             $faculty = Faculty::findOrFail($request->id);
             $data = $request->validate([
@@ -244,6 +298,10 @@ class AcademicController extends Controller
 
     public function programmeCourses(Programme $programme)
     {
+        if (!auth()->user()->can('manage_programmes') && !auth()->user()->can('manage_courses') && !auth()->user()->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        }
+
         $courses = $programme->courses()->orderBy('code')->get()->map(function ($c) {
             return [
                 'id' => $c->id,
@@ -261,6 +319,10 @@ class AcademicController extends Controller
 
     public function storeProgrammeCourse(Request $request, Programme $programme)
     {
+        if (!$request->user()->can('manage_programmes') && !$request->user()->can('manage_courses') && !$request->user()->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        }
+
         $validated = $request->validate([
             'course_id' => 'nullable|exists:courses,id',
             'course_ids' => 'nullable|array',
@@ -303,6 +365,10 @@ class AcademicController extends Controller
 
     public function importProgrammeCourses(Request $request, Programme $programme)
     {
+        if (!$request->user()->can('manage_programmes') && !$request->user()->can('manage_courses') && !$request->user()->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        }
+
         $validated = $request->validate([
             'source_programme_id' => 'required|exists:programmes,id',
         ]);
@@ -334,6 +400,10 @@ class AcademicController extends Controller
 
     public function destroyProgrammeCourse(Programme $programme, Course $course)
     {
+        if (!auth()->user()->can('manage_programmes') && !auth()->user()->can('manage_courses') && !auth()->user()->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        }
+
         $programme->courses()->detach($course->id);
 
         return response()->json(['message' => 'Course successfully removed from programme.']);

@@ -72,12 +72,16 @@ class TimetableController extends Controller
 
         Timetable::create($validated);
 
+        \App\Services\AcademicCacheService::clearTimetableCache();
+
         return back()->with('success', 'Timetable entry added successfully.');
     }
 
     public function destroy(Timetable $timetable)
     {
         $timetable->delete();
+
+        \App\Services\AcademicCacheService::clearTimetableCache();
 
         return back()->with('success', 'Entry removed.');
     }
@@ -90,6 +94,7 @@ class TimetableController extends Controller
 
         try {
             \Maatwebsite\Excel\Facades\Excel::import(new \App\Imports\TimetableImport, $request->file('file'));
+            \App\Services\AcademicCacheService::clearTimetableCache();
             return back()->with('success', 'Timetable imported successfully.');
         } catch (\Exception $e) {
             return back()->with('error', 'Import failed: ' . $e->getMessage());
