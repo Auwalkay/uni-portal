@@ -36,11 +36,47 @@ class ProfileController extends Controller
         // Stats Calculations
         $cgpa = '0.00';
         if ($student) {
+            $enforceSchoolFee = filter_var(\App\Models\SystemSetting::get('enforce_school_fee_for_results', false), FILTER_VALIDATE_BOOLEAN);
+            $enforceHostelFee = filter_var(\App\Models\SystemSetting::get('enforce_hostel_fee_for_results', false), FILTER_VALIDATE_BOOLEAN);
+
             $allRegs = CourseRegistration::where('student_id', $student->id)
                 ->where('is_published', true)
-                ->with('course')
+                ->with(['course', 'semester'])
                 ->get();
-            $cgpa = number_format(app(\App\Services\GradingService::class)->calculateGPA($allRegs), 2);
+
+            $cgpaRegs = $allRegs->filter(function ($reg) use ($enforceSchoolFee, $enforceHostelFee, $student) {
+                $semesterName = $reg->semester?->name ?? '';
+                $isSecondSem = stripos($semesterName, 'Second') !== false || strpos($semesterName, '2') !== false;
+                
+                if (!$isSecondSem) {
+                    return true; // First Sem is never blocked
+                }
+
+                // For Second Sem, check clearance in the registration's session
+                $schoolFeeCleared = true;
+                if ($enforceSchoolFee) {
+                    $schoolFeeInvoice = \App\Models\Invoice::where('user_id', auth()->id())
+                        ->where('type', 'school_fee')
+                        ->where('session_id', $reg->session_id)
+                        ->first();
+                    $schoolFeeCleared = $schoolFeeInvoice && $schoolFeeInvoice->status === 'paid';
+                }
+
+                $hostelFeeCleared = true;
+                if ($enforceHostelFee) {
+                    $hostelBooking = \App\Models\HostelBooking::where('student_id', $student->id)
+                        ->where('session_id', $reg->session_id)
+                        ->first();
+                    if ($hostelBooking) {
+                        $hostelInvoice = $hostelBooking->invoice;
+                        $hostelFeeCleared = $hostelInvoice && $hostelInvoice->status === 'paid';
+                    }
+                }
+
+                return $schoolFeeCleared && $hostelFeeCleared;
+            });
+
+            $cgpa = number_format($cgpaRegs->isEmpty() ? 0 : app(\App\Services\GradingService::class)->calculateGPA($cgpaRegs), 2);
         }
         $totalUnits = 0;
         // Ensure level doesn't 'go down' when viewing historical sessions

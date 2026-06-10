@@ -54,7 +54,7 @@ class CourseRegistrationController extends Controller
             'students' => $students,
             'filters' => $request->only(['search', 'faculty_id', 'department_id']),
             'faculties' => AcademicCacheService::getFaculties(),
-            'departments' => AcademicCacheService::getAllDepartments(),
+            'departments' => AcademicCacheService::getAcademicDepartments(),
         ]);
     }
 
@@ -85,7 +85,7 @@ class CourseRegistrationController extends Controller
         $semesters = $currentSession->semesters()->orderBy('name')->get();
         
         $faculties = AcademicCacheService::getFaculties();
-        $departments = AcademicCacheService::getAllDepartments();
+        $departments = AcademicCacheService::getAcademicDepartments();
         $programmes = AcademicCacheService::getProgrammes();
 
         $level = request('level', $student->current_level);
