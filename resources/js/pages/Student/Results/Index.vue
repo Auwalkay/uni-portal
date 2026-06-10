@@ -223,7 +223,16 @@ const getScoreColor = (score: number | null) => {
                                                     {{ reg.course.code }}
                                                 </TableCell>
                                                 <TableCell class="font-medium text-gray-700">
-                                                    {{ reg.course.title }}
+                                                    <div class="flex items-center gap-2">
+                                                        <span>{{ reg.course.title }}</span>
+                                                        <Badge 
+                                                            v-if="reg.grade === 'F' && reg.course.is_compulsory" 
+                                                            variant="destructive" 
+                                                            class="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded font-sans bg-rose-500 hover:bg-rose-600 text-white border-0 shadow-sm shrink-0"
+                                                        >
+                                                            Carry Over
+                                                        </Badge>
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell class="text-center font-mono text-gray-500">
                                                     {{ reg.course.units }}

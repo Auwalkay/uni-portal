@@ -239,6 +239,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/academics/store', [AcademicController::class, 'store'])->name('academics.store');
             Route::post('/academics/update', [AcademicController::class, 'update'])->name('academics.update');
             Route::post('/academics/toggle', [AcademicController::class, 'toggle'])->name('academics.toggle');
+            Route::get('/academics/programmes/{programme}/courses', [AcademicController::class, 'programmeCourses'])->name('academics.programmes.courses');
+            Route::post('/academics/programmes/{programme}/courses', [AcademicController::class, 'storeProgrammeCourse'])->name('academics.programmes.courses.store');
+            Route::post('/academics/programmes/{programme}/courses/import', [AcademicController::class, 'importProgrammeCourses'])->name('academics.programmes.courses.import');
+            Route::delete('/academics/programmes/{programme}/courses/{course}', [AcademicController::class, 'destroyProgrammeCourse'])->name('academics.programmes.courses.destroy');
 
             Route::get('/sessions', [SessionController::class, 'index'])->name('sessions.index');
             Route::get('/sessions/{session}', [SessionController::class, 'show'])->name('sessions.show');

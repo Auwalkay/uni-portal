@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Head, useForm, router } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { route } from 'ziggy-js';
+import SearchableSelect from '@/components/SearchableSelect.vue';
 import { 
     CalendarRange, Plus, Trash2, Filter, Save, X, Search, Upload, Download 
 } from 'lucide-vue-next';
@@ -30,6 +31,26 @@ const props = defineProps<{
     filters: any;
     currentSession: any;
 }>();
+
+const sessionItems = computed(() => props.sessions.map(s => ({ value: String(s.id), label: s.name })));
+const semesterItems = computed(() => props.semesters.map(s => ({ value: String(s.id), label: s.name })));
+const departmentItems = computed(() => props.departments.map(d => ({ value: String(d.id), label: d.name })));
+const courseItems = computed(() => props.courses.map(c => ({ value: String(c.id), label: `${c.code} - ${c.title}` })));
+const levelItems = [
+    { value: '100', label: '100 Level' },
+    { value: '200', label: '200 Level' },
+    { value: '300', label: '300 Level' },
+    { value: '400', label: '400 Level' },
+    { value: '500', label: '500 Level' },
+];
+const dayItems = [
+    { value: 'Monday', label: 'Monday' },
+    { value: 'Tuesday', label: 'Tuesday' },
+    { value: 'Wednesday', label: 'Wednesday' },
+    { value: 'Thursday', label: 'Thursday' },
+    { value: 'Friday', label: 'Friday' },
+    { value: 'Saturday', label: 'Saturday' },
+];
 
 const form = useForm({
     session_id: props.currentSession?.id || '',
@@ -270,83 +291,79 @@ const breadcrumbs = [
                     
                     <div class="grid gap-4 py-4">
                         <div class="grid grid-cols-2 gap-4">
-                            <div class="space-y-2">
-                                <Label>Session</Label>
-                                <Select v-model="form.session_id">
-                                     <SelectTrigger :class="{'border-red-500': form.errors.session_id}"><SelectValue placeholder="Session" /></SelectTrigger>
-                                     <SelectContent>
-                                         <SelectItem v-for="s in sessions" :key="s.id" :value="String(s.id)">{{ s.name }}</SelectItem>
-                                     </SelectContent>
-                                </Select>
+                            <div class="space-y-2 flex flex-col">
+                                <Label class="mb-1">Session</Label>
+                                <SearchableSelect
+                                    v-model="form.session_id"
+                                    :items="sessionItems"
+                                    placeholder="Select Session"
+                                    search-placeholder="Search sessions..."
+                                    :error-class="!!form.errors.session_id"
+                                />
                                 <p v-if="form.errors.session_id" class="text-xs text-red-500">{{ form.errors.session_id }}</p>
                             </div>
-                            <div class="space-y-2">
-                                <Label>Select Semester</Label>
-                                <Select v-model="form.semester_id">
-                                     <SelectTrigger :class="{'border-red-500': form.errors.semester_id}"><SelectValue placeholder="Semester" /></SelectTrigger>
-                                     <SelectContent>
-                                         <SelectItem v-for="s in semesters" :key="s.id" :value="String(s.id)">{{ s.name }}</SelectItem>
-                                     </SelectContent>
-                                </Select>
+                            <div class="space-y-2 flex flex-col">
+                                <Label class="mb-1">Select Semester</Label>
+                                <SearchableSelect
+                                    v-model="form.semester_id"
+                                    :items="semesterItems"
+                                    placeholder="Select Semester"
+                                    search-placeholder="Search semesters..."
+                                    :error-class="!!form.errors.semester_id"
+                                />
                                 <p v-if="form.errors.semester_id" class="text-xs text-red-500">{{ form.errors.semester_id }}</p>
                             </div>
                         </div>
 
                         <div class="grid grid-cols-2 gap-4">
-                            <div class="space-y-2">
-                                <Label>Department</Label>
-                                <Select v-model="form.department_id">
-                                     <SelectTrigger :class="{'border-red-500': form.errors.department_id}"><SelectValue placeholder="Department" /></SelectTrigger>
-                                     <SelectContent>
-                                         <SelectItem v-for="d in departments" :key="d.id" :value="String(d.id)">{{ d.name }}</SelectItem>
-                                     </SelectContent>
-                                </Select>
+                            <div class="space-y-2 flex flex-col">
+                                <Label class="mb-1">Department</Label>
+                                <SearchableSelect
+                                    v-model="form.department_id"
+                                    :items="departmentItems"
+                                    placeholder="Select Department"
+                                    search-placeholder="Search departments..."
+                                    :error-class="!!form.errors.department_id"
+                                />
                                 <p v-if="form.errors.department_id" class="text-xs text-red-500">{{ form.errors.department_id }}</p>
                             </div>
-                             <div class="space-y-2">
-                                <Label>Level</Label>
-                                <Select v-model="form.level">
-                                     <SelectTrigger :class="{'border-red-500': form.errors.level}"><SelectValue placeholder="Level" /></SelectTrigger>
-                                     <SelectContent>
-                                         <SelectItem value="100">100 Level</SelectItem>
-                                         <SelectItem value="200">200 Level</SelectItem>
-                                         <SelectItem value="300">300 Level</SelectItem>
-                                         <SelectItem value="400">400 Level</SelectItem>
-                                         <SelectItem value="500">500 Level</SelectItem>
-                                     </SelectContent>
-                                </Select>
+                            <div class="space-y-2 flex flex-col">
+                                <Label class="mb-1">Level</Label>
+                                <SearchableSelect
+                                    v-model="form.level"
+                                    :items="levelItems"
+                                    placeholder="Select Level"
+                                    search-placeholder="Search levels..."
+                                    :error-class="!!form.errors.level"
+                                />
                                 <p v-if="form.errors.level" class="text-xs text-red-500">{{ form.errors.level }}</p>
                             </div>
                         </div>
 
-                         <div class="grid gap-4">
-                            <div class="space-y-2">
-                                <Label>Course</Label>
-                                <Select v-model="form.course_id">
-                                     <SelectTrigger :class="{'border-red-500': form.errors.course_id}"><SelectValue placeholder="Select Course" /></SelectTrigger>
-                                     <SelectContent>
-                                         <!-- Really should filter courses by department/level, but showing all for simplicity/speed or use a combobox -->
-                                         <SelectItem v-for="c in courses" :key="c.id" :value="String(c.id)">{{ c.code }} - {{ c.title }}</SelectItem>
-                                     </SelectContent>
-                                </Select>
+                        <div class="grid gap-4">
+                            <div class="space-y-2 flex flex-col">
+                                <Label class="mb-1">Course</Label>
+                                <SearchableSelect
+                                    v-model="form.course_id"
+                                    :items="courseItems"
+                                    placeholder="Select Course"
+                                    search-placeholder="Search courses..."
+                                    :error-class="!!form.errors.course_id"
+                                />
                                 <p v-if="form.errors.course_id" class="text-xs text-red-500">{{ form.errors.course_id }}</p>
                             </div>
                         </div>
 
                         <div class="grid grid-cols-3 gap-4">
-                             <div class="space-y-2">
-                                <Label>Day</Label>
-                                <Select v-model="form.day">
-                                     <SelectTrigger :class="{'border-red-500': form.errors.day}"><SelectValue placeholder="Day" /></SelectTrigger>
-                                     <SelectContent>
-                                         <SelectItem value="Monday">Monday</SelectItem>
-                                         <SelectItem value="Tuesday">Tuesday</SelectItem>
-                                         <SelectItem value="Wednesday">Wednesday</SelectItem>
-                                         <SelectItem value="Thursday">Thursday</SelectItem>
-                                         <SelectItem value="Friday">Friday</SelectItem>
-                                         <SelectItem value="Saturday">Saturday</SelectItem>
-                                     </SelectContent>
-                                </Select>
+                            <div class="space-y-2 flex flex-col">
+                                <Label class="mb-1">Day</Label>
+                                <SearchableSelect
+                                    v-model="form.day"
+                                    :items="dayItems"
+                                    placeholder="Select Day"
+                                    search-placeholder="Search days..."
+                                    :error-class="!!form.errors.day"
+                                />
                                 <p v-if="form.errors.day" class="text-xs text-red-500">{{ form.errors.day }}</p>
                             </div>
                              <div class="space-y-2">

@@ -529,7 +529,7 @@ const getSemesterCourses = (semesterCode: string) => {
                 </div>
 
                 <!-- Footer Action Bar (Sticky Bottom) -->
-                <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-gray-200 shadow-lg z-50 p-4 md:px-8">
+                <div class="fixed bottom-0 left-0 md:left-[var(--sidebar-width)] right-0 bg-white/90 backdrop-blur-md border-t border-gray-200 shadow-lg z-50 p-4 md:px-8 transition-[left] duration-200 ease-linear">
                      <div class="max-w-7xl mx-auto flex items-center justify-between">
                         <div class="text-sm text-gray-500 hidden sm:block">
                             Current selection: <span class="font-bold text-gray-900">{{ selectedCourses.length }} courses</span> with <span class="font-bold text-gray-900">{{ unitsFirst + unitsSecond }} units</span>.

@@ -8,16 +8,17 @@ defineOptions({
 })
 
 const props = withDefaults(
-  defineProps<PopoverContentProps & { class?: HTMLAttributes['class'] }>(),
+  defineProps<PopoverContentProps & { class?: HTMLAttributes['class'], disablePortal?: boolean }>(),
   {
     align: 'center',
     sideOffset: 4,
+    disablePortal: false,
   },
 )
 const emits = defineEmits<PopoverContentEmits>()
 
 const delegatedProps = computed(() => {
-  const { class: _, ...delegated } = props
+  const { class: _, disablePortal: __, ...delegated } = props
 
   return delegated
 })
@@ -26,7 +27,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
 </script>
 
 <template>
-  <PopoverPortal>
+  <PopoverPortal :disabled="disablePortal">
     <PopoverContent
       v-bind="{ ...forwarded, ...$attrs }"
       :class="

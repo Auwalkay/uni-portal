@@ -38,8 +38,10 @@ class CourseAllocationController extends Controller
             'currentSessionId' => $currentSessionId,
             'courses' => Course::select('id', 'code', 'title', 'department_id')->orderBy('code')->get(),
             'programmes' => \App\Models\Programme::select('id', 'name')->orderBy('name')->get(),
-            'lecturers' => Staff::with('user:id,name')
-                ->where('staff.is_academic', 1)
+            'lecturers' => Staff::with(['user:id,name', 'department:id,code'])
+                ->whereHas('user', function ($q) {
+                    $q->role('lecturer');
+                })
                 ->get()->map(function ($s) {
                     return [
                         'id' => $s->id,

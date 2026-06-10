@@ -18,12 +18,20 @@ class CourseRegistrationController extends Controller
 {
     public function index()
     {
-        $student = Student::where('user_id', Auth::id())->firstOrFail();
+        $student = Student::where('user_id', Auth::id())->with('program')->firstOrFail();
 
         // Fetch all registrations
         $registrations = CourseRegistration::where('student_id', $student->id)
             ->with(['session', 'semester', 'course'])
             ->get();
+
+        $programme = $student->program;
+        $overrides = collect();
+        if ($programme) {
+            $overrides = \Illuminate\Support\Facades\DB::table('course_programme')
+                ->where('programme_id', $programme->id)
+                ->pluck('is_compulsory', 'course_id');
+        }
 
         // Group by Session (ID)
         $groupedBySession = $registrations->groupBy('session_id');
@@ -34,7 +42,7 @@ class CourseRegistrationController extends Controller
             $session = $sessionRegistrations->first()->session;
 
             // Within Session, Group by Semester
-            $semesters = $sessionRegistrations->groupBy('semester_id')->map(function ($semesterRegs) {
+            $semesters = $sessionRegistrations->groupBy('semester_id')->map(function ($semesterRegs) use ($overrides) {
                 $semester = $semesterRegs->first()->semester;
 
                 return [
@@ -42,7 +50,13 @@ class CourseRegistrationController extends Controller
                     'name' => $semester->name,
                     'is_current' => $semester->is_current,
                     'total_units' => $semesterRegs->sum('course.units'),
-                    'courses' => $semesterRegs->map(fn($r) => $r->course),
+                    'courses' => $semesterRegs->map(function ($r) use ($overrides) {
+                        $course = $r->course;
+                        if ($course) {
+                            $course->is_compulsory = $overrides->has($course->id) ? (bool)$overrides->get($course->id) : false;
+                        }
+                        return $course;
+                    }),
                 ];
             })->values();
 
@@ -135,15 +149,12 @@ class CourseRegistrationController extends Controller
         }
 
         // Programme Limits
-        $programme = null;
-        if (!empty($student->program)) {
-            $programme = \App\Models\Programme::where('name', $student->program)->first();
-        }
+        $programme = $student->program;
         $maxUnits = $programme ? $programme->max_credit_units : 24;
 
         // Dropdown Data
-        $faculties = \App\Models\Faculty::select('id', 'name')->orderBy('name')->get();
-        $departments = \App\Models\Department::select('id', 'name', 'faculty_id')->orderBy('name')->get();
+        $faculties = \App\Services\AcademicCacheService::getAllFaculties();
+        $departments = \App\Services\AcademicCacheService::getAllDepartments();
 
         // 1. Fetch ALL Courses for Session (Both Semesters)
         $query = Course::query();
@@ -255,10 +266,7 @@ class CourseRegistrationController extends Controller
         // Max Units Check (Global or Per Semester? Usually Per Semester, but let's assume Global for simplicity requested, or Per Semester)
         // User request was simple "select and show".
         // Let's implement Per Semester Unit Cap if possible, but for now stick to global maxUnits provided in create.
-        $programme = null;
-        if (!empty($student->program)) {
-            $programme = \App\Models\Programme::where('name', $student->program)->first();
-        }
+        $programme = $student->program;
         $maxUnits = $programme ? $programme->max_credit_units : 24;
 
         // Ensure total units don't exceed max * 2 (if max is per semester) or just max?
@@ -363,11 +371,26 @@ class CourseRegistrationController extends Controller
             $session = Session::where('is_current', true)->firstOrFail();
         }
 
+        $programme = $student->program;
+        $overrides = collect();
+        if ($programme) {
+            $overrides = \Illuminate\Support\Facades\DB::table('course_programme')
+                ->where('programme_id', $programme->id)
+                ->pluck('is_compulsory', 'course_id');
+        }
+
         $registrations = CourseRegistration::where('student_id', $student->id)
             ->where('session_id', $session->id)
             ->with('course', 'semester')
-            ->get()
-            ->groupBy(fn($reg) => $reg->semester->name);
+            ->get();
+
+        foreach ($registrations as $reg) {
+            if ($reg->course) {
+                $reg->course->is_compulsory = $overrides->has($reg->course->id) ? (bool)$overrides->get($reg->course->id) : false;
+            }
+        }
+
+        $groupedRegistrations = $registrations->groupBy(fn($reg) => $reg->semester->name);
 
         if ($registrations->isEmpty()) {
             return response("No course registration records found for this session ({$session->name}). Please ensure you have registered courses.", 404);
@@ -375,13 +398,12 @@ class CourseRegistrationController extends Controller
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.course_form', [
             'student' => $student,
-            'registrations' => $registrations,
+            'registrations' => $groupedRegistrations,
             'session' => $session,
             'semester' => null, // Generic form for session
             'total_units' => $registrations->sum('course.units'),
         ]);
 
-        // $safeSessionName = str_replace(['/', '\\'], '-', $session->name);
         return $pdf->download('Course_Form.pdf');
     }
 

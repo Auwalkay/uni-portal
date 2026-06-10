@@ -23,7 +23,7 @@ class ResultController extends Controller
 
     public function index()
     {
-        $student = Student::where('user_id', Auth::id())->firstOrFail();
+        $student = Student::where('user_id', Auth::id())->with('program')->firstOrFail();
 
         // 1. Get all unique sessions the student has registered for
         // We can do this by getting distinct session_ids via registrations
@@ -34,6 +34,14 @@ class ResultController extends Controller
         $sessions = Session::whereIn('id', $sessionIds)
             ->orderBy('start_date', 'desc') // Latest session first
             ->get();
+
+        $programme = $student->program;
+        $overrides = collect();
+        if ($programme) {
+            $overrides = \Illuminate\Support\Facades\DB::table('course_programme')
+                ->where('programme_id', $programme->id)
+                ->pluck('is_compulsory', 'course_id');
+        }
 
         // 2. Build the History Structure
         $history = [];
@@ -59,6 +67,13 @@ class ResultController extends Controller
             // Let's iterate and calculate GPA
 
             foreach ($registrationsInSession as $semesterName => $regs) {
+                // Attach overrides to courses
+                foreach ($regs as $reg) {
+                    if ($reg->course) {
+                        $reg->course->is_compulsory = $overrides->has($reg->course->id) ? (bool)$overrides->get($reg->course->id) : false;
+                    }
+                }
+
                 // Calculate GPA
                 $gpa = $this->gradingService->calculateGPA($regs);
 

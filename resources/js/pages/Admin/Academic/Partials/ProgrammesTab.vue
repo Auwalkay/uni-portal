@@ -4,7 +4,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil } from 'lucide-vue-next';
+import { Plus, Pencil, BookOpen } from 'lucide-vue-next';
 
 defineProps<{
     programmes: {
@@ -13,7 +13,7 @@ defineProps<{
     };
 }>();
 
-const emit = defineEmits(['create', 'edit', 'toggle']);
+const emit = defineEmits(['create', 'edit', 'toggle', 'manage-courses']);
 </script>
 
 <template>
@@ -47,9 +47,14 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                                 <Switch :checked="prog.is_active" @update:checked="emit('toggle', prog.id, prog.is_active)" />
                         </TableCell>
                         <TableCell class="text-right">
-                            <Button variant="ghost" size="icon" @click="emit('edit', prog)">
-                                <Pencil class="h-4 w-4" />
-                            </Button>
+                            <div class="flex justify-end gap-1">
+                                <Button variant="ghost" size="icon" @click="emit('manage-courses', prog)" title="Manage Courses">
+                                    <BookOpen class="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                                </Button>
+                                <Button variant="ghost" size="icon" @click="emit('edit', prog)" title="Edit">
+                                    <Pencil class="h-4 w-4" />
+                                </Button>
+                            </div>
                         </TableCell>
                     </TableRow>
                 </TableBody>
