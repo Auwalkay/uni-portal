@@ -354,6 +354,8 @@ class CourseRegistrationController extends Controller
             }
         });
 
+        \App\Services\AcademicCacheService::clearTimetableCache();
+
         return to_route('student.courses.index')->with('success', 'Course registration updated successfully.');
     }
 

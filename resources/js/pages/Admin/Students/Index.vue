@@ -151,6 +151,21 @@ const showImportModal = ref(false);
 
 const importForm = useForm({
     file: null as File | null,
+    session_id: '',
+    faculty_id: '',
+    department_id: '',
+    program_id: '',
+    level: '',
+});
+
+const filteredImportDepartments = computed(() => {
+    if (!importForm.faculty_id) return props.departments;
+    return props.departments.filter(dept => dept.faculty_id === importForm.faculty_id);
+});
+
+const filteredImportProgrammes = computed(() => {
+    if (!importForm.department_id) return props.programmes;
+    return props.programmes.filter(prog => prog.department_id === importForm.department_id);
 });
 
 const submitImport = () => {
@@ -201,32 +216,108 @@ const handleExport = () => {
                                     <Upload class="w-4 h-4 mr-2" /> Import
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent class="sm:max-w-[425px]">
+                            <DialogContent class="sm:max-w-[650px]">
                                 <DialogHeader>
                                     <DialogTitle>Import Students</DialogTitle>
                                     <DialogDescription>
-                                        Upload a CSV file containing legacy student records.
+                                        Select the target academic details and upload a student data spreadsheet.
                                     </DialogDescription>
                                 </DialogHeader>
-                                <div class="grid gap-4 py-4">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 py-4 max-h-[80vh] overflow-y-auto pr-2">
+                                    <!-- Session Select -->
                                     <div class="flex flex-col gap-2">
-                                        <Label for="csv_file">CSV File</Label>
+                                        <Label for="import_session">Session</Label>
+                                        <Select v-model="importForm.session_id">
+                                            <SelectTrigger id="import_session">
+                                                <SelectValue placeholder="Select Session" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem v-for="s in sessions" :key="s.id" :value="s.id">{{ s.name }}</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <p v-if="importForm.errors.session_id" class="text-xs text-destructive">{{ importForm.errors.session_id }}</p>
+                                    </div>
+
+                                    <!-- Level Select -->
+                                    <div class="flex flex-col gap-2">
+                                        <Label for="import_level">Level</Label>
+                                        <Select v-model="importForm.level">
+                                            <SelectTrigger id="import_level">
+                                                <SelectValue placeholder="Select Level" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="100">100 Level</SelectItem>
+                                                <SelectItem value="200">200 Level</SelectItem>
+                                                <SelectItem value="300">300 Level</SelectItem>
+                                                <SelectItem value="400">400 Level</SelectItem>
+                                                <SelectItem value="500">500 Level</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <p v-if="importForm.errors.level" class="text-xs text-destructive">{{ importForm.errors.level }}</p>
+                                    </div>
+
+                                    <!-- Faculty Select -->
+                                    <div class="flex flex-col gap-2">
+                                        <Label for="import_faculty">Faculty</Label>
+                                        <Select v-model="importForm.faculty_id" @update:model-value="importForm.department_id = ''; importForm.program_id = ''">
+                                            <SelectTrigger id="import_faculty">
+                                                <SelectValue placeholder="Select Faculty" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem v-for="f in faculties" :key="f.id" :value="f.id">{{ f.name }}</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <p v-if="importForm.errors.faculty_id" class="text-xs text-destructive">{{ importForm.errors.faculty_id }}</p>
+                                    </div>
+
+                                    <!-- Department Select -->
+                                    <div class="flex flex-col gap-2">
+                                        <Label for="import_department">Department</Label>
+                                        <Select v-model="importForm.department_id" :disabled="!importForm.faculty_id" @update:model-value="importForm.program_id = ''">
+                                            <SelectTrigger id="import_department">
+                                                <SelectValue placeholder="Select Department" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem v-for="d in filteredImportDepartments" :key="d.id" :value="d.id">{{ d.name }}</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <p v-if="importForm.errors.department_id" class="text-xs text-destructive">{{ importForm.errors.department_id }}</p>
+                                    </div>
+
+                                    <!-- Program Select -->
+                                    <div class="flex flex-col gap-2">
+                                        <Label for="import_program">Program / Course of Study</Label>
+                                        <Select v-model="importForm.program_id" :disabled="!importForm.department_id">
+                                            <SelectTrigger id="import_program">
+                                                <SelectValue placeholder="Select Program" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem v-for="p in filteredImportProgrammes" :key="p.id" :value="p.id">{{ p.name }}</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <p v-if="importForm.errors.program_id" class="text-xs text-destructive">{{ importForm.errors.program_id }}</p>
+                                    </div>
+
+                                    <!-- File Select -->
+                                    <div class="flex flex-col gap-2">
+                                        <Label for="csv_file">Student Data File</Label>
                                         <Input 
                                             id="csv_file" 
                                             type="file" 
-                                            accept=".csv" 
+                                            accept=".csv,.xlsx" 
                                             @input="importForm.file = $event.target.files[0]"
                                         />
                                         <p v-if="importForm.errors.file" class="text-xs text-destructive">{{ importForm.errors.file }}</p>
                                     </div>
-                                    <div class="bg-muted p-3 rounded-md text-xs space-y-2">
+
+                                    <div class="bg-muted p-3 rounded-md text-xs space-y-2 col-span-1 md:col-span-2">
                                         <p class="font-bold flex items-center gap-1 text-foreground">
-                                            <FileSpreadsheet class="w-3 h-3 text-primary" /> CSV Format Requirements:
+                                            <FileSpreadsheet class="w-3 h-3 text-primary" /> Excel Format Requirements:
                                         </p>
                                         <ul class="list-disc list-inside space-y-1 text-muted-foreground font-medium">
                                             <li>Standard headers: first_name, last_name, email</li>
-                                            <li>Must include faculty, department, programme, session</li>
-                                            <li>Faculty/Dept/Program names must match system</li>
+                                            <li>Other columns (optional): phone_number, gender, dob, address, state, lga, entry_mode, matric_number, jamb_reg, jamb_score, previous_institution</li>
+                                            <li>All students in the file will be imported into the selected session, program, and level</li>
                                         </ul>
                                         <div class="pt-2">
                                             <a 
@@ -234,7 +325,7 @@ const handleExport = () => {
                                                 class="text-primary hover:underline inline-flex items-center gap-1 font-semibold"
                                                 target="_blank"
                                             >
-                                                <Download class="w-3 h-3" /> Download CSV Template
+                                                <Download class="w-3 h-3" /> Download Excel Template
                                             </a>
                                         </div>
                                     </div>
@@ -243,7 +334,7 @@ const handleExport = () => {
                                     <Button 
                                         type="submit" 
                                         @click="submitImport" 
-                                        :disabled="importForm.processing || !importForm.file"
+                                        :disabled="importForm.processing || !importForm.file || !importForm.session_id || !importForm.faculty_id || !importForm.department_id || !importForm.program_id || !importForm.level"
                                         class="w-full"
                                     >
                                         {{ importForm.processing ? 'Importing...' : 'Start Import' }}

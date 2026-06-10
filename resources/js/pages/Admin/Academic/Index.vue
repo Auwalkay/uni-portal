@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Swal from 'sweetalert2';
 import { Plus, Pencil, BookOpen, Trash2, Loader2 } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { route } from 'ziggy-js'; 
 import SearchableSelect from '@/components/SearchableSelect.vue';
 import FacultiesTab from './Partials/FacultiesTab.vue';
@@ -35,6 +35,52 @@ const props = defineProps<{
     filters: any;
 }>();
 
+const page = usePage();
+
+const hasRole = (roleOrRoles: string | string[]) => {
+    const user = (page.props.auth?.user as any);
+    if (!user || !user.roles || !Array.isArray(user.roles)) return false;
+    
+    if (Array.isArray(roleOrRoles)) {
+        return roleOrRoles.some(role => user.roles.includes(role));
+    }
+    return user.roles.includes(roleOrRoles);
+};
+
+const hasPermission = (permission: string) => {
+    const user = (page.props.auth?.user as any);
+    if (!user || ((!user.permissions || !Array.isArray(user.permissions)) && !user.roles)) return false;
+    
+    // Admins usually have all permissions, but explicit check:
+    if (hasRole('admin')) return true;
+
+    return (user.permissions && Array.isArray(user.permissions) && user.permissions.includes(permission));
+};
+
+const canViewFaculties = computed(() => hasPermission('view_faculties') || hasPermission('manage_faculties') || hasPermission('manage_academic_sessions'));
+const canViewDepartments = computed(() => hasPermission('view_departments') || hasPermission('manage_departments') || hasPermission('manage_academic_sessions'));
+const canViewProgrammes = computed(() => hasPermission('view_programmes') || hasPermission('manage_programmes') || hasPermission('manage_academic_sessions'));
+const canViewCourses = computed(() => hasPermission('view_courses') || hasPermission('manage_courses') || hasPermission('manage_academic_sessions') || hasRole(['lecturer', 'course_coordinator', 'dean', 'hod']));
+const canViewUnits = computed(() => hasPermission('view_departments') || hasPermission('manage_departments') || hasPermission('manage_academic_sessions'));
+
+const canManageFaculties = computed(() => hasPermission('manage_faculties') || hasPermission('manage_academic_sessions'));
+const canManageDepartments = computed(() => hasPermission('manage_departments') || hasPermission('manage_academic_sessions'));
+const canManageProgrammes = computed(() => hasPermission('manage_programmes') || hasPermission('manage_academic_sessions'));
+const canManageCourses = computed(() => hasPermission('manage_courses') || hasPermission('manage_academic_sessions'));
+const canManageUnits = computed(() => hasPermission('manage_departments') || hasPermission('manage_academic_sessions'));
+
+const canManageProgrammeCourses = computed(() => hasPermission('manage_courses') || hasPermission('manage_programmes') || hasPermission('manage_academic_sessions'));
+
+const getDefaultTab = () => {
+    if (props.filters?.tab) return props.filters.tab;
+    if (canViewFaculties.value) return 'faculties';
+    if (canViewDepartments.value) return 'departments';
+    if (canViewProgrammes.value) return 'programmes';
+    if (canViewCourses.value) return 'courses';
+    if (canViewUnits.value) return 'units';
+    return 'faculties'; // fallback
+};
+
 const courseSearchItems = computed(() => props.allCourses.map(c => ({ value: c.id, label: `${c.code} - ${c.title} (${c.units} Units)` })));
 
 const isModalOpen = ref(false);
@@ -49,7 +95,7 @@ const filterForm = ref({
     search: props.filters?.search || '',
     faculty_id: props.filters?.faculty_id || '',
     department_id: props.filters?.department_id || '',
-    tab: props.filters?.tab || 'faculties',
+    tab: getDefaultTab(),
 });
 
 const filterDepartments = computed(() => {
@@ -445,34 +491,38 @@ const removeProgrammeCourse = async (courseId: string) => {
 
             <Tabs v-model="filterForm.tab" class="space-y-4">
                 <TabsList>
-                    <TabsTrigger value="faculties">Faculties</TabsTrigger>
-                    <TabsTrigger value="departments">Departments</TabsTrigger>
-                    <TabsTrigger value="programmes">Programmes</TabsTrigger>
-                    <TabsTrigger value="courses">Courses</TabsTrigger>
-                    <TabsTrigger value="units">Units</TabsTrigger>
+                    <TabsTrigger v-if="canViewFaculties" value="faculties">Faculties</TabsTrigger>
+                    <TabsTrigger v-if="canViewDepartments" value="departments">Departments</TabsTrigger>
+                    <TabsTrigger v-if="canViewProgrammes" value="programmes">Programmes</TabsTrigger>
+                    <TabsTrigger v-if="canViewCourses" value="courses">Courses</TabsTrigger>
+                    <TabsTrigger v-if="canViewUnits" value="units">Units</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="faculties" class="space-y-4">
+                <TabsContent v-if="canViewFaculties" value="faculties" class="space-y-4">
                     <FacultiesTab 
                         :faculties="faculties" 
+                        :canManage="canManageFaculties"
                         @create="openCreate('faculty')" 
                         @edit="(item) => openEdit('faculty', item)"
                         @toggle="(id, state) => toggleActive('faculty', id, state)"
                     />
                 </TabsContent>
 
-                <TabsContent value="departments" class="space-y-4">
+                <TabsContent v-if="canViewDepartments" value="departments" class="space-y-4">
                     <DepartmentsTab 
                         :departments="departments" 
+                        :canManage="canManageDepartments"
                         @create="openCreate('department')" 
                         @edit="(item) => openEdit('department', item)"
                          @toggle="(id, state) => toggleActive('department', id, state)"
                     />
                 </TabsContent>
 
-                <TabsContent value="programmes" class="space-y-4">
+                <TabsContent v-if="canViewProgrammes" value="programmes" class="space-y-4">
                     <ProgrammesTab 
                         :programmes="programmes" 
+                        :canManage="canManageProgrammes"
+                        :canManageCourses="canManageProgrammeCourses"
                         @create="openCreate('programme')" 
                         @edit="(item) => openEdit('programme', item)"
                         @toggle="(id, state) => toggleActive('programme', id, state)"
@@ -480,18 +530,20 @@ const removeProgrammeCourse = async (courseId: string) => {
                     />
                 </TabsContent>
 
-                <TabsContent value="courses" class="space-y-4">
+                <TabsContent v-if="canViewCourses" value="courses" class="space-y-4">
                     <CoursesTab 
                         :courses="courses" 
+                        :canManage="canManageCourses"
                         @create="openCreate('course')" 
                         @edit="(item) => openEdit('course', item)"
                          @toggle="(id, state) => toggleActive('course', id, state)"
                     />
                 </TabsContent>
 
-                <TabsContent value="units" class="space-y-4">
+                <TabsContent v-if="canViewUnits" value="units" class="space-y-4">
                     <UnitsTab 
                         :units="units" 
+                        :canManage="canManageUnits"
                         @create="openCreate('unit')" 
                         @edit="(item) => openEdit('unit', item)"
                          @toggle="(id, state) => toggleActive('unit', id, state)"

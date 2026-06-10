@@ -10,6 +10,7 @@ defineProps<{
         data: Array<any>;
         links: Array<any>;
     };
+    canManage: boolean;
 }>();
 
 const emit = defineEmits(['create', 'edit', 'toggle']);
@@ -22,7 +23,7 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                 <CardTitle>Units</CardTitle>
                 <CardDescription>Manage units within departments.</CardDescription>
             </div>
-            <Button @click="emit('create')"><Plus class="mr-2 h-4 w-4" /> Add Unit</Button>
+            <Button v-if="canManage" @click="emit('create')"><Plus class="mr-2 h-4 w-4" /> Add Unit</Button>
         </CardHeader>
         <CardContent>
             <Table>
@@ -32,7 +33,7 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                         <TableHead>Name</TableHead>
                         <TableHead>Department</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead class="text-right">Actions</TableHead>
+                        <TableHead class="text-right" v-if="canManage">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -41,9 +42,9 @@ const emit = defineEmits(['create', 'edit', 'toggle']);
                         <TableCell>{{ unit.name }}</TableCell>
                         <TableCell>{{ unit.department?.name }}</TableCell>
                         <TableCell>
-                            <Switch :checked="unit.is_active" @update:checked="emit('toggle', unit.id, unit.is_active)" />
+                            <Switch :disabled="!canManage" :checked="unit.is_active" @update:checked="emit('toggle', unit.id, unit.is_active)" />
                         </TableCell>
-                        <TableCell class="text-right">
+                        <TableCell class="text-right" v-if="canManage">
                             <Button variant="ghost" size="icon" @click="emit('edit', unit)">
                                 <Pencil class="h-4 w-4" />
                             </Button>

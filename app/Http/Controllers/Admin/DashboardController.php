@@ -398,6 +398,7 @@ class DashboardController extends Controller
         // 7. My Course Allocations & Timetable (If Staff)
         $myAllocations = [];
         $myTimetable = [];
+        $courseIds = [];
         if ($user->hasAnyRole(['lecturer', 'course_coordinator', 'dean', 'hod'])) {
             $myAllocations = \App\Models\CourseAllocation::whereHas('staff', function ($q) use ($user) {
                 $q->where('user_id', $user->id);
@@ -406,14 +407,12 @@ class DashboardController extends Controller
                 ->with(['course'])
                 ->get();
 
-            // Get course IDs from allocations
-            $courseIds = $myAllocations->pluck('course_id');
+            $courseIds = $myAllocations->pluck('course_id')->toArray();
 
-            // Fetch Timetable
-            $myTimetable = \App\Models\Timetable::whereIn('course_id', $courseIds)
-                ->where('session_id', $sessionId)
-                ->with(['course'])
-                ->get();
+            // Fetch Timetable from Cache
+            if ($user->staff) {
+                $myTimetable = \App\Services\AcademicCacheService::getStaffTimetable($user->staff->id, $sessionId);
+            }
 
             // Lecturer Stats
             $lecturerStats = [

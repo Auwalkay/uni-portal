@@ -98,8 +98,69 @@ class AcademicCacheService
         });
     }
 
+    public static function getStudentTimetable($studentId, $sessionId, $semesterId = null)
+    {
+        $version = Cache::rememberForever('timetable_cache_version', fn() => time());
+        $cacheKey = "timetable_v{$version}_student_{$studentId}_{$sessionId}" . ($semesterId ? "_{$semesterId}" : "");
+
+        return Cache::remember($cacheKey, self::TTL, function () use ($studentId, $sessionId, $semesterId) {
+            $query = \App\Models\CourseRegistration::where('student_id', $studentId)
+                ->where('session_id', $sessionId);
+            if ($semesterId) {
+                $query->where('semester_id', $semesterId);
+            }
+            $registeredCourseIds = $query->pluck('course_id');
+
+            $timetableQuery = \App\Models\Timetable::where('session_id', $sessionId)
+                ->whereIn('course_id', $registeredCourseIds);
+            if ($semesterId) {
+                $timetableQuery->where('semester_id', $semesterId);
+            }
+            return $timetableQuery->with([
+                'course',
+                'course.allocations' => function ($q) use ($sessionId) {
+                    $q->where('session_id', $sessionId)->with('staff.user');
+                }
+            ])
+            ->orderByRaw("FIELD(day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')")
+            ->orderBy('start_time')
+            ->get();
+        });
+    }
+
+    public static function getStaffTimetable($staffId, $sessionId)
+    {
+        $version = Cache::rememberForever('timetable_cache_version', fn() => time());
+        $cacheKey = "timetable_v{$version}_staff_{$staffId}_{$sessionId}";
+
+        return Cache::remember($cacheKey, self::TTL, function () use ($staffId, $sessionId) {
+            $staff = \App\Models\Staff::with(['allocations' => function ($q) use ($sessionId) {
+                $q->where('session_id', $sessionId);
+            }])->find($staffId);
+
+            if (!$staff) {
+                return collect();
+            }
+
+            $courseIds = $staff->allocations->pluck('course_id');
+
+            return \App\Models\Timetable::whereIn('course_id', $courseIds)
+                ->where('session_id', $sessionId)
+                ->with(['course'])
+                ->orderByRaw("FIELD(day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')")
+                ->orderBy('start_time')
+                ->get();
+        });
+    }
+
+    public static function clearTimetableCache()
+    {
+        Cache::forever('timetable_cache_version', time());
+    }
+
     public static function clearAll()
     {
+        self::clearTimetableCache();
         Cache::forget('faculties_with_departments');
         Cache::forget('all_programmes_list');
         Cache::forget('all_programmes_list_v2');

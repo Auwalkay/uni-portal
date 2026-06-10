@@ -30,25 +30,7 @@ class TimetableController extends Controller
 
         $timetables = [];
         if ($currentSession && $currentSemester) {
-            // Get user's registered courses for this semester
-            $registeredCourseIds = \App\Models\CourseRegistration::where('student_id', $student->id)
-                ->where('session_id', $currentSession->id)
-                ->where('semester_id', $currentSemester->id)
-                ->pluck('course_id');
-
-            $timetables = Timetable::where('session_id', $currentSession->id)
-                ->where('semester_id', $currentSemester->id)
-                // Filter by registered courses ONLY
-                ->whereIn('course_id', $registeredCourseIds)
-                ->with([
-                    'course',
-                    'course.allocations' => function ($q) use ($currentSession) {
-                        $q->where('session_id', $currentSession->id)->with('staff.user');
-                    }
-                ])
-                ->orderByRaw("FIELD(day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')")
-                ->orderBy('start_time')
-                ->get();
+            $timetables = \App\Services\AcademicCacheService::getStudentTimetable($student->id, $currentSession->id, $currentSemester->id);
         }
 
         return Inertia::render('Student/Timetable/Index', [
