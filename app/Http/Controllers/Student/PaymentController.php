@@ -142,7 +142,9 @@ class PaymentController extends Controller
         $netAcademicPortion = (float) $invoice->amount - $adminChargeItemAmount;
         
         $minUpfront = (float) $invoice->amount / 2; // Default 50%
-        if (!$adminChargeSplittable && $adminChargeItemAmount > 0) {
+        if ($invoice->type === 'hostel_fee') {
+            $minUpfront = (float) $invoice->amount * 0.75;
+        } elseif (!$adminChargeSplittable && $adminChargeItemAmount > 0) {
             // Admin must be paid full, academic can be split
             $minUpfront = ($netAcademicPortion / 2) + $adminChargeItemAmount;
         }

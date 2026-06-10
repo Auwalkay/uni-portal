@@ -225,4 +225,56 @@ class HostelBookingTest extends TestCase
             'status' => 'success',
         ]);
     }
+
+    public function test_hostel_fee_payment_requires_75_percent_minimum_or_full_payment()
+    {
+        // acting as student
+        $this->actingAs($this->studentUser);
+
+        // create a hostel fee invoice
+        $invoice = Invoice::create([
+            'user_id' => $this->studentUser->id,
+            'session_id' => $this->session->id,
+            'reference' => 'HST-FEES-TEST',
+            'type' => 'hostel_fee',
+            'amount' => 10000.00,
+            'status' => 'pending',
+            'due_date' => now()->addDays(7),
+        ]);
+
+        // Attempting to pay 50% (5000) - should fail
+        $response = $this->post(route('student.payments.pay', $invoice->id), [
+            'amount' => 5000,
+        ]);
+        $response->assertSessionHas('error');
+        $this->assertTrue(str_contains(session('error'), 'Minimum required upfront payment is 7,500'));
+
+        // Mock payment gateway interface so initialization doesn't throw or fail
+        $this->mock(\App\Contracts\PaymentGatewayInterface::class, function ($mock) {
+            $mock->shouldReceive('initializeTransaction')->andReturn([
+                'authorization_url' => 'https://example.com/pay',
+            ]);
+        });
+
+        // Attempting to pay 75% (7500) - should succeed
+        $response = $this->post(route('student.payments.pay', $invoice->id), [
+            'amount' => 7500,
+        ]);
+        $response->assertStatus(409)->orExpect(true); // Should redirect/location or 302/Inertia location (which Inertia returns as 409 conflict with X-Inertia-Location header)
+        if ($response->getStatusCode() === 409) {
+            $response->assertHeader('X-Inertia-Location');
+        } else {
+            $response->assertRedirect();
+        }
+
+        // Attempting to pay 100% (10000) - should succeed
+        $response = $this->post(route('student.payments.pay', $invoice->id), [
+            'amount' => 10000,
+        ]);
+        if ($response->getStatusCode() === 409) {
+            $response->assertHeader('X-Inertia-Location');
+        } else {
+            $response->assertRedirect();
+        }
+    }
 }

@@ -48,6 +48,8 @@ const props = defineProps<{
         admin_charge_splittable: boolean;
         payment_gateway: string;
         application_fee: string | number;
+        enforce_school_fee_for_results: boolean;
+        enforce_hostel_fee_for_results: boolean;
     }
 }>();
 
@@ -73,6 +75,39 @@ const gatewayForm = useForm({
 const appFeeForm = useForm({
     amount: props.settings.application_fee
 });
+
+const resultVisibilityForm = useForm({
+    schoolFee: props.settings.enforce_school_fee_for_results,
+    hostelFee: props.settings.enforce_hostel_fee_for_results
+});
+
+const submitResultVisibility = () => {
+    router.post(route('admin.settings.update'), { 
+        key: 'enforce_school_fee_for_results', 
+        value: resultVisibilityForm.schoolFee ? 'true' : 'false' 
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            router.post(route('admin.settings.update'), { 
+                key: 'enforce_hostel_fee_for_results', 
+                value: resultVisibilityForm.hostelFee ? 'true' : 'false' 
+            }, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Updated',
+                        text: 'Result visibility settings updated successfully',
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 3000
+                    });
+                }
+            });
+        }
+    });
+};
 
 const submitSetting = () => {
     form.post(route('admin.settings.update'), {
@@ -337,6 +372,40 @@ const settingsModules = [
                         </div>
                         <Button @click="submitAdminCharge" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
                             Update Financials
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                <!-- Result Visibility Card -->
+                <Card class="border-rose-200 bg-rose-50/30">
+                    <CardHeader class="flex flex-row items-center gap-4">
+                        <div class="bg-rose-100 p-3 rounded-xl text-rose-600">
+                            <Lock class="w-6 h-6" />
+                        </div>
+                        <div>
+                            <CardTitle>Result Visibility Settings</CardTitle>
+                            <CardDescription>Restrict result access based on student financial clearance.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent class="space-y-6">
+                        <div class="grid gap-4">
+                            <div class="flex items-center justify-between">
+                                <Label for="enforce_school_fee">Enforce School Fees Clearance</Label>
+                                <Switch 
+                                    id="enforce_school_fee" 
+                                    v-model:checked="resultVisibilityForm.schoolFee" 
+                                />
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <Label for="enforce_hostel_fee">Enforce Hostel Fees Clearance</Label>
+                                <Switch 
+                                    id="enforce_hostel_fee" 
+                                    v-model:checked="resultVisibilityForm.hostelFee" 
+                                />
+                            </div>
+                        </div>
+                        <Button @click="submitResultVisibility" class="w-full bg-rose-600 hover:bg-rose-700 text-white">
+                            Update Visibility Settings
                         </Button>
                     </CardContent>
                 </Card>
