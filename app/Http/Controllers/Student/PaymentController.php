@@ -81,21 +81,61 @@ class PaymentController extends Controller
 
         $currentSession = \App\Models\Session::current();
         $canGenerateInvoice = false;
+        $optionalFees = [];
 
-        if ($currentSession) {
-            $hasInvoice = Invoice::where('user_id', Auth::id())
+        $student = Auth::user()->student;
+        if ($currentSession && $student) {
+            $canGenerateInvoice = !Invoice::where('user_id', Auth::id())
                 ->where('type', 'school_fee')
                 ->where('session_id', $currentSession->id)
                 ->exists();
 
-            $canGenerateInvoice = !$hasInvoice;
+            $optionalFees = $feeService->getAvailableOptionalFees($student, $currentSession);
         }
 
         return Inertia::render('Student/Finance/Index', [
             'invoices' => $invoices,
             'canGenerateInvoice' => $canGenerateInvoice,
+            'optionalFees' => $optionalFees,
             'admin_charge_splittable' => (bool) \App\Models\SystemSetting::get('admin_charge_splittable', true),
         ]);
+    }
+
+    public function getOptionalFees()
+    {
+        $student = Auth::user()->student;
+        $currentSession = \App\Models\Session::current();
+        if (!$student || !$currentSession) {
+            return response()->json([]);
+        }
+
+        $feeService = app(\App\Services\Finance\FeeService::class);
+        $optionalFees = $feeService->getAvailableOptionalFees($student, $currentSession);
+
+        return response()->json($optionalFees);
+    }
+
+    public function initiateOptionalFee(\App\Models\FeeConfiguration $config)
+    {
+        $student = Auth::user()->student;
+        $currentSession = \App\Models\Session::current();
+
+        if (!$student || !$currentSession) {
+            return back()->with('error', 'Student profile or active session not found.');
+        }
+
+        if ($config->session_id !== $currentSession->id) {
+            return back()->with('error', 'Invalid session fee configuration.');
+        }
+
+        $feeService = app(\App\Services\Finance\FeeService::class);
+        $invoice = $feeService->generateOptionalFeeInvoice($student, $currentSession, $config);
+
+        if (!$invoice) {
+            return back()->with('error', 'Failed to generate invoice. It may have already been generated or paid.');
+        }
+
+        return redirect()->route('student.payments.index')->with('success', 'Optional Fee invoice generated successfully.');
     }
 
     public function pay(Request $request, Invoice $invoice)
@@ -135,6 +175,15 @@ class PaymentController extends Controller
 
         $balance = (float) $invoice->amount - (float) $invoice->paid_amount;
         $amountToPay = (float) $request->input('amount');
+
+        $isFullPayment = abs($amountToPay - $balance) < 0.01;
+
+        // Disallow split payments for non-school and non-hostel fees (e.g. acceptance_fee, other_fee, application_fee)
+        if ($invoice->type !== 'school_fee' && $invoice->type !== 'hostel_fee') {
+            if (!$isFullPayment) {
+                return back()->with('error', 'Split payments are not supported for this type of fee. The full remaining balance of ' . number_format($balance, 2) . ' NGN must be paid.');
+            }
+        }
 
         // Calculate Minimum Required Upfront Payment based on Splittability Rules
         $adminChargeSplittable = \App\Models\SystemSetting::get('admin_charge_splittable', true);

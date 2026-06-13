@@ -325,6 +325,17 @@ class ProfileController extends Controller
             return back()->with('error', 'Admission letter is not available.');
         }
 
+        $identifer = $student->matriculation_number ?? $applicant->jamb_registration_number ?? $applicant->application_number ?? 'Letter';
+        $fileName = "Admission_Letter_{$identifer}.pdf";
+        $filePath = "admission_letters/{$user->id}.pdf";
+
+        if (\Illuminate\Support\Facades\Storage::disk('local')->exists($filePath)) {
+            return \Illuminate\Support\Facades\Storage::disk('local')->download($filePath, $fileName, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="' . $fileName . '"'
+            ]);
+        }
+
         // Prepare data for the letter
         if ($student) {
             // Calculate Fees for the Letter
@@ -373,8 +384,9 @@ class ProfileController extends Controller
                 'isFontSubsettingEnabled' => true,
             ]);
 
-        $identifer = $student->matriculation_number ?? $applicant->jamb_registration_number ?? $applicant->application_number ?? 'Letter';
-        return $pdf->download("Admission_Letter_{$identifer}.pdf");
+        \Illuminate\Support\Facades\Storage::disk('local')->put($filePath, $pdf->output());
+
+        return $pdf->download($fileName);
     }
 
     private function calculateEstimatedFees($student)
@@ -385,17 +397,36 @@ class ProfileController extends Controller
         $allConfigs = \App\Models\FeeConfiguration::where('session_id', $sessionId)
             ->where(function ($q) use ($student) {
                 $q->where('level', $student->current_level)->orWhereNull('level');
-            })->get();
+            })
+            ->where(function ($q) use ($student) {
+                $q->where('entry_mode', $student->entry_mode)->orWhereNull('entry_mode');
+            })
+            ->where('is_compulsory', true)
+            ->with('feeType')
+            ->get();
 
         $tuition = 0;
+        $oneTimeFeesTotal = 0;
+        $oneTimeFeesList = [];
+
         $grouped = $allConfigs->groupBy('fee_type_id');
-        foreach ($grouped as $configs) {
+        foreach ($grouped as $feeTypeId => $configs) {
             $resolved = $configs->where('program_id', $student->program_id)->first()
                 ?? $configs->where('department_id', $student->department_id)->whereNull('program_id')->first()
                 ?? $configs->where('faculty_id', $student->faculty_id)->whereNull('department_id')->whereNull('program_id')->first()
                 ?? $configs->whereNull('faculty_id')->whereNull('department_id')->whereNull('program_id')->first();
             
-            if ($resolved) $tuition += $resolved->amount;
+            if ($resolved) {
+                if ($resolved->feeType && $resolved->feeType->is_one_time) {
+                    $oneTimeFeesTotal += $resolved->amount;
+                    $oneTimeFeesList[] = [
+                        'name' => $resolved->feeType->name,
+                        'amount' => $resolved->amount
+                    ];
+                } else {
+                    $tuition += $resolved->amount;
+                }
+            }
         }
 
         $adminCharge = \App\Models\SystemSetting::get('admin_charge_enabled', true) 
@@ -412,11 +443,13 @@ class ProfileController extends Controller
             $discount = $baseForDiscount * ($scholarship->percentage / 100);
         }
 
-        $total = $tuition + $adminCharge;
+        $total = $tuition + $adminCharge + $oneTimeFeesTotal;
 
         return [
             'tuition' => $tuition,
             'admin_charge' => $adminCharge,
+            'one_time_fees' => $oneTimeFeesTotal,
+            'one_time_fees_list' => $oneTimeFeesList,
             'discount' => $discount,
             'total' => $total - $discount,
             'scholarship_name' => $scholarship?->name
@@ -434,17 +467,36 @@ class ProfileController extends Controller
         $allConfigs = \App\Models\FeeConfiguration::where('session_id', $session->id)
             ->where(function ($q) {
                 $q->where('level', '100')->orWhereNull('level');
-            })->get();
+            })
+            ->where(function ($q) use ($applicant) {
+                $q->where('entry_mode', $applicant->application_mode)->orWhereNull('entry_mode');
+            })
+            ->where('is_compulsory', true)
+            ->with('feeType')
+            ->get();
 
         $tuition = 0;
+        $oneTimeFeesTotal = 0;
+        $oneTimeFeesList = [];
+
         $grouped = $allConfigs->groupBy('fee_type_id');
-        foreach ($grouped as $configs) {
+        foreach ($grouped as $feeTypeId => $configs) {
             $resolved = $configs->where('program_id', $applicant->program_choice_1)->first()
                 ?? $configs->where('department_id', $deptId)->whereNull('program_id')->first()
                 ?? $configs->where('faculty_id', $facultyId)->whereNull('department_id')->whereNull('program_id')->first()
                 ?? $configs->whereNull('faculty_id')->whereNull('department_id')->whereNull('program_id')->first();
             
-            if ($resolved) $tuition += $resolved->amount;
+            if ($resolved) {
+                if ($resolved->feeType && $resolved->feeType->is_one_time) {
+                    $oneTimeFeesTotal += $resolved->amount;
+                    $oneTimeFeesList[] = [
+                        'name' => $resolved->feeType->name,
+                        'amount' => $resolved->amount
+                    ];
+                } else {
+                    $tuition += $resolved->amount;
+                }
+            }
         }
 
         $adminCharge = \App\Models\SystemSetting::get('admin_charge_enabled', true) 
@@ -461,11 +513,13 @@ class ProfileController extends Controller
             $discount = $baseForDiscount * ($scholarship->percentage / 100);
         }
 
-        $total = $tuition + $adminCharge;
+        $total = $tuition + $adminCharge + $oneTimeFeesTotal;
 
         return [
             'tuition' => $tuition,
             'admin_charge' => $adminCharge,
+            'one_time_fees' => $oneTimeFeesTotal,
+            'one_time_fees_list' => $oneTimeFeesList,
             'discount' => $discount,
             'total' => $total - $discount,
             'scholarship_name' => $scholarship?->name

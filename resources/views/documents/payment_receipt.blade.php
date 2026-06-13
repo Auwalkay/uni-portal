@@ -254,16 +254,30 @@
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td style="font-weight: 600;">
-                        {{ strtoupper(str_replace('_', ' ', $invoice->type)) }} PAYMENT
-                        <div style="font-weight: 400; font-size: 10px; color: #64748b; margin-top: 2px;">
-                            Payment for academic year requirements
-                        </div>
-                    </td>
-                    <td align="right" class="value"><span
-                            class="naira">&#x20A6;</span>{{ number_format($payment->amount, 2) }}</td>
-                </tr>
+                @if($invoice->items && count($invoice->items) > 0)
+                    @foreach($invoice->items as $item)
+                        <tr>
+                            <td style="font-weight: 600; font-size: 11px;">
+                                {{ $item->description }}
+                            </td>
+                            <td align="right" class="value" style="font-size: 11px;">
+                                <span class="naira">&#x20A6;</span>{{ number_format($item->amount, 2) }}
+                            </td>
+                        </tr>
+                    @endforeach
+                @else
+                    <tr>
+                        <td style="font-weight: 600; font-size: 11px;">
+                            {{ strtoupper(str_replace('_', ' ', $invoice->type)) }} PAYMENT
+                            <div style="font-weight: 400; font-size: 10px; color: #64748b; margin-top: 2px;">
+                                Payment for academic year requirements
+                            </div>
+                        </td>
+                        <td align="right" class="value" style="font-size: 11px;">
+                            <span class="naira">&#x20A6;</span>{{ number_format($payment->amount, 2) }}
+                        </td>
+                    </tr>
+                @endif
             </tbody>
         </table>
 
@@ -273,6 +287,11 @@
                     <td class="label">Invoice Total</td>
                     <td align="right" class="value"><span
                             class="naira">&#x20A6;</span>{{ number_format($invoice->amount, 2) }}</td>
+                </tr>
+                <tr>
+                    <td class="label" style="font-weight: 700; color: #10b981;">This Payment</td>
+                    <td align="right" class="value" style="font-weight: 700; color: #10b981;"><span
+                            class="naira">&#x20A6;</span>{{ number_format($payment->amount, 2) }}</td>
                 </tr>
                 <tr>
                     <td class="label">Total Paid to Date</td>

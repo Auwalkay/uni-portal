@@ -13,6 +13,7 @@ class FeeConfiguration extends Model
         'department_id',
         'program_id',
         'level',
+        'entry_mode',
         'amount',
         'is_compulsory'
     ];
