@@ -154,13 +154,17 @@ class FinanceController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:fee_types',
             'description' => 'nullable|string',
+            'is_one_time' => 'boolean',
         ]);
 
         FeeType::create([
             'name' => $validated['name'],
             'slug' => Str::slug($validated['name']),
             'description' => $validated['description'],
+            'is_one_time' => $validated['is_one_time'] ?? false,
         ]);
+
+        \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory('admission_letters');
 
         return back()->with('success', 'Fee Type created successfully.');
     }
@@ -170,13 +174,17 @@ class FinanceController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:fee_types,name,' . $feeType->id,
             'description' => 'nullable|string',
+            'is_one_time' => 'boolean',
         ]);
 
         $feeType->update([
             'name' => $validated['name'],
             'slug' => Str::slug($validated['name']),
             'description' => $validated['description'],
+            'is_one_time' => $validated['is_one_time'] ?? false,
         ]);
+
+        \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory('admission_letters');
 
         return back()->with('success', 'Fee Type updated successfully.');
     }
@@ -188,6 +196,9 @@ class FinanceController extends Controller
         }
 
         $feeType->delete();
+
+        \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory('admission_letters');
+
         return back()->with('success', 'Fee Type deleted successfully.');
     }
 
@@ -201,10 +212,13 @@ class FinanceController extends Controller
             'department_id' => 'nullable|exists:departments,id',
             'program_id' => 'nullable|exists:programmes,id',
             'level' => 'nullable|string', // 100, 200, etc.
+            'entry_mode' => 'nullable|string|in:UTME,Direct Entry,Transfer,Postgraduate',
             'is_compulsory' => 'boolean',
         ]);
 
         FeeConfiguration::create($validated);
+
+        \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory('admission_letters');
 
         return back()->with('success', 'Fee Configuration rules saved.');
     }
@@ -214,12 +228,13 @@ class FinanceController extends Controller
         $validated = $request->validate([
             'amount' => 'required|numeric|min:0',
             'level' => 'nullable|string',
+            'entry_mode' => 'nullable|string|in:UTME,Direct Entry,Transfer,Postgraduate',
             'is_compulsory' => 'boolean',
-            // Typically we don't allow changing the structural targets (faculty/dept/program) on edit to avoid confusion, 
-            // but for flexibility we could. Let's keep it simple for now: only amount/level/compulsory.
         ]);
 
         $config->update($validated);
+
+        \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory('admission_letters');
 
         return back()->with('success', 'Fee Configuration updated.');
     }
@@ -227,6 +242,9 @@ class FinanceController extends Controller
     public function destroyFeeConfiguration(FeeConfiguration $config)
     {
         $config->delete();
+
+        \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory('admission_letters');
+
         return back()->with('success', 'Fee Configuration removed.');
     }
 
@@ -271,6 +289,8 @@ class FinanceController extends Controller
                 }
             }
         });
+
+        \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory('admission_letters');
 
         return back()->with('success', 'Fee configurations cloned successfully.');
     }

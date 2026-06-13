@@ -65,7 +65,7 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'Support Tickets',
-        href: '/support',
+        href: '/student/support',
         icon: LifeBuoy,
     },
 ];

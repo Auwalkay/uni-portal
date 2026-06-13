@@ -408,4 +408,90 @@ class AcademicController extends Controller
 
         return response()->json(['message' => 'Course successfully removed from programme.']);
     }
+
+    public function importProgrammeCoursesFromExcel(Request $request, Programme $programme)
+    {
+        if (!$request->user()->can('manage_programmes') && !$request->user()->can('manage_courses') && !$request->user()->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $request->validate([
+            'file' => 'required|mimes:csv,txt,xlsx|max:4096',
+        ]);
+
+        try {
+            $import = new \App\Imports\ProgrammeCourseImport($programme);
+            \Maatwebsite\Excel\Facades\Excel::import($import, $request->file('file'));
+
+            \App\Services\AcademicCacheService::clearAll();
+
+            $stats = $import->getStats();
+            return response()->json([
+                'success' => true,
+                'stats' => $stats,
+                'message' => "Import processed: {$stats['created']} courses created, {$stats['linked']} courses linked."
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error during import: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function downloadCourseImportTemplate()
+    {
+        if (!auth()->user()->can('manage_programmes') && !auth()->user()->can('manage_courses') && !auth()->user()->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\ProgrammeCourseTemplateExport,
+            'programme_course_import_template.xlsx',
+            \Maatwebsite\Excel\Excel::XLSX
+        );
+    }
+
+    public function importGlobalCoursesFromExcel(Request $request)
+    {
+        if (!$request->user()->can('manage_courses') && !$request->user()->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $request->validate([
+            'file' => 'required|mimes:csv,txt,xlsx|max:4096',
+        ]);
+
+        try {
+            $import = new \App\Imports\GlobalCourseImport();
+            \Maatwebsite\Excel\Facades\Excel::import($import, $request->file('file'));
+
+            \App\Services\AcademicCacheService::clearAll();
+
+            $stats = $import->getStats();
+            return response()->json([
+                'success' => true,
+                'stats' => $stats,
+                'message' => "Import processed: {$stats['created']} courses created, {$stats['linked']} courses linked."
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error during import: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function downloadGlobalCourseImportTemplate()
+    {
+        if (!auth()->user()->can('manage_courses') && !auth()->user()->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\GlobalCourseTemplateExport,
+            'global_course_import_template.xlsx',
+            \Maatwebsite\Excel\Excel::XLSX
+        );
+    }
 }

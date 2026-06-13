@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const props = defineProps<{
     invoices: Array<{
@@ -46,6 +47,15 @@ const props = defineProps<{
     }>;
     canGenerateInvoice: boolean;
     admin_charge_splittable: boolean;
+    optionalFees?: Array<{
+        id: number;
+        fee_type: {
+            id: number;
+            name: string;
+            slug: string;
+        };
+        amount: number;
+    }>;
 }>();
 
 const expandedInvoices = ref<string[]>([]);
@@ -60,8 +70,20 @@ const toggleExpand = (id: string) => {
 };
 
 const isPaymentModalOpen = ref(false);
+const isOptionalFeeModalOpen = ref(false);
 const selectedInvoice = ref<any>(null);
+const selectedOptionalFeeId = ref<string | null>(null);
 const paymentOption = ref('full'); // 'full' or 'half'
+
+const submitOptionalFee = () => {
+    if (!selectedOptionalFeeId.value) return;
+    router.post(route('student.payments.initiate_optional', selectedOptionalFeeId.value), {}, {
+        onFinish: () => {
+            isOptionalFeeModalOpen.value = false;
+            selectedOptionalFeeId.value = null;
+        }
+    });
+};
 
 const openPaymentModal = (invoice: any) => {
     selectedInvoice.value = invoice;
@@ -111,6 +133,11 @@ const activePaymentAmount = computed(() => {
 
 const canPayHalf = computed(() => {
     if (!selectedInvoice.value) return false;
+    
+    // Split payments are only supported for school fees and hostel fees
+    if (selectedInvoice.value.type !== 'school_fee' && selectedInvoice.value.type !== 'hostel_fee') {
+        return false;
+    }
     
     const balance = Number(selectedInvoice.value.amount) - Number(selectedInvoice.value.paid_amount || 0);
     if (balance <= 1) return false; // Already fully paid
@@ -186,10 +213,17 @@ const getPaymentDate = (invoice: any) => {
                     <h2 class="text-3xl font-bold tracking-tight">Financials</h2>
                     <p class="text-muted-foreground">Manage your invoices and payments.</p>
                 </div>
-                <div v-if="canGenerateInvoice">
-                     <Button @click="router.post(route('student.payments.create_school_fee'))">
-                        Pay School Fees
-                    </Button>
+                <div class="flex items-center gap-3">
+                    <div v-if="optionalFees && optionalFees.length > 0">
+                        <Button variant="outline" @click="isOptionalFeeModalOpen = true">
+                            Initiate Optional Fee
+                        </Button>
+                    </div>
+                    <div v-if="canGenerateInvoice">
+                         <Button @click="router.post(route('student.payments.create_school_fee'))">
+                            Pay School Fees
+                        </Button>
+                    </div>
                 </div>
             </div>
 
@@ -356,6 +390,40 @@ const getPaymentDate = (invoice: any) => {
                 </div>
                 <DialogFooter>
                     <Button type="submit" @click="submitPayment">Proceed to Payment</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <!-- Optional Fee Modal -->
+        <Dialog v-model:open="isOptionalFeeModalOpen">
+            <DialogContent class="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle>Initiate Optional Fee</DialogTitle>
+                    <DialogDescription>
+                        Select an optional fee to generate a payment invoice.
+                    </DialogDescription>
+                </DialogHeader>
+                <div class="grid gap-4 py-4" v-if="optionalFees && optionalFees.length > 0">
+                    <div class="grid gap-2">
+                        <Label for="optional-fee-select">Available Optional Fees</Label>
+                        <Select v-model="selectedOptionalFeeId">
+                            <SelectTrigger id="optional-fee-select">
+                                <SelectValue placeholder="Select fee type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem v-for="fee in optionalFees" :key="fee.id" :value="String(fee.id)">
+                                    {{ fee.fee_type?.name }} - {{ formatCurrency(Number(fee.amount)) }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <div v-else class="py-4 text-center text-sm text-muted-foreground italic">
+                    No optional fees are currently available for your profile.
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" @click="isOptionalFeeModalOpen = false">Cancel</Button>
+                    <Button type="submit" @click="submitOptionalFee" :disabled="!selectedOptionalFeeId">Generate Invoice</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

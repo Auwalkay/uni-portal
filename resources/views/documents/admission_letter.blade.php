@@ -271,6 +271,14 @@
                             <td style="padding: 1px 0;">Tuition & Core Fees:</td>
                             <td style="text-align: right; font-weight: bold;"><span class="naira">&#x20A6;</span>{{ number_format($fees['tuition']) }}</td>
                         </tr>
+                        @if(isset($fees['one_time_fees_list']) && count($fees['one_time_fees_list']) > 0)
+                            @foreach($fees['one_time_fees_list'] as $otFee)
+                                <tr>
+                                    <td style="padding: 1px 0;">{{ $otFee['name'] }} (One-Time):</td>
+                                    <td style="text-align: right; font-weight: bold;"><span class="naira">&#x20A6;</span>{{ number_format($otFee['amount']) }}</td>
+                                </tr>
+                            @endforeach
+                        @endif
                         <tr>
                             <td style="padding: 1px 0;">Administrative Charges:</td>
                             <td style="text-align: right; font-weight: bold;"><span class="naira">&#x20A6;</span>{{ number_format($fees['admin_charge']) }}</td>

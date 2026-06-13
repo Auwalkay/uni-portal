@@ -275,8 +275,16 @@ const newProgrammeCourseForm = ref({
 const isSubmittingProgrammeCourse = ref(false);
 
 const importProgrammeId = ref('');
-const isImportingCourses = ref(false);
 const assignedSearchQuery = ref('');
+
+const excelFile = ref<File | null>(null);
+const isUploadingExcel = ref(false);
+const excelInputRef = ref<HTMLInputElement | null>(null);
+
+const isGlobalCourseImportOpen = ref(false);
+const globalExcelFile = ref<File | null>(null);
+const isUploadingGlobalExcel = ref(false);
+const globalExcelInputRef = ref<HTMLInputElement | null>(null);
 
 const importProgrammeSearchItems = computed(() => {
     if (!selectedProgrammeForCourses.value) return [];
@@ -400,6 +408,148 @@ const submitImportProgrammeCourses = async () => {
         Swal.fire('Error', 'Failed to import courses', 'error');
     } finally {
         isImportingCourses.value = false;
+    }
+};
+
+const handleExcelFileChange = (e: Event) => {
+    const target = e.target as HTMLInputElement;
+    if (target.files && target.files.length > 0) {
+        excelFile.value = target.files[0];
+    } else {
+        excelFile.value = null;
+    }
+};
+
+const submitExcelImport = async () => {
+    if (!excelFile.value) {
+        Swal.fire('Validation Error', 'Please select a CSV or Excel file to upload', 'warning');
+        return;
+    }
+    isUploadingExcel.value = true;
+    
+    const formData = new FormData();
+    formData.append('file', excelFile.value);
+    
+    try {
+        const res = await window.fetch(route('admin.academics.programmes.courses.import_excel', selectedProgrammeForCourses.value.id), {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+            },
+            body: formData,
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            const stats = data.stats;
+            let details = `Created: ${stats.created}\nLinked: ${stats.linked}\nSkipped: ${stats.skipped}`;
+            if (stats.errors && stats.errors.length > 0) {
+                details += `\n\nErrors:\n${stats.errors.slice(0, 3).join('\n')}`;
+                if (stats.errors.length > 3) {
+                    details += `\n...and ${stats.errors.length - 3} more errors`;
+                }
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Import Processed with Warnings',
+                    text: data.message,
+                    html: `<pre class="text-left text-xs bg-muted p-3 rounded-lg max-h-40 overflow-y-auto">${details.replace(/\n/g, '<br>')}</pre>`,
+                });
+            } else {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Import Successful',
+                    text: data.message,
+                    html: `<pre class="text-left text-xs bg-muted p-3 rounded-lg">${details.replace(/\n/g, '<br>')}</pre>`,
+                });
+            }
+            
+            // Reset form
+            excelFile.value = null;
+            if (excelInputRef.value) {
+                excelInputRef.value.value = '';
+            }
+            
+            // Refresh courses list
+            await fetchProgrammeCourses(selectedProgrammeForCourses.value.id);
+        } else {
+            Swal.fire('Error', data.message || 'Failed to import courses', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        Swal.fire('Error', 'Failed to upload and import courses', 'error');
+    } finally {
+        isUploadingExcel.value = false;
+    }
+};
+
+const openGlobalCourseImport = () => {
+    globalExcelFile.value = null;
+    isGlobalCourseImportOpen.value = true;
+    if (globalExcelInputRef.value) {
+        globalExcelInputRef.value.value = '';
+    }
+};
+
+const handleGlobalExcelFileChange = (e: Event) => {
+    const target = e.target as HTMLInputElement;
+    if (target.files && target.files.length > 0) {
+        globalExcelFile.value = target.files[0];
+    } else {
+        globalExcelFile.value = null;
+    }
+};
+
+const submitGlobalExcelImport = async () => {
+    if (!globalExcelFile.value) {
+        Swal.fire('Validation Error', 'Please select a CSV or Excel file to upload', 'warning');
+        return;
+    }
+    isUploadingGlobalExcel.value = true;
+    
+    const formData = new FormData();
+    formData.append('file', globalExcelFile.value);
+    
+    try {
+        const res = await window.fetch(route('admin.academics.courses.import_excel'), {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+            },
+            body: formData,
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            const stats = data.stats;
+            let details = `Created: ${stats.created}\nLinked to Programmes: ${stats.linked}\nSkipped: ${stats.skipped}`;
+            if (stats.errors && stats.errors.length > 0) {
+                details += `\n\nErrors:\n${stats.errors.slice(0, 3).join('\n')}`;
+                if (stats.errors.length > 3) {
+                    details += `\n...and ${stats.errors.length - 3} more errors`;
+                }
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Import Processed with Warnings',
+                    text: data.message,
+                    html: `<pre class="text-left text-xs bg-muted p-3 rounded-lg max-h-40 overflow-y-auto">${details.replace(/\n/g, '<br>')}</pre>`,
+                });
+            } else {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Import Successful',
+                    text: data.message,
+                    html: `<pre class="text-left text-xs bg-muted p-3 rounded-lg">${details.replace(/\n/g, '<br>')}</pre>`,
+                });
+            }
+            
+            isGlobalCourseImportOpen.value = false;
+            router.reload({ only: ['courses', 'allCourses'] });
+        } else {
+            Swal.fire('Error', data.message || 'Failed to import courses', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        Swal.fire('Error', 'Failed to upload and import courses', 'error');
+    } finally {
+        isUploadingGlobalExcel.value = false;
     }
 };
 
@@ -537,6 +687,7 @@ const removeProgrammeCourse = async (courseId: string) => {
                         @create="openCreate('course')" 
                         @edit="(item) => openEdit('course', item)"
                          @toggle="(id, state) => toggleActive('course', id, state)"
+                         @import-excel="openGlobalCourseImport"
                     />
                 </TabsContent>
 
@@ -949,12 +1100,98 @@ const removeProgrammeCourse = async (courseId: string) => {
                                     </Button>
                                 </form>
                             </div>
+
+                            <!-- Import from Excel Panel -->
+                            <div class="p-5 bg-muted/40 border border-muted/80 rounded-xl space-y-4 shadow-sm">
+                                <div class="flex items-center justify-between">
+                                    <h3 class="text-sm font-semibold tracking-wide uppercase text-muted-foreground/80">Import from Excel/CSV</h3>
+                                    <a 
+                                        :href="route('admin.academics.programmes.courses.import_template')" 
+                                        class="text-xs text-primary font-medium hover:underline inline-flex items-center gap-1"
+                                        title="Download Excel Template"
+                                    >
+                                        Template
+                                    </a>
+                                </div>
+                                <p class="text-xs text-muted-foreground leading-normal">
+                                    Upload a CSV or Excel file containing courses. Missing courses will be created under the programme's department automatically.
+                                </p>
+                                <form @submit.prevent="submitExcelImport" class="space-y-4">
+                                    <div class="space-y-1.5 w-full">
+                                        <Label class="text-xs font-medium text-muted-foreground">Select Spreadsheet File</Label>
+                                        <Input 
+                                            type="file" 
+                                            ref="excelInputRef"
+                                            @change="handleExcelFileChange" 
+                                            accept=".csv, .xlsx, .xls"
+                                            class="text-xs file:bg-primary file:text-white file:border-0 file:rounded-md file:px-2 file:py-1 file:mr-2"
+                                        />
+                                    </div>
+
+                                    <Button 
+                                        type="submit" 
+                                        :disabled="isUploadingExcel || !excelFile" 
+                                        class="w-full h-10 px-5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium hover:from-emerald-500/90 hover:to-teal-600/90 active:scale-95 transition-all duration-150 shadow-md flex items-center justify-center gap-2"
+                                    >
+                                        <Loader2 v-if="isUploadingExcel" class="h-4 w-4 animate-spin" />
+                                        <Plus v-else class="h-4 w-4" />
+                                        Upload & Import Courses
+                                    </Button>
+                                </form>
+                            </div>
                         </div>
                     </div>
 
                     <DialogFooter class="pt-4 border-t border-border/50">
                         <Button variant="outline" @click="isProgrammeCoursesOpen = false" class="border-border/80 hover:bg-muted">Close</Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <!-- GLOBAL COURSE IMPORT DIALOG -->
+            <Dialog v-model:open="isGlobalCourseImportOpen">
+                <DialogContent class="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <div class="flex items-center justify-between w-full pr-6">
+                            <DialogTitle>Import Courses Globally</DialogTitle>
+                            <a 
+                                :href="route('admin.academics.courses.import_template')" 
+                                class="text-xs text-primary font-medium hover:underline inline-flex items-center gap-1"
+                                title="Download Excel Template"
+                            >
+                                Download Template
+                            </a>
+                        </div>
+                        <DialogDescription class="pt-2">
+                            Upload an Excel or CSV file to import courses globally. Ensure all courses contain a valid <code class="bg-muted px-1.5 py-0.5 rounded font-mono text-xs">department_code</code> matching an existing department.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form @submit.prevent="submitGlobalExcelImport" class="space-y-4 py-4">
+                        <div class="space-y-1.5 w-full">
+                            <Label class="text-xs font-medium text-muted-foreground">Select Spreadsheet File</Label>
+                            <Input 
+                                type="file" 
+                                ref="globalExcelInputRef"
+                                @change="handleGlobalExcelFileChange" 
+                                accept=".csv, .xlsx, .xls"
+                                class="text-xs file:bg-primary file:text-white file:border-0 file:rounded-md file:px-2 file:py-1 file:mr-2"
+                            />
+                        </div>
+
+                        <DialogFooter class="pt-4 border-t">
+                            <Button type="button" variant="outline" @click="isGlobalCourseImportOpen = false">Cancel</Button>
+                            <Button 
+                                type="submit" 
+                                :disabled="isUploadingGlobalExcel || !globalExcelFile" 
+                                class="bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium hover:from-emerald-500/90 hover:to-teal-600/90 flex items-center justify-center gap-2"
+                            >
+                                <Loader2 v-if="isUploadingGlobalExcel" class="h-4 w-4 animate-spin" />
+                                <Plus v-else class="h-4 w-4" />
+                                Import Courses
+                            </Button>
+                        </DialogFooter>
+                    </form>
                 </DialogContent>
             </Dialog>
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
-import AdminLayout from '@/layouts/AdminLayout.vue';
+import StudentLayout from '@/layouts/StudentLayout.vue';
 import { 
     LifeBuoy, Plus, Search, MessageSquare, Clock, 
     CheckCircle2, AlertCircle, X, ChevronRight 
@@ -24,12 +24,9 @@ const props = defineProps<{
     tickets: Ticket[];
 }>();
 
-const page = usePage();
-const user = computed(() => page.props.auth.user as any);
-
 const breadcrumbs = [
-    { title: 'Dashboard', href: '/dashboard' },
-    { title: 'Support Tickets', href: '/support' }
+    { title: 'Dashboard', href: '/student/dashboard' },
+    { title: 'Support Tickets', href: '/student/support' }
 ];
 
 const showCreateModal = ref(false);
@@ -51,7 +48,7 @@ const form = useForm({
 });
 
 const submitTicket = () => {
-    form.post('/support', {
+    form.post('/student/support', {
         onSuccess: () => {
             showCreateModal.value = false;
             form.reset();
@@ -94,7 +91,7 @@ const formatCategory = (cat: string) => {
 <template>
     <Head title="Support Tickets" />
 
-    <AdminLayout :breadcrumbs="breadcrumbs">
+    <StudentLayout :breadcrumbs="breadcrumbs">
         <div class="py-6">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <!-- Header -->
@@ -137,7 +134,7 @@ const formatCategory = (cat: string) => {
                         <Link
                             v-for="ticket in filteredTickets"
                             :key="ticket.id"
-                            :href="`/support/${ticket.id}`"
+                            :href="`/student/support/${ticket.id}`"
                             class="block hover:bg-gray-50 dark:hover:bg-gray-750 transition duration-150"
                         >
                             <div class="p-6 flex items-center justify-between">
@@ -279,5 +276,5 @@ const formatCategory = (cat: string) => {
                 </div>
             </div>
         </div>
-    </AdminLayout>
+    </StudentLayout>
 </template>

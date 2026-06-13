@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, useForm, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
-import AdminLayout from '@/layouts/AdminLayout.vue';
+import StudentLayout from '@/layouts/StudentLayout.vue';
 import { 
     LifeBuoy, MessageSquare, Clock, CheckCircle2, 
     AlertCircle, ArrowLeft, Send 
@@ -36,9 +36,9 @@ const page = usePage();
 const user = computed(() => page.props.auth.user as any);
 
 const breadcrumbs = [
-    { title: 'Dashboard', href: '/dashboard' },
-    { title: 'Support Tickets', href: '/support' },
-    { title: `#${props.ticket.id}`, href: `/support/${props.ticket.id}` }
+    { title: 'Dashboard', href: '/student/dashboard' },
+    { title: 'Support Tickets', href: '/student/support' },
+    { title: `#${props.ticket.id}`, href: `/student/support/${props.ticket.id}` }
 ];
 
 const form = useForm({
@@ -46,7 +46,7 @@ const form = useForm({
 });
 
 const submitReply = () => {
-    form.post(`/support/${props.ticket.id}/reply`, {
+    form.post(`/student/support/${props.ticket.id}/reply`, {
         onSuccess: () => {
             form.reset();
         },
@@ -80,12 +80,12 @@ const isMessageFromAdmin = (msg: Message) => {
 <template>
     <Head :title="`Ticket #${ticket.id} - ${ticket.subject}`" />
 
-    <AdminLayout :breadcrumbs="breadcrumbs">
+    <StudentLayout :breadcrumbs="breadcrumbs">
         <div class="py-6">
             <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
                 <!-- Back Button & Header -->
                 <div class="mb-6">
-                    <a href="/support" class="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 mb-4">
+                    <a href="/student/support" class="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 mb-4">
                         <ArrowLeft class="h-4 w-4 mr-1" />
                         Back to Tickets
                     </a>
@@ -179,5 +179,5 @@ const isMessageFromAdmin = (msg: Message) => {
                 </div>
             </div>
         </div>
-    </AdminLayout>
+    </StudentLayout>
 </template>

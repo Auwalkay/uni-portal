@@ -32,6 +32,7 @@ interface FeeConfiguration {
     program_id?: number | null;
     program?: Program;
     level?: string | null;
+    entry_mode?: string | null;
     is_compulsory: boolean;
 }
 
@@ -55,6 +56,7 @@ const configForm = useForm({
     department_id: null as string | null,
     program_id: null as string | null,
     level: '',
+    entry_mode: '' as string | null,
     is_compulsory: true,
 });
 
@@ -75,6 +77,7 @@ const openEditConfig = (config: FeeConfiguration) => {
     configForm.department_id = config.department_id ? String(config.department_id) : null;
     configForm.program_id = config.program_id ? String(config.program_id) : null;
     configForm.level = config.level || '';
+    configForm.entry_mode = config.entry_mode || '';
     configForm.is_compulsory = !!config.is_compulsory;
     editingConfig.value = true;
     isConfigModalOpen.value = true;
@@ -85,6 +88,7 @@ const submitConfig = () => {
     if (form.faculty_id === 'all') form.faculty_id = null;
     if (form.department_id === 'all') form.department_id = null;
     if (form.program_id === 'all') form.program_id = null;
+    if (form.entry_mode === 'all' || !form.entry_mode) form.entry_mode = null;
 
     if (editingConfig.value && configForm.id) {
         configForm.put(route('admin.finance.configurations.update', configForm.id), {
@@ -168,6 +172,10 @@ const formatCurrency = (val: number) => {
                                     <div v-else-if="config.department">Dept: <span class="text-foreground">{{ config.department.name }}</span></div>
                                     <div v-else-if="config.faculty">Fac: <span class="text-foreground">{{ config.faculty.name }}</span></div>
                                     <div v-else class="italic">Global</div>
+                                    
+                                    <div v-if="config.entry_mode" class="mt-1">
+                                        Entry: <Badge variant="outline" class="text-[10px] bg-slate-50 border-slate-200">{{ config.entry_mode }}</Badge>
+                                    </div>
                                 </TableCell>
                                 <TableCell>{{ config.level || 'All' }}</TableCell>
                                 <TableCell class="font-bold">{{ formatCurrency(config.amount) }}</TableCell>
@@ -245,14 +253,27 @@ const formatCurrency = (val: number) => {
                                     </Select>
                                 </div>
                             </div>
-                             <div class="grid grid-cols-2 gap-4">
+                             <div class="grid grid-cols-3 gap-4">
                                 <div class="grid gap-2">
                                     <Label>Program</Label>
                                     <Select :model-value="configForm.program_id || undefined" @update:model-value="(v) => configForm.program_id = v as string">
-                                        <SelectTrigger><SelectValue placeholder="All Programs" /></SelectTrigger>
+                                        <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">All</SelectItem>
                                             <SelectItem v-for="p in programs" :key="p.id" :value="String(p.id)">{{ p.name }}</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div class="grid gap-2">
+                                    <Label>Entry Mode</Label>
+                                    <Select :model-value="configForm.entry_mode || undefined" @update:model-value="(v) => configForm.entry_mode = v as string">
+                                        <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All</SelectItem>
+                                            <SelectItem value="UTME">UTME</SelectItem>
+                                            <SelectItem value="Direct Entry">Direct Entry</SelectItem>
+                                            <SelectItem value="Transfer">Transfer</SelectItem>
+                                            <SelectItem value="Postgraduate">Postgraduate</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
