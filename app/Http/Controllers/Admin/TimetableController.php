@@ -89,7 +89,7 @@ class TimetableController extends Controller
     public function import(Request $request)
     {
         $request->validate([
-            'file' => 'required|file|mimes:csv,xlsx,xls',
+            'file' => 'required|file|extensions:csv,xls,xlsx',
         ]);
 
         try {

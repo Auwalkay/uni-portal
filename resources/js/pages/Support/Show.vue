@@ -73,7 +73,7 @@ const getPriorityColor = (priority: string) => {
 };
 
 const isMessageFromAdmin = (msg: Message) => {
-    return msg.user.roles?.some(role => role.name === 'admin');
+    return msg.user?.roles?.some(role => role.name === 'admin');
 };
 </script>
 
@@ -135,7 +135,7 @@ const isMessageFromAdmin = (msg: Message) => {
                         >
                             <div class="flex items-center justify-between gap-4 mb-1">
                                 <span :class="['text-xs font-semibold', msg.user_id === user.id ? 'text-indigo-200' : (isMessageFromAdmin(msg) ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400')]">
-                                    {{ msg.user_id === user.id ? 'You' : msg.user.name }}
+                                    {{ msg.user_id === user.id ? 'You' : (msg.user?.name || 'Unknown User') }}
                                     <span v-if="isMessageFromAdmin(msg)" class="ml-1 text-[10px] uppercase bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-300 px-1 rounded">Support</span>
                                 </span>
                                 <span :class="['text-[10px]', msg.user_id === user.id ? 'text-indigo-200' : 'text-gray-400 dark:text-gray-500']">

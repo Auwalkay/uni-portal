@@ -98,7 +98,7 @@ class AttendanceController extends Controller
     {
         $request->validate([
             'date' => 'required|date',
-            'file' => 'required|mimes:xlsx,csv,xls|max:10240',
+            'file' => 'required|file|extensions:csv,xls,xlsx|max:10240',
         ]);
 
         Excel::import(new AttendanceImport($request->date), $request->file('file'));

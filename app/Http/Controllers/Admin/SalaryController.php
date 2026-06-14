@@ -62,7 +62,7 @@ class SalaryController extends Controller
     public function import(Request $request)
     {
         $request->validate([
-            'file' => 'required|mimes:xlsx,csv,xls',
+            'file' => 'required|file|extensions:csv,xls,xlsx',
         ]);
 
         Excel::import(new StaffSalaryImport, $request->file('file'));

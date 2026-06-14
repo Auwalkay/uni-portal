@@ -416,7 +416,7 @@ class AcademicController extends Controller
         }
 
         $request->validate([
-            'file' => 'required|mimes:csv,txt,xlsx|max:4096',
+            'file' => 'required|file|extensions:csv,xls,xlsx|max:4096',
         ]);
 
         try {
@@ -459,7 +459,7 @@ class AcademicController extends Controller
         }
 
         $request->validate([
-            'file' => 'required|mimes:csv,txt,xlsx|max:4096',
+            'file' => 'required|file|extensions:csv,xls,xlsx|max:4096',
         ]);
 
         try {
