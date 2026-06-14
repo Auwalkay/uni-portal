@@ -23,6 +23,16 @@ class StaffImport implements ToModel, WithChunkReading, WithHeadingRow, WithVali
 
     public function model(array $row)
     {
+        // Skip if email already exists
+        if (User::where('email', $row['email'])->exists()) {
+            return null;
+        }
+
+        // Skip if staff number already exists
+        if (Staff::where('staff_number', $row['staff_number'])->exists()) {
+            return null;
+        }
+
         return DB::transaction(function () use ($row) {
             $password = Str::random(10);
             $isNewUser = false;
