@@ -275,6 +275,7 @@ const newProgrammeCourseForm = ref({
 const isSubmittingProgrammeCourse = ref(false);
 
 const importProgrammeId = ref('');
+const isImportingCourses = ref(false);
 const assignedSearchQuery = ref('');
 
 const excelFile = ref<File | null>(null);
@@ -330,6 +331,9 @@ const fetchProgrammeCourses = async (progId: string) => {
 };
 
 const submitAddProgrammeCourse = async () => {
+    if (document.activeElement && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+    }
     if (!newProgrammeCourseForm.value.course_id) {
         Swal.fire('Validation Error', 'Please select a course to add', 'warning');
         return;
@@ -370,6 +374,9 @@ const submitAddProgrammeCourse = async () => {
 };
 
 const submitImportProgrammeCourses = async () => {
+    if (document.activeElement && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+    }
     if (!importProgrammeId.value) {
         Swal.fire('Validation Error', 'Please select a programme to import from', 'warning');
         return;
@@ -421,6 +428,9 @@ const handleExcelFileChange = (e: Event) => {
 };
 
 const submitExcelImport = async () => {
+    if (document.activeElement && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+    }
     if (!excelFile.value) {
         Swal.fire('Validation Error', 'Please select a CSV or Excel file to upload', 'warning');
         return;
@@ -499,6 +509,9 @@ const handleGlobalExcelFileChange = (e: Event) => {
 };
 
 const submitGlobalExcelImport = async () => {
+    if (document.activeElement && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+    }
     if (!globalExcelFile.value) {
         Swal.fire('Validation Error', 'Please select a CSV or Excel file to upload', 'warning');
         return;
@@ -554,6 +567,9 @@ const submitGlobalExcelImport = async () => {
 };
 
 const removeProgrammeCourse = async (courseId: string) => {
+    if (document.activeElement && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+    }
     const confirmResult = window.confirm('Are you sure you want to remove this course from the programme?');
     if (!confirmResult) return;
 
@@ -704,7 +720,7 @@ const removeProgrammeCourse = async (courseId: string) => {
 
              <!-- MODAL DIALOG -->
             <Dialog v-model:open="isModalOpen">
-                <DialogContent class="sm:max-w-[425px]">
+                <DialogContent :trap-focus="false" class="sm:max-w-[425px]">
                     <DialogHeader>
                         <DialogTitle>{{ modalMode === 'create' ? 'Create' : 'Edit' }} {{ activeType }}</DialogTitle>
                         <DialogDescription>
@@ -932,6 +948,7 @@ const removeProgrammeCourse = async (courseId: string) => {
             <Dialog v-model:open="isProgrammeCoursesOpen">
                 <DialogContent 
                     @pointer-down-outside.prevent
+                    :trap-focus="false"
                     class="sm:max-w-[95vw] md:max-w-[90vw] lg:max-w-[1100px] xl:max-w-[1200px] max-h-[90vh] flex flex-col p-6 overflow-hidden bg-card/95 backdrop-blur-md border border-border/80 shadow-2xl rounded-2xl"
                 >
                     <DialogHeader class="pb-4 border-b border-border/50">
@@ -1150,7 +1167,7 @@ const removeProgrammeCourse = async (courseId: string) => {
 
             <!-- GLOBAL COURSE IMPORT DIALOG -->
             <Dialog v-model:open="isGlobalCourseImportOpen">
-                <DialogContent class="sm:max-w-[425px]">
+                <DialogContent :trap-focus="false" class="sm:max-w-[425px]">
                     <DialogHeader>
                         <div class="flex items-center justify-between w-full pr-6">
                             <DialogTitle>Import Courses Globally</DialogTitle>

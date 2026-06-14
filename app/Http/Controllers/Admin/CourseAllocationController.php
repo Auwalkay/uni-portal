@@ -86,7 +86,7 @@ class CourseAllocationController extends Controller
     public function import(\Illuminate\Http\Request $request)
     {
         $request->validate([
-            'file' => 'required|mimes:csv,txt,xlsx|max:2048',
+            'file' => 'required|file|extensions:csv,xls,xlsx|max:2048',
         ]);
 
         try {

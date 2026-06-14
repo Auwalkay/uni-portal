@@ -185,7 +185,7 @@ class StaffController extends Controller
     public function import(Request $request)
     {
         $request->validate([
-            'file' => 'required|mimes:csv,txt,xlsx|max:10240',
+            'file' => 'required|file|extensions:csv,xls,xlsx|max:10240',
         ]);
 
         try {
