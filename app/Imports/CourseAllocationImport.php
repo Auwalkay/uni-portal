@@ -31,13 +31,13 @@ class CourseAllocationImport implements ToCollection, WithHeadingRow
         foreach ($rows as $index => $row) {
             try {
                 // Required fields
-                if (!isset($row['course_code']) || !isset($row['staff_email'])) {
+                if (!isset($row['course_code']) || !isset($row['staff_number'])) {
                     $this->stats['skipped']++;
                     continue;
                 }
 
                 $courseCode = trim($row['course_code']);
-                $staffEmail = trim($row['staff_email']);
+                $staffNumber = trim($row['staff_number']);
 
                 // Find Course
                 $course = Course::where('code', $courseCode)->first();
@@ -48,14 +48,12 @@ class CourseAllocationImport implements ToCollection, WithHeadingRow
                 }
 
                 // Find Staff
-                $user = User::where('email', $staffEmail)->first();
-                if (!$user || !$user->staff) {
-                    $this->stats['errors'][] = "Row " . ($index + 2) . ": Staff with email '$staffEmail' not found.";
+                $staff = Staff::where('staff_number', $staffNumber)->first();
+                if (!$staff) {
+                    $this->stats['errors'][] = "Row " . ($index + 2) . ": Staff with number '$staffNumber' not found.";
                     $this->stats['skipped']++;
                     continue;
                 }
-
-                $staff = $user->staff;
 
                 // Check for existing allocation
                 $exists = CourseAllocation::where('course_id', $course->id)

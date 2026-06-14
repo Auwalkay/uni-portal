@@ -355,4 +355,146 @@ class ResultController extends Controller
             return back()->with('error', 'Import failed: '.$e->getMessage());
         }
     }
+
+    public function print(Request $request)
+    {
+        $user = auth()->user();
+
+        $selectedSessionId = $request->input('session_id');
+        $selectedSemesterId = $request->input('semester_id');
+        $selectedDepartmentId = $request->input('department_id');
+        $selectedLevel = $request->input('level');
+        $hasRegistrations = $request->boolean('has_registrations');
+        $publishStatus = $request->input('publish_status', 'all');
+        $courseId = $request->input('course_id');
+
+        if ($selectedSessionId && $selectedSessionId !== 'ALL') {
+            $session = Session::find($selectedSessionId);
+        } else {
+            $session = Session::where('is_current', true)->first();
+        }
+        if (!$session) {
+            $session = Session::latest()->first();
+        }
+        if (!$session) {
+            abort(404, 'Active academic session not found.');
+        }
+
+        // Fetch courses based on filters
+        $coursesQuery = Course::query()
+            ->with(['department', 'program'])
+            ->when(! $user->can('manage_results'), function ($query) use ($user, $session) {
+                $query->whereHas('allocations', function ($q) use ($user, $session) {
+                    $q->whereHas('staff', fn ($sq) => $sq->where('user_id', $user->id));
+                    $q->where('session_id', $session->id);
+                });
+            })
+            ->when($courseId, function ($query, $id) {
+                $query->where('courses.id', $id);
+            })
+            ->when($selectedDepartmentId && $selectedDepartmentId !== 'ALL', function ($query, $deptId) {
+                $query->where('courses.department_id', $deptId);
+            })
+            ->when($selectedLevel && $selectedLevel !== 'ALL', function ($query, $level) {
+                $query->where('courses.level', $level);
+            })
+            ->when($hasRegistrations, function ($query) use ($session, $selectedSemesterId) {
+                $query->whereHas('registrations', function ($q) use ($session, $selectedSemesterId) {
+                    $q->where('session_id', $session->id)
+                        ->when($selectedSemesterId && $selectedSemesterId !== 'ALL', fn ($sq) => $sq->where('semester_id', $selectedSemesterId));
+                });
+            })
+            ->when($selectedSemesterId && $selectedSemesterId !== 'ALL', function ($query, $semesterId) use ($session) {
+                $query->whereHas('registrations', function ($q) use ($session, $semesterId) {
+                    $q->where('session_id', $session->id)
+                        ->where('semester_id', $semesterId);
+                });
+            })
+            ->when($publishStatus === 'published', function ($query) use ($session, $selectedSemesterId) {
+                $query->whereHas('registrations', function ($q) use ($session, $selectedSemesterId) {
+                    $q->where('session_id', $session->id)
+                        ->when($selectedSemesterId && $selectedSemesterId !== 'ALL', fn ($sq) => $sq->where('semester_id', $selectedSemesterId))
+                        ->where('is_published', true);
+                });
+            })
+            ->when($publishStatus === 'unpublished', function ($query) use ($session, $selectedSemesterId) {
+                $query->whereDoesntHave('registrations', function ($q) use ($session, $selectedSemesterId) {
+                    $q->where('session_id', $session->id)
+                        ->when($selectedSemesterId && $selectedSemesterId !== 'ALL', fn ($sq) => $sq->where('semester_id', $selectedSemesterId))
+                        ->where('is_published', true);
+                });
+            });
+
+        $courses = $coursesQuery->orderBy('code', 'asc')->get();
+
+        $coursesData = [];
+        foreach ($courses as $course) {
+            $registrations = CourseRegistration::where('course_id', $course->id)
+                ->where('session_id', $session->id)
+                ->when($selectedSemesterId && $selectedSemesterId !== 'ALL', fn ($q) => $q->where('semester_id', $selectedSemesterId))
+                ->with(['student.user'])
+                ->get()
+                ->sortBy(function ($reg) {
+                    return $reg->student?->matriculation_number ?? '';
+                });
+
+            // If a specific course_id is asked, we do not skip even if empty
+            if ($registrations->isEmpty() && !$courseId && ($hasRegistrations || $request->has('skip_empty') || $request->boolean('skip_empty', true))) {
+                continue;
+            }
+
+            // Calculate stats
+            $totalStudents = $registrations->count();
+            $gradedCount = $registrations->filter(function ($reg) {
+                return $reg->is_absent || !is_null($reg->score);
+            })->count();
+            
+            $passCount = $registrations->filter(function ($reg) {
+                return !$reg->is_absent && !is_null($reg->score) && $reg->score >= 40;
+            })->count();
+
+            $failCount = $registrations->filter(function ($reg) {
+                return !$reg->is_absent && !is_null($reg->score) && $reg->score < 40;
+            })->count();
+
+            $absentCount = $registrations->where('is_absent', true)->count();
+
+            $gradedForAvg = $registrations->filter(function ($reg) {
+                return !$reg->is_absent && !is_null($reg->score);
+            });
+
+            $avgScore = $gradedForAvg->count() > 0 
+                ? round($gradedForAvg->avg('score'), 1) 
+                : 0;
+
+            $coursesData[] = [
+                'course' => $course,
+                'registrations' => $registrations,
+                'stats' => [
+                    'total' => $totalStudents,
+                    'graded' => $gradedCount,
+                    'passes' => $passCount,
+                    'fails' => $failCount,
+                    'absents' => $absentCount,
+                    'average' => $avgScore,
+                ]
+            ];
+        }
+
+        if (empty($coursesData)) {
+            return back()->with('error', 'No course results found matching the current filters.');
+        }
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.course_results', [
+            'session' => $session,
+            'coursesData' => $coursesData,
+            'date' => now()->format('d M, Y h:i A')
+        ]);
+
+        $filename = count($coursesData) === 1 
+            ? $coursesData[0]['course']->code . '_results_' . $session->name . '.pdf'
+            : 'compiled_results_' . $session->name . '.pdf';
+
+        return $pdf->stream($filename);
+    }
 }
