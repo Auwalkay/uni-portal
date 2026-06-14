@@ -167,6 +167,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware(['permission:view_results'])->group(function () {
             Route::get('/results', [ResultController::class, 'index'])->name('results.index');
             Route::get('/results/{course}/entry', [ResultController::class, 'edit'])->name('results.edit');
+            Route::get('/results/print', [ResultController::class, 'print'])->name('results.print');
             Route::post('/results/{course}', [ResultController::class, 'update'])->name('results.update');
             Route::post('/results/{course}/upload', [ResultController::class, 'upload'])->name('results.upload');
             Route::post('/results/{course}/publish', [ResultController::class, 'publish'])->name('results.publish');

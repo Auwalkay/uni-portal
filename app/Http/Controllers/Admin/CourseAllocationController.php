@@ -19,8 +19,11 @@ class CourseAllocationController extends Controller
         $allocations = \App\Models\CourseAllocation::query()
             ->with(['course', 'staff.user', 'session'])
             ->when($sessionId, fn($q) => $q->where('session_id', $sessionId))
-            ->when($request->department_id, function ($q, $deptId) {
+            ->when($request->department_id && $request->department_id !== 'ALL', function ($q, $deptId) {
                 $q->whereHas('course', fn($c) => $c->where('department_id', $deptId));
+            })
+            ->when($request->faculty_id && $request->faculty_id !== 'ALL' && (!$request->department_id || $request->department_id === 'ALL'), function ($q, $facultyId) {
+                $q->whereHas('course.department', fn($d) => $d->where('faculty_id', $facultyId));
             })
             ->when($request->search, function ($q, $search) {
                 $q->whereHas('course', fn($c) => $c->where('title', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
@@ -112,14 +115,14 @@ class CourseAllocationController extends Controller
     {
         $headers = [
             'course_code',
-            'staff_email'
+            'staff_number'
         ];
 
         $callback = function () use ($headers) {
             $file = fopen('php://output', 'w');
             fputcsv($file, $headers); // Header
-            fputcsv($file, ['CSC101', 'lecturer@university.edu.ng']); // Sample
-            fputcsv($file, ['MTH202', 'prof.math@university.edu.ng']); // Sample
+            fputcsv($file, ['CSC101', 'STF/2026/001']); // Sample
+            fputcsv($file, ['MTH202', 'STF/2026/002']); // Sample
             fclose($file);
         };
 

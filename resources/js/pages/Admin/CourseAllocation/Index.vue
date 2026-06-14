@@ -2,10 +2,11 @@
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { debounce } from 'lodash';
 import {
-  Search, Plus, Trash2, User, Upload, Download, FileSpreadsheet
+  Search, Plus, Trash2, User, Upload, Download, FileSpreadsheet, X
 } from 'lucide-vue-next';
 import { ref, computed, watch } from 'vue';
 import { route } from 'ziggy-js';
+import Pagination from '@/components/Pagination.vue';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -91,6 +92,13 @@ watch([search, selectedSession, selectedFaculty, selectedDepartment], () => {
   updateFilters();
 });
 
+const resetFilters = () => {
+  search.value = '';
+  selectedSession.value = props.currentSessionId || '';
+  selectedFaculty.value = '';
+  selectedDepartment.value = '';
+};
+
 const submitAssign = () => {
   if (!form.session_id) form.session_id = selectedSession.value;
 
@@ -158,7 +166,7 @@ const getLecturerName = (staffId: string) => {
                     <FileSpreadsheet class="w-4 h-4 text-green-600" /> CSV Format Guide
                   </p>
                   <p class="text-muted-foreground text-xs">
-                    Your file must have headers: <code>course_code</code>, <code>staff_email</code>.
+                    Your file must have headers: <code>course_code</code>, <code>staff_number</code>.
                   </p>
 
                   <Button variant="secondary" size="sm" class="w-full mt-2" as-child>
@@ -331,6 +339,16 @@ const getLecturerName = (staffId: string) => {
               </SelectItem>
             </SelectContent>
           </Select>
+
+          <Button 
+            v-if="search || selectedFaculty || selectedDepartment || selectedSession !== currentSessionId" 
+            variant="ghost" 
+            size="sm"
+            @click="resetFilters" 
+            class="h-10 px-3 flex items-center gap-1 text-muted-foreground hover:text-foreground"
+          >
+            <X class="w-4 h-4" /> Clear Filters
+          </Button>
         </div>
       </div>
 
@@ -386,11 +404,11 @@ const getLecturerName = (staffId: string) => {
           </TableBody>
         </Table>
 
-        <CardFooter class="border-t p-4 flex justify-between" v-if="allocations.total > 0">
+        <CardFooter class="border-t p-4 flex flex-col sm:flex-row justify-between items-center gap-4" v-if="allocations.total > 0">
           <div class="text-xs text-muted-foreground">
             Showing {{ allocations.from }}-{{ allocations.to }} of {{ allocations.total }}
           </div>
-          <!-- Pagination links would go here -->
+          <Pagination :links="allocations.links" />
         </CardFooter>
       </Card>
 
