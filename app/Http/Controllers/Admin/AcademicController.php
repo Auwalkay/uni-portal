@@ -107,10 +107,10 @@ class AcademicController extends Controller
             'programmes' => $programmes ?? $empty,
             'courses' => $courses ?? $empty,
             'units' => $units ?? $empty,
-            'allFaculties' => AcademicCacheService::getAllFaculties(),
-            'allDepartments' => AcademicCacheService::getAllDepartments(),
-            'allProgrammes' => AcademicCacheService::getAllProgrammes(),
-            'allCourses' => Course::select('id', 'code', 'title', 'units')->orderBy('code')->get(),
+            'allFaculties' => fn() => AcademicCacheService::getAllFaculties(),
+            'allDepartments' => fn() => AcademicCacheService::getAllDepartments(),
+            'allProgrammes' => fn() => AcademicCacheService::getAllProgrammes(),
+            'allCourses' => fn() => AcademicCacheService::getAllCourses(),
             'filters' => $request->only(['search', 'faculty_id', 'department_id', 'tab']),
         ]);
     }

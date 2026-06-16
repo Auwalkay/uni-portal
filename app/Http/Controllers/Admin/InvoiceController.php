@@ -129,8 +129,8 @@ class InvoiceController extends Controller
         return Inertia::render('Admin/Invoices/Index', [
             'invoices' => $invoices,
             'filters' => $filters,
-            'sessions' => \App\Models\Session::latest()->get(['id', 'name']),
-            'analytics' => $analytics
+            'sessions' => fn() => \App\Models\Session::latest()->get(['id', 'name']),
+            'analytics' => fn() => $analytics,
         ]);
     }
 

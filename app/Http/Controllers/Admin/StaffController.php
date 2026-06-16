@@ -81,10 +81,10 @@ class StaffController extends Controller
         return Inertia::render('Admin/Staff/Index', [
             'staff' => $staff,
             'filters' => $request->only(['search', 'role_id', 'faculty_id', 'department_id']),
-            'faculties' => AcademicCacheService::getFaculties(),
-            'nonAcademicDepartments' => AcademicCacheService::getNonAcademicDepartments(),
-            'roles' => \App\Models\Role::whereNotIn('name', ['student', 'applicant'])->get(['id', 'name']),
-            'stats' => [
+            'faculties' => fn() => AcademicCacheService::getFaculties(),
+            'nonAcademicDepartments' => fn() => AcademicCacheService::getNonAcademicDepartments(),
+            'roles' => fn() => \App\Models\Role::whereNotIn('name', ['student', 'applicant'])->get(['id', 'name']),
+            'stats' => fn() => [
                 'total' => User::role('staff')->count(),
                 'academic' => Staff::where('is_academic', true)->count(),
                 'non_academic' => Staff::where('is_academic', false)->count(),

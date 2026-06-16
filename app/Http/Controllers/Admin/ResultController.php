@@ -26,11 +26,7 @@ class ResultController extends Controller
 
     public function index(Request $request)
     {
-        $sessions = Session::orderBy('start_date', 'desc')->get();
-        $departments = Department::orderBy('name')->get();
-        $faculties = Faculty::orderBy('name')->get();
-
-        $currentSession = Session::where('is_current', true)->first();
+        $currentSession = \App\Services\AcademicCacheService::getCurrentSession();
 
         $selectedSessionId = $request->input('session_id', $currentSession?->id);
         $selectedSemesterId = $request->input('semester_id');
@@ -48,7 +44,7 @@ class ResultController extends Controller
             $sortDir = 'asc';
         }
 
-        $semesters = Semester::when($selectedSessionId, fn ($q) => $q->where('session_id', $selectedSessionId))->get();
+
 
         $user = auth()->user();
         $courses = Course::query()
@@ -128,10 +124,10 @@ class ResultController extends Controller
             ->withQueryString();
 
         return Inertia::render('Admin/Results/Index', [
-            'sessions' => $sessions,
-            'semesters' => $semesters,
-            'departments' => $departments,
-            'faculties' => $faculties, // Optional if we want filtering by faculty
+            'sessions' => fn() => \App\Services\AcademicCacheService::getSessions(),
+            'semesters' => fn() => Semester::when($selectedSessionId, fn ($q) => $q->where('session_id', $selectedSessionId))->get(),
+            'departments' => fn() => \App\Services\AcademicCacheService::getAllDepartments(),
+            'faculties' => fn() => \App\Services\AcademicCacheService::getAllFaculties(),
             'courses' => $courses,
             'filters' => [
                 'session_id' => $selectedSessionId,

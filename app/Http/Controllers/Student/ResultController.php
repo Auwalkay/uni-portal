@@ -46,123 +46,136 @@ class ResultController extends Controller
                 ->pluck('is_compulsory', 'course_id');
         }
 
-        $history = [];
+        $userId = Auth::id();
+        $cacheKey = "student_results_index_{$userId}";
 
-        foreach ($sessions as $session) {
-            // Check clearance for this session
-            $schoolFeeCleared = true;
+        $data = \Illuminate\Support\Facades\Cache::remember($cacheKey, 600, function () use ($student, $userId, $enforceSchoolFee, $enforceHostelFee, $sessions, $programme, $overrides) {
+            // Fix N+1 queries by pre-fetching all school fee invoices and hostel bookings for this student
+            $schoolFeeInvoices = collect();
             if ($enforceSchoolFee) {
-                $schoolFeeInvoice = \App\Models\Invoice::where('user_id', Auth::id())
+                $schoolFeeInvoices = \App\Models\Invoice::where('user_id', $userId)
                     ->where('type', 'school_fee')
-                    ->where('session_id', $session->id)
-                    ->first();
-                $schoolFeeCleared = $schoolFeeInvoice && $schoolFeeInvoice->status === 'paid';
+                    ->get()
+                    ->keyBy('session_id');
             }
 
-            $hostelFeeCleared = true;
+            $hostelBookings = collect();
             if ($enforceHostelFee) {
-                $hostelBooking = \App\Models\HostelBooking::where('student_id', $student->id)
-                    ->where('session_id', $session->id)
-                    ->first();
-                if ($hostelBooking) {
-                    $hostelInvoice = $hostelBooking->invoice;
-                    $hostelFeeCleared = $hostelInvoice && $hostelInvoice->status === 'paid';
-                }
+                $hostelBookings = \App\Models\HostelBooking::where('student_id', $student->id)
+                    ->with('invoice')
+                    ->get()
+                    ->keyBy('session_id');
             }
 
-            $sessionData = [
-                'id' => $session->id,
-                'name' => $session->name,
-                'is_current' => $session->is_current,
-                'semesters' => []
-            ];
+            $history = [];
 
-            // Get semesters for this session
-            $registrationsInSession = CourseRegistration::where('student_id', $student->id)
-                ->where('session_id', $session->id)
+            foreach ($sessions as $session) {
+                // Check clearance for this session
+                $schoolFeeCleared = true;
+                if ($enforceSchoolFee) {
+                    $schoolFeeInvoice = $schoolFeeInvoices->get($session->id);
+                    $schoolFeeCleared = $schoolFeeInvoice && $schoolFeeInvoice->status === 'paid';
+                }
+
+                $hostelFeeCleared = true;
+                if ($enforceHostelFee) {
+                    $hostelBooking = $hostelBookings->get($session->id);
+                    if ($hostelBooking) {
+                        $hostelInvoice = $hostelBooking->invoice;
+                        $hostelFeeCleared = $hostelInvoice && $hostelInvoice->status === 'paid';
+                    }
+                }
+
+                $sessionData = [
+                    'id' => $session->id,
+                    'name' => $session->name,
+                    'is_current' => $session->is_current,
+                    'semesters' => []
+                ];
+
+                // Get semesters for this session
+                $registrationsInSession = CourseRegistration::where('student_id', $student->id)
+                    ->where('session_id', $session->id)
+                    ->where('is_published', true)
+                    ->with(['course', 'semester'])
+                    ->get()
+                    ->groupBy('semester.name');
+
+                foreach ($registrationsInSession as $semesterName => $regs) {
+                    $isSecondSem = stripos($semesterName, 'Second') !== false || strpos($semesterName, '2') !== false;
+                    $isBlocked = $isSecondSem && (!$schoolFeeCleared || !$hostelFeeCleared);
+
+                    foreach ($regs as $reg) {
+                        if ($reg->course) {
+                            $reg->course->is_compulsory = $overrides->has($reg->course->id) ? (bool)$overrides->get($reg->course->id) : false;
+                        }
+                        if ($isBlocked) {
+                            $reg->score = null;
+                            $reg->grade = 'Locked';
+                            $reg->grade_point = null;
+                        }
+                    }
+
+                    $gpa = $isBlocked ? 0 : $this->gradingService->calculateGPA($regs);
+
+                    $sessionData['semesters'][] = [
+                        'name' => $semesterName,
+                        'gpa' => $gpa,
+                        'is_blocked' => $isBlocked,
+                        'school_fee_cleared' => $schoolFeeCleared,
+                        'hostel_fee_cleared' => $hostelFeeCleared,
+                        'courses' => $regs
+                    ];
+                }
+
+                usort($sessionData['semesters'], function ($a, $b) {
+                    return strpos($a['name'], 'Second') !== false ? 1 : -1;
+                });
+
+                $history[] = $sessionData;
+            }
+
+            // CGPA calculation: only include allowed semesters
+            $allPublishedRegs = CourseRegistration::where('student_id', $student->id)
                 ->where('is_published', true)
                 ->with(['course', 'semester'])
-                ->get()
-                ->groupBy('semester.name');
+                ->get();
 
-            foreach ($registrationsInSession as $semesterName => $regs) {
+            $cgpaRegs = $allPublishedRegs->filter(function ($reg) use ($enforceSchoolFee, $enforceHostelFee, $schoolFeeInvoices, $hostelBookings) {
+                $semesterName = $reg->semester?->name ?? '';
                 $isSecondSem = stripos($semesterName, 'Second') !== false || strpos($semesterName, '2') !== false;
-                $isBlocked = $isSecondSem && (!$schoolFeeCleared || !$hostelFeeCleared);
+                
+                if (!$isSecondSem) {
+                    return true; // First Sem is never blocked
+                }
 
-                foreach ($regs as $reg) {
-                    if ($reg->course) {
-                        $reg->course->is_compulsory = $overrides->has($reg->course->id) ? (bool)$overrides->get($reg->course->id) : false;
-                    }
-                    if ($isBlocked) {
-                        // Secure scores and grades from being returned in props
-                        $reg->score = null;
-                        $reg->grade = 'Locked';
-                        $reg->grade_point = null;
+                // Check clearance in the registration's session
+                $schoolFeeCleared = true;
+                if ($enforceSchoolFee) {
+                    $schoolFeeInvoice = $schoolFeeInvoices->get($reg->session_id);
+                    $schoolFeeCleared = $schoolFeeInvoice && $schoolFeeInvoice->status === 'paid';
+                }
+
+                $hostelFeeCleared = true;
+                if ($enforceHostelFee) {
+                    $hostelBooking = $hostelBookings->get($reg->session_id);
+                    if ($hostelBooking) {
+                        $hostelInvoice = $hostelBooking->invoice;
+                        $hostelFeeCleared = $hostelInvoice && $hostelInvoice->status === 'paid';
                     }
                 }
 
-                $gpa = $isBlocked ? 0 : $this->gradingService->calculateGPA($regs);
-
-                $sessionData['semesters'][] = [
-                    'name' => $semesterName,
-                    'gpa' => $gpa,
-                    'is_blocked' => $isBlocked,
-                    'school_fee_cleared' => $schoolFeeCleared,
-                    'hostel_fee_cleared' => $hostelFeeCleared,
-                    'courses' => $regs
-                ];
-            }
-
-            usort($sessionData['semesters'], function ($a, $b) {
-                return strpos($a['name'], 'Second') !== false ? 1 : -1;
+                return $schoolFeeCleared && $hostelFeeCleared;
             });
 
-            $history[] = $sessionData;
-        }
+            $cgpa = $cgpaRegs->isEmpty() ? 0 : $this->gradingService->calculateGPA($cgpaRegs);
 
-        // CGPA calculation: only include allowed semesters
-        $allPublishedRegs = CourseRegistration::where('student_id', $student->id)
-            ->where('is_published', true)
-            ->with(['course', 'semester'])
-            ->get();
-
-        $cgpaRegs = $allPublishedRegs->filter(function ($reg) use ($enforceSchoolFee, $enforceHostelFee, $student) {
-            $semesterName = $reg->semester?->name ?? '';
-            $isSecondSem = stripos($semesterName, 'Second') !== false || strpos($semesterName, '2') !== false;
-            
-            if (!$isSecondSem) {
-                return true; // First Sem is never blocked
-            }
-
-            // For Second Sem, check clearance in the registration's session
-            $schoolFeeCleared = true;
-            if ($enforceSchoolFee) {
-                $schoolFeeInvoice = \App\Models\Invoice::where('user_id', Auth::id())
-                    ->where('type', 'school_fee')
-                    ->where('session_id', $reg->session_id)
-                    ->first();
-                $schoolFeeCleared = $schoolFeeInvoice && $schoolFeeInvoice->status === 'paid';
-            }
-
-            $hostelFeeCleared = true;
-            if ($enforceHostelFee) {
-                $hostelBooking = \App\Models\HostelBooking::where('student_id', $student->id)
-                    ->where('session_id', $reg->session_id)
-                    ->first();
-                if ($hostelBooking) {
-                    $hostelInvoice = $hostelBooking->invoice;
-                    $hostelFeeCleared = $hostelInvoice && $hostelInvoice->status === 'paid';
-                }
-            }
-
-            return $schoolFeeCleared && $hostelFeeCleared;
+            return [
+                'history' => $history,
+                'cgpa' => $cgpa
+            ];
         });
 
-        $cgpa = $cgpaRegs->isEmpty() ? 0 : $this->gradingService->calculateGPA($cgpaRegs);
-
-        return Inertia::render('Student/Results/Index', [
-            'history' => $history,
-            'cgpa' => $cgpa
-        ]);
+        return Inertia::render('Student/Results/Index', $data);
     }
 }
