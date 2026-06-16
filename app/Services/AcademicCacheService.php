@@ -83,6 +83,11 @@ class AcademicCacheService
         return Cache::remember('all_programmes', self::TTL, fn() => Programme::orderBy('name')->get());
     }
 
+    public static function getAllCourses()
+    {
+        return Cache::remember('all_courses_lookup', self::TTL, fn() => \App\Models\Course::select('id', 'code', 'title', 'units')->orderBy('code')->get());
+    }
+
     public static function getFacultiesFull()
     {
         return Cache::remember('faculties_with_departments_full', self::TTL, fn() => Faculty::with('departments.units')->get());
@@ -182,5 +187,6 @@ class AcademicCacheService
         Cache::forget('non_academic_departments');
         Cache::forget('all_system_settings');
         Cache::forget('staff_designations_list');
+        Cache::forget('all_courses_lookup');
     }
 }

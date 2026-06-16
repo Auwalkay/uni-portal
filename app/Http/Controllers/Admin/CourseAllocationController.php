@@ -35,13 +35,13 @@ class CourseAllocationController extends Controller
 
         return Inertia::render('Admin/CourseAllocation/Index', [
             'allocations' => $allocations,
-            'sessions' => Session::latest('start_date')->get(['id', 'name']),
-            'faculties' => Faculty::with('departments:id,name,faculty_id')->orderBy('name')->get(['id', 'name']),
+            'sessions' => fn() => Session::latest('start_date')->get(['id', 'name']),
+            'faculties' => fn() => \App\Services\AcademicCacheService::getFaculties(),
             'filters' => $request->only(['session_id', 'department_id', 'search', 'faculty_id']),
             'currentSessionId' => $currentSessionId,
-            'courses' => Course::select('id', 'code', 'title', 'department_id')->orderBy('code')->get(),
-            'programmes' => \App\Models\Programme::select('id', 'name')->orderBy('name')->get(),
-            'lecturers' => Staff::with(['user:id,name', 'department:id,code'])
+            'courses' => fn() => Course::select('id', 'code', 'title', 'department_id')->orderBy('code')->get(),
+            'programmes' => fn() => \App\Services\AcademicCacheService::getProgrammes(),
+            'lecturers' => fn() => Staff::with(['user:id,name', 'department:id,code'])
                 ->whereHas('user', function ($q) {
                     $q->role('lecturer');
                 })

@@ -9,6 +9,12 @@ class Course extends Model
 {
     use HasUuids;
 
+    protected static function booted()
+    {
+        static::saved(fn() => \App\Services\AcademicCacheService::clearAll());
+        static::deleted(fn() => \App\Services\AcademicCacheService::clearAll());
+    }
+
     protected $guarded = [];
 
     protected $casts = [
