@@ -26,6 +26,7 @@ class SquadcoService implements PaymentGatewayInterface
                 'email' => $email,
                 'currency' => 'NGN',
                 'initiate_type' => 'inline',
+                'pass_charge' => true,
                 'transaction_ref' => $reference,
                 'callback_url' => $callbackUrl,
                 'customer_name' => $metadata['customer_name'] ?? null,
