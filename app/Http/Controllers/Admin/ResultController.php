@@ -6,8 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Imports\ResultImport;
 use App\Models\Course;
 use App\Models\CourseRegistration;
-use App\Models\Department;
-use App\Models\Faculty;
 use App\Models\Semester;
 use App\Models\Session;
 use App\Services\GradingService;
@@ -43,8 +41,6 @@ class ResultController extends Controller
         if (! in_array($sortDir, ['asc', 'desc'])) {
             $sortDir = 'asc';
         }
-
-
 
         $user = auth()->user();
         $courses = Course::query()
@@ -124,10 +120,10 @@ class ResultController extends Controller
             ->withQueryString();
 
         return Inertia::render('Admin/Results/Index', [
-            'sessions' => fn() => \App\Services\AcademicCacheService::getSessions(),
-            'semesters' => fn() => Semester::when($selectedSessionId, fn ($q) => $q->where('session_id', $selectedSessionId))->get(),
-            'departments' => fn() => \App\Services\AcademicCacheService::getAllDepartments(),
-            'faculties' => fn() => \App\Services\AcademicCacheService::getAllFaculties(),
+            'sessions' => fn () => \App\Services\AcademicCacheService::getSessions(),
+            'semesters' => fn () => Semester::when($selectedSessionId, fn ($q) => $q->where('session_id', $selectedSessionId))->get(),
+            'departments' => fn () => \App\Services\AcademicCacheService::getAllDepartments(),
+            'faculties' => fn () => \App\Services\AcademicCacheService::getAllFaculties(),
             'courses' => $courses,
             'filters' => [
                 'session_id' => $selectedSessionId,
@@ -369,10 +365,10 @@ class ResultController extends Controller
         } else {
             $session = Session::where('is_current', true)->first();
         }
-        if (!$session) {
+        if (! $session) {
             $session = Session::latest()->first();
         }
-        if (!$session) {
+        if (! $session) {
             abort(404, 'Active academic session not found.');
         }
 
@@ -435,32 +431,32 @@ class ResultController extends Controller
                 });
 
             // If a specific course_id is asked, we do not skip even if empty
-            if ($registrations->isEmpty() && !$courseId && ($hasRegistrations || $request->has('skip_empty') || $request->boolean('skip_empty', true))) {
+            if ($registrations->isEmpty() && ! $courseId && ($hasRegistrations || $request->has('skip_empty') || $request->boolean('skip_empty', true))) {
                 continue;
             }
 
             // Calculate stats
             $totalStudents = $registrations->count();
             $gradedCount = $registrations->filter(function ($reg) {
-                return $reg->is_absent || !is_null($reg->score);
+                return $reg->is_absent || ! is_null($reg->score);
             })->count();
-            
+
             $passCount = $registrations->filter(function ($reg) {
-                return !$reg->is_absent && !is_null($reg->score) && $reg->score >= 40;
+                return ! $reg->is_absent && ! is_null($reg->score) && $reg->score >= 40;
             })->count();
 
             $failCount = $registrations->filter(function ($reg) {
-                return !$reg->is_absent && !is_null($reg->score) && $reg->score < 40;
+                return ! $reg->is_absent && ! is_null($reg->score) && $reg->score < 40;
             })->count();
 
             $absentCount = $registrations->where('is_absent', true)->count();
 
             $gradedForAvg = $registrations->filter(function ($reg) {
-                return !$reg->is_absent && !is_null($reg->score);
+                return ! $reg->is_absent && ! is_null($reg->score);
             });
 
-            $avgScore = $gradedForAvg->count() > 0 
-                ? round($gradedForAvg->avg('score'), 1) 
+            $avgScore = $gradedForAvg->count() > 0
+                ? round($gradedForAvg->avg('score'), 1)
                 : 0;
 
             $coursesData[] = [
@@ -473,7 +469,7 @@ class ResultController extends Controller
                     'fails' => $failCount,
                     'absents' => $absentCount,
                     'average' => $avgScore,
-                ]
+                ],
             ];
         }
 
@@ -484,12 +480,12 @@ class ResultController extends Controller
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.course_results', [
             'session' => $session,
             'coursesData' => $coursesData,
-            'date' => now()->format('d M, Y h:i A')
+            'date' => now()->format('d M, Y h:i A'),
         ]);
 
-        $filename = count($coursesData) === 1 
-            ? $coursesData[0]['course']->code . '_results_' . $session->name . '.pdf'
-            : 'compiled_results_' . $session->name . '.pdf';
+        $filename = count($coursesData) === 1
+            ? $coursesData[0]['course']->code.'_results_'.$session->name.'.pdf'
+            : 'compiled_results_'.$session->name.'.pdf';
 
         return $pdf->stream($filename);
     }
