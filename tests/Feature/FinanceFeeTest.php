@@ -294,5 +294,105 @@ class FinanceFeeTest extends TestCase
         Storage::disk('local')->assertMissing("admission_letters/1.pdf");
         Storage::disk('local')->assertMissing("admission_letters/2.pdf");
     }
+
+    public function test_admission_letter_fixed_scholarship_calculation_and_cache_invalidation()
+    {
+        Storage::fake('local');
+
+        $scholarship = \App\Models\Scholarship::create([
+            'name' => 'Fixed Test Scholarship',
+            'type' => 'fixed',
+            'amount' => 50000.00,
+            'percentage' => 0,
+            'covers_hostel_fees' => false,
+            'covers_admin_charges' => false,
+        ]);
+
+        $applicant = Applicant::create([
+            'user_id' => $this->studentUser->id,
+            'jamb_registration_number' => 'JAMB123456',
+            'status' => 'admitted',
+            'scholarship_id' => $scholarship->id,
+        ]);
+
+        // Create a fee configuration so fees calculations don't return 0
+        $tuitionType = FeeType::create([
+            'name' => 'Tuition Fee',
+            'slug' => 'tuition-fee',
+            'is_one_time' => false,
+        ]);
+        FeeConfiguration::create([
+            'fee_type_id' => $tuitionType->id,
+            'session_id' => $this->session->id,
+            'amount' => 150000.00,
+            'is_compulsory' => true,
+        ]);
+
+        // 1. Download letter -> should create PDF in storage
+        $response = $this->actingAs($this->studentUser)->get(route('student.admission_letter.download'));
+        $response->assertStatus(200);
+
+        $filePath = "admission_letters/{$this->studentUser->id}.pdf";
+        Storage::disk('local')->assertExists($filePath);
+
+        // Put some fake content to verify cache is served
+        Storage::disk('local')->put($filePath, "CACHED_CONTENT");
+
+        // 2. Download again immediately -> should serve cached content because timestamps are unchanged
+        $response = $this->actingAs($this->studentUser)->get(route('student.admission_letter.download'));
+        $this->assertEquals("CACHED_CONTENT", $response->streamedContent());
+
+        // 3. Update applicant's updated_at timestamp forward to invalidate cache
+        $applicant->updated_at = now()->addSecond();
+        $applicant->save();
+
+        // 4. Download again -> should invalidate cache and regenerate the letter (returning a new PDF response instead of "CACHED_CONTENT")
+        $response = $this->actingAs($this->studentUser)->get(route('student.admission_letter.download'));
+        $this->assertNotEquals("CACHED_CONTENT", $response->streamedContent());
+    }
+
+    public function test_admission_letter_transfer_fee_calculation()
+    {
+        Storage::fake('local');
+
+        $applicant = Applicant::create([
+            'user_id' => $this->studentUser->id,
+            'jamb_registration_number' => 'JAMB123456',
+            'status' => 'admitted',
+            'application_mode' => 'Transfer',
+        ]);
+
+        $tuitionType = FeeType::create([
+            'name' => 'Tuition Fee',
+            'slug' => 'tuition-fee',
+            'is_one_time' => false,
+        ]);
+        FeeConfiguration::create([
+            'fee_type_id' => $tuitionType->id,
+            'session_id' => $this->session->id,
+            'amount' => 150000.00,
+            'is_compulsory' => true,
+        ]);
+
+        $transferFeeType = FeeType::create([
+            'name' => 'Transfer Student Fee',
+            'slug' => 'transfer-student-fee',
+            'is_one_time' => true,
+        ]);
+        FeeConfiguration::create([
+            'fee_type_id' => $transferFeeType->id,
+            'session_id' => $this->session->id,
+            'amount' => 25000.00,
+            'is_compulsory' => true,
+            'entry_mode' => 'Transfer',
+            'level' => '200',
+        ]);
+
+        $response = $this->actingAs($this->studentUser)->get(route('student.admission_letter.download'));
+        $response->assertStatus(200);
+        $this->assertNotEmpty($response->streamedContent());
+    }
 }
+
+
 

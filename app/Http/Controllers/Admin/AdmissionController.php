@@ -122,13 +122,19 @@ class AdmissionController extends Controller
         $filePath = "admission_letters/{$applicant->user_id}.pdf";
 
         if (\Illuminate\Support\Facades\Storage::disk('local')->exists($filePath)) {
-            return \Illuminate\Support\Facades\Storage::disk('local')->download($filePath, $fileName, [
-                'Content-Type' => 'application/pdf',
-                'Content-Disposition' => 'attachment; filename="' . $fileName . '"'
-            ]);
+            $cacheModifiedTime = \Illuminate\Support\Facades\Storage::disk('local')->lastModified($filePath);
+            $applicantUpdatedTime = $applicant->updated_at->timestamp;
+            $scholarshipUpdatedTime = $applicant->scholarship ? $applicant->scholarship->updated_at->timestamp : 0;
+
+            if ($cacheModifiedTime >= max($applicantUpdatedTime, $scholarshipUpdatedTime)) {
+                return \Illuminate\Support\Facades\Storage::disk('local')->download($filePath, $fileName, [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => 'attachment; filename="' . $fileName . '"'
+                ]);
+            }
         }
 
-        $applicant->load(['user', 'programme.department.faculty', 'state', 'lga']);
+        $applicant->load(['user', 'programme.department.faculty', 'state', 'lga', 'scholarship']);
         $currentSession = \App\Models\Session::current();
         
         // Calculate Fees for the Letter
@@ -160,12 +166,22 @@ class AdmissionController extends Controller
         $deptId = $program?->department_id;
         $facultyId = $program?->department?->faculty_id;
 
+        $entryMode = $applicant->application_mode;
+        if ($entryMode === 'DE') {
+            $entryMode = 'Direct Entry';
+        } elseif ($entryMode === 'PG') {
+            $entryMode = 'Postgraduate';
+        }
+
         $allConfigs = \App\Models\FeeConfiguration::where('session_id', $session->id)
-            ->where(function ($q) {
-                $q->where('level', '100')->orWhereNull('level');
+            ->where(function ($q) use ($entryMode) {
+                $q->where(function ($sub) {
+                    $sub->where('level', '100')->orWhereNull('level');
+                })
+                ->orWhere('entry_mode', $entryMode);
             })
-            ->where(function ($q) use ($applicant) {
-                $q->where('entry_mode', $applicant->application_mode)->orWhereNull('entry_mode');
+            ->where(function ($q) use ($entryMode) {
+                $q->where('entry_mode', $entryMode)->orWhereNull('entry_mode');
             })
             ->where('is_compulsory', true)
             ->with('feeType')
@@ -177,7 +193,7 @@ class AdmissionController extends Controller
 
         $grouped = $allConfigs->groupBy('fee_type_id');
         foreach ($grouped as $feeTypeId => $configs) {
-            $resolved = $configs->where('program_id', $applicant->programme_id)->first()
+            $resolved = $configs->where('program_id', $applicant->program_choice_1)->first()
                 ?? $configs->where('department_id', $deptId)->whereNull('program_id')->first()
                 ?? $configs->where('faculty_id', $facultyId)->whereNull('department_id')->whereNull('program_id')->first()
                 ?? $configs->whereNull('faculty_id')->whereNull('department_id')->whereNull('program_id')->first();
@@ -206,7 +222,11 @@ class AdmissionController extends Controller
             if ($adminCharge > 0 && $scholarship->covers_admin_charges) {
                 $baseForDiscount += $adminCharge;
             }
-            $discount = $baseForDiscount * ($scholarship->percentage / 100);
+            if ($scholarship->type === 'fixed') {
+                $discount = max(0, $baseForDiscount - $scholarship->amount);
+            } else {
+                $discount = $baseForDiscount * ($scholarship->percentage / 100);
+            }
         }
 
         $total = $tuition + $adminCharge + $oneTimeFeesTotal;

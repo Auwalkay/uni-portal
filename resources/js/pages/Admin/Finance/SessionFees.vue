@@ -284,7 +284,7 @@ const formatCurrency = (val: number) => {
                              </div>
                         </div>
                           <div class="flex items-center space-x-2">
-                             <Checkbox id="comp-new" :checked="configForm.is_compulsory" @update:checked="(v: boolean) => configForm.is_compulsory = v" />
+                             <Checkbox id="comp-new" v-model:checked="configForm.is_compulsory" />
                             <Label for="comp-new">Is Compulsory?</Label>
                         </div>
                     </div>

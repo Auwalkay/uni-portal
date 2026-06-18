@@ -115,5 +115,179 @@ class ScholarshipTest extends TestCase
             'gateway' => 'scholarship',
         ]);
     }
+
+    public function test_student_on_fixed_amount_scholarship_fee_calculation()
+    {
+        $scholarship = Scholarship::create([
+            'name' => 'Fixed 20k Scholarship',
+            'type' => 'fixed',
+            'amount' => 20000,
+            'covers_admin_charges' => false,
+            'covers_hostel_fees' => false,
+            'is_active' => true,
+        ]);
+
+        $user = User::create([
+            'name' => 'John Fixed',
+            'email' => 'johnfixed@student.com',
+            'password' => Hash::make('password'),
+        ]);
+        $user->assignRole('student');
+
+        $student = \App\Models\Student::create([
+            'user_id' => $user->id,
+            'matriculation_number' => 'STU2026002',
+            'scholarship_id' => $scholarship->id,
+            'status' => 'active',
+            'current_level' => '100',
+        ]);
+
+        $session = \App\Models\Session::create([
+            'name' => '2025/2026',
+            'is_current' => true,
+            'registration_enabled' => true,
+        ]);
+
+        $feeService = app(\App\Services\Finance\FeeService::class);
+        
+        $feeType = \App\Models\FeeType::create(['name' => 'Tuition']);
+        \App\Models\FeeConfiguration::create([
+            'session_id' => $session->id,
+            'fee_type_id' => $feeType->id,
+            'amount' => 50000,
+            'level' => '100',
+        ]);
+
+        \App\Models\SystemSetting::set('admin_charge_enabled', 'false');
+
+        $invoice = $feeService->generateSchoolFeeInvoice($student, $session);
+
+        $this->assertNotNull($invoice);
+        $this->assertEquals(20000, (float) $invoice->amount);
+
+        $discountItem = $invoice->items()->where('amount', '<', 0)->first();
+        $this->assertNotNull($discountItem);
+        $this->assertEquals(-30000, (float) $discountItem->amount);
+        $this->assertStringContainsString('Fixed ₦20,000.00', $discountItem->description);
+    }
+
+    public function test_student_on_fixed_amount_scholarship_exceeding_base_fee()
+    {
+        $scholarship = Scholarship::create([
+            'name' => 'Fixed 60k Scholarship',
+            'type' => 'fixed',
+            'amount' => 60000,
+            'covers_admin_charges' => false,
+            'covers_hostel_fees' => false,
+            'is_active' => true,
+        ]);
+
+        $user = User::create([
+            'name' => 'John High Fixed',
+            'email' => 'johnhighfixed@student.com',
+            'password' => Hash::make('password'),
+        ]);
+        $user->assignRole('student');
+
+        $student = \App\Models\Student::create([
+            'user_id' => $user->id,
+            'matriculation_number' => 'STU2026003',
+            'scholarship_id' => $scholarship->id,
+            'status' => 'active',
+            'current_level' => '100',
+        ]);
+
+        $session = \App\Models\Session::create([
+            'name' => '2025/2026',
+            'is_current' => true,
+            'registration_enabled' => true,
+        ]);
+
+        $feeService = app(\App\Services\Finance\FeeService::class);
+        
+        $feeType = \App\Models\FeeType::create(['name' => 'Tuition']);
+        \App\Models\FeeConfiguration::create([
+            'session_id' => $session->id,
+            'fee_type_id' => $feeType->id,
+            'amount' => 50000,
+            'level' => '100',
+        ]);
+
+        \App\Models\SystemSetting::set('admin_charge_enabled', 'false');
+
+        $invoice = $feeService->generateSchoolFeeInvoice($student, $session);
+
+        $this->assertNotNull($invoice);
+        $this->assertEquals(50000, (float) $invoice->amount);
+
+        $discountItem = $invoice->items()->where('amount', '<', 0)->first();
+        $this->assertNull($discountItem);
+    }
+
+    public function test_scholarship_does_not_apply_to_one_time_fees()
+    {
+        // 1. Create student on 50% scholarship
+        $scholarship = Scholarship::create([
+            'name' => '50% Scholarship',
+            'percentage' => 50,
+            'covers_admin_charges' => false,
+            'covers_hostel_fees' => false,
+            'is_active' => true,
+        ]);
+
+        $user = User::create([
+            'name' => 'Jane OneTime',
+            'email' => 'janeonetime@student.com',
+            'password' => Hash::make('password'),
+        ]);
+        $user->assignRole('student');
+
+        $student = \App\Models\Student::create([
+            'user_id' => $user->id,
+            'matriculation_number' => 'STU2026004',
+            'scholarship_id' => $scholarship->id,
+            'status' => 'active',
+            'current_level' => '100',
+        ]);
+
+        $session = \App\Models\Session::create([
+            'name' => '2025/2026',
+            'is_current' => true,
+            'registration_enabled' => true,
+        ]);
+
+        $feeService = app(\App\Services\Finance\FeeService::class);
+        
+        // Create Tuition (recurring) and Matriculation (one-time)
+        $tuitionType = \App\Models\FeeType::create(['name' => 'Tuition Fee', 'is_one_time' => false]);
+        $matricType = \App\Models\FeeType::create(['name' => 'Matriculation Fee', 'is_one_time' => true]);
+
+        \App\Models\FeeConfiguration::create([
+            'session_id' => $session->id,
+            'fee_type_id' => $tuitionType->id,
+            'amount' => 100000,
+            'level' => '100',
+        ]);
+
+        \App\Models\FeeConfiguration::create([
+            'session_id' => $session->id,
+            'fee_type_id' => $matricType->id,
+            'amount' => 20000,
+            'level' => '100',
+        ]);
+
+        \App\Models\SystemSetting::set('admin_charge_enabled', 'false');
+
+        $invoice = $feeService->generateSchoolFeeInvoice($student, $session);
+
+        $this->assertNotNull($invoice);
+        // Total should be: Tuition (100k) - 50% discount (50k) + One-Time Fee (20k) = 70,000 NGN
+        $this->assertEquals(70000, (float) $invoice->amount);
+
+        // Verify discount item is -50,000 NGN
+        $discountItem = $invoice->items()->where('amount', '<', 0)->first();
+        $this->assertNotNull($discountItem);
+        $this->assertEquals(-50000, (float) $discountItem->amount);
+    }
 }
 

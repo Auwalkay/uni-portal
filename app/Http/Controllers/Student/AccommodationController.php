@@ -151,7 +151,11 @@ class AccommodationController extends Controller
             $discountAmount = 0;
             $student->load('scholarship');
             if ($student->scholarship && $student->scholarship->covers_hostel_fees) {
-                $discountAmount = $fee->amount * ($student->scholarship->percentage / 100);
+                if ($student->scholarship->type === 'fixed') {
+                    $discountAmount = min($student->scholarship->amount, $fee->amount);
+                } else {
+                    $discountAmount = $fee->amount * ($student->scholarship->percentage / 100);
+                }
             }
 
             $finalAmount = $fee->amount - $discountAmount;
@@ -176,9 +180,12 @@ class AccommodationController extends Controller
             ]);
 
             if ($discountAmount > 0) {
+                $discountDesc = $student->scholarship->type === 'fixed'
+                    ? 'Scholarship Discount (' . $student->scholarship->name . ' - Fixed ₦' . number_format($student->scholarship->amount, 2) . ')'
+                    : 'Scholarship Discount (' . $student->scholarship->name . ' - ' . floatval($student->scholarship->percentage) . '%)';
                 InvoiceItem::create([
                     'invoice_id' => $invoice->id,
-                    'description' => 'Scholarship Discount (' . $student->scholarship->name . ' - ' . floatval($student->scholarship->percentage) . '%)',
+                    'description' => $discountDesc,
                     'amount' => -$discountAmount,
                 ]);
             }

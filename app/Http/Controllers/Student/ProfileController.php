@@ -313,8 +313,8 @@ class ProfileController extends Controller
     public function downloadAdmissionLetter()
     {
         $user = auth()->user();
-        $applicant = \App\Models\Applicant::where('user_id', $user->id)->first();
-        $student = \App\Models\Student::where('user_id', $user->id)->with(['user', 'state', 'lga', 'program.department.faculty', 'admittedSession'])->first();
+        $applicant = \App\Models\Applicant::where('user_id', $user->id)->with(['scholarship'])->first();
+        $student = \App\Models\Student::where('user_id', $user->id)->with(['user', 'state', 'lga', 'program.department.faculty', 'admittedSession', 'scholarship'])->first();
 
         if (! $applicant && ! $student) {
             return back()->with('error', 'Admission record not found.');
@@ -329,12 +329,19 @@ class ProfileController extends Controller
         $fileName = "Admission_Letter_{$identifer}.pdf";
         $filePath = "admission_letters/{$user->id}.pdf";
 
-        if (\Illuminate\Support\Facades\Storage::disk('local')->exists($filePath)) {
-            return \Illuminate\Support\Facades\Storage::disk('local')->download($filePath, $fileName, [
-                'Content-Type' => 'application/pdf',
-                'Content-Disposition' => 'attachment; filename="' . $fileName . '"'
-            ]);
-        }
+        // if (\Illuminate\Support\Facades\Storage::disk('local')->exists($filePath)) {
+        //     $cacheModifiedTime = \Illuminate\Support\Facades\Storage::disk('local')->lastModified($filePath);
+        //     $studentUpdatedTime = $student ? $student->updated_at->timestamp : 0;
+        //     $applicantUpdatedTime = $applicant ? $applicant->updated_at->timestamp : 0;
+        //     $scholarshipUpdatedTime = ($student && $student->scholarship) ? $student->scholarship->updated_at->timestamp : (($applicant && $applicant->scholarship) ? $applicant->scholarship->updated_at->timestamp : 0);
+
+        //     if ($cacheModifiedTime >= max($studentUpdatedTime, $applicantUpdatedTime, $scholarshipUpdatedTime)) {
+        //         return \Illuminate\Support\Facades\Storage::disk('local')->download($filePath, $fileName, [
+        //             'Content-Type' => 'application/pdf',
+        //             'Content-Disposition' => 'attachment; filename="' . $fileName . '"'
+        //         ]);
+        //     }
+        // }
 
         // Prepare data for the letter
         if ($student) {
@@ -361,7 +368,7 @@ class ProfileController extends Controller
                 'fees' => $feesData,
             ];
         } else {
-            $applicant->load(['user', 'programme.department.faculty', 'state', 'lga']);
+            $applicant->load(['user', 'programme.department.faculty', 'state', 'lga', 'scholarship']);
             
             // For applicants, we use their first program choice and current session fees
             $currentSession = \App\Models\Session::current();
@@ -440,7 +447,11 @@ class ProfileController extends Controller
             if ($adminCharge > 0 && $scholarship->covers_admin_charges) {
                 $baseForDiscount += $adminCharge;
             }
-            $discount = $baseForDiscount * ($scholarship->percentage / 100);
+            if ($scholarship->type === 'fixed') {
+                $discount = max(0, $baseForDiscount - $scholarship->amount);
+            } else {
+                $discount = $baseForDiscount * ($scholarship->percentage / 100);
+            }
         }
 
         $total = $tuition + $adminCharge + $oneTimeFeesTotal;
@@ -464,12 +475,22 @@ class ProfileController extends Controller
         $deptId = $program?->department_id;
         $facultyId = $program?->department?->faculty_id;
 
+        $entryMode = $applicant->application_mode;
+        if ($entryMode === 'DE') {
+            $entryMode = 'Direct Entry';
+        } elseif ($entryMode === 'PG') {
+            $entryMode = 'Postgraduate';
+        }
+
         $allConfigs = \App\Models\FeeConfiguration::where('session_id', $session->id)
-            ->where(function ($q) {
-                $q->where('level', '100')->orWhereNull('level');
+            ->where(function ($q) use ($entryMode) {
+                $q->where(function ($sub) {
+                    $sub->where('level', '100')->orWhereNull('level');
+                })
+                ->orWhere('entry_mode', $entryMode);
             })
-            ->where(function ($q) use ($applicant) {
-                $q->where('entry_mode', $applicant->application_mode)->orWhereNull('entry_mode');
+            ->where(function ($q) use ($entryMode) {
+                $q->where('entry_mode', $entryMode)->orWhereNull('entry_mode');
             })
             ->where('is_compulsory', true)
             ->with('feeType')
@@ -510,7 +531,11 @@ class ProfileController extends Controller
             if ($adminCharge > 0 && $scholarship->covers_admin_charges) {
                 $baseForDiscount += $adminCharge;
             }
-            $discount = $baseForDiscount * ($scholarship->percentage / 100);
+            if ($scholarship->type === 'fixed') {
+                $discount = max(0, $baseForDiscount - $scholarship->amount);
+            } else {
+                $discount = $baseForDiscount * ($scholarship->percentage / 100);
+            }
         }
 
         $total = $tuition + $adminCharge + $oneTimeFeesTotal;
