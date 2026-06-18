@@ -37,7 +37,9 @@ const props = defineProps<{
     scholarships: Array<{ 
         id: string; 
         name: string; 
+        type: string;
         percentage: string;
+        amount: string;
         covers_admin_charges: boolean;
         covers_hostel_fees: boolean;
         is_active: boolean;
@@ -50,7 +52,9 @@ const props = defineProps<{
 const showCreateModal = ref(false);
 const createForm = useForm({
     name: '',
+    type: 'percentage',
     percentage: '',
+    amount: '',
     covers_admin_charges: false,
     covers_hostel_fees: false,
     is_active: true,
@@ -70,7 +74,9 @@ const showEditModal = ref(false);
 const editForm = useForm({
     id: '',
     name: '',
+    type: 'percentage',
     percentage: '',
+    amount: '',
     covers_admin_charges: false,
     covers_hostel_fees: false,
     is_active: true,
@@ -81,7 +87,9 @@ const editForm = useForm({
 const openEditModal = (scholarship: any) => {
     editForm.id = scholarship.id;
     editForm.name = scholarship.name;
+    editForm.type = scholarship.type || 'percentage';
     editForm.percentage = scholarship.percentage;
+    editForm.amount = scholarship.amount || '';
     editForm.covers_admin_charges = !!scholarship.covers_admin_charges;
     editForm.covers_hostel_fees = !!scholarship.covers_hostel_fees;
     editForm.is_active = !!scholarship.is_active;
@@ -105,8 +113,11 @@ const deleteScholarship = (id: string, name: string) => {
     }
 };
 
-const formatPercentage = (val: string) => {
-    return Number(val).toString() + '%';
+const formatDiscount = (scholarship: any) => {
+    if (scholarship.type === 'fixed') {
+        return '₦' + Number(scholarship.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    return Number(scholarship.percentage).toString() + '%';
 };
 </script>
 
@@ -141,7 +152,8 @@ const formatPercentage = (val: string) => {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Name</TableHead>
-                                <TableHead class="text-center">Discount Percentage</TableHead>
+                                <TableHead>Type</TableHead>
+                                <TableHead class="text-center">Discount</TableHead>
                                 <TableHead class="text-center">Covers Admin</TableHead>
                                 <TableHead class="text-center">Covers Hostel</TableHead>
                                 <TableHead class="text-center">Status</TableHead>
@@ -151,9 +163,10 @@ const formatPercentage = (val: string) => {
                         <TableBody>
                             <TableRow v-for="scholarship in scholarships" :key="scholarship.id">
                                 <TableCell class="font-medium">{{ scholarship.name }}</TableCell>
+                                <TableCell class="capitalize">{{ scholarship.type }}</TableCell>
                                 <TableCell class="text-center">
                                     <span class="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-sm font-semibold text-primary">
-                                        {{ formatPercentage(scholarship.percentage) }}
+                                        {{ formatDiscount(scholarship) }}
                                     </span>
                                 </TableCell>
                                 <TableCell class="text-center">
@@ -184,7 +197,7 @@ const formatPercentage = (val: string) => {
                                 </TableCell>
                             </TableRow>
                             <TableRow v-if="scholarships.length === 0">
-                                <TableCell colspan="6" class="h-24 text-center text-muted-foreground">
+                                <TableCell colspan="7" class="h-24 text-center text-muted-foreground">
                                     No scholarships found. Click "Add Scholarship" to create one.
                                 </TableCell>
                             </TableRow>
@@ -199,7 +212,7 @@ const formatPercentage = (val: string) => {
                     <DialogHeader>
                         <DialogTitle>Add New Scholarship</DialogTitle>
                         <DialogDescription>
-                            Create a new scholarship category. The percentage represents the fee discount applied.
+                            Create a new scholarship category. Choose the discount type (percentage or fixed amount).
                         </DialogDescription>
                     </DialogHeader>
                     <form @submit.prevent="submitCreate" class="space-y-4 py-4">
@@ -209,9 +222,22 @@ const formatPercentage = (val: string) => {
                             <p v-if="createForm.errors.name" class="text-sm text-destructive">{{ createForm.errors.name }}</p>
                         </div>
                         <div class="space-y-2">
+                            <Label for="type">Scholarship Type</Label>
+                            <select id="type" v-model="createForm.type" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" required>
+                                <option value="percentage">Percentage</option>
+                                <option value="fixed">Fixed Amount</option>
+                            </select>
+                            <p v-if="createForm.errors.type" class="text-sm text-destructive">{{ createForm.errors.type }}</p>
+                        </div>
+                        <div v-if="createForm.type === 'percentage'" class="space-y-2">
                             <Label for="percentage">Discount Percentage (%)</Label>
                             <Input id="percentage" type="number" step="0.01" min="0" max="100" v-model="createForm.percentage" placeholder="e.g 50" required />
                             <p v-if="createForm.errors.percentage" class="text-sm text-destructive">{{ createForm.errors.percentage }}</p>
+                        </div>
+                        <div v-if="createForm.type === 'fixed'" class="space-y-2">
+                            <Label for="amount">Discount Amount (₦)</Label>
+                            <Input id="amount" type="number" step="0.01" min="0" v-model="createForm.amount" placeholder="e.g 50000" required />
+                            <p v-if="createForm.errors.amount" class="text-sm text-destructive">{{ createForm.errors.amount }}</p>
                         </div>
 
                         <div class="flex items-center space-x-2 pt-2">
@@ -259,6 +285,20 @@ const formatPercentage = (val: string) => {
                             <p v-if="editForm.errors.name" class="text-sm text-destructive">{{ editForm.errors.name }}</p>
                         </div>
                         <div class="space-y-2">
+                            <Label for="edit-type">Scholarship Type</Label>
+                            <select 
+                                id="edit-type" 
+                                v-model="editForm.type" 
+                                class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" 
+                                :disabled="editForm.students_count > 0 || editForm.applicants_count > 0"
+                                required
+                            >
+                                <option value="percentage">Percentage</option>
+                                <option value="fixed">Fixed Amount</option>
+                            </select>
+                            <p v-if="editForm.errors.type" class="text-sm text-destructive">{{ editForm.errors.type }}</p>
+                        </div>
+                        <div v-if="editForm.type === 'percentage'" class="space-y-2">
                             <Label for="edit-percentage">Discount Percentage (%)</Label>
                             <Input 
                                 id="edit-percentage" 
@@ -274,6 +314,22 @@ const formatPercentage = (val: string) => {
                                 Percentage locked: Scholarship is in use by {{ editForm.students_count + editForm.applicants_count }} individuals.
                             </p>
                             <p v-if="editForm.errors.percentage" class="text-sm text-destructive">{{ editForm.errors.percentage }}</p>
+                        </div>
+                        <div v-if="editForm.type === 'fixed'" class="space-y-2">
+                            <Label for="edit-amount">Discount Amount (₦)</Label>
+                            <Input 
+                                id="edit-amount" 
+                                type="number" 
+                                step="0.01" 
+                                min="0" 
+                                v-model="editForm.amount" 
+                                :disabled="editForm.students_count > 0 || editForm.applicants_count > 0"
+                                required 
+                            />
+                            <p v-if="editForm.students_count > 0 || editForm.applicants_count > 0" class="text-[10px] text-amber-600 font-medium uppercase leading-tight">
+                                Amount locked: Scholarship is in use by {{ editForm.students_count + editForm.applicants_count }} individuals.
+                            </p>
+                            <p v-if="editForm.errors.amount" class="text-sm text-destructive">{{ editForm.errors.amount }}</p>
                         </div>
 
                         <div class="flex items-center space-x-2 pt-2">

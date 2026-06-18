@@ -287,7 +287,7 @@ const submitClone = () => {
                                     <Input v-model="feeTypeForm.description" />
                                 </div>
                                 <div class="flex items-center space-x-2">
-                                    <Checkbox id="one-time-fee" :checked="feeTypeForm.is_one_time" @update:checked="(v: boolean) => feeTypeForm.is_one_time = v" />
+                                    <Checkbox id="one-time-fee" v-model:checked="feeTypeForm.is_one_time" />
                                     <Label for="one-time-fee" class="cursor-pointer">Is this a One-Time Fee? (e.g. Matriculation, Acceptance, Gown Fee)</Label>
                                 </div>
                             </div>

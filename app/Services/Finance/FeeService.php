@@ -95,6 +95,13 @@ class FeeService
         return DB::transaction(function () use ($student, $session, $resolvedConfigs) {
             $academicTotal = $resolvedConfigs->sum('amount');
             
+            $tuition = 0;
+            foreach ($resolvedConfigs as $config) {
+                if (!$config->feeType || !$config->feeType->is_one_time) {
+                    $tuition += $config->amount;
+                }
+            }
+
             $adminChargeEnabled = SystemSetting::get('admin_charge_enabled', true);
             $adminChargeAmount = SystemSetting::get('admin_charge_amount', 250000);
             
@@ -106,11 +113,15 @@ class FeeService
             $discountAmount = 0;
             if ($student->scholarship && ($student->program?->scholarship_eligible ?? true)) {
                 $scholarship = $student->scholarship;
-                $baseForDiscount = $academicTotal;
+                $baseForDiscount = $tuition;
                 if ($adminChargeEnabled && $scholarship->covers_admin_charges) {
                     $baseForDiscount += $adminChargeAmount;
                 }
-                $discountAmount = $baseForDiscount * ($scholarship->percentage / 100);
+                if ($scholarship->type === 'fixed') {
+                    $discountAmount = max(0, $baseForDiscount - $scholarship->amount);
+                } else {
+                    $discountAmount = $baseForDiscount * ($scholarship->percentage / 100);
+                }
             }
 
             $finalAmount = $totalAmountBeforeDiscount - $discountAmount;
@@ -150,9 +161,12 @@ class FeeService
             }
 
             if ($discountAmount > 0) {
+                $discountDesc = $student->scholarship->type === 'fixed'
+                    ? 'Scholarship Discount (' . $student->scholarship->name . ' - Fixed ₦' . number_format($student->scholarship->amount, 2) . ')'
+                    : 'Scholarship Discount (' . $student->scholarship->name . ' - ' . floatval($student->scholarship->percentage) . '%)';
                 InvoiceItem::create([
                     'invoice_id' => $invoice->id,
-                    'description' => 'Scholarship Discount (' . $student->scholarship->name . ' - ' . floatval($student->scholarship->percentage) . '%)',
+                    'description' => $discountDesc,
                     'amount' => -$discountAmount,
                 ]);
             }
@@ -218,6 +232,14 @@ class FeeService
 
         return DB::transaction(function () use ($invoice, $student, $resolvedConfigs) {
             $academicTotal = $resolvedConfigs->sum('amount');
+
+            $tuition = 0;
+            foreach ($resolvedConfigs as $config) {
+                if (!$config->feeType || !$config->feeType->is_one_time) {
+                    $tuition += $config->amount;
+                }
+            }
+
             $adminChargeEnabled = SystemSetting::get('admin_charge_enabled', true);
             $adminChargeAmount = SystemSetting::get('admin_charge_amount', 250000);
             
@@ -227,9 +249,13 @@ class FeeService
             $discountAmount = 0;
             if ($student->scholarship && ($student->program?->scholarship_eligible ?? true)) {
                 $scholarship = $student->scholarship;
-                $baseForDiscount = $academicTotal;
+                $baseForDiscount = $tuition;
                 if ($adminChargeEnabled && $scholarship->covers_admin_charges) $baseForDiscount += $adminChargeAmount;
-                $discountAmount = $baseForDiscount * ($scholarship->percentage / 100);
+                if ($scholarship->type === 'fixed') {
+                    $discountAmount = max(0, $baseForDiscount - $scholarship->amount);
+                } else {
+                    $discountAmount = $baseForDiscount * ($scholarship->percentage / 100);
+                }
             }
 
             $finalAmount = $totalAmountBeforeDiscount - $discountAmount;
@@ -256,9 +282,12 @@ class FeeService
                     ]);
                 }
                 if ($discountAmount > 0) {
+                    $discountDesc = $student->scholarship->type === 'fixed'
+                        ? 'Scholarship Discount (' . $student->scholarship->name . ' - Fixed ₦' . number_format($student->scholarship->amount, 2) . ')'
+                        : 'Scholarship Discount (' . $student->scholarship->name . ' - ' . floatval($student->scholarship->percentage) . '%)';
                     InvoiceItem::create([
                         'invoice_id' => $invoice->id,
-                        'description' => 'Scholarship Discount (' . $student->scholarship->name . ' - ' . floatval($student->scholarship->percentage) . '%)',
+                        'description' => $discountDesc,
                         'amount' => -$discountAmount,
                     ]);
                 }
