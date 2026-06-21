@@ -207,8 +207,8 @@ class AcademicController extends Controller
         } elseif ($request->type === 'course') {
             $data = $request->validate([
                 'title' => 'required|string|max:255',
-                'code' => 'required|string|max:10|unique:courses,code',
-                'units' => 'required|integer|min:1|max:6',
+                'code' => 'required|string|max:20|unique:courses,code',
+                'units' => 'required|integer|min:1|max:10',
                 'level' => 'required|integer',
                 'semester' => 'required|string', // '1' or '2'
                 'department_id' => 'required|exists:departments,id',

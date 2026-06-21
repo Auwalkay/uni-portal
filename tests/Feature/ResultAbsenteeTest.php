@@ -165,4 +165,54 @@ class ResultAbsenteeTest extends TestCase
         $gpa = $gradingService->calculateGPA(collect([$this->reg1, $this->reg2]));
         $this->assertEquals(3.00, $gpa);
     }
+
+    public function test_score_validation_boundaries()
+    {
+        $this->actingAs($this->admin);
+
+        // 1. Test CA score > 40 is rejected
+        $response = $this->post(route('admin.results.update', $this->course1->id), [
+            'scores' => [
+                [
+                    'id' => $this->reg1->id,
+                    'ca_score' => 45, // Exceeds 40
+                    'exam_score' => 40,
+                    'is_absent' => false,
+                ]
+            ]
+        ]);
+        $response->assertSessionHasErrors(['scores.0.ca_score']);
+
+        // 2. Test Exam score > 80 is rejected
+        $response = $this->post(route('admin.results.update', $this->course1->id), [
+            'scores' => [
+                [
+                    'id' => $this->reg1->id,
+                    'ca_score' => 20,
+                    'exam_score' => 85, // Exceeds 80
+                    'is_absent' => false,
+                ]
+            ]
+        ]);
+        $response->assertSessionHasErrors(['scores.0.exam_score']);
+
+        // 3. Test total score > 100 is rejected
+        $response = $this->post(route('admin.results.update', $this->course1->id), [
+            'scores' => [
+                [
+                    'id' => $this->reg1->id,
+                    'ca_score' => 35, // Valid CA
+                    'exam_score' => 70, // Valid Exam, but total is 105 (> 100)
+                    'is_absent' => false,
+                ]
+            ]
+        ]);
+        $response->assertSessionHasErrors(['scores.0.exam_score']);
+
+        // Verify the custom attribute contains the student's name in error messages
+        $errors = session('errors')->getBag('default')->get('scores.0.exam_score');
+        $this->assertNotEmpty($errors);
+        $this->assertStringContainsString('Student User', $errors[0]); // User name is 'Student User'
+        $this->assertStringContainsString('100', $errors[0]);
+    }
 }
