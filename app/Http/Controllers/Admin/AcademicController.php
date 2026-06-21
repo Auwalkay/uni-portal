@@ -260,7 +260,7 @@ class AcademicController extends Controller
             $unit = Unit::findOrFail($request->id);
             $data = $request->validate([
                 'name' => 'required|string|max:255',
-                'code' => 'required|string|max:10|unique:units,code,'.$unit->id,
+                'code' => 'required|string|max:20|unique:units,code,'.$unit->id,
                 'department_id' => 'required|exists:departments,id',
             ]);
             $unit->update($data);
@@ -283,8 +283,8 @@ class AcademicController extends Controller
             $course = Course::findOrFail($request->id);
             $data = $request->validate([
                 'title' => 'required|string|max:255',
-                'code' => 'required|string|max:10|unique:courses,code,'.$course->id,
-                'units' => 'required|integer|min:1|max:6',
+                'code' => 'required|string|max:20|unique:courses,code,'.$course->id,
+                'units' => 'required|integer|min:1|max:10',
                 'level' => 'required|integer',
                 'semester' => 'required|string',
                 'department_id' => 'required|exists:departments,id',
