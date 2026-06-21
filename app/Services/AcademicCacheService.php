@@ -93,6 +93,13 @@ class AcademicCacheService
         return Cache::remember('faculties_with_departments_full', self::TTL, fn() => Faculty::with('departments.units')->get());
     }
 
+    public static function getFacultiesWithProgrammes()
+    {
+        return Cache::remember('faculties_with_departments_and_programmes', self::TTL, function () {
+            return Faculty::with('departments.programmes')->get();
+        });
+    }
+
     public static function getNonAcademicDepartments()
     {
         return Cache::remember('non_academic_departments', self::TTL, fn() => \App\Models\Department::whereNull('faculty_id')->with('units')->get());
@@ -172,6 +179,7 @@ class AcademicCacheService
     {
         self::clearTimetableCache();
         Cache::forget('faculties_with_departments');
+        Cache::forget('faculties_with_departments_and_programmes');
         Cache::forget('all_programmes_list');
         Cache::forget('all_programmes_list_v2');
         Cache::forget('states_with_lgas');

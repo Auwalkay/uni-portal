@@ -113,7 +113,18 @@ class FeeService
             $discountAmount = 0;
             if ($student->scholarship && ($student->program?->scholarship_eligible ?? true)) {
                 $scholarship = $student->scholarship;
-                $baseForDiscount = $tuition;
+                
+                // Exclude "Drug Test" fee type from scholarship discount calculations
+                $baseForDiscount = 0;
+                foreach ($resolvedConfigs as $config) {
+                    if (!$config->feeType || !$config->feeType->is_one_time) {
+                        if ($config->feeType && (strtolower($config->feeType->name) === 'drug test' || $config->feeType->slug === 'drug-test')) {
+                            continue;
+                        }
+                        $baseForDiscount += $config->amount;
+                    }
+                }
+
                 if ($adminChargeEnabled && $scholarship->covers_admin_charges) {
                     $baseForDiscount += $adminChargeAmount;
                 }
@@ -249,7 +260,18 @@ class FeeService
             $discountAmount = 0;
             if ($student->scholarship && ($student->program?->scholarship_eligible ?? true)) {
                 $scholarship = $student->scholarship;
-                $baseForDiscount = $tuition;
+                
+                // Exclude "Drug Test" fee type from scholarship discount calculations
+                $baseForDiscount = 0;
+                foreach ($resolvedConfigs as $config) {
+                    if (!$config->feeType || !$config->feeType->is_one_time) {
+                        if ($config->feeType && (strtolower($config->feeType->name) === 'drug test' || $config->feeType->slug === 'drug-test')) {
+                            continue;
+                        }
+                        $baseForDiscount += $config->amount;
+                    }
+                }
+
                 if ($adminChargeEnabled && $scholarship->covers_admin_charges) $baseForDiscount += $adminChargeAmount;
                 if ($scholarship->type === 'fixed') {
                     $discountAmount = max(0, $baseForDiscount - $scholarship->amount);

@@ -168,7 +168,7 @@ class ProfileController extends Controller
             ->with(['user', 'state', 'lga', 'oLevelResults'])
             ->firstOrFail();
 
-        $states = \App\Models\State::with('lgas')->orderBy('name')->get();
+        $states = \App\Services\AcademicCacheService::getStates();
 
         $allSubjects = \Illuminate\Support\Facades\Cache::remember('all_subjects', 60 * 60 * 24, function () {
             return \App\Models\Subject::orderBy('name')->get();
@@ -413,6 +413,7 @@ class ProfileController extends Controller
             ->get();
 
         $tuition = 0;
+        $discountTuitionBase = 0;
         $oneTimeFeesTotal = 0;
         $oneTimeFeesList = [];
 
@@ -432,6 +433,9 @@ class ProfileController extends Controller
                     ];
                 } else {
                     $tuition += $resolved->amount;
+                    if (!($resolved->feeType && (strtolower($resolved->feeType->name) === 'drug test' || $resolved->feeType->slug === 'drug-test'))) {
+                        $discountTuitionBase += $resolved->amount;
+                    }
                 }
             }
         }
@@ -443,7 +447,7 @@ class ProfileController extends Controller
         $discount = 0;
         $scholarship = $student->scholarship;
         if ($scholarship && ($student->program?->scholarship_eligible ?? true)) {
-            $baseForDiscount = $tuition;
+            $baseForDiscount = $discountTuitionBase;
             if ($adminCharge > 0 && $scholarship->covers_admin_charges) {
                 $baseForDiscount += $adminCharge;
             }
@@ -497,6 +501,7 @@ class ProfileController extends Controller
             ->get();
 
         $tuition = 0;
+        $discountTuitionBase = 0;
         $oneTimeFeesTotal = 0;
         $oneTimeFeesList = [];
 
@@ -516,6 +521,9 @@ class ProfileController extends Controller
                     ];
                 } else {
                     $tuition += $resolved->amount;
+                    if (!($resolved->feeType && (strtolower($resolved->feeType->name) === 'drug test' || $resolved->feeType->slug === 'drug-test'))) {
+                        $discountTuitionBase += $resolved->amount;
+                    }
                 }
             }
         }
@@ -527,7 +535,7 @@ class ProfileController extends Controller
         $discount = 0;
         $scholarship = $applicant->scholarship;
         if ($scholarship && ($applicant->programme?->scholarship_eligible ?? true)) {
-            $baseForDiscount = $tuition;
+            $baseForDiscount = $discountTuitionBase;
             if ($adminCharge > 0 && $scholarship->covers_admin_charges) {
                 $baseForDiscount += $adminCharge;
             }

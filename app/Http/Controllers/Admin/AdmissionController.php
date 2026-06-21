@@ -45,7 +45,7 @@ class AdmissionController extends Controller
 
         $applicants = $query->latest()->paginate(10)->withQueryString();
 
-        $programmes = Programme::select('id', 'name')->orderBy('name')->get();
+        $programmes = \App\Services\AcademicCacheService::getProgrammes();
 
         return Inertia::render('Admin/Admissions/Index', [
             'applicants' => $applicants,
