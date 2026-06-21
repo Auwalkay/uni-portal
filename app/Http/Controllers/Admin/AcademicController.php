@@ -212,7 +212,7 @@ class AcademicController extends Controller
                 'level' => 'required|integer',
                 'semester' => 'required|string', // '1' or '2'
                 'department_id' => 'required|exists:departments,id',
-                'programme_id' => 'required|exists:programmes,id',
+                'programme_id' => 'nullable|exists:programmes,id',
             ]);
             Course::create($data);
         }
@@ -288,7 +288,7 @@ class AcademicController extends Controller
                 'level' => 'required|integer',
                 'semester' => 'required|string',
                 'department_id' => 'required|exists:departments,id',
-                'programme_id' => 'required|exists:programmes,id',
+                'programme_id' => 'nullable|exists:programmes,id',
             ]);
             $course->update($data);
         }
