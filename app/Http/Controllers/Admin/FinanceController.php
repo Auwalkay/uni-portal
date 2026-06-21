@@ -19,84 +19,89 @@ use Carbon\Carbon;
 use App\Models\Expense;
 use App\Models\Payroll;
 use App\Models\ExpenseCategory;
+use App\Services\AcademicCacheService;
 
 class FinanceController extends Controller
 {
     public function dashboard()
     {
-        // 1. Total Inflow (All successful payments)
-        $totalInflow = Payment::where('status', 'success')->sum('amount');
+        $dashboardData = \Illuminate\Support\Facades\Cache::remember('finance_dashboard_analytics', 600, function () {
+            // 1. Total Inflow (All successful payments)
+            $totalInflow = Payment::where('status', 'success')->sum('amount');
 
-        // 2. Total Outflow (Approved Expenses + Paid Payrolls)
-        $totalExpenses = Expense::where('status', 'approved')->sum('amount');
-        $totalPayroll = Payroll::where('status', 'paid')->sum('total_amount');
-        $totalOutflow = $totalExpenses + $totalPayroll;
+            // 2. Total Outflow (Approved Expenses + Paid Payrolls)
+            $totalExpenses = Expense::where('status', 'approved')->sum('amount');
+            $totalPayroll = Payroll::where('status', 'paid')->sum('total_amount');
+            $totalOutflow = $totalExpenses + $totalPayroll;
 
-        // 3. Net Balance
-        $netBalance = $totalInflow - $totalOutflow;
+            // 3. Net Balance
+            $netBalance = $totalInflow - $totalOutflow;
 
-        // 4. Monthly Cash Flow (Last 6 months)
-        $data = collect();
-        for ($i = 5; $i >= 0; $i--) {
-            $date = Carbon::now()->subMonths($i);
-            $month = $date->format('Y-m');
-            $label = $date->format('M Y');
+            // 4. Monthly Cash Flow (Last 6 months)
+            $data = collect();
+            for ($i = 5; $i >= 0; $i--) {
+                $date = Carbon::now()->subMonths($i);
+                $month = $date->format('Y-m');
+                $label = $date->format('M Y');
 
-            $inflow = Payment::where('status', 'success')
-                ->whereYear('paid_at', $date->year)
-                ->whereMonth('paid_at', $date->month)
-                ->sum('amount');
+                $inflow = Payment::where('status', 'success')
+                    ->whereYear('paid_at', $date->year)
+                    ->whereMonth('paid_at', $date->month)
+                    ->sum('amount');
 
-            $outflowExpenses = Expense::where('status', 'approved')
-                ->whereYear('date', $date->year)
-                ->whereMonth('date', $date->month) // Assuming 'date' is when expense incurred
-                ->sum('amount');
+                $outflowExpenses = Expense::where('status', 'approved')
+                    ->whereYear('date', $date->year)
+                    ->whereMonth('date', $date->month) // Assuming 'date' is when expense incurred
+                    ->sum('amount');
 
-            // For payroll, we can use generated_at or paid_at
-            $outflowPayroll = Payroll::where('status', 'paid')
-                ->whereYear('paid_at', $date->year)
-                ->whereMonth('paid_at', $date->month)
-                ->sum('total_amount');
+                // For payroll, we can use generated_at or paid_at
+                $outflowPayroll = Payroll::where('status', 'paid')
+                    ->whereYear('paid_at', $date->year)
+                    ->whereMonth('paid_at', $date->month)
+                    ->sum('total_amount');
 
-            $data->push([
-                'month' => $label,
-                'inflow' => $inflow,
-                'outflow' => $outflowExpenses + $outflowPayroll,
-            ]);
-        }
+                $data->push([
+                    'month' => $label,
+                    'inflow' => $inflow,
+                    'outflow' => $outflowExpenses + $outflowPayroll,
+                ]);
+            }
 
-        // 5. Recent Transactions (Mixed Payments and Expenses)
-        $recentPayments = Payment::with('user')->latest('paid_at')->take(5)->get()->map(function ($p) {
+            // 5. Recent Transactions (Mixed Payments and Expenses)
+            $recentPayments = Payment::with('user')->latest('paid_at')->take(5)->get()->map(function ($p) {
+                return [
+                    'type' => 'inflow',
+                    'description' => 'Payment from ' . $p->user->name,
+                    'amount' => $p->amount,
+                    'date' => $p->paid_at,
+                    'status' => 'success'
+                ];
+            });
+
+            $recentExpenses = Expense::with('user')->latest('date')->take(5)->get()->map(function ($e) {
+                return [
+                    'type' => 'outflow',
+                    'description' => $e->title . ' (' . $e->user->name . ')',
+                    'amount' => $e->amount,
+                    'date' => $e->date,
+                    'status' => $e->status
+                ];
+            });
+
+            $recentTransactions = $recentPayments->concat($recentExpenses)->sortByDesc('date')->take(10)->values();
+
             return [
-                'type' => 'inflow',
-                'description' => 'Payment from ' . $p->user->name,
-                'amount' => $p->amount,
-                'date' => $p->paid_at,
-                'status' => 'success'
+                'stats' => [
+                    'totalInflow' => $totalInflow,
+                    'totalOutflow' => $totalOutflow,
+                    'netBalance' => $netBalance,
+                ],
+                'chartData' => $data,
+                'recentTransactions' => $recentTransactions
             ];
         });
 
-        $recentExpenses = Expense::with('user')->latest('date')->take(5)->get()->map(function ($e) {
-            return [
-                'type' => 'outflow',
-                'description' => $e->title . ' (' . $e->user->name . ')',
-                'amount' => $e->amount,
-                'date' => $e->date,
-                'status' => $e->status
-            ];
-        });
-
-        $recentTransactions = $recentPayments->concat($recentExpenses)->sortByDesc('date')->take(10)->values();
-
-        return Inertia::render('Admin/Finance/Dashboard', [
-            'stats' => [
-                'totalInflow' => $totalInflow,
-                'totalOutflow' => $totalOutflow,
-                'netBalance' => $netBalance,
-            ],
-            'chartData' => $data,
-            'recentTransactions' => $recentTransactions
-        ]);
+        return Inertia::render('Admin/Finance/Dashboard', $dashboardData);
     }
 
     public function index()
@@ -108,9 +113,9 @@ class FinanceController extends Controller
                 ->withCount('feeConfigurations')
                 ->orderBy('start_date', 'desc')
                 ->get(),
-            'faculties' => Faculty::orderBy('name')->get(),
-            'departments' => Department::orderBy('name')->get(),
-            'programs' => Programme::orderBy('name')->get(),
+            'faculties' => AcademicCacheService::getAllFaculties(),
+            'departments' => AcademicCacheService::getAllDepartments(),
+            'programs' => AcademicCacheService::getAllProgrammes(),
         ]);
     }
 
@@ -154,13 +159,17 @@ class FinanceController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:fee_types',
             'description' => 'nullable|string',
+            'is_one_time' => 'boolean',
         ]);
 
         FeeType::create([
             'name' => $validated['name'],
             'slug' => Str::slug($validated['name']),
             'description' => $validated['description'],
+            'is_one_time' => $validated['is_one_time'] ?? false,
         ]);
+
+        \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory('admission_letters');
 
         return back()->with('success', 'Fee Type created successfully.');
     }
@@ -170,13 +179,17 @@ class FinanceController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:fee_types,name,' . $feeType->id,
             'description' => 'nullable|string',
+            'is_one_time' => 'boolean',
         ]);
 
         $feeType->update([
             'name' => $validated['name'],
             'slug' => Str::slug($validated['name']),
             'description' => $validated['description'],
+            'is_one_time' => $validated['is_one_time'] ?? false,
         ]);
+
+        \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory('admission_letters');
 
         return back()->with('success', 'Fee Type updated successfully.');
     }
@@ -188,6 +201,9 @@ class FinanceController extends Controller
         }
 
         $feeType->delete();
+
+        \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory('admission_letters');
+
         return back()->with('success', 'Fee Type deleted successfully.');
     }
 
@@ -201,10 +217,13 @@ class FinanceController extends Controller
             'department_id' => 'nullable|exists:departments,id',
             'program_id' => 'nullable|exists:programmes,id',
             'level' => 'nullable|string', // 100, 200, etc.
+            'entry_mode' => 'nullable|string|in:UTME,Direct Entry,Transfer,Postgraduate',
             'is_compulsory' => 'boolean',
         ]);
 
         FeeConfiguration::create($validated);
+
+        \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory('admission_letters');
 
         return back()->with('success', 'Fee Configuration rules saved.');
     }
@@ -214,12 +233,13 @@ class FinanceController extends Controller
         $validated = $request->validate([
             'amount' => 'required|numeric|min:0',
             'level' => 'nullable|string',
+            'entry_mode' => 'nullable|string|in:UTME,Direct Entry,Transfer,Postgraduate',
             'is_compulsory' => 'boolean',
-            // Typically we don't allow changing the structural targets (faculty/dept/program) on edit to avoid confusion, 
-            // but for flexibility we could. Let's keep it simple for now: only amount/level/compulsory.
         ]);
 
         $config->update($validated);
+
+        \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory('admission_letters');
 
         return back()->with('success', 'Fee Configuration updated.');
     }
@@ -227,6 +247,9 @@ class FinanceController extends Controller
     public function destroyFeeConfiguration(FeeConfiguration $config)
     {
         $config->delete();
+
+        \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory('admission_letters');
+
         return back()->with('success', 'Fee Configuration removed.');
     }
 
@@ -235,9 +258,9 @@ class FinanceController extends Controller
         return Inertia::render('Admin/Finance/SessionFees', [
             'session' => $session->load(['feeConfigurations.feeType', 'feeConfigurations.faculty', 'feeConfigurations.department', 'feeConfigurations.program']),
             'feeTypes' => FeeType::all(),
-            'faculties' => Faculty::orderBy('name')->get(),
-            'departments' => Department::orderBy('name')->get(),
-            'programs' => Programme::orderBy('name')->get(),
+            'faculties' => AcademicCacheService::getAllFaculties(),
+            'departments' => AcademicCacheService::getAllDepartments(),
+            'programs' => AcademicCacheService::getAllProgrammes(),
         ]);
     }
     public function cloneSessionFees(Request $request)
@@ -271,6 +294,8 @@ class FinanceController extends Controller
                 }
             }
         });
+
+        \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory('admission_letters');
 
         return back()->with('success', 'Fee configurations cloned successfully.');
     }

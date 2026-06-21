@@ -15,9 +15,10 @@ class Scholarship extends Model
         static::deleted(fn() => \App\Services\AcademicCacheService::clearAll());
     }
 
-    protected $fillable = ['name', 'percentage', 'covers_admin_charges', 'covers_hostel_fees', 'is_active'];
+    protected $fillable = ['name', 'type', 'percentage', 'amount', 'covers_admin_charges', 'covers_hostel_fees', 'is_active'];
 
     protected $casts = [
+        'amount' => 'decimal:2',
         'covers_admin_charges' => 'boolean',
         'covers_hostel_fees' => 'boolean',
         'is_active' => 'boolean',

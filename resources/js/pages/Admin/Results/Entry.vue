@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm, Link } from '@inertiajs/vue3';
-import { Upload, FileSpreadsheet, Save, ArrowLeft, Download, Users, BookOpen, Home, GraduationCap } from 'lucide-vue-next';
+import { Upload, FileSpreadsheet, Save, ArrowLeft, Download, Users, BookOpen, Home, GraduationCap, Printer } from 'lucide-vue-next';
 import Swal from 'sweetalert2';
 import { ref, computed } from 'vue';
 import { route } from 'ziggy-js';
@@ -183,6 +183,11 @@ const downloadTemplate = () => {
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
+                    <a :href="route('admin.results.print', { course_id: course.id, session_id: session.id })" target="_blank">
+                        <Button variant="outline" class="shadow-sm">
+                            <Printer class="mr-2 h-4 w-4" /> Print Results
+                        </Button>
+                    </a>
                     <Button variant="outline" @click="isUploadOpen = true">
                         <Upload class="mr-2 h-4 w-4" /> Import Excel
                     </Button>

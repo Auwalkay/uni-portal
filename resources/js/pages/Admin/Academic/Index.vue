@@ -198,7 +198,9 @@ const openEdit = (type: 'faculty' | 'department' | 'programme' | 'course' | 'uni
 };
 
 const submitForm = () => {
-    // ... function content
+    if (document.activeElement && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+    }
      const url = modalMode.value === 'create' ? route('admin.academics.store') : route('admin.academics.update');
     
     form.post(url, {
@@ -214,15 +216,15 @@ const submitForm = () => {
                 timer: 3000
             });
         },
-        onError: () => Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Failed to submit form',
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 3000
-        }),
+        onError: (errors) => {
+            const errorList = Object.values(errors).map(err => `<li>${err}</li>`).join('');
+            Swal.fire({
+                icon: 'error',
+                title: 'Submission Failed',
+                html: `<div class="text-left text-sm text-rose-600 dark:text-rose-400 bg-rose-500/10 p-3 rounded-lg border border-rose-500/20"><ul class="list-disc list-inside space-y-1">${errorList}</ul></div>`,
+                confirmButtonColor: '#4f46e5'
+            });
+        },
     });
 };
 
@@ -278,6 +280,15 @@ const importProgrammeId = ref('');
 const isImportingCourses = ref(false);
 const assignedSearchQuery = ref('');
 
+const excelFile = ref<File | null>(null);
+const isUploadingExcel = ref(false);
+const excelInputRef = ref<HTMLInputElement | null>(null);
+
+const isGlobalCourseImportOpen = ref(false);
+const globalExcelFile = ref<File | null>(null);
+const isUploadingGlobalExcel = ref(false);
+const globalExcelInputRef = ref<HTMLInputElement | null>(null);
+
 const importProgrammeSearchItems = computed(() => {
     if (!selectedProgrammeForCourses.value) return [];
     return props.allProgrammes
@@ -322,6 +333,9 @@ const fetchProgrammeCourses = async (progId: string) => {
 };
 
 const submitAddProgrammeCourse = async () => {
+    if (document.activeElement && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+    }
     if (!newProgrammeCourseForm.value.course_id) {
         Swal.fire('Validation Error', 'Please select a course to add', 'warning');
         return;
@@ -362,6 +376,9 @@ const submitAddProgrammeCourse = async () => {
 };
 
 const submitImportProgrammeCourses = async () => {
+    if (document.activeElement && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+    }
     if (!importProgrammeId.value) {
         Swal.fire('Validation Error', 'Please select a programme to import from', 'warning');
         return;
@@ -403,7 +420,158 @@ const submitImportProgrammeCourses = async () => {
     }
 };
 
+const handleExcelFileChange = (e: Event) => {
+    const target = e.target as HTMLInputElement;
+    if (target.files && target.files.length > 0) {
+        excelFile.value = target.files[0];
+    } else {
+        excelFile.value = null;
+    }
+};
+
+const submitExcelImport = async () => {
+    if (document.activeElement && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+    }
+    if (!excelFile.value) {
+        Swal.fire('Validation Error', 'Please select a CSV or Excel file to upload', 'warning');
+        return;
+    }
+    isUploadingExcel.value = true;
+    
+    const formData = new FormData();
+    formData.append('file', excelFile.value);
+    
+    try {
+        const res = await window.fetch(route('admin.academics.programmes.courses.import_excel', selectedProgrammeForCourses.value.id), {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+            },
+            body: formData,
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            const stats = data.stats;
+            let details = `Created: ${stats.created}\nLinked: ${stats.linked}\nSkipped: ${stats.skipped}`;
+            if (stats.errors && stats.errors.length > 0) {
+                details += `\n\nErrors:\n${stats.errors.slice(0, 3).join('\n')}`;
+                if (stats.errors.length > 3) {
+                    details += `\n...and ${stats.errors.length - 3} more errors`;
+                }
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Import Processed with Warnings',
+                    text: data.message,
+                    html: `<pre class="text-left text-xs bg-muted p-3 rounded-lg max-h-40 overflow-y-auto">${details.replace(/\n/g, '<br>')}</pre>`,
+                });
+            } else {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Import Successful',
+                    text: data.message,
+                    html: `<pre class="text-left text-xs bg-muted p-3 rounded-lg">${details.replace(/\n/g, '<br>')}</pre>`,
+                });
+            }
+            
+            // Reset form
+            excelFile.value = null;
+            if (excelInputRef.value) {
+                excelInputRef.value.value = '';
+            }
+            
+            // Refresh courses list
+            await fetchProgrammeCourses(selectedProgrammeForCourses.value.id);
+        } else {
+            Swal.fire('Error', data.message || 'Failed to import courses', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        Swal.fire('Error', 'Failed to upload and import courses', 'error');
+    } finally {
+        isUploadingExcel.value = false;
+    }
+};
+
+const openGlobalCourseImport = () => {
+    globalExcelFile.value = null;
+    isGlobalCourseImportOpen.value = true;
+    if (globalExcelInputRef.value) {
+        globalExcelInputRef.value.value = '';
+    }
+};
+
+const handleGlobalExcelFileChange = (e: Event) => {
+    const target = e.target as HTMLInputElement;
+    if (target.files && target.files.length > 0) {
+        globalExcelFile.value = target.files[0];
+    } else {
+        globalExcelFile.value = null;
+    }
+};
+
+const submitGlobalExcelImport = async () => {
+    if (document.activeElement && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+    }
+    if (!globalExcelFile.value) {
+        Swal.fire('Validation Error', 'Please select a CSV or Excel file to upload', 'warning');
+        return;
+    }
+    isUploadingGlobalExcel.value = true;
+    
+    const formData = new FormData();
+    formData.append('file', globalExcelFile.value);
+    
+    try {
+        const res = await window.fetch(route('admin.academics.courses.import_excel'), {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+            },
+            body: formData,
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            const stats = data.stats;
+            let details = `Created: ${stats.created}\nLinked to Programmes: ${stats.linked}\nSkipped: ${stats.skipped}`;
+            if (stats.errors && stats.errors.length > 0) {
+                details += `\n\nErrors:\n${stats.errors.slice(0, 3).join('\n')}`;
+                if (stats.errors.length > 3) {
+                    details += `\n...and ${stats.errors.length - 3} more errors`;
+                }
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Import Processed with Warnings',
+                    text: data.message,
+                    html: `<pre class="text-left text-xs bg-muted p-3 rounded-lg max-h-40 overflow-y-auto">${details.replace(/\n/g, '<br>')}</pre>`,
+                });
+            } else {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Import Successful',
+                    text: data.message,
+                    html: `<pre class="text-left text-xs bg-muted p-3 rounded-lg">${details.replace(/\n/g, '<br>')}</pre>`,
+                });
+            }
+            
+            isGlobalCourseImportOpen.value = false;
+            router.reload({ only: ['courses', 'allCourses'] });
+        } else {
+            Swal.fire('Error', data.message || 'Failed to import courses', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        Swal.fire('Error', 'Failed to upload and import courses', 'error');
+    } finally {
+        isUploadingGlobalExcel.value = false;
+    }
+};
+
 const removeProgrammeCourse = async (courseId: string) => {
+    if (document.activeElement && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+    }
     const confirmResult = window.confirm('Are you sure you want to remove this course from the programme?');
     if (!confirmResult) return;
 
@@ -537,6 +705,7 @@ const removeProgrammeCourse = async (courseId: string) => {
                         @create="openCreate('course')" 
                         @edit="(item) => openEdit('course', item)"
                          @toggle="(id, state) => toggleActive('course', id, state)"
+                         @import-excel="openGlobalCourseImport"
                     />
                 </TabsContent>
 
@@ -553,7 +722,7 @@ const removeProgrammeCourse = async (courseId: string) => {
 
              <!-- MODAL DIALOG -->
             <Dialog v-model:open="isModalOpen">
-                <DialogContent class="sm:max-w-[425px]">
+                <DialogContent :trap-focus="false" class="sm:max-w-[425px]">
                     <DialogHeader>
                         <DialogTitle>{{ modalMode === 'create' ? 'Create' : 'Edit' }} {{ activeType }}</DialogTitle>
                         <DialogDescription>
@@ -566,11 +735,13 @@ const removeProgrammeCourse = async (courseId: string) => {
                         <div v-if="activeType === 'faculty'" class="space-y-3">
                             <div class="space-y-1">
                                 <Label>Faculty Name</Label>
-                                <Input v-model="form.name" placeholder="Faculty of Sciences" />
+                                <Input v-model="form.name" placeholder="Faculty of Sciences" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.name}" />
+                                <span v-if="form.errors.name" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.name }}</span>
                             </div>
                             <div class="space-y-1">
                                 <Label>Code</Label>
-                                <Input v-model="form.code" placeholder="SCI" />
+                                <Input v-model="form.code" placeholder="SCI" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.code}" />
+                                <span v-if="form.errors.code" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.code }}</span>
                             </div>
                         </div>
 
@@ -578,16 +749,18 @@ const removeProgrammeCourse = async (courseId: string) => {
                         <div v-if="activeType === 'department'" class="space-y-3">
                             <div class="space-y-1">
                                 <Label>Department Name</Label>
-                                <Input v-model="form.name" placeholder="Computer Science" />
+                                <Input v-model="form.name" placeholder="Computer Science" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.name}" />
+                                <span v-if="form.errors.name" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.name }}</span>
                             </div>
                              <div class="space-y-1">
                                 <Label>Code</Label>
-                                <Input v-model="form.code" placeholder="CSC" />
+                                <Input v-model="form.code" placeholder="CSC" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.code}" />
+                                <span v-if="form.errors.code" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.code }}</span>
                             </div>
                             <div class="space-y-1">
                                 <Label>Faculty</Label>
                                 <Select :model-value="form.faculty_id || 'none'" @update:model-value="handleFacultyChange">
-                                    <SelectTrigger>
+                                    <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.faculty_id}">
                                         <SelectValue placeholder="Select Faculty (Optional for non-academic)" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -597,6 +770,7 @@ const removeProgrammeCourse = async (courseId: string) => {
                                         </SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <span v-if="form.errors.faculty_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.faculty_id }}</span>
                             </div>
                             <div class="flex items-center space-x-2 pt-2">
                                 <Switch :checked="form.is_academic" @update:checked="(val) => form.is_academic = val" id="is_academic_dept" />
@@ -610,16 +784,18 @@ const removeProgrammeCourse = async (courseId: string) => {
                         <div v-if="activeType === 'unit'" class="space-y-3">
                             <div class="space-y-1">
                                 <Label>Unit Name</Label>
-                                <Input v-model="form.name" placeholder="Payroll Unit" />
+                                <Input v-model="form.name" placeholder="Payroll Unit" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.name}" />
+                                <span v-if="form.errors.name" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.name }}</span>
                             </div>
                              <div class="space-y-1">
                                 <Label>Code</Label>
-                                <Input v-model="form.code" placeholder="PAY" />
+                                <Input v-model="form.code" placeholder="PAY" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.code}" />
+                                <span v-if="form.errors.code" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.code }}</span>
                             </div>
                             <div class="space-y-1">
                                 <Label>Department</Label>
                                 <Select v-model="form.department_id">
-                                    <SelectTrigger>
+                                    <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.department_id}">
                                         <SelectValue placeholder="Select Department" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -628,19 +804,21 @@ const removeProgrammeCourse = async (courseId: string) => {
                                         </SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <span v-if="form.errors.department_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.department_id }}</span>
                             </div>
                         </div>
 
                         <!-- PROGRAMME FORM -->
                         <div v-if="activeType === 'programme'" class="space-y-3">
-                             <div class="space-y-1">
+                            <div class="space-y-1">
                                 <Label>Programme Name</Label>
-                                <Input v-model="form.name" placeholder="B.Sc Computer Science" />
+                                <Input v-model="form.name" placeholder="B.Sc Computer Science" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.name}" />
+                                <span v-if="form.errors.name" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.name }}</span>
                             </div>
                             <div class="space-y-1">
                                 <Label>Type</Label>
                                 <Select v-model="form.program_type"> <!-- Corrected v-model -->
-                                    <SelectTrigger>
+                                    <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.program_type}">
                                         <SelectValue placeholder="Select Type" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -649,11 +827,12 @@ const removeProgrammeCourse = async (courseId: string) => {
                                         <SelectItem value="PHD">PhD</SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <span v-if="form.errors.program_type" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.program_type }}</span>
                             </div>
                             <div class="space-y-1">
                                 <Label>Faculty</Label>
                                 <Select v-model="form.faculty_id">
-                                    <SelectTrigger>
+                                    <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.faculty_id}">
                                         <SelectValue placeholder="Select Faculty" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -662,11 +841,12 @@ const removeProgrammeCourse = async (courseId: string) => {
                                         </SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <span v-if="form.errors.faculty_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.faculty_id }}</span>
                             </div>
                             <div class="space-y-1">
                                 <Label>Department</Label>
                                  <Select v-model="form.department_id">
-                                    <SelectTrigger>
+                                    <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.department_id}">
                                         <SelectValue placeholder="Select Department" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -675,6 +855,7 @@ const removeProgrammeCourse = async (courseId: string) => {
                                         </SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <span v-if="form.errors.department_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.department_id }}</span>
                             </div>
                             <div class="flex items-center space-x-2 pt-2">
                                 <Switch :checked="form.scholarship_eligible" @update:checked="(val) => form.scholarship_eligible = val" id="scholarship_eligible" />
@@ -686,23 +867,26 @@ const removeProgrammeCourse = async (courseId: string) => {
 
                          <!-- COURSE FORM -->
                         <div v-if="activeType === 'course'" class="space-y-3">
-                            <div class="space-y-1">
+                               <div class="space-y-1">
                                 <Label>Course Title</Label>
-                                <Input v-model="form.title" placeholder="Introduction to Computing" />
+                                <Input v-model="form.title" placeholder="Introduction to Computing" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.title}" />
+                                <span v-if="form.errors.title" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.title }}</span>
                             </div>
                              <div class="space-y-1">
                                 <Label>Course Code</Label>
-                                <Input v-model="form.code" placeholder="CSC 101" />
+                                <Input v-model="form.code" placeholder="CSC 101" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.code}" />
+                                <span v-if="form.errors.code" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.code }}</span>
                             </div>
                              <div class="grid grid-cols-2 gap-4">
                                 <div class="space-y-1">
                                     <Label>Units</Label>
-                                    <Input type="number" v-model="form.units" min="1" max="6" />
+                                    <Input type="number" v-model="form.units" min="1" max="6" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.units}" />
+                                    <span v-if="form.errors.units" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.units }}</span>
                                 </div>
                                 <div class="space-y-1">
                                     <Label>Level</Label>
                                     <Select v-model="form.level">
-                                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                        <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.level}"><SelectValue placeholder="Select" /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="100">100</SelectItem>
                                             <SelectItem value="200">200</SelectItem>
@@ -711,23 +895,25 @@ const removeProgrammeCourse = async (courseId: string) => {
                                             <SelectItem value="500">500</SelectItem>
                                         </SelectContent>
                                     </Select>
+                                    <span v-if="form.errors.level" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.level }}</span>
                                 </div>
                              </div>
                              <div class="grid grid-cols-2 gap-4">
                                   <div class="space-y-1">
                                     <Label>Semester</Label>
                                      <Select v-model="form.semester">
-                                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                        <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.semester}"><SelectValue placeholder="Select" /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="1">First</SelectItem>
                                             <SelectItem value="2">Second</SelectItem>
                                         </SelectContent>
                                     </Select>
+                                    <span v-if="form.errors.semester" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.semester }}</span>
                                 </div>
                                  <div class="space-y-1">
                                     <Label>Faculty</Label>
                                     <Select v-model="form.faculty_id">
-                                        <SelectTrigger>
+                                        <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.faculty_id}">
                                             <SelectValue placeholder="Faculty" class="truncate" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -736,6 +922,7 @@ const removeProgrammeCourse = async (courseId: string) => {
                                             </SelectItem>
                                         </SelectContent>
                                     </Select>
+                                    <span v-if="form.errors.faculty_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.faculty_id }}</span>
                                 </div>
                              </div>
                              
@@ -743,7 +930,7 @@ const removeProgrammeCourse = async (courseId: string) => {
                                 <div class="space-y-1">
                                     <Label>Department</Label>
                                      <Select v-model="form.department_id">
-                                        <SelectTrigger>
+                                        <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.department_id}">
                                             <SelectValue placeholder="Dept" class="truncate" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -751,20 +938,23 @@ const removeProgrammeCourse = async (courseId: string) => {
                                                 {{ dept.code }} - {{ dept.name }}
                                             </SelectItem>
                                         </SelectContent>
-                                    </Select>
+                                     </Select>
+                                     <span v-if="form.errors.department_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.department_id }}</span>
                                 </div>
                                 <div class="space-y-1">
                                     <Label>Programme</Label>
-                                     <Select v-model="form.programme_id">
-                                        <SelectTrigger>
+                                     <Select :model-value="form.programme_id || 'none'" @update:model-value="val => form.programme_id = val === 'none' ? '' : val">
+                                        <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.programme_id}">
                                             <SelectValue placeholder="Programme" class="truncate" />
                                         </SelectTrigger>
                                         <SelectContent>
+                                            <SelectItem value="none">None (General Course)</SelectItem>
                                              <SelectItem v-for="prog in filteredProgrammes" :key="prog.id" :value="prog.id">
                                                 {{ prog.name }}
                                             </SelectItem>
                                         </SelectContent>
-                                    </Select>
+                                     </Select>
+                                     <span v-if="form.errors.programme_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.programme_id }}</span>
                                 </div>
                              </div>
                         </div>
@@ -781,6 +971,7 @@ const removeProgrammeCourse = async (courseId: string) => {
             <Dialog v-model:open="isProgrammeCoursesOpen">
                 <DialogContent 
                     @pointer-down-outside.prevent
+                    :trap-focus="false"
                     class="sm:max-w-[95vw] md:max-w-[90vw] lg:max-w-[1100px] xl:max-w-[1200px] max-h-[90vh] flex flex-col p-6 overflow-hidden bg-card/95 backdrop-blur-md border border-border/80 shadow-2xl rounded-2xl"
                 >
                     <DialogHeader class="pb-4 border-b border-border/50">
@@ -949,12 +1140,98 @@ const removeProgrammeCourse = async (courseId: string) => {
                                     </Button>
                                 </form>
                             </div>
+
+                            <!-- Import from Excel Panel -->
+                            <div class="p-5 bg-muted/40 border border-muted/80 rounded-xl space-y-4 shadow-sm">
+                                <div class="flex items-center justify-between">
+                                    <h3 class="text-sm font-semibold tracking-wide uppercase text-muted-foreground/80">Import from Excel/CSV</h3>
+                                    <a 
+                                        :href="route('admin.academics.programmes.courses.import_template')" 
+                                        class="text-xs text-primary font-medium hover:underline inline-flex items-center gap-1"
+                                        title="Download Excel Template"
+                                    >
+                                        Template
+                                    </a>
+                                </div>
+                                <p class="text-xs text-muted-foreground leading-normal">
+                                    Upload a CSV or Excel file containing courses. Missing courses will be created under the programme's department automatically.
+                                </p>
+                                <form @submit.prevent="submitExcelImport" class="space-y-4">
+                                    <div class="space-y-1.5 w-full">
+                                        <Label class="text-xs font-medium text-muted-foreground">Select Spreadsheet File</Label>
+                                        <Input 
+                                            type="file" 
+                                            ref="excelInputRef"
+                                            @change="handleExcelFileChange" 
+                                            accept=".csv, .xlsx, .xls"
+                                            class="text-xs file:bg-primary file:text-white file:border-0 file:rounded-md file:px-2 file:py-1 file:mr-2"
+                                        />
+                                    </div>
+
+                                    <Button 
+                                        type="submit" 
+                                        :disabled="isUploadingExcel || !excelFile" 
+                                        class="w-full h-10 px-5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium hover:from-emerald-500/90 hover:to-teal-600/90 active:scale-95 transition-all duration-150 shadow-md flex items-center justify-center gap-2"
+                                    >
+                                        <Loader2 v-if="isUploadingExcel" class="h-4 w-4 animate-spin" />
+                                        <Plus v-else class="h-4 w-4" />
+                                        Upload & Import Courses
+                                    </Button>
+                                </form>
+                            </div>
                         </div>
                     </div>
 
                     <DialogFooter class="pt-4 border-t border-border/50">
                         <Button variant="outline" @click="isProgrammeCoursesOpen = false" class="border-border/80 hover:bg-muted">Close</Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <!-- GLOBAL COURSE IMPORT DIALOG -->
+            <Dialog v-model:open="isGlobalCourseImportOpen">
+                <DialogContent :trap-focus="false" class="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <div class="flex items-center justify-between w-full pr-6">
+                            <DialogTitle>Import Courses Globally</DialogTitle>
+                            <a 
+                                :href="route('admin.academics.courses.import_template')" 
+                                class="text-xs text-primary font-medium hover:underline inline-flex items-center gap-1"
+                                title="Download Excel Template"
+                            >
+                                Download Template
+                            </a>
+                        </div>
+                        <DialogDescription class="pt-2">
+                            Upload an Excel or CSV file to import courses globally. Ensure all courses contain a valid <code class="bg-muted px-1.5 py-0.5 rounded font-mono text-xs">department_code</code> matching an existing department.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form @submit.prevent="submitGlobalExcelImport" class="space-y-4 py-4">
+                        <div class="space-y-1.5 w-full">
+                            <Label class="text-xs font-medium text-muted-foreground">Select Spreadsheet File</Label>
+                            <Input 
+                                type="file" 
+                                ref="globalExcelInputRef"
+                                @change="handleGlobalExcelFileChange" 
+                                accept=".csv, .xlsx, .xls"
+                                class="text-xs file:bg-primary file:text-white file:border-0 file:rounded-md file:px-2 file:py-1 file:mr-2"
+                            />
+                        </div>
+
+                        <DialogFooter class="pt-4 border-t">
+                            <Button type="button" variant="outline" @click="isGlobalCourseImportOpen = false">Cancel</Button>
+                            <Button 
+                                type="submit" 
+                                :disabled="isUploadingGlobalExcel || !globalExcelFile" 
+                                class="bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium hover:from-emerald-500/90 hover:to-teal-600/90 flex items-center justify-center gap-2"
+                            >
+                                <Loader2 v-if="isUploadingGlobalExcel" class="h-4 w-4 animate-spin" />
+                                <Plus v-else class="h-4 w-4" />
+                                Import Courses
+                            </Button>
+                        </DialogFooter>
+                    </form>
                 </DialogContent>
             </Dialog>
 

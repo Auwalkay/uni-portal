@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { throttle } from 'lodash';
-import { Search, Filter, BookOpen, Home, GraduationCap, FileText, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-vue-next';
+import { Search, Filter, BookOpen, Home, GraduationCap, FileText, ArrowUpDown, ArrowUp, ArrowDown, Printer } from 'lucide-vue-next';
 import { ref, watch, computed } from 'vue';
 import { route } from 'ziggy-js';
 import Swal from 'sweetalert2';
@@ -210,21 +210,41 @@ const handlePublishSession = (isPublish: boolean) => {
                         </Badge>
                     </div>
                 </div>
-                <div v-if="props.can.publish_results && form.session_id !== 'ALL'" class="flex gap-2 self-end md:self-start">
-                    <Button 
-                        variant="outline" 
-                        class="border-rose-200 text-rose-700 hover:bg-rose-50"
-                        @click="handlePublishSession(false)"
+                <div class="flex items-center gap-2 self-end md:self-start">
+                    <a 
+                        v-if="form.session_id !== 'ALL'"
+                        :href="route('admin.results.print', {
+                            session_id: form.session_id === 'ALL' ? '' : form.session_id,
+                            semester_id: form.semester_id === 'ALL' ? '' : form.semester_id,
+                            department_id: form.department_id === 'ALL' ? '' : form.department_id,
+                            level: form.level === 'ALL' ? '' : form.level,
+                            publish_status: form.publish_status,
+                            has_registrations: form.has_registrations ? 1 : 0
+                        })" 
+                        target="_blank"
                     >
-                        Unpublish Session
-                    </Button>
-                    <Button 
-                        variant="default" 
-                        class="bg-emerald-600 hover:bg-emerald-700 text-white"
-                        @click="handlePublishSession(true)"
-                    >
-                        Publish Session
-                    </Button>
+                        <Button variant="outline" class="shadow-sm">
+                            <Printer class="h-4 w-4 mr-1" />
+                            Print Broadsheets
+                        </Button>
+                    </a>
+
+                    <div v-if="props.can.publish_results && form.session_id !== 'ALL'" class="flex gap-2">
+                        <Button 
+                            variant="outline" 
+                            class="border-rose-200 text-rose-700 hover:bg-rose-50"
+                            @click="handlePublishSession(false)"
+                        >
+                            Unpublish Session
+                        </Button>
+                        <Button 
+                            variant="default" 
+                            class="bg-emerald-600 hover:bg-emerald-700 text-white"
+                            @click="handlePublishSession(true)"
+                        >
+                            Publish Session
+                        </Button>
+                    </div>
                 </div>
             </div>
 

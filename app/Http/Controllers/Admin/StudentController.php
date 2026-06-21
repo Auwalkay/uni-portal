@@ -240,11 +240,11 @@ class StudentController extends Controller
         return Inertia::render('Admin/Students/Index', [
             'students' => $students,
             'filters' => $request->only(['search', 'session_id', 'faculty_id', 'department_id', 'level', 'program_id', 'program', 'scholarship_id', 'date_from', 'date_to']),
-            'sessions' => AcademicCacheService::getSessions(),
-            'faculties' => AcademicCacheService::getFaculties(),
-            'departments' => AcademicCacheService::getAllDepartments(),
-            'programmes' => AcademicCacheService::getProgrammes(),
-            'scholarships' => AcademicCacheService::getScholarships(),
+            'sessions' => fn() => AcademicCacheService::getSessions(),
+            'faculties' => fn() => AcademicCacheService::getFaculties(),
+            'departments' => fn() => AcademicCacheService::getAllDepartments(),
+            'programmes' => fn() => AcademicCacheService::getProgrammes(),
+            'scholarships' => fn() => AcademicCacheService::getScholarships(),
             'stats' => [
                 'total' => (clone $query)->count(),
                 'new' => (clone $query)->where('admitted_session_id', Session::latest('start_date')->value('id'))->count(),

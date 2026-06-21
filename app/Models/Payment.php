@@ -19,6 +19,11 @@ class Payment extends Model
 
     protected $guarded = [];
 
+    protected static function booted()
+    {
+        static::saved(fn($payment) => \Illuminate\Support\Facades\Cache::forget("student_results_index_{$payment->user_id}"));
+    }
+
     protected $casts = [
         'paid_at' => 'datetime',
     ];

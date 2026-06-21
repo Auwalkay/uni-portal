@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import { ref, onMounted, computed } from 'vue';
 import StudentLayout from '@/layouts/StudentLayout.vue';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { ChevronRight, GraduationCap, Trophy, BookOpen, Calendar, Clock } from 'lucide-vue-next';
+import { ChevronRight, GraduationCap, Trophy, BookOpen, Calendar, Clock, Lock } from 'lucide-vue-next';
 
 const props = defineProps<{
     cgpa: number;
@@ -18,6 +18,9 @@ const props = defineProps<{
         semesters: Array<{
             name: string;
             gpa: number;
+            is_blocked: boolean;
+            school_fee_cleared: boolean;
+            hostel_fee_cleared: boolean;
             courses: Array<{
                 id: string;
                 score: number;
@@ -146,11 +149,14 @@ const getScoreColor = (score: number | null) => {
                                 </div>
                                 
                                 <div class="flex-1">
-                                    <div class="flex items-center justify-between">
+                                    <div class="flex items-center justify-between gap-1 flex-wrap">
                                         <span class="font-bold text-sm" :class="selectedSessionId === session.id ? 'text-gray-900' : 'text-gray-600'">
                                             {{ session.name }}
                                         </span>
-                                        <Badge v-if="session.is_current" variant="default" class="text-[10px] h-5 px-1.5 bg-emerald-600">Current</Badge>
+                                        <div class="flex gap-1">
+                                            <Badge v-if="session.is_current" variant="default" class="text-[10px] h-5 px-1.5 bg-emerald-600">Current</Badge>
+                                            <Badge v-if="session.semesters && session.semesters.some(s => s.is_blocked)" variant="destructive" class="text-[10px] h-5 px-1.5 bg-red-600">Locked</Badge>
+                                        </div>
                                     </div>
                                     <span class="text-xs text-muted-foreground block mt-0.5">
                                         {{ session.semesters.length }} Semesters
@@ -182,80 +188,117 @@ const getScoreColor = (score: number | null) => {
                             </div>
                         </div>
 
-                        <!-- Semesters Loop -->
-                         <div class="space-y-8">
-                            <div v-for="semester in selectedSession.semesters" :key="semester.name" 
-                                class="rounded-xl border bg-white shadow-sm overflow-hidden"
-                            >
-                                <!-- Semester Header -->
-                                <div class="bg-gray-50/50 border-b p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                     <div class="flex items-center gap-3">
-                                        <div class="p-2 bg-white rounded-lg border shadow-sm">
-                                            <BookOpen class="w-5 h-5 text-gray-600" />
-                                        </div>
-                                        <h4 class="text-lg font-bold text-gray-900">{{ semester.name }}</h4>
+                         <!-- Semesters Loop -->
+                          <div class="space-y-8">
+                             <div v-for="semester in selectedSession.semesters" :key="semester.name" 
+                                 class="rounded-xl border bg-white shadow-sm overflow-hidden"
+                             >
+                                 <!-- Semester Header -->
+                                 <div class="bg-gray-50/50 border-b p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                      <div class="flex items-center gap-3">
+                                         <div class="p-2 bg-white rounded-lg border shadow-sm">
+                                             <BookOpen class="w-5 h-5 text-gray-600" />
+                                         </div>
+                                         <h4 class="text-lg font-bold text-gray-900">{{ semester.name }}</h4>
+                                      </div>
+                                      
+                                      <div class="flex items-center gap-4 bg-white px-4 py-2 rounded-full border shadow-sm">
+                                          <span class="text-sm font-medium text-gray-500 uppercase tracking-wide">Semester GPA</span>
+                                          <span class="text-xl font-mono font-bold" :class="semester.gpa >= 3.5 ? 'text-emerald-600' : (semester.gpa >= 2.5 ? 'text-blue-600' : 'text-orange-600')">
+                                             {{ semester.gpa.toFixed(2) }}
+                                          </span>
+                                      </div>
+                                 </div>
+
+                                 <!-- Table -->
+                                 <div v-if="!semester.is_blocked" class="p-0">
+                                     <Table>
+                                         <TableHeader>
+                                             <TableRow class="hover:bg-transparent bg-gray-50/30">
+                                                 <TableHead class="w-[100px] font-bold">Code</TableHead>
+                                                 <TableHead class="font-bold">Course Title</TableHead>
+                                                 <TableHead class="text-center w-[80px] font-bold">Units</TableHead>
+                                                 <TableHead class="text-center w-[100px] font-bold">Score</TableHead>
+                                                 <TableHead class="text-center w-[80px] font-bold">Grade</TableHead>
+                                                 <TableHead class="text-center w-[80px] font-bold">Points</TableHead>
+                                             </TableRow>
+                                         </TableHeader>
+                                         <TableBody>
+                                             <TableRow v-for="reg in semester.courses" :key="reg.id" class="hover:bg-gray-50/50 transition-colors">
+                                                 <TableCell class="font-mono font-semibold text-primary">
+                                                     {{ reg.course.code }}
+                                                 </TableCell>
+                                                 <TableCell class="font-medium text-gray-700">
+                                                     <div class="flex items-center gap-2">
+                                                         <span>{{ reg.course.title }}</span>
+                                                         <Badge 
+                                                             v-if="reg.grade === 'F' && reg.course.is_compulsory" 
+                                                             variant="destructive" 
+                                                             class="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded font-sans bg-rose-500 hover:bg-rose-600 text-white border-0 shadow-sm shrink-0"
+                                                         >
+                                                             Carry Over
+                                                         </Badge>
+                                                     </div>
+                                                 </TableCell>
+                                                 <TableCell class="text-center font-mono text-gray-500">
+                                                     {{ reg.course.units }}
+                                                 </TableCell>
+                                                 <TableCell class="text-center">
+                                                     <span class="inline-block w-12 py-1 rounded-md text-xs font-bold font-mono" :class="getScoreColor(reg.score)">
+                                                         {{ reg.score ?? '-' }}
+                                                     </span>
+                                                 </TableCell>
+                                                 <TableCell class="text-center font-bold font-mono text-lg">
+                                                     <span :class="getGradeColor(reg.grade)">
+                                                         {{ reg.grade ?? '-' }}
+                                                     </span>
+                                                 </TableCell>
+                                                 <TableCell class="text-center font-mono text-gray-600">
+                                                     {{ reg.grade_point ?? '-' }}
+                                                 </TableCell>
+                                             </TableRow>
+                                         </TableBody>
+                                     </Table>
+                                 </div>
+
+                                 <!-- Locked Warning -->
+                                 <div v-else class="p-8 text-center bg-white border-t border-red-50/50 space-y-6">
+                                     <div class="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto text-red-600 border border-red-100">
+                                         <Lock class="w-6 h-6" />
+                                     </div>
+                                     <div class="space-y-2 max-w-md mx-auto">
+                                         <h4 class="text-lg font-bold text-gray-900">Semester Results Locked</h4>
+                                         <p class="text-xs text-muted-foreground">
+                                             Results for the {{ semester.name }} are currently locked due to outstanding financial clearance.
+                                         </p>
                                      </div>
                                      
-                                     <div class="flex items-center gap-4 bg-white px-4 py-2 rounded-full border shadow-sm">
-                                         <span class="text-sm font-medium text-gray-500 uppercase tracking-wide">Semester GPA</span>
-                                         <span class="text-xl font-mono font-bold" :class="semester.gpa >= 3.5 ? 'text-emerald-600' : (semester.gpa >= 2.5 ? 'text-blue-600' : 'text-orange-600')">
-                                            {{ semester.gpa.toFixed(2) }}
-                                         </span>
+                                     <div class="bg-slate-50 border border-slate-100 rounded-lg p-4 max-w-xs mx-auto text-left space-y-2">
+                                         <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center border-b pb-1.5">Clearance Status</p>
+                                         <div class="flex items-center justify-between text-xs">
+                                             <span class="text-slate-600 font-medium">School Fees:</span>
+                                             <Badge :variant="semester.school_fee_cleared ? 'default' : 'destructive'" class="text-[9px] font-bold h-4.5 px-1.5">
+                                                 {{ semester.school_fee_cleared ? 'Cleared' : 'Pending' }}
+                                             </Badge>
+                                         </div>
+                                         <div class="flex items-center justify-between text-xs">
+                                             <span class="text-slate-600 font-medium">Hostel Fees:</span>
+                                             <Badge :variant="semester.hostel_fee_cleared ? 'default' : 'destructive'" class="text-[9px] font-bold h-4.5 px-1.5">
+                                                 {{ semester.hostel_fee_cleared ? 'Cleared' : 'Pending' }}
+                                             </Badge>
+                                         </div>
                                      </div>
-                                </div>
-
-                                <!-- Table -->
-                                <div class="p-0">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow class="hover:bg-transparent bg-gray-50/30">
-                                                <TableHead class="w-[100px] font-bold">Code</TableHead>
-                                                <TableHead class="font-bold">Course Title</TableHead>
-                                                <TableHead class="text-center w-[80px] font-bold">Units</TableHead>
-                                                <TableHead class="text-center w-[100px] font-bold">Score</TableHead>
-                                                <TableHead class="text-center w-[80px] font-bold">Grade</TableHead>
-                                                <TableHead class="text-center w-[80px] font-bold">Points</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            <TableRow v-for="reg in semester.courses" :key="reg.id" class="hover:bg-gray-50/50 transition-colors">
-                                                <TableCell class="font-mono font-semibold text-primary">
-                                                    {{ reg.course.code }}
-                                                </TableCell>
-                                                <TableCell class="font-medium text-gray-700">
-                                                    <div class="flex items-center gap-2">
-                                                        <span>{{ reg.course.title }}</span>
-                                                        <Badge 
-                                                            v-if="reg.grade === 'F' && reg.course.is_compulsory" 
-                                                            variant="destructive" 
-                                                            class="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded font-sans bg-rose-500 hover:bg-rose-600 text-white border-0 shadow-sm shrink-0"
-                                                        >
-                                                            Carry Over
-                                                        </Badge>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell class="text-center font-mono text-gray-500">
-                                                    {{ reg.course.units }}
-                                                </TableCell>
-                                                <TableCell class="text-center">
-                                                    <span class="inline-block w-12 py-1 rounded-md text-xs font-bold font-mono" :class="getScoreColor(reg.score)">
-                                                        {{ reg.score ?? '-' }}
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell class="text-center font-bold font-mono text-lg">
-                                                    <span :class="getGradeColor(reg.grade)">
-                                                        {{ reg.grade ?? '-' }}
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell class="text-center font-mono text-gray-600">
-                                                    {{ reg.grade_point ?? '-' }}
-                                                </TableCell>
-                                            </TableRow>
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            </div>
-                         </div>
+                                     
+                                     <div class="pt-1">
+                                         <Button as-child size="sm" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-6 shadow-md shadow-indigo-600/10">
+                                             <Link :href="route('student.payments.index')">
+                                                 Clear Outstanding Bills
+                                             </Link>
+                                         </Button>
+                                     </div>
+                                 </div>
+                             </div>
+                          </div>
 
                     </div>
 

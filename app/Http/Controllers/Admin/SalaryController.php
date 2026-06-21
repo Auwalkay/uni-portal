@@ -10,6 +10,7 @@ use Inertia\Inertia;
 use App\Exports\StaffSalaryExport;
 use App\Imports\StaffSalaryImport;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Services\AcademicCacheService;
 
 class SalaryController extends Controller
 {
@@ -32,7 +33,7 @@ class SalaryController extends Controller
 
         return Inertia::render('Admin/Finance/Salary/Index', [
             'staff' => $query->paginate(15)->withQueryString(),
-            'departments' => Department::orderBy('name')->get(),
+            'departments' => AcademicCacheService::getAllDepartments(),
             'filters' => $request->only(['search', 'department_id']),
         ]);
     }
@@ -62,7 +63,7 @@ class SalaryController extends Controller
     public function import(Request $request)
     {
         $request->validate([
-            'file' => 'required|mimes:xlsx,csv,xls',
+            'file' => 'required|file|extensions:csv,xls,xlsx',
         ]);
 
         Excel::import(new StaffSalaryImport, $request->file('file'));

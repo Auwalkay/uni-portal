@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const props = defineProps<{
     invoices: Array<{
@@ -46,6 +47,15 @@ const props = defineProps<{
     }>;
     canGenerateInvoice: boolean;
     admin_charge_splittable: boolean;
+    optionalFees?: Array<{
+        id: number;
+        fee_type: {
+            id: number;
+            name: string;
+            slug: string;
+        };
+        amount: number;
+    }>;
 }>();
 
 const expandedInvoices = ref<string[]>([]);
@@ -60,8 +70,20 @@ const toggleExpand = (id: string) => {
 };
 
 const isPaymentModalOpen = ref(false);
+const isOptionalFeeModalOpen = ref(false);
 const selectedInvoice = ref<any>(null);
+const selectedOptionalFeeId = ref<string | null>(null);
 const paymentOption = ref('full'); // 'full' or 'half'
+
+const submitOptionalFee = () => {
+    if (!selectedOptionalFeeId.value) return;
+    router.post(route('student.payments.initiate_optional', selectedOptionalFeeId.value), {}, {
+        onFinish: () => {
+            isOptionalFeeModalOpen.value = false;
+            selectedOptionalFeeId.value = null;
+        }
+    });
+};
 
 const openPaymentModal = (invoice: any) => {
     selectedInvoice.value = invoice;
@@ -74,9 +96,14 @@ const fullBalance = computed(() => {
     return parseFloat(selectedInvoice.value.amount) - parseFloat(selectedInvoice.value.paid_amount || 0);
 });
 
-const installmentAmount = computed(() => {
+const minPaymentAmount = computed(() => {
     if (!selectedInvoice.value) return 0;
     
+    const totalNetInvoice = parseFloat(selectedInvoice.value.amount);
+    if (selectedInvoice.value.type === 'hostel_fee') {
+        return totalNetInvoice * 0.75;
+    }
+
     const isSplittable = String(props.admin_charge_splittable) === 'true' || props.admin_charge_splittable === true;
     const adminChargeItem = selectedInvoice.value.items?.find((i: any) => 
         i.description.toLowerCase().includes('administrative') || 
@@ -84,40 +111,54 @@ const installmentAmount = computed(() => {
     );
     
     const adminAmount = adminChargeItem ? parseFloat(adminChargeItem.amount) : 0;
-    const totalNetInvoice = parseFloat(selectedInvoice.value.amount);
     const academicNetPortion = totalNetInvoice - adminAmount;
     
     let minPayment = totalNetInvoice / 2;
 
     if (!isSplittable && adminAmount > 0) {
-        // Formula: Full Admin + 50% of whatever is left (Academic)
         minPayment = (academicNetPortion / 2) + adminAmount;
     }
 
-    return Math.min(minPayment, fullBalance.value);
+    return minPayment;
+});
+
+const installmentAmount = computed(() => {
+    if (!selectedInvoice.value) return 0;
+    return Math.min(minPaymentAmount.value, fullBalance.value);
 });
 
 const activePaymentAmount = computed(() => {
     return paymentOption.value === 'half' ? installmentAmount.value : fullBalance.value;
 });
 
-
 const canPayHalf = computed(() => {
     if (!selectedInvoice.value) return false;
+    
+    // Split payments are only supported for school fees and hostel fees
+    if (selectedInvoice.value.type !== 'school_fee' && selectedInvoice.value.type !== 'hostel_fee') {
+        return false;
+    }
     
     const balance = Number(selectedInvoice.value.amount) - Number(selectedInvoice.value.paid_amount || 0);
     if (balance <= 1) return false; // Already fully paid
 
-    const adminChargeItem = selectedInvoice.value.items?.find((i: any) => i.description === 'Administrative Charges');
+    if (Number(selectedInvoice.value.paid_amount || 0) >= minPaymentAmount.value) {
+        return false;
+    }
+
+    const adminChargeItem = selectedInvoice.value.items?.find((i: any) => 
+        i.description.toLowerCase().includes('administrative') || 
+        i.description.toLowerCase().includes('admin charge')
+    );
     const adminAmount = adminChargeItem ? Number(adminChargeItem.amount) : 0;
     const totalAmount = Number(selectedInvoice.value.amount);
 
-    // If total is equal to or less than admin amount, it means academic is 0. No split allowed.
+    if (selectedInvoice.value.type === 'hostel_fee') {
+        return true;
+    }
+
     if (totalAmount <= adminAmount) return false;
 
-    // If they have already met the minimum requirement (Admin + 50% Academic), 
-    // they should be able to pay any amount for the rest. 
-    // For now, we'll still offer the "Installment" button which will default to 50% or balance.
     return true;
 });
 
@@ -172,10 +213,17 @@ const getPaymentDate = (invoice: any) => {
                     <h2 class="text-3xl font-bold tracking-tight">Financials</h2>
                     <p class="text-muted-foreground">Manage your invoices and payments.</p>
                 </div>
-                <div v-if="canGenerateInvoice">
-                     <Button @click="router.post(route('student.payments.create_school_fee'))">
-                        Pay School Fees
-                    </Button>
+                <div class="flex items-center gap-3">
+                    <div v-if="optionalFees && optionalFees.length > 0">
+                        <Button variant="outline" @click="isOptionalFeeModalOpen = true">
+                            Initiate Optional Fee
+                        </Button>
+                    </div>
+                    <div v-if="canGenerateInvoice">
+                         <Button @click="router.post(route('student.payments.create_school_fee'))">
+                            Pay School Fees
+                        </Button>
+                    </div>
                 </div>
             </div>
 
@@ -328,8 +376,12 @@ const getPaymentDate = (invoice: any) => {
                                     for="half"
                                     class="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
                                 >
-                                    <span class="mb-2 text-lg font-semibold">Pay Installment</span>
-                                    <span class="text-sm text-muted-foreground">Mandatory Upfront Portion</span>
+                                    <span class="mb-2 text-lg font-semibold">
+                                        {{ selectedInvoice.type === 'hostel_fee' ? 'Pay 75% Installment' : 'Pay Installment' }}
+                                    </span>
+                                    <span class="text-sm text-muted-foreground">
+                                        {{ selectedInvoice.type === 'hostel_fee' ? '75% Upfront payment' : 'Mandatory Upfront Portion' }}
+                                    </span>
                                     <span class="mt-2 text-xl font-bold">{{ formatCurrency(installmentAmount) }}</span>
                                 </Label>
                             </div>
@@ -338,6 +390,40 @@ const getPaymentDate = (invoice: any) => {
                 </div>
                 <DialogFooter>
                     <Button type="submit" @click="submitPayment">Proceed to Payment</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <!-- Optional Fee Modal -->
+        <Dialog v-model:open="isOptionalFeeModalOpen">
+            <DialogContent class="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle>Initiate Optional Fee</DialogTitle>
+                    <DialogDescription>
+                        Select an optional fee to generate a payment invoice.
+                    </DialogDescription>
+                </DialogHeader>
+                <div class="grid gap-4 py-4" v-if="optionalFees && optionalFees.length > 0">
+                    <div class="grid gap-2">
+                        <Label for="optional-fee-select">Available Optional Fees</Label>
+                        <Select v-model="selectedOptionalFeeId">
+                            <SelectTrigger id="optional-fee-select">
+                                <SelectValue placeholder="Select fee type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem v-for="fee in optionalFees" :key="fee.id" :value="String(fee.id)">
+                                    {{ fee.fee_type?.name }} - {{ formatCurrency(Number(fee.amount)) }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <div v-else class="py-4 text-center text-sm text-muted-foreground italic">
+                    No optional fees are currently available for your profile.
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" @click="isOptionalFeeModalOpen = false">Cancel</Button>
+                    <Button type="submit" @click="submitOptionalFee" :disabled="!selectedOptionalFeeId">Generate Invoice</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

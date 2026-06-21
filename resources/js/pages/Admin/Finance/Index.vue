@@ -43,6 +43,7 @@ interface FeeType {
     name: string;
     slug: string;
     description: string;
+    is_one_time: boolean;
     configurations_count?: number;
 }
 
@@ -72,11 +73,12 @@ const props = defineProps<{
     programs: any[];
 }>();
 
-// Fee Type Form (unchanged)
+// Fee Type Form
 const feeTypeForm = useForm({
     id: null as number | null,
     name: '',
     description: '',
+    is_one_time: false,
 });
 
 const isFeeTypeModalOpen = ref(false);
@@ -92,6 +94,7 @@ const openCreateFeeType = () => {
 const openEditFeeType = (type: FeeType) => {
     feeTypeForm.name = type.name;
     feeTypeForm.description = type.description;
+    feeTypeForm.is_one_time = !!type.is_one_time;
     feeTypeForm.id = type.id;
     editingFeeType.value = true;
     isFeeTypeModalOpen.value = true;
@@ -249,7 +252,13 @@ const submitClone = () => {
                                 </TableHeader>
                                 <TableBody>
                                     <TableRow v-for="type in feeTypes" :key="type.id">
-                                        <TableCell class="font-medium">{{ type.name }}</TableCell>
+                                        <TableCell class="font-medium">
+                                            <div class="flex items-center gap-2">
+                                                <span>{{ type.name }}</span>
+                                                <Badge v-if="type.is_one_time" variant="outline" class="text-[10px] bg-amber-50 text-amber-700 border-amber-200">One-Time</Badge>
+                                                <Badge v-else variant="outline" class="text-[10px] bg-slate-50 text-slate-700 border-slate-200">Recurring</Badge>
+                                            </div>
+                                        </TableCell>
                                         <TableCell class="font-mono text-xs">{{ type.slug }}</TableCell>
                                         <TableCell>{{ type.description }}</TableCell>
                                         <TableCell><Badge variant="secondary">{{ type.configurations_count }} rules</Badge></TableCell>
@@ -276,6 +285,10 @@ const submitClone = () => {
                                 <div class="grid gap-2">
                                     <Label>Description</Label>
                                     <Input v-model="feeTypeForm.description" />
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <Checkbox id="one-time-fee" v-model:checked="feeTypeForm.is_one_time" />
+                                    <Label for="one-time-fee" class="cursor-pointer">Is this a One-Time Fee? (e.g. Matriculation, Acceptance, Gown Fee)</Label>
                                 </div>
                             </div>
                             <DialogFooter>

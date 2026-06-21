@@ -19,8 +19,11 @@ class CourseAllocationController extends Controller
         $allocations = \App\Models\CourseAllocation::query()
             ->with(['course', 'staff.user', 'session'])
             ->when($sessionId, fn($q) => $q->where('session_id', $sessionId))
-            ->when($request->department_id, function ($q, $deptId) {
+            ->when($request->department_id && $request->department_id !== 'ALL', function ($q, $deptId) {
                 $q->whereHas('course', fn($c) => $c->where('department_id', $deptId));
+            })
+            ->when($request->faculty_id && $request->faculty_id !== 'ALL' && (!$request->department_id || $request->department_id === 'ALL'), function ($q, $facultyId) {
+                $q->whereHas('course.department', fn($d) => $d->where('faculty_id', $facultyId));
             })
             ->when($request->search, function ($q, $search) {
                 $q->whereHas('course', fn($c) => $c->where('title', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
@@ -32,13 +35,13 @@ class CourseAllocationController extends Controller
 
         return Inertia::render('Admin/CourseAllocation/Index', [
             'allocations' => $allocations,
-            'sessions' => Session::latest('start_date')->get(['id', 'name']),
-            'faculties' => Faculty::with('departments:id,name,faculty_id')->orderBy('name')->get(['id', 'name']),
+            'sessions' => fn() => \App\Services\AcademicCacheService::getSessions(),
+            'faculties' => fn() => \App\Services\AcademicCacheService::getFaculties(),
             'filters' => $request->only(['session_id', 'department_id', 'search', 'faculty_id']),
             'currentSessionId' => $currentSessionId,
-            'courses' => Course::select('id', 'code', 'title', 'department_id')->orderBy('code')->get(),
-            'programmes' => \App\Models\Programme::select('id', 'name')->orderBy('name')->get(),
-            'lecturers' => Staff::with(['user:id,name', 'department:id,code'])
+            'courses' => fn() => Course::select('id', 'code', 'title', 'department_id')->orderBy('code')->get(),
+            'programmes' => fn() => \App\Services\AcademicCacheService::getProgrammes(),
+            'lecturers' => fn() => Staff::with(['user:id,name', 'department:id,code'])
                 ->whereHas('user', function ($q) {
                     $q->role('lecturer');
                 })
@@ -86,7 +89,7 @@ class CourseAllocationController extends Controller
     public function import(\Illuminate\Http\Request $request)
     {
         $request->validate([
-            'file' => 'required|mimes:csv,txt,xlsx|max:2048',
+            'file' => 'required|file|extensions:csv,xls,xlsx|max:2048',
         ]);
 
         try {
@@ -112,14 +115,14 @@ class CourseAllocationController extends Controller
     {
         $headers = [
             'course_code',
-            'staff_email'
+            'staff_number'
         ];
 
         $callback = function () use ($headers) {
             $file = fopen('php://output', 'w');
             fputcsv($file, $headers); // Header
-            fputcsv($file, ['CSC101', 'lecturer@university.edu.ng']); // Sample
-            fputcsv($file, ['MTH202', 'prof.math@university.edu.ng']); // Sample
+            fputcsv($file, ['CSC101', 'STF/2026/001']); // Sample
+            fputcsv($file, ['MTH202', 'STF/2026/002']); // Sample
             fclose($file);
         };
 

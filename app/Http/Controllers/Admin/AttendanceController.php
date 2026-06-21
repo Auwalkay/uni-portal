@@ -16,6 +16,7 @@ use App\Models\Semester;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use App\Models\Holiday;
+use App\Services\AcademicCacheService;
 
 class AttendanceController extends Controller
 {
@@ -50,8 +51,8 @@ class AttendanceController extends Controller
             'attendances' => $attendances,
             'allStaff' => $allStaff,
             'holiday' => $holiday,
-            'faculties' => Faculty::orderBy('name')->get(),
-            'departments' => Department::orderBy('name')->get(),
+            'faculties' => AcademicCacheService::getAllFaculties(),
+            'departments' => AcademicCacheService::getAllDepartments(),
             'filters' => $request->only(['date', 'department_id', 'status']),
         ]);
     }
@@ -98,7 +99,7 @@ class AttendanceController extends Controller
     {
         $request->validate([
             'date' => 'required|date',
-            'file' => 'required|mimes:xlsx,csv,xls|max:10240',
+            'file' => 'required|file|extensions:csv,xls,xlsx|max:10240',
         ]);
 
         Excel::import(new AttendanceImport($request->date), $request->file('file'));
@@ -134,9 +135,9 @@ class AttendanceController extends Controller
 
         return Inertia::render('Admin/HR/Attendance/Reports', [
             'stats' => $stats['data'],
-            'sessions' => Session::orderBy('start_date', 'desc')->get(),
+            'sessions' => AcademicCacheService::getSessions(),
             'semesters' => Semester::orderBy('registration_starts_at', 'desc')->get(),
-            'departments' => Department::orderBy('name')->get(),
+            'departments' => AcademicCacheService::getAllDepartments(),
             'reportTitle' => $stats['title'],
             'filters' => $request->all(),
         ]);
@@ -259,7 +260,7 @@ class AttendanceController extends Controller
             'daysInMonth' => $daysInMonth,
             'currentMonth' => $date->format('F Y'),
             'selectedDate' => $date->format('Y-m-d'),
-            'departments' => Department::orderBy('name')->get(),
+            'departments' => AcademicCacheService::getAllDepartments(),
             'filters' => $request->only(['date', 'department_id']),
         ]);
     }

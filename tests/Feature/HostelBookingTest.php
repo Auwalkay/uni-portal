@@ -225,4 +225,107 @@ class HostelBookingTest extends TestCase
             'status' => 'success',
         ]);
     }
+
+    public function test_hostel_fee_payment_requires_75_percent_minimum_or_full_payment()
+    {
+        // acting as student
+        $this->actingAs($this->studentUser);
+
+        // create a hostel fee invoice
+        $invoice = Invoice::create([
+            'user_id' => $this->studentUser->id,
+            'session_id' => $this->session->id,
+            'reference' => 'HST-FEES-TEST',
+            'type' => 'hostel_fee',
+            'amount' => 10000.00,
+            'status' => 'pending',
+            'due_date' => now()->addDays(7),
+        ]);
+
+        // Attempting to pay 50% (5000) - should fail
+        $response = $this->post(route('student.payments.pay', $invoice->id), [
+            'amount' => 5000,
+        ]);
+        $response->assertSessionHas('error');
+        $this->assertTrue(str_contains(session('error'), 'Minimum required upfront payment is 7,500'));
+
+        // Mock payment gateway interface so initialization doesn't throw or fail
+        $this->mock(\App\Contracts\PaymentGatewayInterface::class, function ($mock) {
+            $mock->shouldReceive('initializeTransaction')->andReturn([
+                'authorization_url' => 'https://example.com/pay',
+            ]);
+        });
+
+        // Attempting to pay 75% (7500) - should succeed
+        $response = $this->post(route('student.payments.pay', $invoice->id), [
+            'amount' => 7500,
+        ]);
+        $response->assertStatus(409)->orExpect(true); // Should redirect/location or 302/Inertia location (which Inertia returns as 409 conflict with X-Inertia-Location header)
+        if ($response->getStatusCode() === 409) {
+            $response->assertHeader('X-Inertia-Location');
+        } else {
+            $response->assertRedirect();
+        }
+
+        // Attempting to pay 100% (10000) - should succeed
+        $response = $this->post(route('student.payments.pay', $invoice->id), [
+            'amount' => 10000,
+        ]);
+        if ($response->getStatusCode() === 409) {
+            $response->assertHeader('X-Inertia-Location');
+        } else {
+            $response->assertRedirect();
+        }
+    }
+
+    public function test_manual_invoice_payment_confirms_hostel_booking()
+    {
+        $this->actingAs($this->admin);
+
+        // 1. Simulate school fees payment
+        $schoolInvoice = Invoice::create([
+            'user_id' => $this->studentUser->id,
+            'session_id' => $this->session->id,
+            'reference' => 'SCH-FEES-1',
+            'type' => 'school_fee',
+            'amount' => 100000.00,
+            'status' => 'paid',
+            'due_date' => now()->addDays(7),
+        ]);
+
+        // 2. Allocate Room (creates booking in pending status and hostel_fee invoice in pending status)
+        $this->post(route('admin.hostels.bookings.store'), [
+            'student_id' => $this->student->id,
+            'hostel_room_id' => $this->maleRoom->id,
+        ]);
+
+        $hostelInvoice = Invoice::where('user_id', $this->studentUser->id)
+            ->where('type', 'hostel_fee')
+            ->firstOrFail();
+
+        $this->assertDatabaseHas('hostel_bookings', [
+            'student_id' => $this->student->id,
+            'hostel_room_id' => $this->maleRoom->id,
+            'status' => 'pending',
+        ]);
+
+        // 3. Mark the hostel_fee invoice as paid manually by admin
+        $response = $this->post(route('admin.invoices.mark-as-paid', $hostelInvoice->id), [
+            'amount' => $hostelInvoice->amount,
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $response->assertStatus(302); // redirects back
+
+        // 4. Assert booking status is updated to confirmed
+        $this->assertDatabaseHas('hostel_bookings', [
+            'student_id' => $this->student->id,
+            'hostel_room_id' => $this->maleRoom->id,
+            'status' => 'confirmed',
+        ]);
+
+        // 5. Assert invoice status is updated to paid
+        $hostelInvoice->refresh();
+        $this->assertEquals('paid', $hostelInvoice->status);
+    }
 }

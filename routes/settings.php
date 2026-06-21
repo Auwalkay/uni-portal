@@ -82,6 +82,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
         Route::post('/payments/create-school-fee', [PaymentController::class, 'createSchoolFeeInvoice'])->name('payments.create_school_fee');
+        Route::get('/payments/optional-fees', [PaymentController::class, 'getOptionalFees'])->name('payments.optional_fees');
+        Route::post('/payments/initiate-optional/{config}', [PaymentController::class, 'initiateOptionalFee'])->name('payments.initiate_optional');
         Route::post('/payments/{invoice}/pay', [PaymentController::class, 'pay'])->name('payments.pay');
         Route::get('/payments/callback', [PaymentController::class, 'callback'])->name('payments.callback');
         Route::get('/payments/{payment}/download', [PaymentController::class, 'downloadReceipt'])->name('payments.download');
@@ -114,6 +116,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Sickbay routes
         Route::get('/sickbay', [\App\Http\Controllers\Student\SickbayController::class, 'index'])->name('sickbay.index');
+
+        // Support routes
+        Route::get('/support', [\App\Http\Controllers\Student\SupportTicketController::class, 'index'])->name('support.index');
+        Route::post('/support', [\App\Http\Controllers\Student\SupportTicketController::class, 'store'])->name('support.store');
+        Route::get('/support/{ticket}', [\App\Http\Controllers\Student\SupportTicketController::class, 'show'])->name('support.show');
+        Route::post('/support/{ticket}/reply', [\App\Http\Controllers\Student\SupportTicketController::class, 'reply'])->name('support.reply');
     });
 
     // Admin/Staff Personal History Routes (accessible by all staff and admin users with view_library / view_sickbay_portal)
@@ -159,6 +167,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware(['permission:view_results'])->group(function () {
             Route::get('/results', [ResultController::class, 'index'])->name('results.index');
             Route::get('/results/{course}/entry', [ResultController::class, 'edit'])->name('results.edit');
+            Route::get('/results/print', [ResultController::class, 'print'])->name('results.print');
             Route::post('/results/{course}', [ResultController::class, 'update'])->name('results.update');
             Route::post('/results/{course}/upload', [ResultController::class, 'upload'])->name('results.upload');
             Route::post('/results/{course}/publish', [ResultController::class, 'publish'])->name('results.publish');
@@ -242,6 +251,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/academics/programmes/{programme}/courses', [AcademicController::class, 'programmeCourses'])->name('academics.programmes.courses');
             Route::post('/academics/programmes/{programme}/courses', [AcademicController::class, 'storeProgrammeCourse'])->name('academics.programmes.courses.store');
             Route::post('/academics/programmes/{programme}/courses/import', [AcademicController::class, 'importProgrammeCourses'])->name('academics.programmes.courses.import');
+            Route::post('/academics/programmes/{programme}/courses/import-excel', [AcademicController::class, 'importProgrammeCoursesFromExcel'])->name('academics.programmes.courses.import_excel');
+            Route::get('/academics/programmes/courses/import-template', [AcademicController::class, 'downloadCourseImportTemplate'])->name('academics.programmes.courses.import_template');
+            Route::post('/academics/courses/import-excel', [AcademicController::class, 'importGlobalCoursesFromExcel'])->name('academics.courses.import_excel');
+            Route::get('/academics/courses/import-template', [AcademicController::class, 'downloadGlobalCourseImportTemplate'])->name('academics.courses.import_template');
             Route::delete('/academics/programmes/{programme}/courses/{course}', [AcademicController::class, 'destroyProgrammeCourse'])->name('academics.programmes.courses.destroy');
         });
 

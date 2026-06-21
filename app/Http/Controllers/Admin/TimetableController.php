@@ -10,12 +10,13 @@ use App\Models\Session;
 use App\Models\Timetable;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use App\Services\AcademicCacheService;
 
 class TimetableController extends Controller
 {
     public function index(Request $request)
     {
-        $currentSession = Session::where('is_current', true)->first();
+        $currentSession = Session::current();
 
         $filters = $request->only(['session_id', 'semester_id', 'department_id', 'level']);
 
@@ -47,10 +48,10 @@ class TimetableController extends Controller
 
         return Inertia::render('Admin/Timetable/Index', [
             'timetables' => $timetables,
-            'sessions' => Session::latest()->get(['id', 'name']),
+            'sessions' => AcademicCacheService::getSessions(),
             'semesters' => $currentSession ? Semester::where('session_id', $currentSession->id)->get(['id', 'name']) : [],
-            'departments' => Department::orderBy('name')->get(['id', 'name']),
-            'courses' => Course::orderBy('code')->get(['id', 'code', 'title']),
+            'departments' => AcademicCacheService::getAllDepartments(),
+            'courses' => AcademicCacheService::getAllCourses(),
             'filters' => $filters,
             'currentSession' => $currentSession,
         ]);
@@ -89,7 +90,7 @@ class TimetableController extends Controller
     public function import(Request $request)
     {
         $request->validate([
-            'file' => 'required|file|mimes:csv,xlsx,xls',
+            'file' => 'required|file|extensions:csv,xls,xlsx',
         ]);
 
         try {

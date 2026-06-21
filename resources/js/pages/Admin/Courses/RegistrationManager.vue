@@ -2,6 +2,7 @@
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, watch, computed } from 'vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
+import SearchableSelect from '@/components/SearchableSelect.vue';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +30,16 @@ const filteredDepartments = computed(() => {
     if (facultyId.value === 'all') return [];
     return props.departments.filter(d => String(d.faculty_id) === String(facultyId.value));
 });
+
+const facultyItems = computed(() => [
+    { value: 'all', label: 'All Faculties' },
+    ...props.faculties.map(f => ({ value: String(f.id), label: f.name }))
+]);
+
+const departmentItems = computed(() => [
+    { value: 'all', label: 'All Departments' },
+    ...filteredDepartments.value.map(d => ({ value: String(d.id), label: d.name }))
+]);
 
 const updateFilters = debounce(() => {
     router.get(route('admin.course_registration.index'), { 
@@ -86,28 +97,23 @@ const breadcrumbs = [
                         <div class="flex flex-wrap items-end gap-4">
                             <div class="space-y-1.5 flex-1 min-w-[200px]">
                                 <Label class="text-[10px] font-bold uppercase text-muted-foreground ml-1">Faculty</Label>
-                                <Select v-model="facultyId">
-                                    <SelectTrigger class="bg-white rounded-lg">
-                                        <SelectValue placeholder="All Faculties" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Faculties</SelectItem>
-                                        <SelectItem v-for="fac in faculties" :key="fac.id" :value="String(fac.id)">{{ fac.name }}</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <SearchableSelect
+                                    v-model="facultyId"
+                                    :items="facultyItems"
+                                    placeholder="All Faculties"
+                                    search-placeholder="Search faculties..."
+                                />
                             </div>
 
                             <div class="space-y-1.5 flex-1 min-w-[200px]">
                                 <Label class="text-[10px] font-bold uppercase text-muted-foreground ml-1">Department</Label>
-                                <Select v-model="departmentId" :disabled="facultyId === 'all'">
-                                    <SelectTrigger class="bg-white rounded-lg">
-                                        <SelectValue placeholder="All Departments" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Departments</SelectItem>
-                                        <SelectItem v-for="dept in filteredDepartments" :key="dept.id" :value="String(dept.id)">{{ dept.name }}</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <SearchableSelect
+                                    v-model="departmentId"
+                                    :items="departmentItems"
+                                    placeholder="All Departments"
+                                    search-placeholder="Search departments..."
+                                    :disabled="facultyId === 'all'"
+                                />
                             </div>
 
                             <Button variant="ghost" @click="resetFilters" class="text-xs font-semibold text-muted-foreground hover:text-red-600">

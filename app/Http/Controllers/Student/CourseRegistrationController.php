@@ -154,7 +154,7 @@ class CourseRegistrationController extends Controller
 
         // Dropdown Data
         $faculties = \App\Services\AcademicCacheService::getAllFaculties();
-        $departments = \App\Services\AcademicCacheService::getAllDepartments();
+        $departments = \App\Services\AcademicCacheService::getAcademicDepartments();
 
         // 1. Fetch ALL Courses for Session (Both Semesters)
         $query = Course::query();

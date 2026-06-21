@@ -40,6 +40,11 @@ class FeeService
                 $q->where('level', $student->current_level)
                     ->orWhereNull('level');
             })
+            ->where(function ($q) use ($student) {
+                $q->where('entry_mode', $student->entry_mode)
+                    ->orWhereNull('entry_mode');
+            })
+            ->where('is_compulsory', true)
             ->with('feeType')
             ->get();
 
@@ -70,6 +75,15 @@ class FeeService
                     ->first();
             }
             if ($resolved) {
+                if ($resolved->feeType && $resolved->feeType->is_one_time) {
+                    $alreadyCharged = \App\Models\InvoiceItem::whereHas('invoice', function ($q) use ($student) {
+                        $q->where('user_id', $student->user_id);
+                    })->where('fee_type_id', $resolved->fee_type_id)->exists();
+
+                    if ($alreadyCharged) {
+                        continue;
+                    }
+                }
                 $resolvedConfigs->push($resolved);
             }
         }
@@ -81,6 +95,13 @@ class FeeService
         return DB::transaction(function () use ($student, $session, $resolvedConfigs) {
             $academicTotal = $resolvedConfigs->sum('amount');
             
+            $tuition = 0;
+            foreach ($resolvedConfigs as $config) {
+                if (!$config->feeType || !$config->feeType->is_one_time) {
+                    $tuition += $config->amount;
+                }
+            }
+
             $adminChargeEnabled = SystemSetting::get('admin_charge_enabled', true);
             $adminChargeAmount = SystemSetting::get('admin_charge_amount', 250000);
             
@@ -92,11 +113,26 @@ class FeeService
             $discountAmount = 0;
             if ($student->scholarship && ($student->program?->scholarship_eligible ?? true)) {
                 $scholarship = $student->scholarship;
-                $baseForDiscount = $academicTotal;
+                
+                // Exclude "Drug Test" fee type from scholarship discount calculations
+                $baseForDiscount = 0;
+                foreach ($resolvedConfigs as $config) {
+                    if (!$config->feeType || !$config->feeType->is_one_time) {
+                        if ($config->feeType && (strtolower($config->feeType->name) === 'drug test' || $config->feeType->slug === 'drug-test')) {
+                            continue;
+                        }
+                        $baseForDiscount += $config->amount;
+                    }
+                }
+
                 if ($adminChargeEnabled && $scholarship->covers_admin_charges) {
                     $baseForDiscount += $adminChargeAmount;
                 }
-                $discountAmount = $baseForDiscount * ($scholarship->percentage / 100);
+                if ($scholarship->type === 'fixed') {
+                    $discountAmount = max(0, $baseForDiscount - $scholarship->amount);
+                } else {
+                    $discountAmount = $baseForDiscount * ($scholarship->percentage / 100);
+                }
             }
 
             $finalAmount = $totalAmountBeforeDiscount - $discountAmount;
@@ -136,9 +172,12 @@ class FeeService
             }
 
             if ($discountAmount > 0) {
+                $discountDesc = $student->scholarship->type === 'fixed'
+                    ? 'Scholarship Discount (' . $student->scholarship->name . ' - Fixed ₦' . number_format($student->scholarship->amount, 2) . ')'
+                    : 'Scholarship Discount (' . $student->scholarship->name . ' - ' . floatval($student->scholarship->percentage) . '%)';
                 InvoiceItem::create([
                     'invoice_id' => $invoice->id,
-                    'description' => 'Scholarship Discount (' . $student->scholarship->name . ' - ' . floatval($student->scholarship->percentage) . '%)',
+                    'description' => $discountDesc,
                     'amount' => -$discountAmount,
                 ]);
             }
@@ -169,6 +208,10 @@ class FeeService
             ->where(function ($q) use ($student) {
                 $q->where('level', $student->current_level)->orWhereNull('level');
             })
+            ->where(function ($q) use ($student) {
+                $q->where('entry_mode', $student->entry_mode)->orWhereNull('entry_mode');
+            })
+            ->where('is_compulsory', true)
             ->with('feeType')
             ->get();
 
@@ -181,13 +224,33 @@ class FeeService
             if (!$resolved && $student->department_id) $resolved = $configs->where('department_id', $student->department_id)->whereNull('program_id')->first();
             if (!$resolved && $student->faculty_id) $resolved = $configs->where('faculty_id', $student->faculty_id)->whereNull('department_id')->whereNull('program_id')->first();
             if (!$resolved) $resolved = $configs->whereNull('faculty_id')->whereNull('department_id')->whereNull('program_id')->first();
-            if ($resolved) $resolvedConfigs->push($resolved);
+            if ($resolved) {
+                if ($resolved->feeType && $resolved->feeType->is_one_time) {
+                    $alreadyCharged = \App\Models\InvoiceItem::whereHas('invoice', function ($q) use ($student, $invoice) {
+                        $q->where('user_id', $student->user_id)
+                          ->where('id', '!=', $invoice->id);
+                    })->where('fee_type_id', $resolved->fee_type_id)->exists();
+
+                    if ($alreadyCharged) {
+                        continue;
+                    }
+                }
+                $resolvedConfigs->push($resolved);
+            }
         }
 
         if ($resolvedConfigs->isEmpty()) return $invoice;
 
         return DB::transaction(function () use ($invoice, $student, $resolvedConfigs) {
             $academicTotal = $resolvedConfigs->sum('amount');
+
+            $tuition = 0;
+            foreach ($resolvedConfigs as $config) {
+                if (!$config->feeType || !$config->feeType->is_one_time) {
+                    $tuition += $config->amount;
+                }
+            }
+
             $adminChargeEnabled = SystemSetting::get('admin_charge_enabled', true);
             $adminChargeAmount = SystemSetting::get('admin_charge_amount', 250000);
             
@@ -197,9 +260,24 @@ class FeeService
             $discountAmount = 0;
             if ($student->scholarship && ($student->program?->scholarship_eligible ?? true)) {
                 $scholarship = $student->scholarship;
-                $baseForDiscount = $academicTotal;
+                
+                // Exclude "Drug Test" fee type from scholarship discount calculations
+                $baseForDiscount = 0;
+                foreach ($resolvedConfigs as $config) {
+                    if (!$config->feeType || !$config->feeType->is_one_time) {
+                        if ($config->feeType && (strtolower($config->feeType->name) === 'drug test' || $config->feeType->slug === 'drug-test')) {
+                            continue;
+                        }
+                        $baseForDiscount += $config->amount;
+                    }
+                }
+
                 if ($adminChargeEnabled && $scholarship->covers_admin_charges) $baseForDiscount += $adminChargeAmount;
-                $discountAmount = $baseForDiscount * ($scholarship->percentage / 100);
+                if ($scholarship->type === 'fixed') {
+                    $discountAmount = max(0, $baseForDiscount - $scholarship->amount);
+                } else {
+                    $discountAmount = $baseForDiscount * ($scholarship->percentage / 100);
+                }
             }
 
             $finalAmount = $totalAmountBeforeDiscount - $discountAmount;
@@ -226,9 +304,12 @@ class FeeService
                     ]);
                 }
                 if ($discountAmount > 0) {
+                    $discountDesc = $student->scholarship->type === 'fixed'
+                        ? 'Scholarship Discount (' . $student->scholarship->name . ' - Fixed ₦' . number_format($student->scholarship->amount, 2) . ')'
+                        : 'Scholarship Discount (' . $student->scholarship->name . ' - ' . floatval($student->scholarship->percentage) . '%)';
                     InvoiceItem::create([
                         'invoice_id' => $invoice->id,
-                        'description' => 'Scholarship Discount (' . $student->scholarship->name . ' - ' . floatval($student->scholarship->percentage) . '%)',
+                        'description' => $discountDesc,
                         'amount' => -$discountAmount,
                     ]);
                 }
@@ -253,5 +334,119 @@ class FeeService
         }
 
         return $count;
+    }
+
+    /**
+     * Get available optional fees for a student.
+     */
+    public function getAvailableOptionalFees(Student $student, Session $session)
+    {
+        // Fetch all configurations for the target session
+        $allConfigs = FeeConfiguration::where('session_id', $session->id)
+            ->where(function ($q) use ($student) {
+                $q->where('level', $student->current_level)
+                    ->orWhereNull('level');
+            })
+            ->where(function ($q) use ($student) {
+                $q->where('entry_mode', $student->entry_mode)
+                    ->orWhereNull('entry_mode');
+            })
+            ->where('is_compulsory', false)
+            ->with('feeType')
+            ->get();
+
+        // Resolve specific configs based on student profile (program/dept/faculty)
+        $resolvedConfigs = collect();
+        $groupedConfigs = $allConfigs->groupBy('fee_type_id');
+
+        foreach ($groupedConfigs as $feeTypeId => $configs) {
+            $resolved = null;
+            if ($student->program_id) {
+                $resolved = $configs->where('program_id', $student->program_id)->first();
+            }
+            if (!$resolved && $student->department_id) {
+                $resolved = $configs->where('department_id', $student->department_id)
+                    ->whereNull('program_id')
+                    ->first();
+            }
+            if (!$resolved && $student->faculty_id) {
+                $resolved = $configs->where('faculty_id', $student->faculty_id)
+                    ->whereNull('department_id')
+                    ->whereNull('program_id')
+                    ->first();
+            }
+            if (!$resolved) {
+                $resolved = $configs->whereNull('faculty_id')
+                    ->whereNull('department_id')
+                    ->whereNull('program_id')
+                    ->first();
+            }
+            if ($resolved) {
+                $resolvedConfigs->push($resolved);
+            }
+        }
+
+        // Filter out optional fees that have already been generated/invoiced for this student
+        return $resolvedConfigs->filter(function ($config) use ($student) {
+            // If the fee type is one-time, check if they have ever been invoiced for it
+            if ($config->feeType && $config->feeType->is_one_time) {
+                return !\App\Models\InvoiceItem::whereHas('invoice', function ($q) use ($student) {
+                    $q->where('user_id', $student->user_id);
+                })->where('fee_type_id', $config->fee_type_id)->exists();
+            }
+
+            // Otherwise, check if they've been invoiced for it in the current session
+            return !\App\Models\InvoiceItem::whereHas('invoice', function ($q) use ($student, $config) {
+                $q->where('user_id', $student->user_id)
+                    ->where('session_id', $config->session_id);
+            })->where('fee_type_id', $config->fee_type_id)->exists();
+        })->values();
+    }
+
+    /**
+     * Generate invoice for a specific optional fee configuration.
+     */
+    public function generateOptionalFeeInvoice(Student $student, Session $session, FeeConfiguration $config)
+    {
+        // Double check it's not already invoiced
+        $isOneTime = $config->feeType ? $config->feeType->is_one_time : false;
+        $existsQuery = \App\Models\InvoiceItem::whereHas('invoice', function ($q) use ($student, $config, $isOneTime) {
+            $q->where('user_id', $student->user_id);
+            if (!$isOneTime) {
+                $q->where('session_id', $config->session_id);
+            }
+        })->where('fee_type_id', $config->fee_type_id);
+
+        if ($existsQuery->exists()) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($student, $session, $config) {
+            $studentSession = StudentSession::firstOrCreate(
+                ['student_id' => $student->id, 'session_id' => $session->id],
+                ['level' => $student->current_level, 'status' => 'active']
+            );
+
+            $invoice = Invoice::create([
+                'user_id' => $student->user_id,
+                'session_id' => $session->id,
+                'student_session_id' => $studentSession->id,
+                'type' => 'other_fee',
+                'reference' => 'OTH-' . strtoupper(uniqid()),
+                'invoice_number' => 'INV-' . strtoupper(Str::random(10)),
+                'amount' => $config->amount,
+                'status' => 'pending',
+                'due_date' => now()->addWeeks(4),
+            ]);
+
+            InvoiceItem::create([
+                'invoice_id' => $invoice->id,
+                'fee_type_id' => $config->fee_type_id,
+                'description' => $config->feeType->name ?? 'Optional Fee',
+                'amount' => $config->amount,
+            ]);
+
+            return $invoice;
+        });
     }
 }

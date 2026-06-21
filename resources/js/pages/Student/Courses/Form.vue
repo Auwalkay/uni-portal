@@ -2,6 +2,7 @@
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import StudentLayout from '@/layouts/StudentLayout.vue';
+import SearchableSelect from '@/components/SearchableSelect.vue';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -68,6 +69,25 @@ const filteredDepartments = computed(() => {
     if (!filterForm.value.faculty_id) return [];
     return props.departments.filter(d => d.faculty_id === filterForm.value.faculty_id);
 });
+
+const facultyItems = computed(() => [
+    { value: '', label: 'All Faculties' },
+    ...props.faculties.map(f => ({ value: String(f.id), label: f.name }))
+]);
+
+const departmentItems = computed(() => [
+    { value: '', label: 'All Departments' },
+    ...filteredDepartments.value.map(d => ({ value: String(d.id), label: d.name }))
+]);
+
+const levelItems = [
+    { value: '', label: 'All Levels' },
+    { value: '100', label: '100 Level' },
+    { value: '200', label: '200 Level' },
+    { value: '300', label: '300 Level' },
+    { value: '400', label: '400 Level' },
+    { value: '500', label: '500 Level' },
+];
 
 watch(() => filterForm.value.faculty_id, () => {
     filterForm.value.department_id = '';
@@ -351,42 +371,33 @@ const getSemesterCourses = (semesterCode: string) => {
                             <div class="p-5 space-y-4">
                                 <div class="space-y-1.5">
                                     <Label class="text-xs font-semibold uppercase text-gray-500">Faculty</Label>
-                                    <Select v-model="filterForm.faculty_id">
-                                        <SelectTrigger class="h-9 w-full bg-gray-50/50 border-gray-200">
-                                            <SelectValue placeholder="All Faculties" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem v-for="fac in faculties" :key="fac.id" :value="fac.id">{{ fac.name }}</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <SearchableSelect
+                                        v-model="filterForm.faculty_id"
+                                        :items="facultyItems"
+                                        placeholder="All Faculties"
+                                        search-placeholder="Search faculties..."
+                                    />
                                 </div>
 
                                 <div class="space-y-1.5">
                                     <Label class="text-xs font-semibold uppercase text-gray-500">Department</Label>
-                                    <Select v-model="filterForm.department_id" :disabled="!filterForm.faculty_id">
-                                        <SelectTrigger class="h-9 w-full bg-gray-50/50 border-gray-200">
-                                            <SelectValue placeholder="All Departments" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem v-for="dept in filteredDepartments" :key="dept.id" :value="dept.id">{{ dept.name }}</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <SearchableSelect
+                                        v-model="filterForm.department_id"
+                                        :items="departmentItems"
+                                        placeholder="All Departments"
+                                        search-placeholder="Search departments..."
+                                        :disabled="!filterForm.faculty_id"
+                                    />
                                 </div>
 
                                 <div class="space-y-1.5">
                                     <Label class="text-xs font-semibold uppercase text-gray-500">Level</Label>
-                                    <Select v-model="filterForm.level">
-                                        <SelectTrigger class="h-9 w-full bg-gray-50/50 border-gray-200">
-                                            <SelectValue placeholder="All Levels" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="100">100 Level</SelectItem>
-                                            <SelectItem value="200">200 Level</SelectItem>
-                                            <SelectItem value="300">300 Level</SelectItem>
-                                            <SelectItem value="400">400 Level</SelectItem>
-                                            <SelectItem value="500">500 Level</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <SearchableSelect
+                                        v-model="filterForm.level"
+                                        :items="levelItems"
+                                        placeholder="All Levels"
+                                        search-placeholder="Search levels..."
+                                    />
                                 </div>
 
                                 <Button @click="loadCourses" class="w-full bg-gray-900 text-white hover:bg-gray-800 shadow-lg shadow-gray-200/50 transition-all font-medium py-2.5 h-auto text-sm" :disabled="isLoading">

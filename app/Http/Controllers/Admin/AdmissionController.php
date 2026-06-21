@@ -45,7 +45,7 @@ class AdmissionController extends Controller
 
         $applicants = $query->latest()->paginate(10)->withQueryString();
 
-        $programmes = Programme::select('id', 'name')->orderBy('name')->get();
+        $programmes = \App\Services\AcademicCacheService::getProgrammes();
 
         return Inertia::render('Admin/Admissions/Index', [
             'applicants' => $applicants,
@@ -117,7 +117,24 @@ class AdmissionController extends Controller
             abort(403, 'Admission letter is only available for admitted applicants.');
         }
 
-        $applicant->load(['user', 'programme.department.faculty', 'state', 'lga']);
+        $identifer = $applicant->jamb_registration_number ?? $applicant->application_number ?? 'Letter';
+        $fileName = "Admission_Letter_{$identifer}.pdf";
+        $filePath = "admission_letters/{$applicant->user_id}.pdf";
+
+        if (\Illuminate\Support\Facades\Storage::disk('local')->exists($filePath)) {
+            $cacheModifiedTime = \Illuminate\Support\Facades\Storage::disk('local')->lastModified($filePath);
+            $applicantUpdatedTime = $applicant->updated_at->timestamp;
+            $scholarshipUpdatedTime = $applicant->scholarship ? $applicant->scholarship->updated_at->timestamp : 0;
+
+            if ($cacheModifiedTime >= max($applicantUpdatedTime, $scholarshipUpdatedTime)) {
+                return \Illuminate\Support\Facades\Storage::disk('local')->download($filePath, $fileName, [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => 'attachment; filename="' . $fileName . '"'
+                ]);
+            }
+        }
+
+        $applicant->load(['user', 'programme.department.faculty', 'state', 'lga', 'scholarship']);
         $currentSession = \App\Models\Session::current();
         
         // Calculate Fees for the Letter
@@ -136,7 +153,9 @@ class AdmissionController extends Controller
             'isFontSubsettingEnabled' => true,
         ]);
 
-        return $pdf->download("Admission_Letter_{$applicant->jamb_registration_number}.pdf");
+        \Illuminate\Support\Facades\Storage::disk('local')->put($filePath, $pdf->output());
+
+        return $pdf->download($fileName);
     }
 
     private function calculateEstimatedFeesForApplicant($applicant, $session)
@@ -147,20 +166,49 @@ class AdmissionController extends Controller
         $deptId = $program?->department_id;
         $facultyId = $program?->department?->faculty_id;
 
+        $entryMode = $applicant->application_mode;
+        if ($entryMode === 'DE') {
+            $entryMode = 'Direct Entry';
+        } elseif ($entryMode === 'PG') {
+            $entryMode = 'Postgraduate';
+        }
+
         $allConfigs = \App\Models\FeeConfiguration::where('session_id', $session->id)
-            ->where(function ($q) {
-                $q->where('level', '100')->orWhereNull('level');
-            })->get();
+            ->where(function ($q) use ($entryMode) {
+                $q->where(function ($sub) {
+                    $sub->where('level', '100')->orWhereNull('level');
+                })
+                ->orWhere('entry_mode', $entryMode);
+            })
+            ->where(function ($q) use ($entryMode) {
+                $q->where('entry_mode', $entryMode)->orWhereNull('entry_mode');
+            })
+            ->where('is_compulsory', true)
+            ->with('feeType')
+            ->get();
 
         $tuition = 0;
+        $oneTimeFeesTotal = 0;
+        $oneTimeFeesList = [];
+
         $grouped = $allConfigs->groupBy('fee_type_id');
-        foreach ($grouped as $configs) {
-            $resolved = $configs->where('program_id', $applicant->programme_id)->first()
+        foreach ($grouped as $feeTypeId => $configs) {
+            $resolved = $configs->where('program_id', $applicant->program_choice_1)->first()
                 ?? $configs->where('department_id', $deptId)->whereNull('program_id')->first()
                 ?? $configs->where('faculty_id', $facultyId)->whereNull('department_id')->whereNull('program_id')->first()
                 ?? $configs->whereNull('faculty_id')->whereNull('department_id')->whereNull('program_id')->first();
             
-            if ($resolved) $tuition += $resolved->amount;
+            if ($resolved) {
+                if ($resolved->feeType && $resolved->feeType->is_one_time) {
+                    $oneTimeFeesTotal += $resolved->amount;
+                    $oneTimeFeesList[] = [
+                        'name' => $resolved->feeType->name,
+                        'amount' => $resolved->amount
+                    ];
+                } else {
+                    $tuition += $resolved->amount;
+                }
+            }
         }
 
         $adminCharge = \App\Models\SystemSetting::get('admin_charge_enabled', true) 
@@ -174,14 +222,20 @@ class AdmissionController extends Controller
             if ($adminCharge > 0 && $scholarship->covers_admin_charges) {
                 $baseForDiscount += $adminCharge;
             }
-            $discount = $baseForDiscount * ($scholarship->percentage / 100);
+            if ($scholarship->type === 'fixed') {
+                $discount = max(0, $baseForDiscount - $scholarship->amount);
+            } else {
+                $discount = $baseForDiscount * ($scholarship->percentage / 100);
+            }
         }
 
-        $total = $tuition + $adminCharge;
+        $total = $tuition + $adminCharge + $oneTimeFeesTotal;
 
         return [
             'tuition' => $tuition,
             'admin_charge' => $adminCharge,
+            'one_time_fees' => $oneTimeFeesTotal,
+            'one_time_fees_list' => $oneTimeFeesList,
             'discount' => $discount,
             'total' => $total - $discount,
             'scholarship_name' => $scholarship?->name

@@ -9,6 +9,20 @@ class CourseRegistration extends Model
 {
     use HasUuids;
 
+    protected static function booted()
+    {
+        static::saved(function ($reg) {
+            if ($reg->student && $reg->student->user_id) {
+                \Illuminate\Support\Facades\Cache::forget("student_results_index_{$reg->student->user_id}");
+            }
+        });
+        static::deleted(function ($reg) {
+            if ($reg->student && $reg->student->user_id) {
+                \Illuminate\Support\Facades\Cache::forget("student_results_index_{$reg->student->user_id}");
+            }
+        });
+    }
+
     protected $guarded = [];
 
     public function student()

@@ -22,11 +22,19 @@ class ScholarshipController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'percentage' => 'required|numeric|min:0|max:100',
+            'type' => 'required|string|in:percentage,fixed',
+            'percentage' => 'required_if:type,percentage|nullable|numeric|min:0|max:100',
+            'amount' => 'required_if:type,fixed|nullable|numeric|min:0',
             'covers_admin_charges' => 'required|boolean',
             'covers_hostel_fees' => 'required|boolean',
             'is_active' => 'required|boolean',
         ]);
+
+        if ($validated['type'] === 'fixed') {
+            $validated['percentage'] = 0;
+        } else {
+            $validated['amount'] = 0;
+        }
 
         Scholarship::create($validated);
 
@@ -39,19 +47,31 @@ class ScholarshipController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'percentage' => 'required|numeric|min:0|max:100',
+            'type' => 'required|string|in:percentage,fixed',
+            'percentage' => 'required_if:type,percentage|nullable|numeric|min:0|max:100',
+            'amount' => 'required_if:type,fixed|nullable|numeric|min:0',
             'covers_admin_charges' => 'required|boolean',
             'covers_hostel_fees' => 'required|boolean',
             'is_active' => 'required|boolean',
         ]);
 
-        // If percentage is changing, check for associated students/applicants
-        if ((float) $request->percentage !== (float) $scholarship->percentage) {
+        if ($validated['type'] === 'fixed') {
+            $validated['percentage'] = 0;
+        } else {
+            $validated['amount'] = 0;
+        }
+
+        // If percentage, amount or type is changing, check for associated students/applicants
+        $percentageChanged = (float) ($validated['percentage'] ?? 0) !== (float) $scholarship->percentage;
+        $amountChanged = (float) ($validated['amount'] ?? 0) !== (float) $scholarship->amount;
+        $typeChanged = $validated['type'] !== $scholarship->type;
+
+        if ($percentageChanged || $amountChanged || $typeChanged) {
             $hasUsers = \App\Models\Student::where('scholarship_id', $id)->exists()
                      || \App\Models\Applicant::where('scholarship_id', $id)->exists();
 
             if ($hasUsers) {
-                return redirect()->back()->with('error', 'The scholarship percentage cannot be modified once students or applicants have been assigned to it.');
+                return redirect()->back()->with('error', 'The scholarship configuration (percentage, amount, or type) cannot be modified once students or applicants have been assigned to it.');
             }
         }
 
