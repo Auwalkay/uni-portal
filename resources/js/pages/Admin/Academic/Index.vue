@@ -198,7 +198,9 @@ const openEdit = (type: 'faculty' | 'department' | 'programme' | 'course' | 'uni
 };
 
 const submitForm = () => {
-    // ... function content
+    if (document.activeElement && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+    }
      const url = modalMode.value === 'create' ? route('admin.academics.store') : route('admin.academics.update');
     
     form.post(url, {
@@ -214,15 +216,15 @@ const submitForm = () => {
                 timer: 3000
             });
         },
-        onError: () => Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Failed to submit form',
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 3000
-        }),
+        onError: (errors) => {
+            const errorList = Object.values(errors).map(err => `<li>${err}</li>`).join('');
+            Swal.fire({
+                icon: 'error',
+                title: 'Submission Failed',
+                html: `<div class="text-left text-sm text-rose-600 dark:text-rose-400 bg-rose-500/10 p-3 rounded-lg border border-rose-500/20"><ul class="list-disc list-inside space-y-1">${errorList}</ul></div>`,
+                confirmButtonColor: '#4f46e5'
+            });
+        },
     });
 };
 
@@ -733,11 +735,13 @@ const removeProgrammeCourse = async (courseId: string) => {
                         <div v-if="activeType === 'faculty'" class="space-y-3">
                             <div class="space-y-1">
                                 <Label>Faculty Name</Label>
-                                <Input v-model="form.name" placeholder="Faculty of Sciences" />
+                                <Input v-model="form.name" placeholder="Faculty of Sciences" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.name}" />
+                                <span v-if="form.errors.name" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.name }}</span>
                             </div>
                             <div class="space-y-1">
                                 <Label>Code</Label>
-                                <Input v-model="form.code" placeholder="SCI" />
+                                <Input v-model="form.code" placeholder="SCI" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.code}" />
+                                <span v-if="form.errors.code" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.code }}</span>
                             </div>
                         </div>
 
@@ -745,16 +749,18 @@ const removeProgrammeCourse = async (courseId: string) => {
                         <div v-if="activeType === 'department'" class="space-y-3">
                             <div class="space-y-1">
                                 <Label>Department Name</Label>
-                                <Input v-model="form.name" placeholder="Computer Science" />
+                                <Input v-model="form.name" placeholder="Computer Science" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.name}" />
+                                <span v-if="form.errors.name" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.name }}</span>
                             </div>
                              <div class="space-y-1">
                                 <Label>Code</Label>
-                                <Input v-model="form.code" placeholder="CSC" />
+                                <Input v-model="form.code" placeholder="CSC" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.code}" />
+                                <span v-if="form.errors.code" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.code }}</span>
                             </div>
                             <div class="space-y-1">
                                 <Label>Faculty</Label>
                                 <Select :model-value="form.faculty_id || 'none'" @update:model-value="handleFacultyChange">
-                                    <SelectTrigger>
+                                    <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.faculty_id}">
                                         <SelectValue placeholder="Select Faculty (Optional for non-academic)" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -764,6 +770,7 @@ const removeProgrammeCourse = async (courseId: string) => {
                                         </SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <span v-if="form.errors.faculty_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.faculty_id }}</span>
                             </div>
                             <div class="flex items-center space-x-2 pt-2">
                                 <Switch :checked="form.is_academic" @update:checked="(val) => form.is_academic = val" id="is_academic_dept" />
@@ -777,16 +784,18 @@ const removeProgrammeCourse = async (courseId: string) => {
                         <div v-if="activeType === 'unit'" class="space-y-3">
                             <div class="space-y-1">
                                 <Label>Unit Name</Label>
-                                <Input v-model="form.name" placeholder="Payroll Unit" />
+                                <Input v-model="form.name" placeholder="Payroll Unit" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.name}" />
+                                <span v-if="form.errors.name" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.name }}</span>
                             </div>
                              <div class="space-y-1">
                                 <Label>Code</Label>
-                                <Input v-model="form.code" placeholder="PAY" />
+                                <Input v-model="form.code" placeholder="PAY" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.code}" />
+                                <span v-if="form.errors.code" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.code }}</span>
                             </div>
                             <div class="space-y-1">
                                 <Label>Department</Label>
                                 <Select v-model="form.department_id">
-                                    <SelectTrigger>
+                                    <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.department_id}">
                                         <SelectValue placeholder="Select Department" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -795,19 +804,21 @@ const removeProgrammeCourse = async (courseId: string) => {
                                         </SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <span v-if="form.errors.department_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.department_id }}</span>
                             </div>
                         </div>
 
                         <!-- PROGRAMME FORM -->
                         <div v-if="activeType === 'programme'" class="space-y-3">
-                             <div class="space-y-1">
+                            <div class="space-y-1">
                                 <Label>Programme Name</Label>
-                                <Input v-model="form.name" placeholder="B.Sc Computer Science" />
+                                <Input v-model="form.name" placeholder="B.Sc Computer Science" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.name}" />
+                                <span v-if="form.errors.name" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.name }}</span>
                             </div>
                             <div class="space-y-1">
                                 <Label>Type</Label>
                                 <Select v-model="form.program_type"> <!-- Corrected v-model -->
-                                    <SelectTrigger>
+                                    <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.program_type}">
                                         <SelectValue placeholder="Select Type" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -816,11 +827,12 @@ const removeProgrammeCourse = async (courseId: string) => {
                                         <SelectItem value="PHD">PhD</SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <span v-if="form.errors.program_type" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.program_type }}</span>
                             </div>
                             <div class="space-y-1">
                                 <Label>Faculty</Label>
                                 <Select v-model="form.faculty_id">
-                                    <SelectTrigger>
+                                    <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.faculty_id}">
                                         <SelectValue placeholder="Select Faculty" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -829,11 +841,12 @@ const removeProgrammeCourse = async (courseId: string) => {
                                         </SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <span v-if="form.errors.faculty_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.faculty_id }}</span>
                             </div>
                             <div class="space-y-1">
                                 <Label>Department</Label>
                                  <Select v-model="form.department_id">
-                                    <SelectTrigger>
+                                    <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.department_id}">
                                         <SelectValue placeholder="Select Department" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -842,6 +855,7 @@ const removeProgrammeCourse = async (courseId: string) => {
                                         </SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <span v-if="form.errors.department_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.department_id }}</span>
                             </div>
                             <div class="flex items-center space-x-2 pt-2">
                                 <Switch :checked="form.scholarship_eligible" @update:checked="(val) => form.scholarship_eligible = val" id="scholarship_eligible" />
@@ -853,23 +867,26 @@ const removeProgrammeCourse = async (courseId: string) => {
 
                          <!-- COURSE FORM -->
                         <div v-if="activeType === 'course'" class="space-y-3">
-                            <div class="space-y-1">
+                               <div class="space-y-1">
                                 <Label>Course Title</Label>
-                                <Input v-model="form.title" placeholder="Introduction to Computing" />
+                                <Input v-model="form.title" placeholder="Introduction to Computing" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.title}" />
+                                <span v-if="form.errors.title" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.title }}</span>
                             </div>
                              <div class="space-y-1">
                                 <Label>Course Code</Label>
-                                <Input v-model="form.code" placeholder="CSC 101" />
+                                <Input v-model="form.code" placeholder="CSC 101" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.code}" />
+                                <span v-if="form.errors.code" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.code }}</span>
                             </div>
                              <div class="grid grid-cols-2 gap-4">
                                 <div class="space-y-1">
                                     <Label>Units</Label>
-                                    <Input type="number" v-model="form.units" min="1" max="6" />
+                                    <Input type="number" v-model="form.units" min="1" max="6" :class="{'border-rose-500 focus-visible:ring-rose-500': form.errors.units}" />
+                                    <span v-if="form.errors.units" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.units }}</span>
                                 </div>
                                 <div class="space-y-1">
                                     <Label>Level</Label>
                                     <Select v-model="form.level">
-                                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                        <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.level}"><SelectValue placeholder="Select" /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="100">100</SelectItem>
                                             <SelectItem value="200">200</SelectItem>
@@ -878,23 +895,25 @@ const removeProgrammeCourse = async (courseId: string) => {
                                             <SelectItem value="500">500</SelectItem>
                                         </SelectContent>
                                     </Select>
+                                    <span v-if="form.errors.level" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.level }}</span>
                                 </div>
                              </div>
                              <div class="grid grid-cols-2 gap-4">
                                   <div class="space-y-1">
                                     <Label>Semester</Label>
                                      <Select v-model="form.semester">
-                                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                        <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.semester}"><SelectValue placeholder="Select" /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="1">First</SelectItem>
                                             <SelectItem value="2">Second</SelectItem>
                                         </SelectContent>
                                     </Select>
+                                    <span v-if="form.errors.semester" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.semester }}</span>
                                 </div>
                                  <div class="space-y-1">
                                     <Label>Faculty</Label>
                                     <Select v-model="form.faculty_id">
-                                        <SelectTrigger>
+                                        <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.faculty_id}">
                                             <SelectValue placeholder="Faculty" class="truncate" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -903,6 +922,7 @@ const removeProgrammeCourse = async (courseId: string) => {
                                             </SelectItem>
                                         </SelectContent>
                                     </Select>
+                                    <span v-if="form.errors.faculty_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.faculty_id }}</span>
                                 </div>
                              </div>
                              
@@ -910,7 +930,7 @@ const removeProgrammeCourse = async (courseId: string) => {
                                 <div class="space-y-1">
                                     <Label>Department</Label>
                                      <Select v-model="form.department_id">
-                                        <SelectTrigger>
+                                        <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.department_id}">
                                             <SelectValue placeholder="Dept" class="truncate" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -918,20 +938,23 @@ const removeProgrammeCourse = async (courseId: string) => {
                                                 {{ dept.code }} - {{ dept.name }}
                                             </SelectItem>
                                         </SelectContent>
-                                    </Select>
+                                     </Select>
+                                     <span v-if="form.errors.department_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.department_id }}</span>
                                 </div>
                                 <div class="space-y-1">
                                     <Label>Programme</Label>
-                                     <Select v-model="form.programme_id">
-                                        <SelectTrigger>
+                                     <Select :model-value="form.programme_id || 'none'" @update:model-value="val => form.programme_id = val === 'none' ? '' : val">
+                                        <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.programme_id}">
                                             <SelectValue placeholder="Programme" class="truncate" />
                                         </SelectTrigger>
                                         <SelectContent>
+                                            <SelectItem value="none">None (General Course)</SelectItem>
                                              <SelectItem v-for="prog in filteredProgrammes" :key="prog.id" :value="prog.id">
                                                 {{ prog.name }}
                                             </SelectItem>
                                         </SelectContent>
-                                    </Select>
+                                     </Select>
+                                     <span v-if="form.errors.programme_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.programme_id }}</span>
                                 </div>
                              </div>
                         </div>
