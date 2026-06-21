@@ -134,11 +134,11 @@ class BursaryController extends Controller
         return Inertia::render('Admin/Finance/StudentFees', [
             'students' => $students,
             'summaryStats' => $stats,
-            'sessions' => Session::orderBy('start_date', 'desc')->get(),
+            'sessions' => \App\Services\AcademicCacheService::getSessions(),
             'currentSession' => Session::find($sessionId),
-            'faculties' => Faculty::orderBy('name')->get(),
-            'departments' => Department::orderBy('name')->get(),
-            'programs' => Programme::orderBy('name')->get(),
+            'faculties' => \App\Services\AcademicCacheService::getAllFaculties(),
+            'departments' => \App\Services\AcademicCacheService::getAllDepartments(),
+            'programs' => \App\Services\AcademicCacheService::getAllProgrammes(),
             'filters' => $request->only(['session_id', 'faculty_id', 'department_id', 'program_id', 'level', 'status', 'search']),
         ]);
     }

@@ -289,5 +289,73 @@ class ScholarshipTest extends TestCase
         $this->assertNotNull($discountItem);
         $this->assertEquals(-50000, (float) $discountItem->amount);
     }
+
+    public function test_scholarship_does_not_apply_to_drug_test_fee()
+    {
+        // 1. Create student on 50% scholarship
+        $scholarship = Scholarship::create([
+            'name' => '50% Scholarship',
+            'percentage' => 50,
+            'covers_admin_charges' => false,
+            'covers_hostel_fees' => false,
+            'is_active' => true,
+        ]);
+
+        $user = User::create([
+            'name' => 'John DrugTest',
+            'email' => 'johndrugtest@student.com',
+            'password' => Hash::make('password'),
+        ]);
+        $user->assignRole('student');
+
+        $student = \App\Models\Student::create([
+            'user_id' => $user->id,
+            'matriculation_number' => 'STU2026999',
+            'scholarship_id' => $scholarship->id,
+            'status' => 'active',
+            'current_level' => '100',
+        ]);
+
+        $session = \App\Models\Session::create([
+            'name' => '2025/2026',
+            'is_current' => true,
+            'registration_enabled' => true,
+        ]);
+
+        $feeService = app(\App\Services\Finance\FeeService::class);
+        
+        // Create Tuition (recurring) and Drug Test (not one-time but excluded)
+        $tuitionType = FeeType::create(['name' => 'Tuition Fee', 'slug' => 'tuition-fee', 'is_one_time' => false]);
+        $drugTestType = FeeType::create(['name' => 'Drug Test', 'slug' => 'drug-test', 'is_one_time' => false]);
+
+        FeeConfiguration::create([
+            'session_id' => $session->id,
+            'fee_type_id' => $tuitionType->id,
+            'amount' => 100000,
+            'level' => '100',
+            'is_compulsory' => true,
+        ]);
+
+        FeeConfiguration::create([
+            'session_id' => $session->id,
+            'fee_type_id' => $drugTestType->id,
+            'amount' => 10000,
+            'level' => '100',
+            'is_compulsory' => true,
+        ]);
+
+        \App\Models\SystemSetting::set('admin_charge_enabled', 'false');
+
+        $invoice = $feeService->generateSchoolFeeInvoice($student, $session);
+
+        $this->assertNotNull($invoice);
+        // Total should be: Tuition (100k) - 50% discount (50k) + Drug Test (10k) = 60,000 NGN
+        $this->assertEquals(60000, (float) $invoice->amount);
+
+        // Verify discount item is exactly -50,000 NGN (discount only on tuition)
+        $discountItem = $invoice->items()->where('amount', '<', 0)->first();
+        $this->assertNotNull($discountItem);
+        $this->assertEquals(-50000, (float) $discountItem->amount);
+    }
 }
 

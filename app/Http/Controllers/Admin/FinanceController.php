@@ -19,6 +19,7 @@ use Carbon\Carbon;
 use App\Models\Expense;
 use App\Models\Payroll;
 use App\Models\ExpenseCategory;
+use App\Services\AcademicCacheService;
 
 class FinanceController extends Controller
 {
@@ -112,9 +113,9 @@ class FinanceController extends Controller
                 ->withCount('feeConfigurations')
                 ->orderBy('start_date', 'desc')
                 ->get(),
-            'faculties' => Faculty::orderBy('name')->get(),
-            'departments' => Department::orderBy('name')->get(),
-            'programs' => Programme::orderBy('name')->get(),
+            'faculties' => AcademicCacheService::getAllFaculties(),
+            'departments' => AcademicCacheService::getAllDepartments(),
+            'programs' => AcademicCacheService::getAllProgrammes(),
         ]);
     }
 
@@ -257,9 +258,9 @@ class FinanceController extends Controller
         return Inertia::render('Admin/Finance/SessionFees', [
             'session' => $session->load(['feeConfigurations.feeType', 'feeConfigurations.faculty', 'feeConfigurations.department', 'feeConfigurations.program']),
             'feeTypes' => FeeType::all(),
-            'faculties' => Faculty::orderBy('name')->get(),
-            'departments' => Department::orderBy('name')->get(),
-            'programs' => Programme::orderBy('name')->get(),
+            'faculties' => AcademicCacheService::getAllFaculties(),
+            'departments' => AcademicCacheService::getAllDepartments(),
+            'programs' => AcademicCacheService::getAllProgrammes(),
         ]);
     }
     public function cloneSessionFees(Request $request)

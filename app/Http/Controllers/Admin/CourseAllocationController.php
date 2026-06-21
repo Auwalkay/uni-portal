@@ -35,7 +35,7 @@ class CourseAllocationController extends Controller
 
         return Inertia::render('Admin/CourseAllocation/Index', [
             'allocations' => $allocations,
-            'sessions' => fn() => Session::latest('start_date')->get(['id', 'name']),
+            'sessions' => fn() => \App\Services\AcademicCacheService::getSessions(),
             'faculties' => fn() => \App\Services\AcademicCacheService::getFaculties(),
             'filters' => $request->only(['session_id', 'department_id', 'search', 'faculty_id']),
             'currentSessionId' => $currentSessionId,

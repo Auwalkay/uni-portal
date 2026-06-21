@@ -27,6 +27,7 @@ class FeeSeeder extends Seeder
             'Sports Fee' => 2000,
             'Medical Fee' => 5000,
             'Library Fee' => 2000,
+            'Drug Test' => 10000,
         ];
 
         foreach ($fees as $name => $amount) {

@@ -78,9 +78,9 @@ class PaymentController extends Controller
         return \Inertia\Inertia::render('Admin/Payments/Index', [
             'payments' => $payments,
             'filters' => $filters,
-            'sessions' => \App\Models\Session::latest()->get(['id', 'name']),
-            'faculties' => \App\Models\Faculty::with('departments:id,name,faculty_id')->get(['id', 'name']),
-            'departments' => \App\Models\Department::get(['id', 'name', 'faculty_id']),
+            'sessions' => \App\Services\AcademicCacheService::getSessions(),
+            'faculties' => \App\Services\AcademicCacheService::getFaculties(),
+            'departments' => \App\Services\AcademicCacheService::getAllDepartments(),
             'stats' => $stats,
         ]);
     }

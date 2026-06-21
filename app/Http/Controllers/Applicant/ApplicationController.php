@@ -39,7 +39,7 @@ class ApplicationController extends Controller
     public function create()
     {
         return Inertia::render('Applicant/Application/Start', [
-            'faculties' => Faculty::with('departments.programmes')->get(),
+            'faculties' => \App\Services\AcademicCacheService::getFacultiesWithProgrammes(),
         ]);
     }
 
@@ -48,7 +48,7 @@ class ApplicationController extends Controller
         return Inertia::render('Applicant/Application/FormWizard', [
             'mode' => $request->query('mode', 'UTME'),
             'programme_id' => $request->query('programme_id'),
-            'states' => \App\Models\State::with('lgas')->get(),
+            'states' => \App\Services\AcademicCacheService::getStates(),
         ]);
     }
 
