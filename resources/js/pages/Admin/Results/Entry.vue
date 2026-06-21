@@ -66,10 +66,39 @@ const submitUpload = () => {
 };
 
 const submit = () => {
+    // Client-side validation: CA max 40, Exam max 80, Total max 100
+    for (let i = 0; i < form.scores.length; i++) {
+        const score = form.scores[i];
+        if (score.is_absent) continue;
+        const ca = Number(score.ca_score) || 0;
+        const exam = Number(score.exam_score) || 0;
+        if (ca < 0 || ca > 40) {
+            Swal.fire('Validation Error', `CA score for student "${getStudentName(score.id)}" must be between 0 and 40.`, 'error');
+            return;
+        }
+        if (exam < 0 || exam > 80) {
+            Swal.fire('Validation Error', `Exam score for student "${getStudentName(score.id)}" must be between 0 and 80.`, 'error');
+            return;
+        }
+        if (ca + exam > 100) {
+            Swal.fire('Validation Error', `Total score (CA + Exam) for student "${getStudentName(score.id)}" cannot exceed 100 (currently ${ca + exam}).`, 'error');
+            return;
+        }
+    }
+
     form.post(route('admin.results.update', props.course.id), {
         preserveScroll: true,
         onSuccess: () => {
             Swal.fire('Saved', 'Results updated successfully', 'success');
+        },
+        onError: (errors) => {
+            const errorList = Object.values(errors).map(err => `<li>${err}</li>`).join('');
+            Swal.fire({
+                icon: 'error',
+                title: 'Failed to Save Results',
+                html: `<div class="text-left text-sm text-rose-600 dark:text-rose-400 bg-rose-500/10 p-3 rounded-lg border border-rose-500/20"><ul class="list-disc list-inside space-y-1">${errorList}</ul></div>`,
+                confirmButtonColor: '#4f46e5'
+            });
         }
     });
 };
@@ -257,7 +286,7 @@ const downloadTemplate = () => {
                                     <TableHead class="h-12">Student Name</TableHead>
                                     <TableHead class="h-12 w-[80px]">Absent</TableHead>
                                     <TableHead class="h-12 w-[140px]">CA (40)</TableHead>
-                                    <TableHead class="h-12 w-[140px]">Exam (60)</TableHead>
+                                    <TableHead class="h-12 w-[140px]">Exam (80)</TableHead>
                                     <TableHead class="h-12 w-[120px]">Total (100)</TableHead>
                                     <TableHead class="h-12 w-[100px]">Grade</TableHead>
                                 </TableRow>
@@ -281,22 +310,28 @@ const downloadTemplate = () => {
                                             class="w-28 font-medium transition-opacity"
                                             placeholder="0"
                                             :disabled="score.is_absent"
-                                            :class="{'opacity-40 pointer-events-none': score.is_absent}"
+                                            :class="{'opacity-40 pointer-events-none': score.is_absent, 'border-rose-500 text-rose-600 focus-visible:ring-rose-500': !score.is_absent && (Number(score.ca_score) > 40 || Number(score.ca_score) < 0 || (Number(score.ca_score) || 0) + (Number(score.exam_score) || 0) > 100 || form.errors[`scores.${index}.ca_score`])}"
                                         />
+                                        <p v-if="form.errors[`scores.${index}.ca_score`]" class="text-xs text-rose-600 mt-1 max-w-[120px] leading-tight">
+                                            {{ form.errors[`scores.${index}.ca_score`] }}
+                                        </p>
                                     </TableCell>
                                     <TableCell>
                                         <Input
                                             type="number"
                                             v-model="score.exam_score"
-                                            min="0" max="60" step="0.5"
+                                            min="0" max="80" step="0.5"
                                             class="w-28 font-medium transition-opacity"
                                             placeholder="0"
                                             :disabled="score.is_absent"
-                                            :class="{'opacity-40 pointer-events-none': score.is_absent}"
+                                            :class="{'opacity-40 pointer-events-none': score.is_absent, 'border-rose-500 text-rose-600 focus-visible:ring-rose-500': !score.is_absent && (Number(score.exam_score) > 80 || Number(score.exam_score) < 0 || (Number(score.ca_score) || 0) + (Number(score.exam_score) || 0) > 100 || form.errors[`scores.${index}.exam_score`])}"
                                         />
+                                        <p v-if="form.errors[`scores.${index}.exam_score`]" class="text-xs text-rose-600 mt-1 max-w-[120px] leading-tight">
+                                            {{ form.errors[`scores.${index}.exam_score`] }}
+                                        </p>
                                     </TableCell>
                                     <TableCell>
-                                        <span class="text-lg font-bold" :class="{'text-muted-foreground opacity-50': score.is_absent}">
+                                        <span class="text-lg font-bold" :class="{'text-muted-foreground opacity-50': score.is_absent, 'text-rose-600': !score.is_absent && (Number(score.ca_score) > 40 || Number(score.exam_score) > 80 || calculateTotal(index) > 100)}">
                                             {{ score.is_absent ? 'ABS' : calculateTotal(index) }}
                                         </span>
                                     </TableCell>

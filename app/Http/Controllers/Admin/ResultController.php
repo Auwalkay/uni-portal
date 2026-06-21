@@ -274,13 +274,51 @@ class ResultController extends Controller
                 abort(403, 'You are not allocated to this course.');
             }
         }
-        $request->validate([
+        $attributes = [];
+        if ($request->has('scores') && is_array($request->scores)) {
+            foreach ($request->scores as $index => $score) {
+                $reg = null;
+                if (!empty($score['id'])) {
+                    $reg = CourseRegistration::with('student.user')->find($score['id']);
+                }
+                $name = $reg && $reg->student && $reg->student->user ? $reg->student->user->name : "Student " . ($index + 1);
+                $attributes["scores.{$index}.ca_score"] = "CA score for {$name}";
+                $attributes["scores.{$index}.exam_score"] = "Exam score for {$name}";
+            }
+        }
+
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'scores' => 'required|array',
             'scores.*.id' => 'required|exists:course_registrations,id',
             'scores.*.ca_score' => 'nullable|numeric|min:0|max:40',
-            'scores.*.exam_score' => 'nullable|numeric|min:0|max:100',
+            'scores.*.exam_score' => 'nullable|numeric|min:0|max:80',
             'scores.*.is_absent' => 'nullable|boolean',
-        ]);
+        ], [], $attributes);
+
+        $validator->after(function ($validator) use ($request) {
+            if ($request->has('scores') && is_array($request->scores)) {
+                foreach ($request->scores as $index => $score) {
+                    if (!empty($score['is_absent'])) {
+                        continue;
+                    }
+                    $ca = floatval($score['ca_score'] ?? 0);
+                    $exam = floatval($score['exam_score'] ?? 0);
+                    if ($ca + $exam > 100) {
+                        $reg = null;
+                        if (!empty($score['id'])) {
+                            $reg = CourseRegistration::with('student.user')->find($score['id']);
+                        }
+                        $name = $reg && $reg->student && $reg->student->user ? $reg->student->user->name : "Student " . ($index + 1);
+                        $validator->errors()->add(
+                            "scores.{$index}.exam_score",
+                            "The total score (CA + Exam) for {$name} must not exceed 100 (currently " . ($ca + $exam) . ")."
+                        );
+                    }
+                }
+            }
+        });
+
+        $validator->validate();
 
         foreach ($request->scores as $data) {
             $reg = CourseRegistration::find($data['id']);
