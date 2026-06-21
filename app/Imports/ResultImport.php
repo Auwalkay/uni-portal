@@ -28,13 +28,26 @@ class ResultImport implements ToCollection, WithHeadingRow
      */
     public function collection(Collection $rows)
     {
-        foreach ($rows as $row) {
+        foreach ($rows as $index => $row) {
             if (!isset($row['matric_number']))
                 continue;
 
+            $rowNum = $index + 2;
             $matric = trim($row['matric_number']);
-            $ca = $row['ca'] ?? 0;
-            $exam = $row['exam'] ?? 0;
+            $ca = isset($row['ca']) && $row['ca'] !== '' ? floatval($row['ca']) : 0;
+            $exam = isset($row['exam']) && $row['exam'] !== '' ? floatval($row['exam']) : 0;
+
+            if ($ca < 0 || $ca > 40) {
+                throw new \Exception("Row {$rowNum}: The CA score for student with matric number '{$matric}' must be between 0 and 40 (currently {$row['ca']}).");
+            }
+
+            if ($exam < 0 || $exam > 80) {
+                throw new \Exception("Row {$rowNum}: The Exam score for student with matric number '{$matric}' must be between 0 and 80 (currently {$row['exam']}).");
+            }
+
+            if ($ca + $exam > 100) {
+                throw new \Exception("Row {$rowNum}: The total score (CA + Exam) for student with matric number '{$matric}' must not exceed 100 (currently " . ($ca + $exam) . ").");
+            }
 
             // Find Student Registration
             // We join students to check matric number
@@ -46,11 +59,7 @@ class ResultImport implements ToCollection, WithHeadingRow
                 ->first();
 
             if ($registration) {
-                // Update
                 $total = $ca + $exam;
-                if ($total > 100)
-                    $total = 100;
-
                 $grading = $this->gradingService->calculate($total);
 
                 $registration->update([
