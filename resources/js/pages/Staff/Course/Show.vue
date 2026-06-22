@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { ref, computed } from 'vue';
 
 const props = defineProps<{
-    course: { id: string; code: string; title: string; unit: number };
+    course: { id: string; code: string; title: string; units: number };
     session: { id: string; name: string };
     students: Array<{
         id: string;
@@ -66,7 +66,7 @@ const breadcrumbs = [
                         <p class="text-muted-foreground flex items-center gap-2">
                             <span>{{ session.name }} Session</span>
                             <span>•</span>
-                            <span>{{ course.unit }} Units</span>
+                            <span>{{ course.units }} Units</span>
                         </p>
                     </div>
                 </div>

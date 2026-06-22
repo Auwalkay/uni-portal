@@ -68,11 +68,20 @@ class SquadcoService implements PaymentGatewayInterface
                 'reference' => $data['transaction_ref'] ?? null,
                 'amount' => $data['amount'] ?? 0, // Keep in kobo to match Paystack pattern
                 'channel' => $data['payment_method'] ?? 'squadco',
+                'gateway_response' => $data['transaction_status'] ?? null,
                 'original_data' => $data
             ];
         }
 
         Log::error('Squadco Verify Error: ' . $response->body());
+
+        $body = $response->json();
+        if ($body && isset($body['message'])) {
+            return [
+                'status' => 'failed',
+                'gateway_response' => $body['message'],
+            ];
+        }
 
         return null;
     }

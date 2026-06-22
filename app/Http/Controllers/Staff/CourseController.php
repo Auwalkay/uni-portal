@@ -79,7 +79,7 @@ class CourseController extends Controller
             ]);
 
         return Inertia::render('Staff/Course/Show', [
-            'course' => $course->only(['id', 'code', 'title', 'unit']),
+            'course' => $course->only(['id', 'code', 'title', 'units']),
             'session' => $currentSession->only(['id', 'name']),
             'students' => $registrations,
         ]);
