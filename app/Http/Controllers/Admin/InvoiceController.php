@@ -315,8 +315,15 @@ class InvoiceController extends Controller
             // return redirect()->route('applicant.apply.show')->with('success', 'Payment successful! Application submitted.');
         }
 
-        if (!$paymentData || $paymentData['status'] !== 'success') {
+        if (!$paymentData || ($paymentData['status'] ?? null) !== 'success') {
             $statusMsg = $paymentData['status'] ?? 'no response';
+            $gatewayResponse = $paymentData['gateway_response'] ?? null;
+            if (!$gatewayResponse && isset($paymentData['original_data']['gateway_response'])) {
+                $gatewayResponse = $paymentData['original_data']['gateway_response'];
+            }
+            if ($gatewayResponse) {
+                $statusMsg .= " (Reason: {$gatewayResponse})";
+            }
             return back()->with('error', "Payment verification failed. Gateway status: {$statusMsg}.");
         }
 

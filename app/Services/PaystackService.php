@@ -48,6 +48,14 @@ class PaystackService implements PaymentGatewayInterface
 
         Log::error('Paystack Verify Error: '.$response->body());
 
+        $body = $response->json();
+        if ($body && isset($body['message'])) {
+            return [
+                'status' => 'failed',
+                'gateway_response' => $body['message'],
+            ];
+        }
+
         return null;
     }
 }
