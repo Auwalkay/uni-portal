@@ -324,6 +324,7 @@ class InvoiceController extends Controller
             if ($gatewayResponse) {
                 $statusMsg .= " (Reason: {$gatewayResponse})";
             }
+            
             return back()->with('error', "Payment verification failed. Gateway status: {$statusMsg}.");
         }
 

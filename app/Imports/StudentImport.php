@@ -27,6 +27,7 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
     protected $programmeId;
     protected $sessionId;
     protected $level;
+    protected $deptCode;
 
     protected $states = [];
 
@@ -39,6 +40,7 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
         $this->programmeId = $programmeId;
         $this->sessionId = $sessionId;
         $this->level = $level;
+        $this->deptCode = \App\Models\Department::where('id', $departmentId)->value('code');
     }
 
     public function model(array $row)
@@ -88,7 +90,12 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
             }
 
             // Generate or use provided matric number
-            $matricNumber = $row['matric_number'] ?? MatriculationNumberHelper::generate();
+            $matricNumber = !empty($row['matric_number'])
+                ? strtoupper(trim($row['matric_number']))
+                : MatriculationNumberHelper::generate([
+                    'dept_code' => $this->deptCode,
+                    'level' => $this->level,
+                ]);
 
             $dob = null;
             if (!empty($row['dob'])) {
@@ -100,6 +107,10 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
                     $dob = $row['dob'];
                 }
             }
+
+            $prog = \App\Models\Programme::find($this->programmeId);
+            $entryLevel = (int) $this->level;
+            $duration = max(($prog?->duration ?? 4) - ($entryLevel === 200 ? 1 : ($entryLevel === 300 ? 2 : 0)), 1);
 
             $student = Student::updateOrCreate(
                 ['user_id' => $user->id],
@@ -120,6 +131,7 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
                     'jamb_registration_number' => $row['jamb_reg'] ?? null,
                     'jamb_score' => $row['jamb_score'] ?? null,
                     'previous_institution' => $row['previous_institution'] ?? null,
+                    'program_duration' => $duration,
                 ]
             );
 

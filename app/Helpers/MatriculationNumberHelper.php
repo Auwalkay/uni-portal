@@ -22,6 +22,13 @@ class MatriculationNumberHelper
             $deptCode = $data['dept_code'] ?? 'GEN';
             $facCode = $data['fac_code'] ?? 'GEN';
 
+            // Extract the starting digit based on entry level
+            $level = isset($data['level']) ? (string)$data['level'] : '100';
+            $startDigit = substr(trim($level), 0, 1);
+            if (!in_array($startDigit, ['1', '2', '3', '4', '5', '6', '7', '8', '9'])) {
+                $startDigit = '1';
+            }
+
             // If format contains {SEQUENCE}, calculate it
             $sequence = '';
             $count = 0;
@@ -34,12 +41,19 @@ class MatriculationNumberHelper
                 );
                 $prefix = str_replace('{SEQUENCE}', '', $prefix);
                 
+                // Append the start digit to the prefix to scope the count to this entry level
+                $scopedPrefix = $prefix . $startDigit;
+
                 // Get the count of students with this pattern and lock them to prevent race conditions
-                $count = Student::where('matriculation_number', 'LIKE', $prefix . '%')
+                $count = Student::where('matriculation_number', 'LIKE', $scopedPrefix . '%')
                     ->lockForUpdate()
                     ->count();
                 
-                $sequence = str_pad($count + 1, 3, '0', STR_PAD_LEFT);
+                // Pad the sequence counter to 3 digits (e.g., 001)
+                $seqCounter = str_pad($count + 1, 3, '0', STR_PAD_LEFT);
+                
+                // Combine them to form a 4-digit sequence (e.g., 2001)
+                $sequence = $startDigit . $seqCounter;
             }
 
             do {
@@ -56,7 +70,8 @@ class MatriculationNumberHelper
                     // If sequence already exists, increment it
                     while (Student::where('matriculation_number', $matricNumber)->exists()) {
                         $count++;
-                        $sequence = str_pad($count + 1, 3, '0', STR_PAD_LEFT);
+                        $seqCounter = str_pad($count + 1, 3, '0', STR_PAD_LEFT);
+                        $sequence = $startDigit . $seqCounter;
                         $matricNumber = str_replace(
                             ['{YEAR}', '{SEQUENCE}', '{DEPT}', '{FACULTY}'],
                             [$year, $sequence, $deptCode, $facCode],
@@ -68,7 +83,7 @@ class MatriculationNumberHelper
 
             } while (Student::where('matriculation_number', $matricNumber)->exists());
 
-            return $matricNumber;
+            return strtoupper($matricNumber);
         });
     }
 }

@@ -336,13 +336,17 @@ const breadcrumbs = [
                             <TableCell class="font-mono font-medium">{{ invoice.reference }}</TableCell>
                             <TableCell>
                                 <div class="flex items-center gap-3">
-                                    <Avatar class="h-8 w-8">
-                                        <AvatarImage :src="invoice.user?.profile_photo_url || ''" :alt="invoice.user?.name" />
-                                        <AvatarFallback>{{ invoice.user?.name?.charAt(0) || 'U' }}</AvatarFallback>
-                                    </Avatar>
+                                    <Link :href="invoice.user?.student ? route('admin.students.show', invoice.user.student.id) : '#'" class="block shrink-0">
+                                        <Avatar class="h-8 w-8 hover:opacity-80 transition-opacity">
+                                            <AvatarImage :src="invoice.user?.profile_photo_url || ''" :alt="invoice.user?.name" />
+                                            <AvatarFallback>{{ invoice.user?.name?.charAt(0) || 'U' }}</AvatarFallback>
+                                        </Avatar>
+                                    </Link>
                                     <div>
-                                        <div class="font-medium">{{ invoice.user?.name }}</div>
-                                        <div class="text-xs text-muted-foreground">{{ invoice.user?.student?.matriculation_number || invoice.user?.email }}</div>
+                                        <Link :href="invoice.user?.student ? route('admin.students.show', invoice.user.student.id) : '#'" class="hover:underline hover:text-indigo-600 transition-colors block">
+                                            <div class="font-medium text-slate-900 dark:text-slate-100">{{ invoice.user?.name }}</div>
+                                        </Link>
+                                        <div class="text-xs text-muted-foreground uppercase">{{ invoice.user?.student?.matriculation_number || invoice.user?.email }}</div>
                                     </div>
                                 </div>
                             </TableCell>
