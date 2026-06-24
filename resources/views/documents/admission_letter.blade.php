@@ -256,9 +256,33 @@
                     <th>Mode of Study</th>
                     <td>{{ ucwords($applicant->application_mode) }} (Full-Time)</td>
                 </tr>
+                @php
+                    $normalDuration = (int) ($applicant->programme?->duration ?? 4);
+                    $entryLevel = 100;
+
+                    if (isset($applicant->is_student) && $applicant->is_student) {
+                        $entryLevel = (int) ($applicant->entry_level ?? 100);
+                    } else {
+                        $mode = strtoupper($applicant->application_mode ?? 'UTME');
+                        if (str_contains($mode, 'DE') || str_contains($mode, 'DIRECT') || str_contains($mode, '200')) {
+                            $entryLevel = 200;
+                        } elseif (str_contains($mode, '300') || str_contains($mode, 'TRANSFER')) {
+                            $entryLevel = str_contains($mode, '300') ? 300 : 200;
+                        }
+                    }
+
+                    $deduction = 0;
+                    if ($entryLevel === 200) {
+                        $deduction = 1;
+                    } elseif ($entryLevel === 300) {
+                        $deduction = 2;
+                    }
+
+                    $calculatedDuration = max($normalDuration - $deduction, 1);
+                @endphp
                 <tr>
                     <th>Duration</th>
-                    <td>{{ $applicant->programme?->duration ?? '4' }} Years</td>
+                    <td>{{ $calculatedDuration }} Years</td>
                 </tr>
             </table>
 

@@ -36,7 +36,10 @@ class EnrollmentService
 
             $currentLevel = ($applicant->application_mode === 'DE') ? 200 : 100;
 
-            $matricNo = \App\Helpers\MatriculationNumberHelper::generate(['dept_code' => $applicant->programme?->department?->code]);
+            $matricNo = \App\Helpers\MatriculationNumberHelper::generate([
+                'dept_code' => $applicant->programme?->department?->code,
+                'level' => $currentLevel,
+            ]);
 
             $student = Student::create([
                 'user_id' => $userId,
@@ -50,7 +53,7 @@ class EnrollmentService
                 'gender' => $applicant->gender,
                 'entry_mode' => $applicant->application_mode,
                 'admitted_session_id' => $currentSession->id,
-                'program_duration' => $applicant->programme?->duration ?? 4,
+                'program_duration' => max(($applicant->programme?->duration ?? 4) - ($currentLevel === 200 ? 1 : ($currentLevel === 300 ? 2 : 0)), 1),
                 'scholarship_id' => $applicant->scholarship_id,
             ]);
 
