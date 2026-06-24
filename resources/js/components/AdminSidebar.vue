@@ -52,6 +52,12 @@ const overviewItems = computed(() => {
             icon: LayoutGrid,
             show: true,
         },
+        {
+            title: 'System Reports',
+            href: '/admin/reports',
+            icon: FileText,
+            show: hasRole('admin') || hasPermission('view_bursary_reports'),
+        },
     ].filter(item => item.show);
 });
 

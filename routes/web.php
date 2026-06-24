@@ -183,6 +183,10 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
         Route::get('activity-logs', [\App\Http\Controllers\Admin\ActivityLogController::class, 'index'])->name('activity-logs.index');
     });
 
+    // SYSTEM REPORTS
+    Route::get('reports', [\App\Http\Controllers\Admin\ReportController::class, 'index'])->name('reports.index');
+    Route::get('reports/export', [\App\Http\Controllers\Admin\ReportController::class, 'export'])->name('reports.export');
+
 });
 
 // Staff Self-Service Routes
