@@ -213,13 +213,7 @@ class MatriculationNumberTest extends TestCase
             'entry_mode' => 'UTME',
             'fee_policy' => 'admission_session',
         ];
-        $response = $this->actingAs($admin)->post(route('admin.students.store'), $student1Data);
-        if ($response->status() !== 201 && $response->status() !== 302) {
-            dd($response->status(), $response->content());
-        }
-        if (session()->has('errors')) {
-            dd(session()->get('errors')->all());
-        }
+        $this->actingAs($admin)->post(route('admin.students.store'), $student1Data);
         $student1 = Student::whereHas('user', function($q) {
             $q->where('email', 'john.utme@example.com');
         })->first();
@@ -291,5 +285,40 @@ class MatriculationNumberTest extends TestCase
         ]);
 
         $this->assertEquals("MIU{$year}2045", $matric);
+    }
+
+    public function test_console_command_regenerates_matriculation_numbers_successfully()
+    {
+        SystemSetting::set('matric_format', 'MIU{YEAR}{SEQUENCE}');
+
+        $faculty = Faculty::create(['name' => 'Sciences', 'code' => 'SCI']);
+        $dept = Department::create(['name' => 'Computer Science', 'code' => 'CSC', 'faculty_id' => $faculty->id]);
+
+        $user1 = User::factory()->create(['name' => 'Shea Strickland']);
+        $student1 = Student::create([
+            'user_id' => $user1->id,
+            'matriculation_number' => 'MIU26001',
+            'current_level' => '200',
+            'faculty_id' => $faculty->id,
+            'department_id' => $dept->id,
+        ]);
+
+        $user2 = User::factory()->create(['name' => 'John Doe']);
+        $student2 = Student::create([
+            'user_id' => $user2->id,
+            'matriculation_number' => 'UNI/2024/0001',
+            'current_level' => '200',
+            'faculty_id' => $faculty->id,
+            'department_id' => $dept->id,
+        ]);
+
+        $this->artisan('students:regenerate-matric-numbers')
+            ->assertExitCode(0);
+
+        $student1->refresh();
+        $student2->refresh();
+
+        $this->assertEquals('MIU262001', $student1->matriculation_number);
+        $this->assertEquals('MIU242001', $student2->matriculation_number);
     }
 }
