@@ -31,7 +31,7 @@ class MatriculationNumberHelper
 
             // If format contains {SEQUENCE}, calculate it
             $sequence = '';
-            $count = 0;
+            $maxCount = 0;
             if (str_contains($format, '{SEQUENCE}')) {
                 // Calculate prefix for counting: replace all placeholders except SEQUENCE
                 $prefix = str_replace(
@@ -41,18 +41,28 @@ class MatriculationNumberHelper
                 );
                 $prefix = str_replace('{SEQUENCE}', '', $prefix);
                 
-                // Append the start digit to the prefix to scope the count to this entry level
-                $scopedPrefix = $prefix . $startDigit;
-
-                // Get the count of students with this pattern and lock them to prevent race conditions
-                $count = Student::where('matriculation_number', 'LIKE', $scopedPrefix . '%')
+                // Retrieve existing matriculation numbers starting with the prefix
+                $existingMatrics = Student::where('matriculation_number', 'LIKE', $prefix . '%')
                     ->lockForUpdate()
-                    ->count();
+                    ->pluck('matriculation_number');
+
+                foreach ($existingMatrics as $matric) {
+                    $seqPart = substr($matric, strlen($prefix));
+                    if (strlen($seqPart) >= 3) {
+                        $counterStr = substr($seqPart, -3);
+                        if (is_numeric($counterStr)) {
+                            $counterVal = (int) $counterStr;
+                            if ($counterVal > $maxCount) {
+                                $maxCount = $counterVal;
+                            }
+                        }
+                    }
+                }
                 
-                // Pad the sequence counter to 3 digits (e.g., 001)
-                $seqCounter = str_pad($count + 1, 3, '0', STR_PAD_LEFT);
+                // Pad the sequence counter to 3 digits (e.g., 001 or continuing sequence)
+                $seqCounter = str_pad($maxCount + 1, 3, '0', STR_PAD_LEFT);
                 
-                // Combine them to form a 4-digit sequence (e.g., 2001)
+                // Combine them to form a 4-digit sequence (e.g., 2001 or 2046)
                 $sequence = $startDigit . $seqCounter;
             }
 
@@ -69,8 +79,8 @@ class MatriculationNumberHelper
                 if (!str_contains($format, '{RANDOM}')) {
                     // If sequence already exists, increment it
                     while (Student::where('matriculation_number', $matricNumber)->exists()) {
-                        $count++;
-                        $seqCounter = str_pad($count + 1, 3, '0', STR_PAD_LEFT);
+                        $maxCount++;
+                        $seqCounter = str_pad($maxCount + 1, 3, '0', STR_PAD_LEFT);
                         $sequence = $startDigit . $seqCounter;
                         $matricNumber = str_replace(
                             ['{YEAR}', '{SEQUENCE}', '{DEPT}', '{FACULTY}'],

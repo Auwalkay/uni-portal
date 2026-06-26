@@ -57,15 +57,14 @@ class MatriculationNumberTest extends TestCase
         ]);
         $this->assertEquals("MIU{$year}CSC1002", $matric2);
 
-        // Level 200
+        // Level 200 (should continue from Level 100 sequence counter, expecting 2002 instead of starting fresh at 2001)
         $matric3 = MatriculationNumberHelper::generate([
             'dept_code' => 'CSC',
             'level' => '200',
         ]);
-        // Expected: MIU{YEAR}CSC2001
-        $this->assertEquals("MIU{$year}CSC2001", $matric3);
+        $this->assertEquals("MIU{$year}CSC2002", $matric3);
 
-        // Save a level 200 student
+        // Save the level 200 student
         $user2 = User::factory()->create();
         Student::create([
             'user_id' => $user2->id,
@@ -75,11 +74,12 @@ class MatriculationNumberTest extends TestCase
             'department_id' => $dept->id,
         ]);
 
+        // Next Level 200 student should continue to 2003
         $matric4 = MatriculationNumberHelper::generate([
             'dept_code' => 'CSC',
             'level' => '200',
         ]);
-        $this->assertEquals("MIU{$year}CSC2002", $matric4);
+        $this->assertEquals("MIU{$year}CSC2003", $matric4);
     }
 
     public function test_all_caps_enforced_for_generated_and_manual_inputs()
