@@ -16,7 +16,7 @@ class MatriculationNumberHelper
     public static function generate(?array $data = null): string
     {
         return DB::transaction(function () use ($data) {
-            $year = date('y');
+            $year = isset($data['year']) ? $data['year'] : date('y');
             $format = \App\Models\SystemSetting::get('matric_format', 'MIU{YEAR}{SEQUENCE}');
 
             $deptCode = $data['dept_code'] ?? 'GEN';
@@ -33,8 +33,11 @@ class MatriculationNumberHelper
             $sequence = '';
             $maxCount = 0;
             if (str_contains($format, '{SEQUENCE}')) {
-                // Calculate prefix for counting: replace all placeholders except SEQUENCE
-                $prefix = str_replace(
+                if (isset($data['sequence'])) {
+                    $sequence = $data['sequence'];
+                } else {
+                    // Calculate prefix for counting: replace all placeholders except SEQUENCE
+                    $prefix = str_replace(
                     ['{YEAR}', '{RANDOM}', '{DEPT}', '{FACULTY}'],
                     [$year, '', $deptCode, $facCode],
                     $format
@@ -64,6 +67,7 @@ class MatriculationNumberHelper
                 
                 // Combine them to form a 4-digit sequence (e.g., 2001 or 2046)
                 $sequence = $startDigit . $seqCounter;
+                }
             }
 
             do {

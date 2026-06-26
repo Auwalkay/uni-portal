@@ -213,7 +213,13 @@ class MatriculationNumberTest extends TestCase
             'entry_mode' => 'UTME',
             'fee_policy' => 'admission_session',
         ];
-        $this->actingAs($admin)->post(route('admin.students.store'), $student1Data);
+        $response = $this->actingAs($admin)->post(route('admin.students.store'), $student1Data);
+        if ($response->status() !== 201 && $response->status() !== 302) {
+            dd($response->status(), $response->content());
+        }
+        if (session()->has('errors')) {
+            dd(session()->get('errors')->all());
+        }
         $student1 = Student::whereHas('user', function($q) {
             $q->where('email', 'john.utme@example.com');
         })->first();
@@ -271,5 +277,19 @@ class MatriculationNumberTest extends TestCase
         })->first();
         $this->assertNotNull($student3);
         $this->assertEquals(2, $student3->program_duration);
+    }
+
+    public function test_helper_supports_forced_custom_sequence()
+    {
+        SystemSetting::set('matric_format', 'MIU{YEAR}{SEQUENCE}');
+        $year = date('y');
+
+        // Force a custom sequence like "2045"
+        $matric = MatriculationNumberHelper::generate([
+            'level' => '200',
+            'sequence' => '2045',
+        ]);
+
+        $this->assertEquals("MIU{$year}2045", $matric);
     }
 }
