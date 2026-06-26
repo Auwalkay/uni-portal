@@ -90,13 +90,22 @@ class StudentController extends Controller
 
             // Generate Matric Number
             $dept = \App\Models\Department::find($validated['department_id']);
-            $matricNumber = $validated['matriculation_number'] ?? MatriculationNumberHelper::generate(['dept_code' => $dept?->code]);
+            $matricNumber = !empty($validated['matriculation_number'])
+                ? strtoupper(trim($validated['matriculation_number']))
+                : MatriculationNumberHelper::generate([
+                    'dept_code' => $dept?->code,
+                    'level' => $validated['current_level'],
+                ]);
 
             // Handle Passport
             $passportPath = null;
             if ($request->hasFile('passport_photo')) {
                 $passportPath = $request->file('passport_photo')->store('passports', 'public');
             }
+
+            $prog = \App\Models\Programme::find($validated['program_id']);
+            $entryLevel = (int) $validated['current_level'];
+            $duration = max(($prog?->duration ?? 4) - ($entryLevel === 200 ? 1 : ($entryLevel === 300 ? 2 : 0)), 1);
 
             // Create Student Profile
             $student = Student::create([
@@ -122,6 +131,7 @@ class StudentController extends Controller
                 'passport_photo_path' => $passportPath,
                 'fee_policy' => $validated['fee_policy'],
                 'scholarship_id' => $validated['scholarship_id'],
+                'program_duration' => $duration,
             ]);
 
             $currentSession = \App\Models\Session::find($validated['admitted_session_id']);
@@ -479,7 +489,7 @@ class StudentController extends Controller
             }
 
             $student->update([
-                'matriculation_number' => $validated['matriculation_number'],
+                'matriculation_number' => strtoupper(trim($validated['matriculation_number'])),
                 'gender' => $validated['gender'],
                 'dob' => $validated['dob'],
                 'phone_number' => $validated['phone_number'],

@@ -20,7 +20,7 @@ const props = defineProps<{
                 id: string;
                 code: string;
                 title: string;
-                unit: number;
+                units: number;
             };
             session: {
                 name: string;
@@ -127,7 +127,7 @@ watch(selectedSession, (value) => {
                         <CardContent>
                              <div class="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
                                 <div class="text-sm text-muted-foreground">
-                                    <span class="font-medium text-slate-700 dark:text-slate-300">{{ allocation.course.unit }}</span> Units
+                                    <span class="font-medium text-slate-700 dark:text-slate-300">{{ allocation.course.units }}</span> Units
                                 </div>
                                 <div class="flex items-center text-sm font-medium text-indigo-600 group-hover:translate-x-1 transition-transform">
                                     Manage <ArrowRight class="ml-1 h-3 w-3" />

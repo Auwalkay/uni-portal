@@ -348,6 +348,12 @@ class ProfileController extends Controller
             // Calculate Fees for the Letter
             $feesData = $this->calculateEstimatedFees($student);
             
+            // Calculate student's entry level (their first session level or fallback)
+            $entryLevel = (int) ($student->sessions()->orderBy('created_at', 'asc')->value('level')
+                ?? $student->sessions()->orderBy('level', 'asc')->value('level')
+                ?? $student->current_level
+                ?? 100);
+
             // Map student data to what the template expects
             $data = [
                 'applicant' => (object) [
@@ -361,6 +367,8 @@ class ProfileController extends Controller
                     'jamb_registration_number' => $student->jamb_registration_number,
                     'application_mode' => $student->entry_mode ?? 'UTME',
                     'programme' => $student->program,
+                    'entry_level' => $entryLevel,
+                    'is_student' => true,
                 ],
                 'faculty_name' => $student->faculty?->name ?? $student->program?->department?->faculty?->name ?? 'N/A',
                 'programme_name' => $student->program?->name ?? 'N/A',

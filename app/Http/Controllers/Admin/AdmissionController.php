@@ -188,6 +188,7 @@ class AdmissionController extends Controller
             ->get();
 
         $tuition = 0;
+        $discountTuitionBase = 0;
         $oneTimeFeesTotal = 0;
         $oneTimeFeesList = [];
 
@@ -207,6 +208,9 @@ class AdmissionController extends Controller
                     ];
                 } else {
                     $tuition += $resolved->amount;
+                    if (!($resolved->feeType && (strtolower($resolved->feeType->name) === 'drug test' || $resolved->feeType->slug === 'drug-test'))) {
+                        $discountTuitionBase += $resolved->amount;
+                    }
                 }
             }
         }
@@ -218,7 +222,7 @@ class AdmissionController extends Controller
         $discount = 0;
         $scholarship = $applicant->scholarship;
         if ($scholarship && ($applicant->programme?->scholarship_eligible ?? true)) {
-            $baseForDiscount = $tuition;
+            $baseForDiscount = $discountTuitionBase;
             if ($adminCharge > 0 && $scholarship->covers_admin_charges) {
                 $baseForDiscount += $adminCharge;
             }
