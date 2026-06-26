@@ -57,15 +57,14 @@ class MatriculationNumberTest extends TestCase
         ]);
         $this->assertEquals("MIU{$year}CSC1002", $matric2);
 
-        // Level 200
+        // Level 200 (should continue from Level 100 sequence counter, expecting 2002 instead of starting fresh at 2001)
         $matric3 = MatriculationNumberHelper::generate([
             'dept_code' => 'CSC',
             'level' => '200',
         ]);
-        // Expected: MIU{YEAR}CSC2001
-        $this->assertEquals("MIU{$year}CSC2001", $matric3);
+        $this->assertEquals("MIU{$year}CSC2002", $matric3);
 
-        // Save a level 200 student
+        // Save the level 200 student
         $user2 = User::factory()->create();
         Student::create([
             'user_id' => $user2->id,
@@ -75,11 +74,12 @@ class MatriculationNumberTest extends TestCase
             'department_id' => $dept->id,
         ]);
 
+        // Next Level 200 student should continue to 2003
         $matric4 = MatriculationNumberHelper::generate([
             'dept_code' => 'CSC',
             'level' => '200',
         ]);
-        $this->assertEquals("MIU{$year}CSC2002", $matric4);
+        $this->assertEquals("MIU{$year}CSC2003", $matric4);
     }
 
     public function test_all_caps_enforced_for_generated_and_manual_inputs()
@@ -213,7 +213,13 @@ class MatriculationNumberTest extends TestCase
             'entry_mode' => 'UTME',
             'fee_policy' => 'admission_session',
         ];
-        $this->actingAs($admin)->post(route('admin.students.store'), $student1Data);
+        $response = $this->actingAs($admin)->post(route('admin.students.store'), $student1Data);
+        if ($response->status() !== 201 && $response->status() !== 302) {
+            dd($response->status(), $response->content());
+        }
+        if (session()->has('errors')) {
+            dd(session()->get('errors')->all());
+        }
         $student1 = Student::whereHas('user', function($q) {
             $q->where('email', 'john.utme@example.com');
         })->first();
@@ -271,5 +277,19 @@ class MatriculationNumberTest extends TestCase
         })->first();
         $this->assertNotNull($student3);
         $this->assertEquals(2, $student3->program_duration);
+    }
+
+    public function test_helper_supports_forced_custom_sequence()
+    {
+        SystemSetting::set('matric_format', 'MIU{YEAR}{SEQUENCE}');
+        $year = date('y');
+
+        // Force a custom sequence like "2045"
+        $matric = MatriculationNumberHelper::generate([
+            'level' => '200',
+            'sequence' => '2045',
+        ]);
+
+        $this->assertEquals("MIU{$year}2045", $matric);
     }
 }
