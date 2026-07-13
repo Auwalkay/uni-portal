@@ -90,13 +90,44 @@ const openEdit = (expense: any) => {
     isModalOpen.value = true;
 };
 
+const formatAmountInput = (val: string) => {
+    let cleaned = val.replace(/[^0-9.]/g, '');
+    const parts = cleaned.split('.');
+    if (parts.length > 2) {
+        cleaned = parts[0] + '.' + parts.slice(1).join('');
+    }
+    
+    const integerPart = parts[0];
+    const decimalPart = parts[1] !== undefined ? '.' + parts.slice(1).join('') : '';
+    
+    if (integerPart) {
+        return Number(integerPart).toLocaleString('en-US') + decimalPart;
+    }
+    return cleaned;
+};
+
+watch(() => form.amount, (newVal) => {
+    if (newVal) {
+        const formatted = formatAmountInput(String(newVal));
+        if (formatted !== newVal) {
+            form.amount = formatted;
+        }
+    }
+});
+
 const submit = () => {
+    const formattedAmount = form.amount;
+    form.amount = String(form.amount).replace(/,/g, '');
+
     if (isEditing.value && form.id) {
         form.put(route('admin.finance.expenses.update', form.id), {
             onSuccess: () => {
                 isModalOpen.value = false;
                 Swal.fire({ icon: 'success', title: 'Success', text: 'Expense updated', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
             },
+            onError: () => {
+                form.amount = formattedAmount;
+            }
         });
     } else {
         form.post(route('admin.finance.expenses.store'), {
@@ -104,6 +135,9 @@ const submit = () => {
                 isModalOpen.value = false;
                 Swal.fire({ icon: 'success', title: 'Success', text: 'Expense added', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
             },
+            onError: () => {
+                form.amount = formattedAmount;
+            }
         });
     }
 };
@@ -264,7 +298,7 @@ const formatCurrency = (val: any) => new Intl.NumberFormat('en-NG', { style: 'cu
                         <div class="grid grid-cols-2 gap-4">
                             <div class="grid gap-2">
                                 <Label>Amount</Label>
-                                <Input type="number" v-model="form.amount" placeholder="0.00" />
+                                <Input type="text" v-model="form.amount" placeholder="0.00" />
                             </div>
                             <div class="grid gap-2">
                                 <Label>Date</Label>
