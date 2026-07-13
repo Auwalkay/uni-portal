@@ -118,8 +118,18 @@ class FeeService
                 $baseForDiscount = 0;
                 foreach ($resolvedConfigs as $config) {
                     if (!$config->feeType || !$config->feeType->is_one_time) {
-                        if ($config->feeType && (strtolower($config->feeType->name) === 'drug test' || $config->feeType->slug === 'drug-test')) {
-                            continue;
+                        if ($config->feeType) {
+                            $feeName = strtolower($config->feeType->name);
+                            $feeSlug = $config->feeType->slug;
+                            $isExcluded = str_contains($feeName, 'drug test') || 
+                                          str_contains($feeSlug, 'drug-test') ||
+                                          str_contains($feeName, 'acceptance') || 
+                                          str_contains($feeSlug, 'acceptance') ||
+                                          str_contains($feeName, 'matriculation') || 
+                                          str_contains($feeSlug, 'matriculation');
+                            if ($isExcluded) {
+                                continue;
+                            }
                         }
                         $baseForDiscount += $config->amount;
                     }
@@ -265,8 +275,18 @@ class FeeService
                 $baseForDiscount = 0;
                 foreach ($resolvedConfigs as $config) {
                     if (!$config->feeType || !$config->feeType->is_one_time) {
-                        if ($config->feeType && (strtolower($config->feeType->name) === 'drug test' || $config->feeType->slug === 'drug-test')) {
-                            continue;
+                        if ($config->feeType) {
+                            $feeName = strtolower($config->feeType->name);
+                            $feeSlug = $config->feeType->slug;
+                            $isExcluded = str_contains($feeName, 'drug test') || 
+                                          str_contains($feeSlug, 'drug-test') ||
+                                          str_contains($feeName, 'acceptance') || 
+                                          str_contains($feeSlug, 'acceptance') ||
+                                          str_contains($feeName, 'matriculation') || 
+                                          str_contains($feeSlug, 'matriculation');
+                            if ($isExcluded) {
+                                continue;
+                            }
                         }
                         $baseForDiscount += $config->amount;
                     }

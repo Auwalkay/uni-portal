@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Models\Scholarship;
+use App\Models\FeeType;
+use App\Models\FeeConfiguration;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -29,6 +31,7 @@ class ScholarshipTest extends TestCase
 
         $response = $this->actingAs($admin)->post(route('admin.scholarships.store'), [
             'name' => 'Need Based Scholarship',
+            'type' => 'percentage',
             'percentage' => 50,
             'covers_admin_charges' => true,
             'covers_hostel_fees' => true,
@@ -40,6 +43,7 @@ class ScholarshipTest extends TestCase
 
         $this->assertDatabaseHas('scholarships', [
             'name' => 'Need Based Scholarship',
+            'type' => 'percentage',
             'percentage' => 50,
             'covers_admin_charges' => true,
             'covers_hostel_fees' => true,
@@ -52,6 +56,7 @@ class ScholarshipTest extends TestCase
         // 1. Create a student with 100% scholarship that covers admin/hostel
         $scholarship = Scholarship::create([
             'name' => '100% Scholarship',
+            'type' => 'percentage',
             'percentage' => 100,
             'covers_admin_charges' => true,
             'covers_hostel_fees' => true,
@@ -75,6 +80,8 @@ class ScholarshipTest extends TestCase
 
         $session = \App\Models\Session::create([
             'name' => '2025/2026',
+            'start_date' => '2025-09-01',
+            'end_date' => '2026-07-01',
             'is_current' => true,
             'registration_enabled' => true,
         ]);
@@ -144,6 +151,8 @@ class ScholarshipTest extends TestCase
 
         $session = \App\Models\Session::create([
             'name' => '2025/2026',
+            'start_date' => '2025-09-01',
+            'end_date' => '2026-07-01',
             'is_current' => true,
             'registration_enabled' => true,
         ]);
@@ -199,6 +208,8 @@ class ScholarshipTest extends TestCase
 
         $session = \App\Models\Session::create([
             'name' => '2025/2026',
+            'start_date' => '2025-09-01',
+            'end_date' => '2026-07-01',
             'is_current' => true,
             'registration_enabled' => true,
         ]);
@@ -229,6 +240,7 @@ class ScholarshipTest extends TestCase
         // 1. Create student on 50% scholarship
         $scholarship = Scholarship::create([
             'name' => '50% Scholarship',
+            'type' => 'percentage',
             'percentage' => 50,
             'covers_admin_charges' => false,
             'covers_hostel_fees' => false,
@@ -252,6 +264,8 @@ class ScholarshipTest extends TestCase
 
         $session = \App\Models\Session::create([
             'name' => '2025/2026',
+            'start_date' => '2025-09-01',
+            'end_date' => '2026-07-01',
             'is_current' => true,
             'registration_enabled' => true,
         ]);
@@ -295,6 +309,7 @@ class ScholarshipTest extends TestCase
         // 1. Create student on 50% scholarship
         $scholarship = Scholarship::create([
             'name' => '50% Scholarship',
+            'type' => 'percentage',
             'percentage' => 50,
             'covers_admin_charges' => false,
             'covers_hostel_fees' => false,
@@ -318,6 +333,8 @@ class ScholarshipTest extends TestCase
 
         $session = \App\Models\Session::create([
             'name' => '2025/2026',
+            'start_date' => '2025-09-01',
+            'end_date' => '2026-07-01',
             'is_current' => true,
             'registration_enabled' => true,
         ]);
@@ -358,4 +375,3 @@ class ScholarshipTest extends TestCase
         $this->assertEquals(-50000, (float) $discountItem->amount);
     }
 }
-

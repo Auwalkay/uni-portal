@@ -4,6 +4,7 @@ import { Head, useForm, router } from '@inertiajs/vue3';
 import { ref, watch, computed } from 'vue';
 import { route } from 'ziggy-js';
 import SearchableSelect from '@/components/SearchableSelect.vue';
+import Pagination from '@/components/Pagination.vue';
 import { 
     CalendarRange, Plus, Trash2, Filter, Save, X, Search, Upload, Download 
 } from 'lucide-vue-next';
@@ -23,7 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import Swal from 'sweetalert2';
 
 const props = defineProps<{
-    timetables: any[];
+    timetables: any;
     sessions: any[];
     semesters: any[];
     departments: any[];
@@ -253,7 +254,7 @@ const breadcrumbs = [
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        <TableRow v-for="entry in timetables" :key="entry.id">
+                        <TableRow v-for="entry in timetables.data" :key="entry.id">
                             <TableCell class="font-medium">{{ entry.day }}</TableCell>
                             <TableCell>
                                 <Badge variant="outline">{{ entry.start_time.substring(0,5) }} - {{ entry.end_time.substring(0,5) }}</Badge>
@@ -273,7 +274,7 @@ const breadcrumbs = [
                                 </Button>
                             </TableCell>
                         </TableRow>
-                        <TableRow v-if="timetables.length === 0">
+                        <TableRow v-if="timetables.data.length === 0">
                             <TableCell colspan="6" class="h-24 text-center text-muted-foreground">
                                 No entries found.
                             </TableCell>
@@ -281,6 +282,8 @@ const breadcrumbs = [
                     </TableBody>
                 </Table>
             </div>
+
+            <Pagination :links="timetables.links" class="mt-4" />
 
             <!-- Create Modal -->
             <Dialog v-model:open="isCreateOpen">
