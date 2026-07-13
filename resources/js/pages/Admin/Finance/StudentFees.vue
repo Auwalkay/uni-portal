@@ -110,7 +110,7 @@ const formatCurrency = (amount: number) => {
 const getStatusBadge = (status: string) => {
     switch (status) {
         case 'paid': return 'bg-green-100 text-green-700 border-green-200';
-        case 'partially_paid': return 'bg-amber-100 text-amber-700 border-amber-200';
+        case 'partial': return 'bg-amber-100 text-amber-700 border-amber-200';
         default: return 'bg-red-100 text-red-700 border-red-200';
     }
 };
@@ -245,7 +245,7 @@ const getStatusBadge = (status: string) => {
                     <SelectContent>
                         <SelectItem value="ALL">All Status</SelectItem>
                         <SelectItem value="paid">Fully Paid</SelectItem>
-                        <SelectItem value="partially_paid">Partially Paid</SelectItem>
+                        <SelectItem value="partial">Partially Paid</SelectItem>
                         <SelectItem value="unpaid">Unpaid</SelectItem>
                     </SelectContent>
                 </Select>
