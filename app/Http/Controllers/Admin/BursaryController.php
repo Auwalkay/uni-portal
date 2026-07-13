@@ -105,7 +105,7 @@ class BursaryController extends Controller
 
             $status = $invoice ? $invoice->status : 'unpaid';
             if ($status === 'paid') $stats['paid_count']++;
-            elseif ($status === 'partially_paid') $stats['partial_count']++;
+            elseif ($status === 'partial') $stats['partial_count']++;
             else $stats['unpaid_count']++;
         });
 
