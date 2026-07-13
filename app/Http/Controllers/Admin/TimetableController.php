@@ -44,7 +44,8 @@ class TimetableController extends Controller
             ->orderBy('level')
             ->orderByRaw("FIELD(day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')")
             ->orderBy('start_time')
-            ->get();
+            ->paginate(15)
+            ->withQueryString();
 
         return Inertia::render('Admin/Timetable/Index', [
             'timetables' => $timetables,

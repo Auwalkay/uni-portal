@@ -38,27 +38,33 @@ class FinanceController extends Controller
             $netBalance = $totalInflow - $totalOutflow;
 
             // 4. Monthly Cash Flow (Last 6 months)
+            $sixMonthsAgo = Carbon::now()->subMonths(5)->startOfMonth();
+
+            $payments = Payment::where('status', 'success')
+                ->where('paid_at', '>=', $sixMonthsAgo)
+                ->get(['amount', 'paid_at']);
+
+            $expenses = Expense::where('status', 'approved')
+                ->where('date', '>=', $sixMonthsAgo)
+                ->get(['amount', 'date']);
+
+            $payrolls = Payroll::where('status', 'paid')
+                ->where('paid_at', '>=', $sixMonthsAgo)
+                ->get(['total_amount', 'paid_at']);
+
+            $paymentsGrouped = $payments->groupBy(fn($p) => Carbon::parse($p->paid_at)->format('Y-m'));
+            $expensesGrouped = $expenses->groupBy(fn($e) => Carbon::parse($e->date)->format('Y-m'));
+            $payrollGrouped = $payrolls->groupBy(fn($pr) => Carbon::parse($pr->paid_at)->format('Y-m'));
+
             $data = collect();
             for ($i = 5; $i >= 0; $i--) {
                 $date = Carbon::now()->subMonths($i);
-                $month = $date->format('Y-m');
+                $monthKey = $date->format('Y-m');
                 $label = $date->format('M Y');
 
-                $inflow = Payment::where('status', 'success')
-                    ->whereYear('paid_at', $date->year)
-                    ->whereMonth('paid_at', $date->month)
-                    ->sum('amount');
-
-                $outflowExpenses = Expense::where('status', 'approved')
-                    ->whereYear('date', $date->year)
-                    ->whereMonth('date', $date->month) // Assuming 'date' is when expense incurred
-                    ->sum('amount');
-
-                // For payroll, we can use generated_at or paid_at
-                $outflowPayroll = Payroll::where('status', 'paid')
-                    ->whereYear('paid_at', $date->year)
-                    ->whereMonth('paid_at', $date->month)
-                    ->sum('total_amount');
+                $inflow = isset($paymentsGrouped[$monthKey]) ? $paymentsGrouped[$monthKey]->sum('amount') : 0;
+                $outflowExpenses = isset($expensesGrouped[$monthKey]) ? $expensesGrouped[$monthKey]->sum('amount') : 0;
+                $outflowPayroll = isset($payrollGrouped[$monthKey]) ? $payrollGrouped[$monthKey]->sum('total_amount') : 0;
 
                 $data->push([
                     'month' => $label,

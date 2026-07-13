@@ -441,7 +441,16 @@ class ProfileController extends Controller
                     ];
                 } else {
                     $tuition += $resolved->amount;
-                    if (!($resolved->feeType && (strtolower($resolved->feeType->name) === 'drug test' || $resolved->feeType->slug === 'drug-test'))) {
+                    $feeName = $resolved->feeType ? strtolower($resolved->feeType->name) : '';
+                    $feeSlug = $resolved->feeType ? $resolved->feeType->slug : '';
+                    $isExcluded = str_contains($feeName, 'drug test') || 
+                                  str_contains($feeSlug, 'drug-test') ||
+                                  str_contains($feeName, 'acceptance') || 
+                                  str_contains($feeSlug, 'acceptance') ||
+                                  str_contains($feeName, 'matriculation') || 
+                                  str_contains($feeSlug, 'matriculation');
+                    
+                    if (!$isExcluded) {
                         $discountTuitionBase += $resolved->amount;
                     }
                 }
@@ -529,7 +538,16 @@ class ProfileController extends Controller
                     ];
                 } else {
                     $tuition += $resolved->amount;
-                    if (!($resolved->feeType && (strtolower($resolved->feeType->name) === 'drug test' || $resolved->feeType->slug === 'drug-test'))) {
+                    $feeName = $resolved->feeType ? strtolower($resolved->feeType->name) : '';
+                    $feeSlug = $resolved->feeType ? $resolved->feeType->slug : '';
+                    $isExcluded = str_contains($feeName, 'drug test') || 
+                                  str_contains($feeSlug, 'drug-test') ||
+                                  str_contains($feeName, 'acceptance') || 
+                                  str_contains($feeSlug, 'acceptance') ||
+                                  str_contains($feeName, 'matriculation') || 
+                                  str_contains($feeSlug, 'matriculation');
+                    
+                    if (!$isExcluded) {
                         $discountTuitionBase += $resolved->amount;
                     }
                 }
