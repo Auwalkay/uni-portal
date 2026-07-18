@@ -8,10 +8,11 @@ use App\Models\Session;
 use App\Models\Timetable;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Illuminate\Support\Facades\Log;
 
-class TimetableImport implements ToCollection, WithHeadingRow
+class TimetableImport implements ToCollection, WithChunkReading, WithHeadingRow
 {
     public function collection(Collection $rows)
     {
@@ -59,8 +60,13 @@ class TimetableImport implements ToCollection, WithHeadingRow
 
     private function formatTime($time)
     {
-        // Handle Excel time serial or string 
+        // Handle Excel time serial or string
         // Simple string handling for now (HH:MM)
         return date('H:i', strtotime($time));
+    }
+
+    public function chunkSize(): int
+    {
+        return 500;
     }
 }

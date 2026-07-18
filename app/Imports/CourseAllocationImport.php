@@ -9,10 +9,11 @@ use App\Models\Staff;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Illuminate\Support\Facades\Log;
 
-class CourseAllocationImport implements ToCollection, WithHeadingRow
+class CourseAllocationImport implements ToCollection, WithChunkReading, WithHeadingRow
 {
     private $stats = [
         'created' => 0,
@@ -87,5 +88,10 @@ class CourseAllocationImport implements ToCollection, WithHeadingRow
     public function getStats()
     {
         return $this->stats;
+    }
+
+    public function chunkSize(): int
+    {
+        return 500;
     }
 }

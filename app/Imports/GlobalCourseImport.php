@@ -7,12 +7,13 @@ use App\Models\Department;
 use App\Models\Programme;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-class GlobalCourseImport implements ToCollection, WithHeadingRow
+class GlobalCourseImport implements ToCollection, WithChunkReading, WithHeadingRow
 {
     private $stats = [
         'created' => 0,
@@ -159,5 +160,10 @@ class GlobalCourseImport implements ToCollection, WithHeadingRow
     public function getStats()
     {
         return $this->stats;
+    }
+
+    public function chunkSize(): int
+    {
+        return 500;
     }
 }
