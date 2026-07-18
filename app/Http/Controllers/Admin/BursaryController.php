@@ -232,25 +232,25 @@ class BursaryController extends Controller
             }
         ])->get();
 
-        $students->transform(function ($student) use ($sessionId) {
-            $invoice = $student->invoices->first(); // Since we filtered in with()
+        $invoiceIds = $students->pluck('invoices')->flatten()->pluck('id')->filter()->values();
 
-            $lastPayment = null;
-            if ($invoice) {
-                // Since we need the last payment date, we might still need a quick query or 
-                // we could have eager loaded it too. For 3k, a single subquery is better.
-                $lastPayment = \App\Models\Payment::where('invoice_id', $invoice->id)
-                    ->where('status', 'success')
-                    ->latest('paid_at')
-                    ->first();
-            }
+        $latestPaymentByInvoice = \App\Models\Payment::whereIn('invoice_id', $invoiceIds)
+            ->where('status', 'success')
+            ->orderByDesc('paid_at')
+            ->get()
+            ->groupBy('invoice_id')
+            ->map(fn ($payments) => $payments->first());
+
+        $students->transform(function ($student) use ($latestPaymentByInvoice) {
+            $invoice = $student->invoices->first(); // Since we filtered in with()
+            $lastPayment = $invoice ? $latestPaymentByInvoice->get($invoice->id) : null;
 
             $student->fee_status = $invoice ? $invoice->status : 'unpaid';
             $student->total_billed = $invoice ? $invoice->amount : 0;
             $student->total_paid = $invoice ? $invoice->paid_amount : 0;
             $student->balance = $invoice ? ($invoice->amount - $invoice->paid_amount) : 0;
             $student->last_payment_date = $lastPayment ? $lastPayment->paid_at : null;
-            
+
             return $student;
         });
 

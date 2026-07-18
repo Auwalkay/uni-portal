@@ -49,7 +49,7 @@ class AcademicSummarySheet implements FromCollection, WithHeadings, WithTitle
 
     public function collection()
     {
-        $deptQuery = Department::with(['faculty', 'students']);
+        $deptQuery = Department::with('faculty');
         if (!empty($this->filters['faculty_id']) && $this->filters['faculty_id'] !== 'all') {
             $deptQuery->where('faculty_id', $this->filters['faculty_id']);
         }
@@ -57,40 +57,50 @@ class AcademicSummarySheet implements FromCollection, WithHeadings, WithTitle
             $deptQuery->where('id', $this->filters['department_id']);
         }
 
-        return $deptQuery->get()
-            ->map(function ($dept) {
-                $students = $dept->students;
+        $departments = $deptQuery->get();
 
-                if (!empty($this->filters['program_id']) && $this->filters['program_id'] !== 'all') {
-                    $students = $students->where('program_id', $this->filters['program_id']);
-                }
-                if (!empty($this->filters['session_id']) && $this->filters['session_id'] !== 'all') {
-                    $students = $students->where('admitted_session_id', $this->filters['session_id']);
-                }
-                if (!empty($this->filters['level']) && $this->filters['level'] !== 'all') {
-                    $students = $students->where('current_level', $this->filters['level']);
-                }
-                if (!empty($this->filters['gender']) && $this->filters['gender'] !== 'all') {
-                    $students = $students->where('gender', $this->filters['gender']);
-                }
-                if (!empty($this->filters['entry_mode']) && $this->filters['entry_mode'] !== 'all') {
-                    $students = $students->where('entry_mode', $this->filters['entry_mode']);
-                }
-                if (!empty($this->filters['start_date'])) {
-                    $students = $students->where('created_at', '>=', $this->filters['start_date']);
-                }
-                if (!empty($this->filters['end_date'])) {
-                    $students = $students->where('created_at', '<=', $this->filters['end_date'] . ' 23:59:59');
-                }
+        $studentQuery = \App\Models\Student::query()
+            ->whereIn('department_id', $departments->pluck('id'));
 
-                return [
-                    'department' => $dept->name,
-                    'faculty' => $dept->faculty?->name ?? 'N/A',
-                    'total_students' => $students->count(),
-                    'male_students' => $students->where('gender', 'male')->count(),
-                    'female_students' => $students->where('gender', 'female')->count(),
-                ];
-            });
+        if (!empty($this->filters['program_id']) && $this->filters['program_id'] !== 'all') {
+            $studentQuery->where('program_id', $this->filters['program_id']);
+        }
+        if (!empty($this->filters['session_id']) && $this->filters['session_id'] !== 'all') {
+            $studentQuery->where('admitted_session_id', $this->filters['session_id']);
+        }
+        if (!empty($this->filters['level']) && $this->filters['level'] !== 'all') {
+            $studentQuery->where('current_level', $this->filters['level']);
+        }
+        if (!empty($this->filters['gender']) && $this->filters['gender'] !== 'all') {
+            $studentQuery->where('gender', $this->filters['gender']);
+        }
+        if (!empty($this->filters['entry_mode']) && $this->filters['entry_mode'] !== 'all') {
+            $studentQuery->where('entry_mode', $this->filters['entry_mode']);
+        }
+        if (!empty($this->filters['start_date'])) {
+            $studentQuery->where('created_at', '>=', $this->filters['start_date']);
+        }
+        if (!empty($this->filters['end_date'])) {
+            $studentQuery->where('created_at', '<=', $this->filters['end_date'] . ' 23:59:59');
+        }
+
+        $counts = $studentQuery
+            ->selectRaw("department_id, count(*) as total, sum(case when gender = 'male' then 1 else 0 end) as male, sum(case when gender = 'female' then 1 else 0 end) as female")
+            ->groupBy('department_id')
+            ->get()
+            ->keyBy('department_id');
+
+        return $departments->map(function ($dept) use ($counts) {
+            $c = $counts->get($dept->id);
+
+            return [
+                'department' => $dept->name,
+                'faculty' => $dept->faculty?->name ?? 'N/A',
+                'total_students' => $c->total ?? 0,
+                'male_students' => $c->male ?? 0,
+                'female_students' => $c->female ?? 0,
+            ];
+        });
     }
 
     public function headings(): array

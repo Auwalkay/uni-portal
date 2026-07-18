@@ -8,9 +8,10 @@ use App\Models\CourseRegistration;
 use App\Services\GradingService;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
-class ResultImport implements ToCollection, WithHeadingRow
+class ResultImport implements ToCollection, WithChunkReading, WithHeadingRow
 {
     protected $course;
     protected $session;
@@ -72,5 +73,10 @@ class ResultImport implements ToCollection, WithHeadingRow
                 ]);
             }
         }
+    }
+
+    public function chunkSize(): int
+    {
+        return 500;
     }
 }

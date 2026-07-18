@@ -5,9 +5,10 @@ namespace App\Imports;
 use App\Models\Attendance;
 use App\Models\Staff;
 use Maatwebsite\Excel\Concerns\ToModel;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
-class AttendanceImport implements ToModel, WithHeadingRow
+class AttendanceImport implements ToModel, WithChunkReading, WithHeadingRow
 {
     protected $date;
 
@@ -47,5 +48,10 @@ class AttendanceImport implements ToModel, WithHeadingRow
                 'source' => 'excel',
             ]
         );
+    }
+
+    public function chunkSize(): int
+    {
+        return 500;
     }
 }
