@@ -20,7 +20,7 @@ class StaffSalaryExport implements FromCollection, WithHeadings, WithMapping
     public function headings(): array
     {
         return [
-            'ID',
+            'Staff ID',
             'Staff Name',
             'Email',
             'Department',
@@ -42,7 +42,7 @@ class StaffSalaryExport implements FromCollection, WithHeadings, WithMapping
     public function map($row): array
     {
         return [
-            $row->id,
+            $row->staff_number,
             $row->user?->name,
             $row->user?->email,
             $row->department?->name,

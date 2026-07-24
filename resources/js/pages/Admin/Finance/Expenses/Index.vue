@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
+import SearchableSelect from '@/components/SearchableSelect.vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Button } from '@/components/ui/button';
@@ -42,7 +43,19 @@ const props = defineProps<{
     expenses: any;
     categories: any[];
     filters: any;
+    users: any[];
+    canRequestForOthers: boolean;
 }>();
+
+const staffOptions = computed(() => {
+    return (props.users || []).map(u => {
+        const staffNum = u.staff?.staff_number ? ` [${u.staff.staff_number}]` : '';
+        return {
+            value: u.id,
+            label: `${u.name}${staffNum} (${u.email})`
+        };
+    });
+});
 
 const form = useForm({
     id: null,
@@ -51,6 +64,7 @@ const form = useForm({
     amount: '',
     date: new Date().toISOString().split('T')[0],
     expense_category_id: '' as string,
+    user_id: '' as string,
 });
 
 const isModalOpen = ref(false);
@@ -59,6 +73,7 @@ const isEditing = ref(false);
 const openCreate = () => {
     form.reset();
     form.id = null;
+    form.user_id = '';
     isEditing.value = false;
     isModalOpen.value = true;
 };
@@ -69,18 +84,50 @@ const openEdit = (expense: any) => {
     form.amount = expense.amount;
     form.date = expense.date.split('T')[0]; // Adjust if needed
     form.expense_category_id = expense.expense_category_id;
+    form.user_id = expense.user_id || '';
     form.id = expense.id;
     isEditing.value = true;
     isModalOpen.value = true;
 };
 
+const formatAmountInput = (val: string) => {
+    let cleaned = val.replace(/[^0-9.]/g, '');
+    const parts = cleaned.split('.');
+    if (parts.length > 2) {
+        cleaned = parts[0] + '.' + parts.slice(1).join('');
+    }
+    
+    const integerPart = parts[0];
+    const decimalPart = parts[1] !== undefined ? '.' + parts.slice(1).join('') : '';
+    
+    if (integerPart) {
+        return Number(integerPart).toLocaleString('en-US') + decimalPart;
+    }
+    return cleaned;
+};
+
+watch(() => form.amount, (newVal) => {
+    if (newVal) {
+        const formatted = formatAmountInput(String(newVal));
+        if (formatted !== newVal) {
+            form.amount = formatted;
+        }
+    }
+});
+
 const submit = () => {
+    const formattedAmount = form.amount;
+    form.amount = String(form.amount).replace(/,/g, '');
+
     if (isEditing.value && form.id) {
         form.put(route('admin.finance.expenses.update', form.id), {
             onSuccess: () => {
                 isModalOpen.value = false;
                 Swal.fire({ icon: 'success', title: 'Success', text: 'Expense updated', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
             },
+            onError: () => {
+                form.amount = formattedAmount;
+            }
         });
     } else {
         form.post(route('admin.finance.expenses.store'), {
@@ -88,6 +135,9 @@ const submit = () => {
                 isModalOpen.value = false;
                 Swal.fire({ icon: 'success', title: 'Success', text: 'Expense added', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
             },
+            onError: () => {
+                form.amount = formattedAmount;
+            }
         });
     }
 };
@@ -183,7 +233,8 @@ const formatCurrency = (val: any) => new Intl.NumberFormat('en-NG', { style: 'cu
                                 <TableHead>Category</TableHead>
                                 <TableHead>Amount</TableHead>
                                 <TableHead>Status</TableHead>
-                                <TableHead>Requester</TableHead>
+                                <TableHead>Beneficiary</TableHead>
+                                <TableHead>Requested By</TableHead>
                                 <TableHead class="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -201,7 +252,18 @@ const formatCurrency = (val: any) => new Intl.NumberFormat('en-NG', { style: 'cu
                                         {{ expense.status }}
                                     </Badge>
                                 </TableCell>
-                                <TableCell>{{ expense.user?.name }}</TableCell>
+                                <TableCell>
+                                    <div>{{ expense.user?.name }}</div>
+                                    <div v-if="expense.user?.staff?.staff_number" class="text-xs text-muted-foreground font-mono">
+                                        {{ expense.user.staff.staff_number }}
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+                                    <div>{{ expense.requester?.name || expense.user?.name }}</div>
+                                    <div v-if="(expense.requester?.staff?.staff_number || expense.user?.staff?.staff_number)" class="text-xs text-muted-foreground font-mono">
+                                        {{ expense.requester?.staff?.staff_number || expense.user?.staff?.staff_number }}
+                                    </div>
+                                </TableCell>
                                 <TableCell class="text-right space-x-2">
                                     <div v-if="expense.status === 'pending'" class="flex justify-end gap-2">
                                         <Button size="icon" variant="ghost" @click="openEdit(expense)"><Edit class="h-4 w-4" /></Button>
@@ -215,7 +277,7 @@ const formatCurrency = (val: any) => new Intl.NumberFormat('en-NG', { style: 'cu
                                 </TableCell>
                             </TableRow>
                              <TableRow v-if="expenses.data.length === 0">
-                                <TableCell colspan="7" class="text-center py-8 text-muted-foreground">No expenses found.</TableCell>
+                                <TableCell colspan="8" class="text-center py-8 text-muted-foreground">No expenses found.</TableCell>
                             </TableRow>
                         </TableBody>
                     </Table>
@@ -236,7 +298,7 @@ const formatCurrency = (val: any) => new Intl.NumberFormat('en-NG', { style: 'cu
                         <div class="grid grid-cols-2 gap-4">
                             <div class="grid gap-2">
                                 <Label>Amount</Label>
-                                <Input type="number" v-model="form.amount" placeholder="0.00" />
+                                <Input type="text" v-model="form.amount" placeholder="0.00" />
                             </div>
                             <div class="grid gap-2">
                                 <Label>Date</Label>
@@ -253,6 +315,15 @@ const formatCurrency = (val: any) => new Intl.NumberFormat('en-NG', { style: 'cu
                                     <SelectItem v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</SelectItem>
                                 </SelectContent>
                             </Select>
+                        </div>
+                        <div v-if="canRequestForOthers" class="grid gap-2">
+                            <Label>Requested For (Beneficiary)</Label>
+                            <SearchableSelect
+                                v-model="form.user_id"
+                                :items="staffOptions"
+                                placeholder="Select Staff Member"
+                                search-placeholder="Search by name or email..."
+                            />
                         </div>
                         <div class="grid gap-2">
                             <Label>Description</Label>

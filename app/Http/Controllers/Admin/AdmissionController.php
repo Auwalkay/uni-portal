@@ -121,18 +121,18 @@ class AdmissionController extends Controller
         $fileName = "Admission_Letter_{$identifer}.pdf";
         $filePath = "admission_letters/{$applicant->user_id}.pdf";
 
-        if (\Illuminate\Support\Facades\Storage::disk('local')->exists($filePath)) {
-            $cacheModifiedTime = \Illuminate\Support\Facades\Storage::disk('local')->lastModified($filePath);
-            $applicantUpdatedTime = $applicant->updated_at->timestamp;
-            $scholarshipUpdatedTime = $applicant->scholarship ? $applicant->scholarship->updated_at->timestamp : 0;
-
-            if ($cacheModifiedTime >= max($applicantUpdatedTime, $scholarshipUpdatedTime)) {
-                return \Illuminate\Support\Facades\Storage::disk('local')->download($filePath, $fileName, [
-                    'Content-Type' => 'application/pdf',
-                    'Content-Disposition' => 'attachment; filename="' . $fileName . '"'
-                ]);
-            }
-        }
+        // if (\Illuminate\Support\Facades\Storage::disk('local')->exists($filePath)) {
+        //     $cacheModifiedTime = \Illuminate\Support\Facades\Storage::disk('local')->lastModified($filePath);
+        //     $applicantUpdatedTime = $applicant->updated_at->timestamp;
+        //     $scholarshipUpdatedTime = $applicant->scholarship ? $applicant->scholarship->updated_at->timestamp : 0;
+        // 
+        //     if ($cacheModifiedTime >= max($applicantUpdatedTime, $scholarshipUpdatedTime)) {
+        //         return \Illuminate\Support\Facades\Storage::disk('local')->download($filePath, $fileName, [
+        //             'Content-Type' => 'application/pdf',
+        //             'Content-Disposition' => 'attachment; filename="' . $fileName . '"'
+        //         ]);
+        //     }
+        // }
 
         $applicant->load(['user', 'programme.department.faculty', 'state', 'lga', 'scholarship']);
         $currentSession = \App\Models\Session::current();
@@ -208,7 +208,16 @@ class AdmissionController extends Controller
                     ];
                 } else {
                     $tuition += $resolved->amount;
-                    if (!($resolved->feeType && (strtolower($resolved->feeType->name) === 'drug test' || $resolved->feeType->slug === 'drug-test'))) {
+                    $feeName = $resolved->feeType ? strtolower($resolved->feeType->name) : '';
+                    $feeSlug = $resolved->feeType ? $resolved->feeType->slug : '';
+                    $isExcluded = str_contains($feeName, 'drug test') || 
+                                  str_contains($feeSlug, 'drug-test') ||
+                                  str_contains($feeName, 'acceptance') || 
+                                  str_contains($feeSlug, 'acceptance') ||
+                                  str_contains($feeName, 'matriculation') || 
+                                  str_contains($feeSlug, 'matriculation');
+                    
+                    if (!$isExcluded) {
                         $discountTuitionBase += $resolved->amount;
                     }
                 }

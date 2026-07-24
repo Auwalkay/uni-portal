@@ -48,15 +48,43 @@ class RegenerateStudentMatricNumbers extends Command
         }
 
         DB::transaction(function () use ($students, $dryRun) {
-            // Extract and preserve the original serials for all students first
+            // Extract and preserve the original serials and years for all students first
             $originalSerials = [];
+            $originalYears = [];
             foreach ($students as $student) {
                 $originalMatric = $student->matriculation_number;
                 $originalSerial = '001'; // Fallback
-                if ($originalMatric && preg_match('/(\d{3,4})$/', $originalMatric, $matches)) {
-                    $originalSerial = substr($matches[1], -3);
+                $year = date('y'); // Fallback
+
+                if ($originalMatric) {
+                    $originalMatricUpper = strtoupper(trim($originalMatric));
+                    
+                    // 1. Try to match the MIU{YEAR}{SEQUENCE} format, e.g., MIU26001 or MIU260045
+                    if (preg_match('/^MIU(\d{2})(\d+)/', $originalMatricUpper, $matches)) {
+                        $year = $matches[1];
+                        $originalSerial = substr($matches[2], -3);
+                    }
+                    // 2. Try to match UNI/{YEAR}/{SEQUENCE} format, e.g., UNI/2024/0001 or UNI/24/0001
+                    elseif (preg_match('/UNI\/(\d{2,4})\/(\d+)/', $originalMatricUpper, $matches)) {
+                        $yearVal = $matches[1];
+                        $year = strlen($yearVal) === 4 ? substr($yearVal, -2) : $yearVal;
+                        $originalSerial = substr($matches[2], -3);
+                    }
+                    // 3. Fallback generic extractor
+                    else {
+                        if (preg_match('/(\d{3,4})$/', $originalMatricUpper, $matches)) {
+                            $originalSerial = substr($matches[1], -3);
+                        }
+                        if ($student->admittedSession && preg_match('/^(\d{4})/', $student->admittedSession->name, $sessionMatches)) {
+                            $year = substr($sessionMatches[1], -2);
+                        } else {
+                            $year = $student->created_at ? $student->created_at->format('y') : date('y');
+                        }
+                    }
                 }
+
                 $originalSerials[$student->id] = $originalSerial;
+                $originalYears[$student->id] = $year;
             }
 
             // 1. First, set all student matriculation numbers to temporary values to prevent sequence collisions during generation
@@ -74,14 +102,7 @@ class RegenerateStudentMatricNumbers extends Command
             
             $updates = [];
             foreach ($students as $index => $student) {
-                // Determine the 2-digit year from the admitted session name (e.g. "2024/2025" -> "24")
-                $year = date('y');
-                if ($student->admittedSession && preg_match('/^(\d{4})/', $student->admittedSession->name, $matches)) {
-                    $year = substr($matches[1], -2);
-                } else {
-                    // Fallback to student creation year
-                    $year = $student->created_at ? $student->created_at->format('y') : date('y');
-                }
+                $year = $originalYears[$student->id];
 
                 $deptCode = $student->department ? $student->department->code : 'GEN';
                 $facCode = $student->faculty ? $student->faculty->code : 'GEN';

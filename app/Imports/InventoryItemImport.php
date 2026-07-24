@@ -5,9 +5,10 @@ namespace App\Imports;
 use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
 use Maatwebsite\Excel\Concerns\ToModel;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
-class InventoryItemImport implements ToModel, WithHeadingRow
+class InventoryItemImport implements ToModel, WithChunkReading, WithHeadingRow
 {
     /**
     * @param array $row
@@ -32,5 +33,10 @@ class InventoryItemImport implements ToModel, WithHeadingRow
             'available_quantity' => $row['quantity'] ?? 0,
             'condition' => $row['condition'] ?? 'new',
         ]);
+    }
+
+    public function chunkSize(): int
+    {
+        return 500;
     }
 }

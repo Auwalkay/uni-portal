@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Auth;
@@ -13,7 +14,16 @@ class ExpenseController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Expense::with(['category', 'user', 'approver'])->latest('date');
+        $query = Expense::with(['category', 'user.staff', 'requester.staff', 'approver'])->latest('date');
+
+        // Filter based on roles/permissions
+        $user = Auth::user();
+        if (!$user->can('request_expenses_for_others') && !$user->can('approve_expenses')) {
+            $query->where(function ($q) use ($user) {
+                $q->where('user_id', $user->id)
+                  ->orWhere('requested_by', $user->id);
+            });
+        }
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -27,6 +37,10 @@ class ExpenseController extends Controller
             'expenses' => $query->paginate(10)->withQueryString(),
             'categories' => ExpenseCategory::orderBy('name')->get(),
             'filters' => $request->only(['status', 'category_id']),
+            'users' => $user->can('request_expenses_for_others')
+                ? User::orderBy('name')->with('staff:id,user_id,staff_number')->get(['id', 'name', 'email'])
+                : [],
+            'canRequestForOthers' => $user->can('request_expenses_for_others'),
         ]);
     }
 
@@ -38,11 +52,22 @@ class ExpenseController extends Controller
             'expense_category_id' => 'required|exists:expense_categories,id',
             'date' => 'required|date',
             'description' => 'nullable|string',
+            'user_id' => 'nullable|exists:users,id',
         ]);
 
+        $userId = Auth::id();
+        if (Auth::user()->can('request_expenses_for_others') && !empty($validated['user_id'])) {
+            $userId = $validated['user_id'];
+        }
+
         Expense::create([
-            ...$validated,
-            'user_id' => Auth::id(),
+            'title' => $validated['title'],
+            'amount' => $validated['amount'],
+            'expense_category_id' => $validated['expense_category_id'],
+            'date' => $validated['date'],
+            'description' => $validated['description'] ?? null,
+            'user_id' => $userId,
+            'requested_by' => Auth::id(),
             'status' => 'pending',
         ]);
 
@@ -55,15 +80,33 @@ class ExpenseController extends Controller
             return back()->with('error', 'Cannot edit processed expenses.');
         }
 
+        $user = Auth::user();
+        if ($expense->requested_by !== $user->id && $expense->user_id !== $user->id && !$user->can('request_expenses_for_others')) {
+            abort(403, 'Unauthorized action.');
+        }
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
             'expense_category_id' => 'required|exists:expense_categories,id',
             'date' => 'required|date',
             'description' => 'nullable|string',
+            'user_id' => 'nullable|exists:users,id',
         ]);
 
-        $expense->update($validated);
+        $userId = $expense->user_id;
+        if ($user->can('request_expenses_for_others') && !empty($validated['user_id'])) {
+            $userId = $validated['user_id'];
+        }
+
+        $expense->update([
+            'title' => $validated['title'],
+            'amount' => $validated['amount'],
+            'expense_category_id' => $validated['expense_category_id'],
+            'date' => $validated['date'],
+            'description' => $validated['description'] ?? null,
+            'user_id' => $userId,
+        ]);
 
         return back()->with('success', 'Expense updated successfully.');
     }
@@ -72,6 +115,11 @@ class ExpenseController extends Controller
     {
         if ($expense->status !== 'pending') {
             return back()->with('error', 'Cannot delete processed expenses.');
+        }
+
+        $user = Auth::user();
+        if ($expense->requested_by !== $user->id && $expense->user_id !== $user->id && !$user->can('request_expenses_for_others')) {
+            abort(403, 'Unauthorized action.');
         }
 
         $expense->delete();
@@ -94,7 +142,7 @@ class ExpenseController extends Controller
 
         $expense->update([
             'status' => 'rejected',
-            'approved_by' => Auth::id(), // Rejected by
+            'approved_by' => Auth::id(),
             'rejection_reason' => $request->rejection_reason,
         ]);
 

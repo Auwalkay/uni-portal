@@ -4,10 +4,11 @@ namespace App\Imports;
 
 use App\Models\Staff;
 use Maatwebsite\Excel\Concerns\ToModel;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithValidation;
 
-class StaffSalaryImport implements ToModel, WithHeadingRow, WithValidation
+class StaffSalaryImport implements ToModel, WithChunkReading, WithHeadingRow, WithValidation
 {
     /**
      * @param array $row
@@ -16,9 +17,13 @@ class StaffSalaryImport implements ToModel, WithHeadingRow, WithValidation
      */
     public function model(array $row)
     {
-        // Find staff by ID or Email
+        // Find staff by Staff ID (staff_number), UUID id, or Email
         $staff = null;
-        if (isset($row['id'])) {
+        if (isset($row['staff_id'])) {
+            $staff = Staff::where('staff_number', $row['staff_id'])->first();
+        }
+
+        if (!$staff && isset($row['id'])) {
             $staff = Staff::find($row['id']);
         }
 
@@ -40,12 +45,13 @@ class StaffSalaryImport implements ToModel, WithHeadingRow, WithValidation
             ]);
         }
 
-        return null; // Return null because we are updating existing records, not creating new ones
+        return null;
     }
 
     public function rules(): array
     {
         return [
+            'staff_id' => 'nullable|exists:staff,staff_number',
             'id' => 'nullable|exists:staff,id',
             'email' => 'nullable|email',
             'basic_salary' => 'nullable|numeric|min:0',
@@ -53,5 +59,10 @@ class StaffSalaryImport implements ToModel, WithHeadingRow, WithValidation
             'deductions' => 'nullable|numeric|min:0',
             'bonuses' => 'nullable|numeric|min:0',
         ];
+    }
+
+    public function chunkSize(): int
+    {
+        return 500;
     }
 }

@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
             NigeriaStateLgaSeeder::class,
             LibrarySeeder::class,
             SickbaySeeder::class,
+            ExpensePermissionSeeder::class,
         ]);
     }
 }
