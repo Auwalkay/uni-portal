@@ -38,6 +38,7 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
+            'settings' => \App\Services\AcademicCacheService::getSystemSettings(),
             'auth' => [
                 'user' => $request->user() ? [
                     'id' => $request->user()->id,

@@ -84,21 +84,22 @@ class ProfileController extends Controller
         $academicStatus = 'Good Standing';
         $showRegistrationNotification = false;
         $registrationMessage = '';
+        $isRegistrationActive = false;
 
         if ($student && $currentSession && $currentStudentSession) {
-            // Assuming we have a relation or through model.
-            // Let's use CourseRegistration model directly for now.
             $totalUnits = CourseRegistration::where('student_session_id', $currentStudentSession->id)
                 ->join('courses', 'course_registrations.course_id', '=', 'courses.id')
                 ->sum('courses.units');
+        }
 
+        if ($student && $currentSession) {
             // Check for Registration Notification
-            if ($currentSemester && $currentSession->registration_enabled) {
+            if ($currentSemester) {
                 $now = now();
                 $start = $currentSemester->registration_starts_at;
                 $end = $currentSemester->registration_ends_at;
 
-                $isOpen = true;
+                $isOpen = (bool) $currentSession->registration_enabled;
                 if ($start && $now->lt($start)) {
                     $isOpen = false;
                 }
@@ -107,10 +108,14 @@ class ProfileController extends Controller
                 }
 
                 if ($isOpen) {
+                    $isRegistrationActive = true;
                     // Check if already registered
-                    $hasRegistered = CourseRegistration::where('student_session_id', $currentStudentSession->id)
-                        ->where('semester_id', $currentSemester->id)
-                        ->exists();
+                    $hasRegistered = false;
+                    if ($currentStudentSession) {
+                        $hasRegistered = CourseRegistration::where('student_session_id', $currentStudentSession->id)
+                            ->where('semester_id', $currentSemester->id)
+                            ->exists();
+                    }
 
                     if (! $hasRegistered) {
                         $showRegistrationNotification = true;
@@ -120,7 +125,32 @@ class ProfileController extends Controller
                             $registrationMessage = "Registration for {$currentSemester->name} is now open.";
                         }
                     }
+                } else {
+                    $showRegistrationNotification = true;
+                    $isRegistrationActive = false;
+                    if ($end && $now->gt($end)) {
+                        $registrationMessage = "Course registration for {$currentSemester->name} is currently closed. The deadline was " . $end->format('M d, Y') . ".";
+                    } elseif ($start && $now->lt($start)) {
+                        $registrationMessage = "Course registration for {$currentSemester->name} is not active yet. It is scheduled to open on " . $start->format('M d, Y') . ".";
+                    } else {
+                        $registrationMessage = "Course registration for {$currentSemester->name} is currently closed.";
+                    }
                 }
+            }
+        }
+
+        $showHostelNotification = false;
+        $hostelNotificationMessage = '';
+        $bookingEnabled = filter_var(\App\Models\SystemSetting::get('enable_hostel_booking', true), FILTER_VALIDATE_BOOLEAN);
+
+        if ($bookingEnabled && $student && $currentSession) {
+            $hasBooked = \App\Models\HostelBooking::where('student_id', $student->id)
+                ->where('session_id', $currentSession->id)
+                ->exists();
+
+            if (!$hasBooked) {
+                $showHostelNotification = true;
+                $hostelNotificationMessage = "Hostel booking is now open for the current session. Select your room to reserve your accommodation.";
             }
         }
 
@@ -150,6 +180,9 @@ class ProfileController extends Controller
             'schoolFeeStatus' => $schoolFeeStatus,
             'showRegistrationNotification' => $showRegistrationNotification,
             'registrationMessage' => $registrationMessage,
+            'isRegistrationActive' => $isRegistrationActive,
+            'showHostelNotification' => $showHostelNotification,
+            'hostelNotificationMessage' => $hostelNotificationMessage,
             'stats' => [
                 'cgpa' => $cgpa,
                 'totalUnits' => $totalUnits,

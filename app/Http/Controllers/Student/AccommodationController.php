@@ -30,6 +30,8 @@ class AccommodationController extends Controller
             return redirect()->route('student.dashboard')->with('error', 'No active academic session found.');
         }
 
+        $isBookingActive = filter_var(\App\Models\SystemSetting::get('enable_hostel_booking', true), FILTER_VALIDATE_BOOLEAN);
+
         // 1. School Fee Check
         $hasPaidFees = Invoice::where('user_id', $user->id)
             ->where('type', 'school_fee')
@@ -46,11 +48,12 @@ class AccommodationController extends Controller
             ->where('session_id', $currentSession->id)
             ->first();
 
-        // If they haven't met requirements, just pass the statuses to the view so it can show the red locks
-        if (!$hasPaidFees) {
+        // If they haven't met requirements or booking is disabled, pass correct statuses to the view
+        if (!$hasPaidFees || !$isBookingActive) {
             return Inertia::render('Student/Accommodation/Index', [
                 'hasPaidFees' => $hasPaidFees,
                 'hasRegisteredCourses' => $hasRegisteredCourses,
+                'isBookingActive' => $isBookingActive,
                 'hostels' => [],
                 'existingBooking' => $existingBooking,
             ]);
@@ -84,6 +87,7 @@ class AccommodationController extends Controller
         return Inertia::render('Student/Accommodation/Index', [
             'hasPaidFees' => $hasPaidFees,
             'hasRegisteredCourses' => $hasRegisteredCourses,
+            'isBookingActive' => $isBookingActive,
             'hostels' => $hostels,
             'existingBooking' => $existingBooking,
         ]);
@@ -91,6 +95,11 @@ class AccommodationController extends Controller
 
     public function store(Request $request)
     {
+        $bookingEnabled = filter_var(\App\Models\SystemSetting::get('enable_hostel_booking', true), FILTER_VALIDATE_BOOLEAN);
+        if (!$bookingEnabled) {
+            return back()->with('error', 'Hostel bookings are currently closed by the administration.');
+        }
+
         $request->validate([
             'hostel_room_id' => 'required|exists:hostel_rooms,id',
         ]);

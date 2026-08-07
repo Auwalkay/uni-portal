@@ -50,6 +50,8 @@ const props = defineProps<{
         application_fee: string | number;
         enforce_school_fee_for_results: boolean;
         enforce_hostel_fee_for_results: boolean;
+        enable_exam_card_download: boolean;
+        enable_hostel_booking: boolean;
     }
 }>();
 
@@ -81,6 +83,14 @@ const resultVisibilityForm = useForm({
     hostelFee: props.settings.enforce_hostel_fee_for_results
 });
 
+const examCardForm = useForm({
+    enabled: props.settings.enable_exam_card_download
+});
+
+const hostelBookingForm = useForm({
+    enabled: props.settings.enable_hostel_booking
+});
+
 const submitResultVisibility = () => {
     router.post(route('admin.settings.update'), { 
         key: 'enforce_school_fee_for_results', 
@@ -104,6 +114,46 @@ const submitResultVisibility = () => {
                         timer: 3000
                     });
                 }
+            });
+        }
+    });
+};
+
+const submitExamCardSetting = () => {
+    router.post(route('admin.settings.update'), { 
+        key: 'enable_exam_card_download', 
+        value: examCardForm.enabled ? 'true' : 'false' 
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            Swal.fire({
+                icon: 'success',
+                title: 'Updated',
+                text: 'Exam card download settings updated successfully',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
+            });
+        }
+    });
+};
+
+const submitHostelBookingSetting = () => {
+    router.post(route('admin.settings.update'), { 
+        key: 'enable_hostel_booking', 
+        value: hostelBookingForm.enabled ? 'true' : 'false' 
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            Swal.fire({
+                icon: 'success',
+                title: 'Updated',
+                text: 'Hostel booking settings updated successfully',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
             });
         }
     });
@@ -406,6 +456,60 @@ const settingsModules = [
                         </div>
                         <Button @click="submitResultVisibility" class="w-full bg-rose-600 hover:bg-rose-700 text-white">
                             Update Visibility Settings
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                <!-- Exam Card Access Card -->
+                <Card class="border-emerald-200 bg-emerald-50/30">
+                    <CardHeader class="flex flex-row items-center gap-4">
+                        <div class="bg-emerald-100 p-3 rounded-xl text-emerald-600">
+                            <Award class="w-6 h-6" />
+                        </div>
+                        <div>
+                            <CardTitle>Exam Card Settings</CardTitle>
+                            <CardDescription>Control student access to download exam cards.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent class="space-y-6">
+                        <div class="grid gap-4">
+                            <div class="flex items-center justify-between">
+                                <Label for="enable_exam_card">Enable Exam Card Downloads</Label>
+                                <Switch 
+                                    id="enable_exam_card" 
+                                    v-model:checked="examCardForm.enabled" 
+                                />
+                            </div>
+                        </div>
+                        <Button @click="submitExamCardSetting" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white">
+                            Update Exam Card Settings
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                <!-- Hostel Booking Access Card -->
+                <Card class="border-sky-200 bg-sky-50/30">
+                    <CardHeader class="flex flex-row items-center gap-4">
+                        <div class="bg-sky-100 p-3 rounded-xl text-sky-600">
+                            <Building class="w-6 h-6" />
+                        </div>
+                        <div>
+                            <CardTitle>Hostel Booking Settings</CardTitle>
+                            <CardDescription>Control student access to book accommodation.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent class="space-y-6">
+                        <div class="grid gap-4">
+                            <div class="flex items-center justify-between">
+                                <Label for="enable_hostel_booking">Enable Hostel Bookings</Label>
+                                <Switch 
+                                    id="enable_hostel_booking" 
+                                    v-model:checked="hostelBookingForm.enabled" 
+                                />
+                            </div>
+                        </div>
+                        <Button @click="submitHostelBookingSetting" class="w-full bg-sky-600 hover:bg-sky-700 text-white">
+                            Update Hostel Booking Settings
                         </Button>
                     </CardContent>
                 </Card>

@@ -31,6 +31,8 @@ class SystemSettingsController extends Controller
                 'application_fee' => SystemSetting::get('application_fee', 100000),
                 'enforce_school_fee_for_results' => filter_var(SystemSetting::get('enforce_school_fee_for_results', false), FILTER_VALIDATE_BOOLEAN),
                 'enforce_hostel_fee_for_results' => filter_var(SystemSetting::get('enforce_hostel_fee_for_results', false), FILTER_VALIDATE_BOOLEAN),
+                'enable_exam_card_download' => filter_var(SystemSetting::get('enable_exam_card_download', true), FILTER_VALIDATE_BOOLEAN),
+                'enable_hostel_booking' => filter_var(SystemSetting::get('enable_hostel_booking', true), FILTER_VALIDATE_BOOLEAN),
             ]
         ]);
     }
@@ -43,6 +45,7 @@ class SystemSettingsController extends Controller
         ]);
 
         SystemSetting::set($request->key, $request->value);
+        \App\Services\AcademicCacheService::clearAll();
 
         return back()->with('success', 'Setting updated successfully.');
     }
