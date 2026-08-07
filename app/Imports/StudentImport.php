@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use App\Mail\StudentAccountCreated;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
@@ -64,9 +65,7 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
                 $user->update(['name' => $row['first_name'] . ' ' . $row['last_name']]);
             }
 
-            if (! $user->hasRole('student')) {
-                $user->assignRole('student');
-            }
+            $user->syncRoles(['student']);
 
             // State & LGA (Optional)
             $stateId = null;
@@ -138,14 +137,14 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
 
             $currentSession = \App\Models\Session::find($this->sessionId);
 
-            $currenSemester = $currentSession->semesters()->where('is_current', true)->first();
+            $currenSemester = $currentSession ? $currentSession->semesters()->where('is_current', true)->first() : null;
 
             StudentSession::create([
                 'student_id' => $student->id,
                 'session_id' => $this->sessionId,
                 'level' => $this->level,
                 'status' => 'active',
-                'semester' => $currenSemester->name,
+                'semester' => $currenSemester?->name ?? 'First Semester',
             ]);
             if ($isNewUser) {
                 Mail::to($user->email)->send(new StudentAccountCreated($user, $password));
