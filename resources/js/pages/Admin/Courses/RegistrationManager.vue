@@ -20,11 +20,16 @@ const props = defineProps<{
     filters: any;
     faculties: any[];
     departments: any[];
+    sessions: any[];
+    semesters: any[];
 }>();
 
 const search = ref(props.filters.search || '');
 const facultyId = ref(props.filters.faculty_id || 'all');
 const departmentId = ref(props.filters.department_id || 'all');
+const sessionId = ref(props.filters.session_id || '');
+const semesterId = ref(props.filters.semester_id || '');
+const status = ref(props.filters.status || 'all');
 
 const filteredDepartments = computed(() => {
     if (facultyId.value === 'all') return [];
@@ -41,18 +46,35 @@ const departmentItems = computed(() => [
     ...filteredDepartments.value.map(d => ({ value: String(d.id), label: d.name }))
 ]);
 
+const sessionItems = computed(() => [
+    ...props.sessions.map(s => ({ value: String(s.id), label: s.name }))
+]);
+
+const semesterItems = computed(() => [
+    ...props.semesters.map(s => ({ value: String(s.id), label: s.name }))
+]);
+
+const statusItems = [
+    { value: 'all', label: 'All Statuses' },
+    { value: 'registered', label: 'Registered' },
+    { value: 'not_registered', label: 'Not Registered' },
+];
+
 const updateFilters = debounce(() => {
     router.get(route('admin.course_registration.index'), { 
         search: search.value,
         faculty_id: facultyId.value === 'all' ? null : facultyId.value,
         department_id: departmentId.value === 'all' ? null : departmentId.value,
+        session_id: sessionId.value,
+        semester_id: semesterId.value,
+        status: status.value,
     }, {
         preserveState: true,
         replace: true
     });
 }, 500);
 
-watch([search, facultyId, departmentId], () => {
+watch([search, facultyId, departmentId, sessionId, semesterId, status], () => {
     updateFilters();
 });
 
@@ -60,6 +82,7 @@ const resetFilters = () => {
     search.value = '';
     facultyId.value = 'all';
     departmentId.value = 'all';
+    status.value = 'all';
 };
 
 const breadcrumbs = [
@@ -114,6 +137,41 @@ const breadcrumbs = [
                                     search-placeholder="Search departments..."
                                     :disabled="facultyId === 'all'"
                                 />
+                            </div>
+
+                            <div class="space-y-1.5 flex-1 min-w-[150px]">
+                                <Label class="text-[10px] font-bold uppercase text-muted-foreground ml-1">Academic Session</Label>
+                                <SearchableSelect
+                                    v-model="sessionId"
+                                    :items="sessionItems"
+                                    placeholder="Select Session"
+                                    search-placeholder="Search sessions..."
+                                />
+                            </div>
+
+                            <div class="space-y-1.5 flex-1 min-w-[150px]">
+                                <Label class="text-[10px] font-bold uppercase text-muted-foreground ml-1">Semester</Label>
+                                <SearchableSelect
+                                    v-model="semesterId"
+                                    :items="semesterItems"
+                                    placeholder="Select Semester"
+                                    search-placeholder="Search semesters..."
+                                    :disabled="!sessionId"
+                                />
+                            </div>
+
+                            <div class="space-y-1.5 flex-1 min-w-[150px]">
+                                <Label class="text-[10px] font-bold uppercase text-muted-foreground ml-1">Reg. Status</Label>
+                                <Select v-model="status">
+                                    <SelectTrigger class="w-full bg-white border-slate-200">
+                                        <SelectValue placeholder="All Statuses" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem v-for="item in statusItems" :key="item.value" :value="item.value">
+                                            {{ item.label }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
 
                             <Button variant="ghost" @click="resetFilters" class="text-xs font-semibold text-muted-foreground hover:text-red-600">
