@@ -21,7 +21,8 @@ import {
     Download,
     Check,
     Trash2,
-    TrendingUp
+    TrendingUp,
+    Plus
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
 import { router } from '@inertiajs/vue3';
@@ -162,6 +163,55 @@ const deleteInvoice = (id: number) => {
         });
     }
 };
+
+// Student Sessions History State & Methods
+const sessionModalOpen = ref(false);
+const editingSession = ref<any>(null);
+
+const studentSessionForm = useForm({
+    session_id: '',
+    level: '100',
+    semester: 'First Semester',
+    status: 'active',
+});
+
+const openAddSessionModal = () => {
+    editingSession.value = null;
+    studentSessionForm.session_id = props.sessions[0]?.id || '';
+    studentSessionForm.level = '100';
+    studentSessionForm.semester = 'First Semester';
+    studentSessionForm.status = 'active';
+    studentSessionForm.clearErrors();
+    sessionModalOpen.value = true;
+};
+
+const openEditSessionModal = (sessionRecord: any) => {
+    editingSession.value = sessionRecord;
+    studentSessionForm.session_id = sessionRecord.session_id;
+    studentSessionForm.level = sessionRecord.level.toString();
+    studentSessionForm.semester = sessionRecord.semester;
+    studentSessionForm.status = sessionRecord.status;
+    studentSessionForm.clearErrors();
+    sessionModalOpen.value = true;
+};
+
+const submitStudentSession = () => {
+    if (editingSession.value) {
+        studentSessionForm.put(route('admin.students.sessions.update', [props.student.id, editingSession.value.id]), {
+            preserveScroll: true,
+            onSuccess: () => {
+                sessionModalOpen.value = false;
+            },
+        });
+    } else {
+        studentSessionForm.post(route('admin.students.sessions.store', props.student.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                sessionModalOpen.value = false;
+            },
+        });
+    }
+};
 </script>
 
 <template>
@@ -266,10 +316,11 @@ const deleteInvoice = (id: number) => {
                 </Card>
 
                 <Tabs default-value="overview" class="w-full">
-                    <TabsList class="grid w-full grid-cols-1 lg:grid-cols-3 lg:w-[400px]">
+                    <TabsList class="grid w-full grid-cols-1 lg:grid-cols-4 lg:w-[520px]">
                         <TabsTrigger value="overview">Overview</TabsTrigger>
                         <TabsTrigger v-if="permissions.can_view_academics" value="academic">Academics</TabsTrigger>
                         <TabsTrigger v-if="permissions.can_view_finance" value="finance">Financials</TabsTrigger>
+                        <TabsTrigger v-if="permissions.can_edit_students" value="sessions">Sessions</TabsTrigger>
                     </TabsList>
                     
                     <!-- Overview Tab -->
@@ -597,10 +648,151 @@ const deleteInvoice = (id: number) => {
                             </Card>
                          </div>
                     </TabsContent>
+
+                    <!-- Sessions Tab -->
+                    <TabsContent v-slot="{ active }" v-if="permissions.can_edit_students" value="sessions" class="space-y-6 mt-6">
+                        <Card>
+                            <CardHeader class="flex flex-row items-center justify-between space-y-0">
+                                <div>
+                                    <CardTitle class="text-lg flex items-center gap-2">
+                                        <Calendar class="w-5 h-5 text-muted-foreground" /> Enrollment History (Sessions)
+                                    </CardTitle>
+                                    <CardDescription>
+                                        View and manage the academic sessions this student has been enrolled in.
+                                    </CardDescription>
+                                </div>
+                                <Button size="sm" @click="openAddSessionModal">
+                                    <Plus class="w-4 h-4 mr-2" /> Add Session Record
+                                </Button>
+                            </CardHeader>
+                            <CardContent>
+                                <div class="rounded-md border">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Academic Session</TableHead>
+                                                <TableHead>Level</TableHead>
+                                                <TableHead>Semester</TableHead>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead class="text-right">Actions</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            <TableRow v-if="!student.sessions || student.sessions.length === 0">
+                                                <TableCell colspan="5" class="h-24 text-center text-muted-foreground">
+                                                    No enrollment history records found for this student.
+                                                </TableCell>
+                                            </TableRow>
+                                            <TableRow v-for="sessionRecord in student.sessions" :key="sessionRecord.id">
+                                                <TableCell class="font-medium">
+                                                    {{ sessionRecord.session?.name || 'Unknown Session' }}
+                                                </TableCell>
+                                                <TableCell>{{ sessionRecord.level }} Level</TableCell>
+                                                <TableCell>{{ sessionRecord.semester }}</TableCell>
+                                                <TableCell>
+                                                    <Badge :variant="sessionRecord.status === 'active' ? 'default' : 'outline'">
+                                                        {{ sessionRecord.status }}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell class="text-right">
+                                                    <Button variant="outline" size="icon" class="h-8 w-8" @click="openEditSessionModal(sessionRecord)">
+                                                        <Edit class="w-4 h-4 text-blue-600" />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </CardContent>
+                        </Card>
+                     </TabsContent>
                 </Tabs>
             </div>
         </AdminLayout>
     </div>
+
+    <!-- Add / Edit Session Modal -->
+    <Dialog v-model:open="sessionModalOpen">
+        <DialogContent class="sm:max-w-[425px]">
+            <DialogHeader>
+                <DialogTitle>{{ editingSession ? 'Edit Session Record' : 'Add Session Record' }}</DialogTitle>
+                <DialogDescription>
+                    {{ editingSession ? 'Modify the selected session enrollment details.' : 'Create a new academic session enrollment record for this student.' }}
+                </DialogDescription>
+            </DialogHeader>
+            <form @submit.prevent="submitStudentSession" class="space-y-4 py-4">
+                <div class="space-y-2">
+                    <Label for="modal_session_id">Academic Session</Label>
+                    <Select v-model="studentSessionForm.session_id" id="modal_session_id">
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select academic session" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem v-for="s in sessions" :key="s.id" :value="s.id">
+                                {{ s.name }}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <span v-if="studentSessionForm.errors.session_id" class="text-sm text-red-500">{{ studentSessionForm.errors.session_id }}</span>
+                </div>
+
+                <div class="space-y-2">
+                    <Label for="modal_level">Level</Label>
+                    <Select v-model="studentSessionForm.level" id="modal_level">
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select level" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="100">100 Level</SelectItem>
+                            <SelectItem value="200">200 Level</SelectItem>
+                            <SelectItem value="300">300 Level</SelectItem>
+                            <SelectItem value="400">400 Level</SelectItem>
+                            <SelectItem value="500">500 Level</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <span v-if="studentSessionForm.errors.level" class="text-sm text-red-500">{{ studentSessionForm.errors.level }}</span>
+                </div>
+
+                <div class="space-y-2">
+                    <Label for="modal_semester">Semester</Label>
+                    <Select v-model="studentSessionForm.semester" id="modal_semester">
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select semester" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="First Semester">First Semester</SelectItem>
+                            <SelectItem value="Second Semester">Second Semester</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <span v-if="studentSessionForm.errors.semester" class="text-sm text-red-500">{{ studentSessionForm.errors.semester }}</span>
+                </div>
+
+                <div class="space-y-2">
+                    <Label for="modal_status">Status</Label>
+                    <Select v-model="studentSessionForm.status" id="modal_status">
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="suspended">Suspended</SelectItem>
+                            <SelectItem value="graduated">Graduated</SelectItem>
+                            <SelectItem value="completed">Completed</SelectItem>
+                            <SelectItem value="inactive">Inactive</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <span v-if="studentSessionForm.errors.status" class="text-sm text-red-500">{{ studentSessionForm.errors.status }}</span>
+                </div>
+
+                <DialogFooter class="pt-4">
+                    <Button type="button" variant="outline" @click="sessionModalOpen = false">Cancel</Button>
+                    <Button type="submit" :disabled="studentSessionForm.processing">
+                        {{ studentSessionForm.processing ? 'Saving...' : 'Save Record' }}
+                    </Button>
+                </DialogFooter>
+            </form>
+        </DialogContent>
+    </Dialog>
 
     <!-- Print Layout (Hidden on Screen, Visible on Print) -->
     <div class="hidden print:block p-8 max-w-4xl mx-auto space-y-6 text-black bg-white">

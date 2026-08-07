@@ -38,9 +38,15 @@ class ReportController extends Controller
 {
     public function index(Request $request)
     {
+        $currentSession = Session::where('is_current', true)->first();
+        $sessionId = $request->query('session_id');
+        if (is_null($sessionId) && $currentSession) {
+            $sessionId = $currentSession->id;
+        }
+
         // Active filters
         $filters = [
-            'session_id' => $request->query('session_id'),
+            'session_id' => $sessionId,
             'faculty_id' => $request->query('faculty_id'),
             'department_id' => $request->query('department_id'),
             'program_id' => $request->query('program_id'),
@@ -88,9 +94,9 @@ class ReportController extends Controller
             $applicantQuery->where('application_mode', $request->entry_mode);
         }
 
-        // Apply session_id if provided
-        if ($request->filled('session_id')) {
-            $studentQuery->where('admitted_session_id', $request->session_id);
+        // Apply session_id if provided (and not 'all')
+        if ($sessionId && $sessionId !== 'all') {
+            $studentQuery->where('admitted_session_id', $sessionId);
         }
 
         // Apply date range filters if provided
@@ -287,9 +293,22 @@ class ReportController extends Controller
             'total_payrolls_run' => $payrollQuery->count(),
         ];
 
+        $scholarshipBreakdown = Scholarship::all()->map(function ($scholarship) use ($studentQuery) {
+            $studentCount = (clone $studentQuery)->where('scholarship_id', $scholarship->id)->count();
+            return [
+                'id' => $scholarship->id,
+                'name' => $scholarship->name,
+                'type' => $scholarship->type,
+                'percentage' => $scholarship->percentage,
+                'amount' => (double) $scholarship->amount,
+                'student_count' => $studentCount,
+            ];
+        })->filter(fn($item) => $item['student_count'] > 0)->values()->toArray();
+
         $scholarshipStats = [
             'total_scholarship_students' => (clone $studentQuery)->whereNotNull('scholarship_id')->count(),
             'total_scholarships' => Scholarship::count(),
+            'breakdown' => $scholarshipBreakdown,
         ];
 
         $financeStats = [

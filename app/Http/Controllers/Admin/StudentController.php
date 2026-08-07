@@ -291,6 +291,7 @@ class StudentController extends Controller
             'state',
             'lga',
             'scholarship',
+            'sessions.session',
         ]);
 
         if ($canViewFinance) {
@@ -323,10 +324,11 @@ class StudentController extends Controller
                 'can_view_finance' => $canViewFinance,
                 'can_view_academics' => $canViewAcademics,
                 'can_edit_admission' => $user->hasRole('admission_director') || $user->hasRole('admin'),
+                'can_edit_students' => $user->can('edit_students'),
                 'can_perform_registration' => $user->can('perform_student_registration'),
                 'manage_student_registrations' => $user->can('manage_student_registrations'),
             ],
-            'sessions' => ($user->hasRole('admission_director') || $user->hasRole('admin')) 
+            'sessions' => ($user->hasRole('admission_director') || $user->hasRole('admin') || $user->can('edit_students')) 
                 ? AcademicCacheService::getSessions() 
                 : [],
         ]);
@@ -351,6 +353,10 @@ class StudentController extends Controller
 
     public function import(Request $request)
     {
+        if ($request->scholarship_id === 'none') {
+            $request->merge(['scholarship_id' => null]);
+        }
+
         $request->validate([
             'file' => 'required|mimes:csv,txt,xlsx|max:10240',
             'session_id' => 'required|exists:academic_sessions,id',
@@ -358,6 +364,7 @@ class StudentController extends Controller
             'department_id' => 'required|exists:departments,id',
             'program_id' => 'required|exists:programmes,id',
             'level' => 'required|in:100,200,300,400,500',
+            'scholarship_id' => 'nullable|exists:scholarships,id',
         ]);
 
         try {
@@ -366,7 +373,8 @@ class StudentController extends Controller
                 $request->department_id,
                 $request->program_id,
                 $request->session_id,
-                $request->level
+                $request->level,
+                $request->scholarship_id
             );
             Excel::import($import, $request->file('file'));
 
@@ -510,6 +518,12 @@ class StudentController extends Controller
                 'fee_policy' => $validated['fee_policy'],
                 'scholarship_id' => $validated['scholarship_id'] ?? null,
             ]);
+
+            // Sync the active session's level to match the new current_level
+            $activeSession = $student->currentSession()->first();
+            if ($activeSession) {
+                $activeSession->update(['level' => $validated['current_level']]);
+            }
         });
 
         return redirect()->route('admin.students.index')->with('success', 'Student updated successfully.');

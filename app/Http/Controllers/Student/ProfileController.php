@@ -174,59 +174,75 @@ class ProfileController extends Controller
             return \App\Models\Subject::orderBy('name')->get();
         });
 
-        $currentSession = Session::current();
-        // Allow full edit if in admitted session (fresh) OR if no admitted session set (legacy/error case handling)
-        $canEditProfile = $currentSession && $student->admitted_session_id === $currentSession->id;
+        // Determine which fields are editable (can only set them if they are null/empty)
+        $canEditGender = is_null($student->gender) || $student->gender === '';
+        $canEditState = is_null($student->state_id);
+        $canEditLga = is_null($student->lga_id);
+        $canEditJamb = is_null($student->jamb_registration_number) || $student->jamb_registration_number === '';
+        $canEditOlevel = !$student->oLevelResults()->exists();
+        $canEditIndigene = is_null($student->indigene_letter_path);
 
         return \Inertia\Inertia::render('Student/Profile/Edit', [
             'student' => $student,
             'user' => $request->user(),
             'states' => $states,
             'allSubjects' => $allSubjects,
-            'canEditProfile' => $canEditProfile,
+            'canEditGender' => $canEditGender,
+            'canEditState' => $canEditState,
+            'canEditLga' => $canEditLga,
+            'canEditJamb' => $canEditJamb,
+            'canEditOlevel' => $canEditOlevel,
+            'canEditIndigene' => $canEditIndigene,
             'status' => session('status'),
+            'warning' => session('warning'),
         ]);
     }
 
     public function update(Request $request)
     {
         $student = Student::where('user_id', $request->user()->id)->firstOrFail();
-        $currentSession = Session::current();
-        $canEditProfile = $currentSession && $student->admitted_session_id === $currentSession->id;
+
+        // Determine which fields are editable (can only set them if they are null/empty)
+        $canEditGender = is_null($student->gender) || $student->gender === '';
+        $canEditState = is_null($student->state_id);
+        $canEditLga = is_null($student->lga_id);
+        $canEditJamb = is_null($student->jamb_registration_number) || $student->jamb_registration_number === '';
+        $canEditOlevel = !$student->oLevelResults()->exists();
+        $canEditIndigene = is_null($student->indigene_letter_path);
 
         // Base rules (always editable)
         $rules = [
             'phone_number' => 'required|string',
             'address' => 'required|string',
-            'state_id' => 'required|exists:states,id', // Address related? Usually Origin. Wait. "Origin & Docs" was step 2.
-            // Requirement: "others can only preview or change address and picture"
-            // "Address" usually means residential address.
-            // "Structure": Personal(Phone, Address), Origin(State, LGA, Indigene), O-level, NoK.
-            // So for returning: Phone, Address, Passport, Next of Kin.
-            // State/LGA are usually Origin (Immutable).
-
             'next_of_kin_name' => 'required|string',
             'next_of_kin_phone' => 'required|string',
             'next_of_kin_address' => 'nullable|string',
-            'passport_photograph' => 'nullable|image|max:2048',
+            'passport_photograph' => is_null($student->passport_photo_path) ? 'required|image|max:2048' : 'nullable|image|max:2048',
         ];
 
-        // Full editing rules
-        if ($canEditProfile) {
-            $rules = array_merge($rules, [
-                'gender' => 'required|string',
-                'dob' => 'required|date',
-                'state_id' => 'required|exists:states,id', // Origin
-                'lga_id' => 'required|exists:lgas,id',
-                'indigene_letter' => 'nullable|mimes:jpg,jpeg,png,pdf|max:2048',
-                'o_level_sittings' => 'nullable|array|max:2',
-                'o_level_sittings.*.id' => 'nullable|integer',
-                'o_level_sittings.*.exam_type' => 'nullable|string',
-                'o_level_sittings.*.exam_year' => 'nullable|string',
-                'o_level_sittings.*.exam_number' => 'nullable|string',
-                'o_level_sittings.*.subjects' => 'nullable|array',
-                'o_level_sittings.*.scanned_copy' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
-            ]);
+        // Conditional validation rules based on whether they were null
+        if ($canEditGender) {
+            $rules['gender'] = 'required|string|in:male,female';
+        }
+        if ($canEditState) {
+            $rules['state_id'] = 'required|exists:states,id';
+        }
+        if ($canEditLga) {
+            $rules['lga_id'] = 'required|exists:lgas,id';
+        }
+        if ($canEditJamb) {
+            $rules['jamb_registration_number'] = 'required|string|max:255|unique:students,jamb_registration_number,' . $student->id;
+        }
+        if ($canEditIndigene) {
+            $rules['indigene_letter'] = 'required|file|mimes:jpg,jpeg,png,pdf|max:2048';
+        }
+        if ($canEditOlevel) {
+            $rules['o_level_sittings'] = 'required|array|min:1|max:2';
+            $rules['o_level_sittings.*.exam_type'] = 'required|string';
+            $rules['o_level_sittings.*.exam_year'] = 'required|string';
+            $rules['o_level_sittings.*.exam_number'] = 'required|string';
+            $rules['o_level_sittings.*.subjects'] = 'required|array|min:1';
+            $rules['o_level_sittings.*.scanned_copy'] = 'required|file|mimes:jpg,jpeg,png,pdf|max:2048';
         }
 
         $validated = $request->validate($rules);
@@ -239,11 +255,17 @@ class ProfileController extends Controller
             'next_of_kin_address' => $request->input('next_of_kin_address'),
         ];
 
-        if ($canEditProfile) {
+        if ($canEditGender && $request->has('gender')) {
             $data['gender'] = strtolower($request->gender);
-            $data['dob'] = $request->dob;
+        }
+        if ($canEditState && $request->has('state_id')) {
             $data['state_id'] = $request->state_id;
+        }
+        if ($canEditLga && $request->has('lga_id')) {
             $data['lga_id'] = $request->lga_id;
+        }
+        if ($canEditJamb && $request->has('jamb_registration_number')) {
+            $data['jamb_registration_number'] = strtoupper(trim($request->jamb_registration_number));
         }
 
         if ($request->hasFile('passport_photograph')) {
@@ -251,18 +273,16 @@ class ProfileController extends Controller
             $data['passport_photo_path'] = $path;
         }
 
-        if ($canEditProfile && $request->hasFile('indigene_letter')) {
+        if ($canEditIndigene && $request->hasFile('indigene_letter')) {
             $path = $request->file('indigene_letter')->store('documents/indigene', 'public');
             $data['indigene_letter_path'] = $path;
         }
 
         $student->update($data);
 
-        // Sync O-Level Results (Only for Fresh Students)
-        $processedIds = [];
-        if ($canEditProfile && $request->filled('o_level_sittings')) {
+        // Sync O-Level Results (Only if not already set)
+        if ($canEditOlevel && $request->filled('o_level_sittings')) {
             foreach ($request->o_level_sittings as $index => $sitting) {
-                // Skip empty rows if needed, mainly checking exam_type
                 if (empty($sitting['exam_type'])) {
                     continue;
                 }
@@ -279,35 +299,11 @@ class ProfileController extends Controller
                     $oLevelData['scanned_copy_path'] = $path;
                 }
 
-                if (! empty($sitting['id'])) {
-                    // Update existing
-                    $result = $student->oLevelResults()->find($sitting['id']);
-                    if ($result) {
-                        $result->update($oLevelData);
-                        $processedIds[] = $result->id;
-                    }
-                } else {
-                    // Create new
-                    $result = $student->oLevelResults()->create($oLevelData);
-                    $processedIds[] = $result->id;
-                }
+                $student->oLevelResults()->create($oLevelData);
             }
         }
 
-        // Delete removed sittings (results that belong to student but were not in the submitted list)
-        // If the user submitted empty array or no valid sittings, this might delete all if we intended to clear.
-        // But logic above ($request->filled) keeps old ones if empty.
-        // Better logic: Only delete if $request->o_level_sittings was actually sent (even empty).
-        // Since frontend sends the array, we can safely delete except processed.
-        // However, we should be careful. If $processedIds is empty but sittings were sent (e.g. user deleted all in UI), we delete all.
-        // If sittings were NOT sent (e.g. unrelated update), we shouldn't delete.
-        // But Edit form sends everything. So safe to deleteNotIn.
-
-        if ($canEditProfile && $request->has('o_level_sittings')) {
-            $student->oLevelResults()->whereNotIn('id', $processedIds)->delete();
-        }
-
-        return redirect()->route('student.profile.edit')->with('status', 'Profile updated successfully.');
+        return redirect()->route('student.dashboard')->with('status', 'Profile updated successfully.');
     }
 
     public function downloadAdmissionLetter()
