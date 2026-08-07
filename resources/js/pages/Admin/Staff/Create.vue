@@ -90,6 +90,13 @@ const form = useForm({
     lga_id: '',
     specialization: '',
     research_interests: '',
+    basic_salary: '',
+    allowances: '',
+    deductions: '',
+    bonuses: '',
+    bank_name: '',
+    account_number: '',
+    account_name: '',
 });
 
 const selectedFacultyId = ref<string>('');
@@ -144,6 +151,21 @@ const formatRoleName = (name: string) => {
     return name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 };
 
+const formatCurrency = (value: number | string) => {
+    return new Intl.NumberFormat('en-NG', {
+        style: 'currency',
+        currency: 'NGN'
+    }).format(Number(value || 0));
+};
+
+const computedNetSalary = computed(() => {
+    const basic = Number(form.basic_salary || 0);
+    const allowances = Number(form.allowances || 0);
+    const bonuses = Number(form.bonuses || 0);
+    const deductions = Number(form.deductions || 0);
+    return basic + allowances + bonuses - deductions;
+});
+
 const submit = () => {
     form.post(route('admin.staff.store')); 
 };
@@ -177,7 +199,7 @@ const submit = () => {
                 <!-- Left Column: Tabbed Information -->
                 <div class="lg:col-span-2">
                     <Tabs default-value="account" class="w-full space-y-6">
-                        <TabsList class="grid w-full grid-cols-3 h-12 p-1 bg-slate-100 rounded-xl">
+                        <TabsList class="grid w-full grid-cols-4 h-12 p-1 bg-slate-100 rounded-xl">
                             <TabsTrigger value="account" class="rounded-lg font-bold text-xs uppercase tracking-widest">
                                 <User class="w-3.5 h-3.5 mr-2" /> Account
                             </TabsTrigger>
@@ -186,6 +208,9 @@ const submit = () => {
                             </TabsTrigger>
                             <TabsTrigger value="placement" class="rounded-lg font-bold text-xs uppercase tracking-widest">
                                 <Building2 class="w-3.5 h-3.5 mr-2" /> Placement
+                            </TabsTrigger>
+                            <TabsTrigger value="salary" class="rounded-lg font-bold text-xs uppercase tracking-widest">
+                                <Briefcase class="w-3.5 h-3.5 mr-2" /> Salary & Bank
                             </TabsTrigger>
                         </TabsList>
 
@@ -332,7 +357,7 @@ const submit = () => {
                                                             <SelectValue placeholder="Select State" />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            <SelectItem v-for="state in states" :key="state.id" :value="state.id">
+                                                            <SelectItem v-for="state in states" :key="state.id" :value="String(state.id)">
                                                                 {{ state.name }}
                                                             </SelectItem>
                                                         </SelectContent>
@@ -345,7 +370,7 @@ const submit = () => {
                                                             <SelectValue placeholder="Select LGA" />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            <SelectItem v-for="lga in availableLgas" :key="lga.id" :value="lga.id">
+                                                            <SelectItem v-for="lga in availableLgas" :key="lga.id" :value="String(lga.id)">
                                                                 {{ lga.name }}
                                                             </SelectItem>
                                                         </SelectContent>
@@ -458,6 +483,95 @@ const submit = () => {
                                                     </SelectItem>
                                                 </SelectContent>
                                             </Select>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+
+                        <!-- Salary & Bank Tab -->
+                        <TabsContent value="salary" class="space-y-6 animate-in fade-in-50 duration-300">
+                            <Card class="border shadow-sm overflow-hidden">
+                                <CardHeader class="bg-slate-50 border-b py-4">
+                                    <CardTitle class="text-base flex items-center gap-2">
+                                        <Briefcase class="w-4 h-4 text-primary" />
+                                        Salary Configuration
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent class="p-6">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div class="space-y-2">
+                                            <Label class="text-sm font-semibold">Basic Salary (NGN)</Label>
+                                            <div class="relative">
+                                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">₦</span>
+                                                <Input type="number" step="0.01" v-model="form.basic_salary" placeholder="0.00" class="pl-8 bg-white" />
+                                            </div>
+                                            <p class="text-[10px] text-muted-foreground ml-1">{{ formatCurrency(form.basic_salary) }}</p>
+                                        </div>
+
+                                        <div class="space-y-2">
+                                            <Label class="text-sm font-semibold">Allowances (NGN)</Label>
+                                            <div class="relative">
+                                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">₦</span>
+                                                <Input type="number" step="0.01" v-model="form.allowances" placeholder="0.00" class="pl-8 bg-white" />
+                                            </div>
+                                            <p class="text-[10px] text-muted-foreground ml-1">{{ formatCurrency(form.allowances) }}</p>
+                                        </div>
+
+                                        <div class="space-y-2">
+                                            <Label class="text-sm font-semibold">Deductions (NGN)</Label>
+                                            <div class="relative">
+                                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">₦</span>
+                                                <Input type="number" step="0.01" v-model="form.deductions" placeholder="0.00" class="pl-8 bg-white" />
+                                            </div>
+                                            <p class="text-[10px] text-muted-foreground ml-1">{{ formatCurrency(form.deductions) }}</p>
+                                        </div>
+
+                                        <div class="space-y-2">
+                                            <Label class="text-sm font-semibold">Bonuses (NGN)</Label>
+                                            <div class="relative">
+                                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">₦</span>
+                                                <Input type="number" step="0.01" v-model="form.bonuses" placeholder="0.00" class="pl-8 bg-white" />
+                                            </div>
+                                            <p class="text-[10px] text-muted-foreground ml-1">{{ formatCurrency(form.bonuses) }}</p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Computed Net Salary Summary -->
+                                    <div class="mt-6 p-4 rounded-xl bg-slate-900 text-white flex justify-between items-center shadow-lg animate-in fade-in duration-300">
+                                        <div>
+                                            <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Calculated Net Salary</span>
+                                            <span class="text-xl font-extrabold text-emerald-400 block">{{ formatCurrency(computedNetSalary) }}</span>
+                                        </div>
+                                        <div class="text-right text-[10px] text-slate-400 font-medium">
+                                            Basic + Allowances + Bonuses - Deductions
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card class="border shadow-sm overflow-hidden">
+                                <CardHeader class="bg-slate-50 border-b py-4">
+                                    <CardTitle class="text-base flex items-center gap-2">
+                                        <Building2 class="w-4 h-4 text-primary" />
+                                        Bank Account Details
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent class="p-6">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div class="space-y-2">
+                                            <Label class="text-sm font-semibold">Bank Name</Label>
+                                            <Input v-model="form.bank_name" placeholder="e.g. Zenith Bank" class="bg-white" />
+                                        </div>
+
+                                        <div class="space-y-2">
+                                            <Label class="text-sm font-semibold">Account Number</Label>
+                                            <Input v-model="form.account_number" placeholder="10-digit Account Number" class="bg-white" />
+                                        </div>
+
+                                        <div class="space-y-2 md:col-span-2">
+                                            <Label class="text-sm font-semibold">Account Name</Label>
+                                            <Input v-model="form.account_name" placeholder="Name on the Bank Account" class="bg-white" />
                                         </div>
                                     </div>
                                 </CardContent>
