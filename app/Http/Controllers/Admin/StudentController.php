@@ -136,14 +136,14 @@ class StudentController extends Controller
 
             $currentSession = \App\Models\Session::find($validated['admitted_session_id']);
 
-            $currenSemester = $currentSession->semesters()->where('is_current', true)->first();
+            $currenSemester = $currentSession ? $currentSession->semesters()->where('is_current', true)->first() : null;
 
             StudentSession::create([
                 'student_id' => $student->id,
                 'session_id' => $validated['admitted_session_id'],
                 'level' => $validated['current_level'],
                 'status' => 'active',
-                'semester' => $currenSemester->name,
+                'semester' => $currenSemester?->name ?? 'First Semester',
             ]);
 
             // Handle WAEC Result
