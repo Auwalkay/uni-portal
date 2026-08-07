@@ -4,7 +4,7 @@ import { Head, Link } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import StudentLayout from '@/layouts/StudentLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard, Calendar, CalendarClock, MapPin, FileText } from 'lucide-vue-next';
+import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard, Calendar, CalendarClock, MapPin, FileText, Home } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -24,6 +24,9 @@ const props = defineProps<{
     schoolFeeStatus?: string; // 'paid', 'partial', 'pending', 'cancelled', etc.
     showRegistrationNotification?: boolean;
     registrationMessage?: string;
+    isRegistrationActive?: boolean;
+    showHostelNotification?: boolean;
+    hostelNotificationMessage?: string;
     stats?: {
         cgpa: string;
         totalUnits: number;
@@ -109,17 +112,40 @@ const greeting = () => {
             </div>
 
             <!-- Registration Notification -->
-            <div v-if="showRegistrationNotification" class="rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm flex items-start gap-4">
-                <div class="rounded-full bg-blue-100 p-2">
-                    <AlertCircle class="h-6 w-6 text-blue-600" />
+            <div v-if="showRegistrationNotification" 
+                :class="[
+                    'rounded-xl border p-4 shadow-sm flex items-start gap-4',
+                    isRegistrationActive 
+                        ? 'border-blue-200 bg-blue-50 text-blue-900' 
+                        : 'border-amber-200 bg-amber-50 text-amber-900'
+                ]"
+            >
+                <div :class="['rounded-full p-2', isRegistrationActive ? 'bg-blue-100' : 'bg-amber-100']">
+                    <AlertCircle :class="['h-6 w-6', isRegistrationActive ? 'text-blue-600' : 'text-amber-600']" />
                 </div>
                 <div class="flex-1">
-                    <h3 class="font-semibold text-blue-900">Course Registration Open</h3>
-                    <p class="text-blue-700 mt-1 text-sm">
-                        {{ registrationMessage || 'Course registration for the current semester is now open. Please register your courses before the deadline.' }}
+                    <h3 class="font-semibold">{{ isRegistrationActive ? 'Course Registration Open' : 'Course Registration Notice' }}</h3>
+                    <p :class="['mt-1 text-sm', isRegistrationActive ? 'text-blue-700' : 'text-amber-700']">
+                        {{ registrationMessage }}
                     </p>
-                    <Link :href="route('student.courses.create')" class="mt-3 inline-flex items-center text-sm font-medium text-blue-800 hover:text-blue-900 underline underline-offset-4">
+                    <Link v-if="isRegistrationActive" :href="route('student.courses.create')" class="mt-3 inline-flex items-center text-sm font-medium text-blue-800 hover:text-blue-900 underline underline-offset-4">
                         Register Courses Now &rarr;
+                    </Link>
+                </div>
+            </div>
+
+            <!-- Hostel Booking Notification -->
+            <div v-if="showHostelNotification" class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm flex items-start gap-4 text-emerald-900">
+                <div class="rounded-full bg-emerald-100 p-2">
+                    <Home class="h-6 w-6 text-emerald-600" />
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-semibold">Hostel Booking Open</h3>
+                    <p class="mt-1 text-sm text-emerald-700">
+                        {{ hostelNotificationMessage }}
+                    </p>
+                    <Link :href="route('student.accommodation.index')" class="mt-3 inline-flex items-center text-sm font-medium text-emerald-800 hover:text-emerald-900 underline underline-offset-4">
+                        Book Your Room Now &rarr;
                     </Link>
                 </div>
             </div>

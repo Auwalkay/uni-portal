@@ -25,6 +25,13 @@ class CourseRegistrationController extends Controller
     {
         Gate::authorize('manage_student_registrations');
 
+        $currentSession = Session::current();
+        $currentSemester = Semester::current();
+
+        $sessionId = $request->query('session_id') ?? ($currentSession?->id ?? '');
+        $semesterId = $request->query('semester_id') ?? ($currentSemester?->id ?? '');
+        $status = $request->query('status') ?? 'all'; // 'all', 'registered', 'not_registered'
+
         $query = Student::query()
             ->with(['user', 'academicDepartment.faculty', 'program']);
 
@@ -48,13 +55,38 @@ class CourseRegistrationController extends Controller
             $query->where('department_id', $request->department_id);
         }
 
+        // Apply Registration Status Filter
+        if ($status === 'registered') {
+            $query->whereHas('registrations', function ($q) use ($sessionId, $semesterId) {
+                $q->where('session_id', $sessionId)
+                  ->where('semester_id', $semesterId);
+            });
+        } elseif ($status === 'not_registered') {
+            $query->whereDoesntHave('registrations', function ($q) use ($sessionId, $semesterId) {
+                $q->where('session_id', $sessionId)
+                  ->where('semester_id', $semesterId);
+            });
+        }
+
         $students = $query->latest()->paginate(10)->withQueryString();
+
+        // Get semesters for the selected session
+        $semesters = $sessionId ? Semester::where('session_id', $sessionId)->get() : collect();
 
         return Inertia::render('Admin/Courses/RegistrationManager', [
             'students' => $students,
-            'filters' => $request->only(['search', 'faculty_id', 'department_id']),
+            'filters' => [
+                'search' => $request->query('search'),
+                'faculty_id' => $request->query('faculty_id'),
+                'department_id' => $request->query('department_id'),
+                'session_id' => $sessionId,
+                'semester_id' => $semesterId,
+                'status' => $status,
+            ],
             'faculties' => AcademicCacheService::getFaculties(),
             'departments' => AcademicCacheService::getAcademicDepartments(),
+            'sessions' => AcademicCacheService::getSessions(),
+            'semesters' => $semesters,
         ]);
     }
 

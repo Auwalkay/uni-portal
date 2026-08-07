@@ -411,6 +411,11 @@ class CourseRegistrationController extends Controller
 
     public function downloadExamCard(Request $request)
     {
+        $examCardEnabled = filter_var(\App\Models\SystemSetting::get('enable_exam_card_download', true), FILTER_VALIDATE_BOOLEAN);
+        if (!$examCardEnabled) {
+            return back()->with('error', 'Exam card downloading is currently disabled by the administration.');
+        }
+
         $student = Student::where('user_id', Auth::id())
             ->with(['user', 'department.faculty', 'program'])
             ->firstOrFail();

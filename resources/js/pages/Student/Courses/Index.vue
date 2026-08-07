@@ -196,7 +196,7 @@ const selectSession = (sessionId: number) => {
                                         </div>
                                         <div class="flex-shrink-0 relative z-10 flex gap-2">
                                              <a 
-                                                v-if="selectedSessionRecord.id"
+                                                v-if="selectedSessionRecord.id && $page.props.settings?.enable_exam_card_download"
                                                 :href="route('student.courses.exam_card', { session_id: selectedSessionRecord.id })" 
                                                 target="_blank"
                                              > 

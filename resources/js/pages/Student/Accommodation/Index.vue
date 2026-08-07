@@ -32,9 +32,10 @@ const props = defineProps<{
     hasRegisteredCourses: boolean;
     hostels: any[];
     existingBooking: any | null;
+    isBookingActive: boolean;
 }>();
 
-const canBook = computed(() => props.hasPaidFees);
+const canBook = computed(() => props.hasPaidFees && props.isBookingActive);
 
 // Booking State
 const selectedHostelId = ref<string | null>(null);
@@ -248,7 +249,21 @@ const bookRoom = () => {
                 <template v-else>
                     <!-- Enhanced Prerequisite Gate -->
                     <div v-if="!canBook" class="animate-in fade-in slide-in-from-bottom-8 duration-1000">
-                        <div class="max-w-4xl mx-auto space-y-8">
+                        <!-- Global booking closed warning -->
+                        <div v-if="!isBookingActive" class="max-w-md mx-auto text-center space-y-6 py-12">
+                            <div class="inline-flex items-center justify-center p-4 rounded-full bg-amber-100 text-amber-600 mb-2">
+                                <Building2 class="h-12 w-12" />
+                            </div>
+                            <h2 class="text-3xl font-extrabold tracking-tight">Hostel Booking Closed</h2>
+                            <p class="text-muted-foreground">
+                                Hostel booking is currently closed by the administration. Please check back later or contact the student affairs office for more details.
+                            </p>
+                            <Button variant="outline" class="w-full" @click="router.visit(route('student.dashboard'))">
+                                Return to Dashboard
+                            </Button>
+                        </div>
+
+                        <div v-else class="max-w-4xl mx-auto space-y-8">
                             <div class="text-center space-y-4">
                                 <div class="inline-flex items-center justify-center p-3 rounded-2xl bg-destructive/10 text-destructive mb-2">
                                     <LayoutDashboard class="h-8 w-8" />
