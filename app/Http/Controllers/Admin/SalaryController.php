@@ -66,8 +66,18 @@ class SalaryController extends Controller
             'file' => 'required|file|extensions:csv,xls,xlsx',
         ]);
 
-        Excel::import(new StaffSalaryImport, $request->file('file'));
-
-        return back()->with('success', 'Staff salaries updated successfully.');
+        try {
+            Excel::import(new StaffSalaryImport, $request->file('file'));
+            return back()->with('success', 'Staff salaries updated successfully.');
+        } catch (\Maatwebsite\Excel\Validators\ValidationException $e) {
+            $failures = $e->failures();
+            $errors = [];
+            foreach ($failures as $failure) {
+                $errors[] = "Row {$failure->row()}: " . implode(', ', $failure->errors());
+            }
+            return back()->withErrors(['file' => $errors]);
+        } catch (\Exception $e) {
+            return back()->withErrors(['file' => 'Import error: ' . $e->getMessage()]);
+        }
     }
 }

@@ -438,6 +438,21 @@ const handleImport = () => {
                                 accept=".xlsx, .xls, .csv"
                                 class="cursor-pointer file:cursor-pointer file:bg-primary file:text-primary-foreground file:border-none file:px-4 file:py-1 file:rounded-md file:mr-4 file:hover:bg-primary/90"
                             />
+                            <p class="text-[10px] text-muted-foreground ml-1">Select the filled salary Excel/CSV sheet.</p>
+                            
+                            <div v-if="importForm.errors.file" class="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs space-y-1">
+                                <div class="font-bold">Errors found in file:</div>
+                                <div class="max-h-24 overflow-y-auto space-y-1">
+                                    <template v-if="Array.isArray(importForm.errors.file)">
+                                        <div v-for="(error, index) in importForm.errors.file" :key="index">
+                                            {{ error }}
+                                        </div>
+                                    </template>
+                                    <template v-else>
+                                        {{ importForm.errors.file }}
+                                    </template>
+                                </div>
+                            </div>
                         </div>
 
                         <ul class="text-xs space-y-2 text-muted-foreground list-disc pl-4">
