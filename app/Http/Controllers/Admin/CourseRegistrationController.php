@@ -221,7 +221,7 @@ class CourseRegistrationController extends Controller
         return to_route('admin.course_registration.manage', $student->id)->with('success', 'Course registration processed successfully.');
     }
 
-    public function downloadForm(Student $student)
+    public function downloadForm(Request $request, Student $student)
     {
         Gate::authorize('manage_student_registrations');
 
@@ -240,14 +240,23 @@ class CourseRegistrationController extends Controller
             return back()->with('error', 'No course registration records found for this session.');
         }
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.course_form', [
+        if ($request->query('download') === '1') {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.course_form', [
+                'student' => $student->load(['user', 'academicDepartment.faculty', 'program']),
+                'registrations' => $registrations,
+                'session' => $currentSession,
+                'semester' => null,
+                'total_units' => $registrations->flatten()->sum('course.units'),
+            ]);
+
+            return $pdf->download("Course_Form_{$student->matriculation_number}.pdf");
+        }
+
+        return Inertia::render('Admin/Students/CourseRegistrationFormView', [
             'student' => $student->load(['user', 'academicDepartment.faculty', 'program']),
             'registrations' => $registrations,
             'session' => $currentSession,
-            'semester' => null,
             'total_units' => $registrations->flatten()->sum('course.units'),
         ]);
-
-        return $pdf->stream("Course_Form_{$student->matriculation_number}.pdf");
     }
 }
