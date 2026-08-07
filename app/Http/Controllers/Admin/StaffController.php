@@ -139,6 +139,13 @@ class StaffController extends Controller
             'lga_id' => 'nullable|exists:lgas,id',
             'specialization' => 'nullable|string|max:255',
             'research_interests' => 'nullable|string',
+            'basic_salary' => 'nullable|numeric|min:0',
+            'allowances' => 'nullable|numeric|min:0',
+            'deductions' => 'nullable|numeric|min:0',
+            'bonuses' => 'nullable|numeric|min:0',
+            'bank_name' => 'nullable|string|max:255',
+            'account_number' => 'nullable|string|max:20',
+            'account_name' => 'nullable|string|max:255',
         ]);
 
         $password = $request->password ?? Str::random(10);
@@ -174,6 +181,13 @@ class StaffController extends Controller
             'lga_id' => $request->lga_id,
             'specialization' => $request->specialization,
             'research_interests' => $request->research_interests,
+            'basic_salary' => $request->basic_salary ?? 0,
+            'allowances' => $request->allowances ?? 0,
+            'deductions' => $request->deductions ?? 0,
+            'bonuses' => $request->bonuses ?? 0,
+            'bank_name' => $request->bank_name,
+            'account_number' => $request->account_number,
+            'account_name' => $request->account_name,
         ]);
 
         Mail::to($user->email)->send(new StaffAccountCreated($user, $password));
