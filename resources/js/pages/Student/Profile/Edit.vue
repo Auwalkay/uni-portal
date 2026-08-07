@@ -49,8 +49,15 @@ const props = defineProps<{
     };
     states: Array<{ id: number; name: string; lgas: Array<{ id: number; name: string }> }>;
     allSubjects: Array<{ id: number; name: string }>;
-    canEditProfile: boolean;
+    canEditGender: boolean;
+    canEditState: boolean;
+    canEditLga: boolean;
+    canEditJamb: boolean;
+    canEditOlevel: boolean;
+    canEditIndigene: boolean;
     status?: string;
+    warning?: string;
+    canEditProfile: boolean;
 }>();
 
 const page = usePage();
@@ -111,6 +118,7 @@ const form = useForm({
     next_of_kin_name: props.student.next_of_kin_name || '',
     next_of_kin_phone: props.student.next_of_kin_phone || '',
     next_of_kin_address: props.student.next_of_kin_address || '',
+    jamb_registration_number: props.student.jamb_registration_number || '',
     passport_photograph: null as File | null,
     indigene_letter: null as File | null,
     // O-Level Arrays
@@ -267,7 +275,17 @@ const updateProfile = () => {
             </div>
 
             <!-- Content Grid with Z-Index fix to appear ON TOP of header -->
-            <div class="relative z-30 grid grid-cols-1 lg:grid-cols-12 gap-8 -mt-20 px-4 md:px-8 pb-12">
+            <div class="relative z-30 px-4 md:px-8 -mt-20 pb-12 space-y-6">
+                <!-- Warning Alert -->
+                <div v-if="warning" class="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-4 flex gap-3 text-amber-800 dark:text-amber-300 shadow-md">
+                    <ShieldAlert class="w-5 h-5 shrink-0 mt-0.5" />
+                    <div>
+                        <h4 class="font-semibold text-sm">Profile Setup Required</h4>
+                        <p class="text-xs mt-1 leading-relaxed">{{ warning }}</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 <!-- Left Column: Sticky Profile Card -->
                 <div class="lg:col-span-4 space-y-6">
                     <div class="sticky top-6 space-y-6">
@@ -388,15 +406,19 @@ const updateProfile = () => {
                                     </div>
                                     <div class="space-y-2">
                                         <Label>Gender</Label>
-                                        <Select v-model="form.gender" :disabled="!canEditProfile">
-                                            <SelectTrigger :class="{'opacity-75': !canEditProfile}">
+                                        <Select v-model="form.gender" :disabled="!canEditGender">
+                                            <SelectTrigger :class="{'opacity-75': !canEditGender}">
                                                 <SelectValue placeholder="Select Gender" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="Male">Male</SelectItem>
-                                                <SelectItem value="Female">Female</SelectItem>
+                                                <SelectItem value="male">Male</SelectItem>
+                                                <SelectItem value="female">Female</SelectItem>
                                             </SelectContent>
                                         </Select>
+                                    </div>
+                                    <div class="space-y-2">
+                                        <Label>JAMB Registration Number</Label>
+                                        <Input v-model="form.jamb_registration_number" placeholder="Enter JAMB Registration Number" :disabled="!canEditJamb" :class="{'opacity-75 bg-muted': !canEditJamb}" />
                                     </div>
                                     <div class="space-y-2">
                                         <Label>Phone Number</Label>
@@ -427,8 +449,8 @@ const updateProfile = () => {
                                 <CardContent class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div class="space-y-2">
                                         <Label>State of Origin</Label>
-                                        <Select v-model="form.state_id" :disabled="!canEditProfile">
-                                            <SelectTrigger :class="{'opacity-75': !canEditProfile}">
+                                        <Select v-model="form.state_id" :disabled="!canEditState">
+                                            <SelectTrigger :class="{'opacity-75': !canEditState}">
                                                 <SelectValue placeholder="Select State" />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -439,24 +461,24 @@ const updateProfile = () => {
                                         </Select>
                                     </div>
                                     <div class="space-y-2">
-                                        <Label>Local Govt. Area</Label>
-                                        <Select v-model="form.lga_id" :disabled="!canEditProfile || !form.state_id">
-                                            <SelectTrigger :class="{'opacity-75': !canEditProfile}">
-                                                <SelectValue placeholder="Select LGA" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem v-for="lga in filteredLgas" :key="lga.id" :value="String(lga.id)">
-                                                    {{ lga.name }}
-                                                </SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
+                                         <Label>Local Govt. Area</Label>
+                                         <Select v-model="form.lga_id" :disabled="!canEditLga || !form.state_id">
+                                             <SelectTrigger :class="{'opacity-75': !canEditLga}">
+                                                 <SelectValue placeholder="Select LGA" />
+                                             </SelectTrigger>
+                                             <SelectContent>
+                                                 <SelectItem v-for="lga in filteredLgas" :key="lga.id" :value="String(lga.id)">
+                                                     {{ lga.name }}
+                                                 </SelectItem>
+                                             </SelectContent>
+                                         </Select>
+                                     </div>
                                     
                                     <Separator class="md:col-span-2 my-2" />
 
                                     <div class="space-y-4 md:col-span-2">
                                         <Label>Indigene Letter Upload</Label>
-                                        <div v-if="canEditProfile" class="border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition cursor-pointer relative" :class="{'bg-green-50 border-green-200': form.indigene_letter}">
+                                        <div v-if="canEditIndigene" class="border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition cursor-pointer relative" :class="{'bg-green-50 border-green-200': form.indigene_letter}">
                                             <input type="file" @input="form.indigene_letter = ($event.target as HTMLInputElement).files?.[0] || null" accept=".pdf,.jpg,.png" class="absolute inset-0 opacity-0 cursor-pointer" />
                                             <div class="bg-orange-100 p-3 rounded-full mb-3">
                                                 <FileText class="w-6 h-6 text-orange-600" />
@@ -472,7 +494,10 @@ const updateProfile = () => {
                                             </p>
                                         </div>
                                         <div v-else class="p-4 bg-muted/50 rounded-lg border text-center text-muted-foreground text-sm">
-                                            Updating Indigene Letter is restricted for returning students.
+                                            <span v-if="student.indigene_letter_path" class="text-green-600 flex items-center justify-center gap-2">
+                                                <CheckCircle class="w-4 h-4" /> Indigene Letter Uploaded
+                                            </span>
+                                            <span v-else>No Indigene letter uploaded. Updates restricted.</span>
                                         </div>
                                     </div>
                                 </CardContent>
@@ -522,8 +547,8 @@ const updateProfile = () => {
                                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <div class="space-y-2">
                                             <Label>Exam Type</Label>
-                                            <Select v-model="form.o_level_sittings[activeSitting].exam_type" :disabled="!canEditProfile">
-                                                <SelectTrigger :class="{'opacity-75': !canEditProfile}">
+                                            <Select v-model="form.o_level_sittings[activeSitting].exam_type" :disabled="!canEditOlevel">
+                                                <SelectTrigger :class="{'opacity-75': !canEditOlevel}">
                                                     <SelectValue placeholder="Select Exam" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -536,8 +561,8 @@ const updateProfile = () => {
                                         </div>
                                         <div class="space-y-2">
                                             <Label>Exam Year</Label>
-                                             <Select v-model="form.o_level_sittings[activeSitting].exam_year" :disabled="!canEditProfile">
-                                                <SelectTrigger :class="{'opacity-75': !canEditProfile}">
+                                             <Select v-model="form.o_level_sittings[activeSitting].exam_year" :disabled="!canEditOlevel">
+                                                <SelectTrigger :class="{'opacity-75': !canEditOlevel}">
                                                     <SelectValue placeholder="Year" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -549,14 +574,14 @@ const updateProfile = () => {
                                         </div>
                                         <div class="space-y-2">
                                             <Label>Exam Number</Label>
-                                            <Input v-model="form.o_level_sittings[activeSitting].exam_number" placeholder="Enter Exam No." :disabled="!canEditProfile" :class="{'opacity-75': !canEditProfile}" />
+                                            <Input v-model="form.o_level_sittings[activeSitting].exam_number" placeholder="Enter Exam No." :disabled="!canEditOlevel" :class="{'opacity-75': !canEditOlevel}" />
                                         </div>
                                     </div>
 
                                     <div class="space-y-3">
                                         <div class="flex justify-between items-center">
                                             <Label>Subjects & Grades</Label>
-                                            <Button v-if="canEditProfile" type="button" variant="ghost" size="sm" class="text-primary hover:text-primary/80 h-auto p-0" @click="addSubject">
+                                            <Button v-if="canEditOlevel" type="button" variant="ghost" size="sm" class="text-primary hover:text-primary/80 h-auto p-0" @click="addSubject">
                                                 + Add Subject
                                             </Button>
                                         </div>
@@ -564,8 +589,8 @@ const updateProfile = () => {
                                         <div class="bg-muted/30 rounded-lg p-2 space-y-2">
                                             <div v-for="(item, index) in form.o_level_sittings[activeSitting].subjects" :key="index" class="flex gap-2 items-start animate-in fade-in slide-in-from-top-2 duration-200">
                                                 <div class="flex-1">
-                                                    <Select v-model="item.subject" :disabled="!canEditProfile">
-                                                        <SelectTrigger class="bg-background" :class="{'opacity-75': !canEditProfile}">
+                                                    <Select v-model="item.subject" :disabled="!canEditOlevel">
+                                                        <SelectTrigger class="bg-background" :class="{'opacity-75': !canEditOlevel}">
                                                             <SelectValue placeholder="Select Subject" />
                                                         </SelectTrigger>
                                                         <SelectContent class="max-h-60">
@@ -576,8 +601,8 @@ const updateProfile = () => {
                                                     </Select>
                                                 </div>
                                                 <div class="w-28 md:w-32">
-                                                    <Select v-model="item.grade" :disabled="!canEditProfile">
-                                                        <SelectTrigger class="bg-background" :class="{'opacity-75': !canEditProfile}">
+                                                    <Select v-model="item.grade" :disabled="!canEditOlevel">
+                                                        <SelectTrigger class="bg-background" :class="{'opacity-75': !canEditOlevel}">
                                                             <SelectValue placeholder="Grade" />
                                                         </SelectTrigger>
                                                         <SelectContent>
@@ -585,12 +610,12 @@ const updateProfile = () => {
                                                         </SelectContent>
                                                     </Select>
                                                 </div>
-                                                <Button v-if="canEditProfile" type="button" variant="ghost" size="icon" class="text-destructive hover:bg-destructive/10 shrink-0" @click="removeSubject(index)">
+                                                <Button v-if="canEditOlevel" type="button" variant="ghost" size="icon" class="text-destructive hover:bg-destructive/10 shrink-0" @click="removeSubject(index)">
                                                     <X class="w-4 h-4" />
                                                 </Button>
                                             </div>
                                             <div v-if="form.o_level_sittings[activeSitting].subjects.length === 0" class="text-sm text-muted-foreground text-center py-6 border-2 border-dashed rounded-md">
-                                                <span v-if="canEditProfile">No subjects added. Click "+ Add Subject" to begin.</span>
+                                                <span v-if="canEditOlevel">No subjects added. Click "+ Add Subject" to begin.</span>
                                                 <span v-else>No subjects recorded.</span>
                                             </div>
                                         </div>
@@ -600,7 +625,7 @@ const updateProfile = () => {
 
                                     <div class="space-y-4">
                                          <Label>Upload Result Verification (Scanned Copy)</Label>
-                                         <div v-if="canEditProfile" class="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition cursor-pointer relative" :class="{'bg-purple-50 border-purple-200': form.o_level_sittings[activeSitting].scanned_copy}">
+                                         <div v-if="canEditOlevel" class="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition cursor-pointer relative" :class="{'bg-purple-50 border-purple-200': form.o_level_sittings[activeSitting].scanned_copy}">
                                             <input type="file" @input="form.o_level_sittings[activeSitting].scanned_copy = ($event.target as HTMLInputElement).files?.[0] || null" accept=".pdf,.jpg,.png" class="absolute inset-0 opacity-0 cursor-pointer" />
                                             <div class="bg-purple-100 p-2 rounded-full mb-2">
                                                 <FileText class="w-5 h-5 text-purple-600" />
@@ -629,7 +654,7 @@ const updateProfile = () => {
                                     </div>
 
                                     <!-- Remove Sitting Button -->
-                                    <div v-if="form.o_level_sittings.length > 1 && canEditProfile" class="flex justify-end pt-2">
+                                    <div v-if="form.o_level_sittings.length > 1 && canEditOlevel" class="flex justify-end pt-2">
                                         <Button type="button" variant="ghost" size="sm" class="text-destructive hover:bg-destructive/10 hover:text-destructive" @click="removeSitting(activeSitting)">
                                             Remove this Sitting
                                         </Button>
@@ -736,5 +761,6 @@ const updateProfile = () => {
                 </div>
             </div>
         </div>
+    </div>
     </StudentLayout>
 </template>

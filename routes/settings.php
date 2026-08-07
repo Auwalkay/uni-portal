@@ -2,7 +2,7 @@
 
 use App\Http\Controllers\Admin\AcademicController;
 use App\Http\Controllers\Admin\AdmissionController;
-use App\Http\Controllers\Admin\AuditLogController;
+use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\CourseRegistrationController;
 use App\Http\Controllers\Admin\DocumentController;
 use App\Http\Controllers\Admin\FrontDesk\ComplaintController;
@@ -78,50 +78,54 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // STUDENT Routes
     Route::prefix('student')->name('student.')->middleware('permission:access_student_portal')->group(function () {
-        Route::get('/dashboard', [\App\Http\Controllers\Student\ProfileController::class, 'dashboard'])->name('dashboard');
-
-        Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
-        Route::post('/payments/create-school-fee', [PaymentController::class, 'createSchoolFeeInvoice'])->name('payments.create_school_fee');
-        Route::get('/payments/optional-fees', [PaymentController::class, 'getOptionalFees'])->name('payments.optional_fees');
-        Route::post('/payments/initiate-optional/{config}', [PaymentController::class, 'initiateOptionalFee'])->name('payments.initiate_optional');
-        Route::post('/payments/{invoice}/pay', [PaymentController::class, 'pay'])->name('payments.pay');
-        Route::get('/payments/callback', [PaymentController::class, 'callback'])->name('payments.callback');
-        Route::get('/payments/{payment}/download', [PaymentController::class, 'downloadReceipt'])->name('payments.download');
-
+        // Profile routes (exempt from completion enforcement so they can complete it)
         Route::get('/profile', [\App\Http\Controllers\Student\ProfileController::class, 'edit'])->name('profile.edit');
         Route::patch('/profile', [\App\Http\Controllers\Student\ProfileController::class, 'update'])->name('profile.update');
 
-        Route::get('/courses', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'index'])->name('courses.index');
-        Route::get('/courses/register', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'create'])->name('courses.create');
-        Route::post('/courses', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'store'])->name('courses.store');
-        Route::get('/courses/form', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'downloadForm'])->name('courses.form');
-        Route::get('/courses/exam-card', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'downloadExamCard'])->name('courses.exam_card');
+        // Enforced routes
+        Route::middleware(['student_profile_completed'])->group(function () {
+            Route::get('/dashboard', [\App\Http\Controllers\Student\ProfileController::class, 'dashboard'])->name('dashboard');
 
-        Route::get('/timetable', [TimetableController::class, 'index'])->name('timetable.index');
+            Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
+            Route::post('/payments/create-school-fee', [PaymentController::class, 'createSchoolFeeInvoice'])->name('payments.create_school_fee');
+            Route::get('/payments/optional-fees', [PaymentController::class, 'getOptionalFees'])->name('payments.optional_fees');
+            Route::post('/payments/initiate-optional/{config}', [PaymentController::class, 'initiateOptionalFee'])->name('payments.initiate_optional');
+            Route::post('/payments/{invoice}/pay', [PaymentController::class, 'pay'])->name('payments.pay');
+            Route::get('/payments/callback', [PaymentController::class, 'callback'])->name('payments.callback');
+            Route::get('/payments/{payment}/download', [PaymentController::class, 'downloadReceipt'])->name('payments.download');
 
-        Route::get('/results', [\App\Http\Controllers\Student\ResultController::class, 'index'])->name('results.index');
+            Route::get('/courses', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'index'])->name('courses.index');
+            Route::get('/courses/register', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'create'])->name('courses.create');
+            Route::post('/courses', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'store'])->name('courses.store');
+            Route::get('/courses/form', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'downloadForm'])->name('courses.form');
+            Route::get('/courses/exam-card', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'downloadExamCard'])->name('courses.exam_card');
 
-        Route::get('/accommodation', [AccommodationController::class, 'index'])->name('accommodation.index');
-        Route::post('/accommodation', [AccommodationController::class, 'store'])->name('accommodation.store');
-        Route::get('/accommodation/download-slip', [AccommodationController::class, 'downloadAccommodationSlip'])->name('accommodation.download-slip');
-        Route::get('/accommodation/download-payment', [AccommodationController::class, 'downloadPaymentSlip'])->name('accommodation.download-payment');
+            Route::get('/timetable', [TimetableController::class, 'index'])->name('timetable.index');
 
-        Route::get('/id-card', [IdCardController::class, 'show'])->name('id_card.show');
-        Route::get('/admission-letter', [\App\Http\Controllers\Student\ProfileController::class, 'downloadAdmissionLetter'])->name('admission_letter.download');
+            Route::get('/results', [\App\Http\Controllers\Student\ResultController::class, 'index'])->name('results.index');
 
-        // Library routes
-        Route::get('/library', [\App\Http\Controllers\Student\LibraryController::class, 'index'])->name('library.index');
-        Route::post('/library/request', [\App\Http\Controllers\Student\LibraryController::class, 'requestBook'])->name('library.request');
-        Route::get('/library/books/{book}/download', [\App\Http\Controllers\Student\LibraryController::class, 'downloadEbook'])->name('library.books.download');
+            Route::get('/accommodation', [AccommodationController::class, 'index'])->name('accommodation.index');
+            Route::post('/accommodation', [AccommodationController::class, 'store'])->name('accommodation.store');
+            Route::get('/accommodation/download-slip', [AccommodationController::class, 'downloadAccommodationSlip'])->name('accommodation.download-slip');
+            Route::get('/accommodation/download-payment', [AccommodationController::class, 'downloadPaymentSlip'])->name('accommodation.download-payment');
 
-        // Sickbay routes
-        Route::get('/sickbay', [\App\Http\Controllers\Student\SickbayController::class, 'index'])->name('sickbay.index');
+            Route::get('/id-card', [IdCardController::class, 'show'])->name('id_card.show');
+            Route::get('/admission-letter', [\App\Http\Controllers\Student\ProfileController::class, 'downloadAdmissionLetter'])->name('admission_letter.download');
 
-        // Support routes
-        Route::get('/support', [\App\Http\Controllers\Student\SupportTicketController::class, 'index'])->name('support.index');
-        Route::post('/support', [\App\Http\Controllers\Student\SupportTicketController::class, 'store'])->name('support.store');
-        Route::get('/support/{ticket}', [\App\Http\Controllers\Student\SupportTicketController::class, 'show'])->name('support.show');
-        Route::post('/support/{ticket}/reply', [\App\Http\Controllers\Student\SupportTicketController::class, 'reply'])->name('support.reply');
+            // Library routes
+            Route::get('/library', [\App\Http\Controllers\Student\LibraryController::class, 'index'])->name('library.index');
+            Route::post('/library/request', [\App\Http\Controllers\Student\LibraryController::class, 'requestBook'])->name('library.request');
+            Route::get('/library/books/{book}/download', [\App\Http\Controllers\Student\LibraryController::class, 'downloadEbook'])->name('library.books.download');
+
+            // Sickbay routes
+            Route::get('/sickbay', [\App\Http\Controllers\Student\SickbayController::class, 'index'])->name('sickbay.index');
+
+            // Support routes
+            Route::get('/support', [\App\Http\Controllers\Student\SupportTicketController::class, 'index'])->name('support.index');
+            Route::post('/support', [\App\Http\Controllers\Student\SupportTicketController::class, 'store'])->name('support.store');
+            Route::get('/support/{ticket}', [\App\Http\Controllers\Student\SupportTicketController::class, 'show'])->name('support.show');
+            Route::post('/support/{ticket}/reply', [\App\Http\Controllers\Student\SupportTicketController::class, 'reply'])->name('support.reply');
+        });
     });
 
     // Admin/Staff Personal History Routes (accessible by all staff and admin users with view_library / view_sickbay_portal)
@@ -185,6 +189,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware(['permission:edit_students'])->group(function () {
             Route::get('/students/{student}/edit', [StudentController::class, 'edit'])->name('students.edit');
             Route::put('/students/{student}', [StudentController::class, 'update'])->name('students.update');
+            Route::post('/students/{student}/sessions', [\App\Http\Controllers\Admin\StudentSessionController::class, 'store'])->name('students.sessions.store');
+            Route::put('/students/{student}/sessions/{session}', [\App\Http\Controllers\Admin\StudentSessionController::class, 'update'])->name('students.sessions.update');
         });
 
         // Search & View Students (All Staff)
@@ -316,7 +322,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/settings/roles', [RoleController::class, 'store'])->name('settings.roles.store');
             Route::get('/settings/roles/{role}/edit', [RoleController::class, 'edit'])->name('settings.roles.edit');
             Route::put('/settings/roles/{role}', [RoleController::class, 'update'])->name('settings.roles.update');
-            Route::get('/settings/logs', [AuditLogController::class, 'index'])->name('settings.logs.index');
+            Route::get('/settings/logs', [ActivityLogController::class, 'index'])->name('settings.logs.index');
 
             Route::patch('/users/{user}/roles', [UserController::class, 'updateRoles'])->name('users.roles.update');
             Route::patch('/users/{user}/status', [UserController::class, 'toggleStatus'])->name('users.status.toggle');

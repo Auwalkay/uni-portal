@@ -156,6 +156,7 @@ const importForm = useForm({
     department_id: '',
     program_id: '',
     level: '',
+    scholarship_id: '',
 });
 
 const filteredImportDepartments = computed(() => {
@@ -297,6 +298,21 @@ const handleExport = () => {
                                         </Select>
                                         <p v-if="importForm.errors.program_id" class="text-xs text-destructive">{{ importForm.errors.program_id }}</p>
                                     </div>
+
+                                     <!-- Scholarship Select -->
+                                     <div class="flex flex-col gap-2">
+                                         <Label for="import_scholarship">Scholarship (Optional)</Label>
+                                         <Select v-model="importForm.scholarship_id">
+                                             <SelectTrigger id="import_scholarship">
+                                                 <SelectValue placeholder="Select Scholarship" />
+                                             </SelectTrigger>
+                                             <SelectContent>
+                                                 <SelectItem value="none">None</SelectItem>
+                                                 <SelectItem v-for="s in scholarships" :key="s.id" :value="s.id">{{ s.name }}</SelectItem>
+                                             </SelectContent>
+                                         </Select>
+                                         <p v-if="importForm.errors.scholarship_id" class="text-xs text-destructive">{{ importForm.errors.scholarship_id }}</p>
+                                     </div>
 
                                     <!-- File Select -->
                                     <div class="flex flex-col gap-2">

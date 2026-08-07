@@ -56,7 +56,7 @@ const overviewItems = computed(() => {
             title: 'System Reports',
             href: '/admin/reports',
             icon: FileText,
-            show: hasRole('admin') || hasPermission('view_bursary_reports'),
+            show: hasRole('admin') || hasRole('super_admin') || hasPermission('view_bursary_reports') || hasPermission('manage_system_settings') || hasPermission('view_global_analytics'),
         },
     ].filter(item => item.show);
 });

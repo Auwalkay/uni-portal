@@ -29,18 +29,20 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
     protected $sessionId;
     protected $level;
     protected $deptCode;
+    protected $scholarshipId;
 
     protected $states = [];
 
     protected $lgas = [];
 
-    public function __construct($facultyId, $departmentId, $programmeId, $sessionId, $level)
+    public function __construct($facultyId, $departmentId, $programmeId, $sessionId, $level, $scholarshipId = null)
     {
         $this->facultyId = $facultyId;
         $this->departmentId = $departmentId;
         $this->programmeId = $programmeId;
         $this->sessionId = $sessionId;
         $this->level = $level;
+        $this->scholarshipId = $scholarshipId;
         $this->deptCode = \App\Models\Department::where('id', $departmentId)->value('code');
     }
 
@@ -131,17 +133,19 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
                     'jamb_score' => $row['jamb_score'] ?? null,
                     'previous_institution' => $row['previous_institution'] ?? null,
                     'program_duration' => $duration,
+                    'scholarship_id' => $this->scholarshipId,
                 ]
             );
 
 
-            $currentSession = \App\Models\Session::find($this->sessionId);
+            $currentActiveSession = \App\Models\Session::current();
+            $enrollmentSession = $currentActiveSession ?? \App\Models\Session::find($this->sessionId);
 
-            $currenSemester = $currentSession ? $currentSession->semesters()->where('is_current', true)->first() : null;
+            $currenSemester = $enrollmentSession ? $enrollmentSession->semesters()->where('is_current', true)->first() : null;
 
             StudentSession::create([
                 'student_id' => $student->id,
-                'session_id' => $this->sessionId,
+                'session_id' => $enrollmentSession?->id ?? $this->sessionId,
                 'level' => $this->level,
                 'status' => 'active',
                 'semester' => $currenSemester?->name ?? 'First Semester',

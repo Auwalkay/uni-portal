@@ -743,6 +743,19 @@ const breadcrumbs = [
                                 </div>
                                 <Award class="w-6 h-6 text-amber-500" />
                             </div>
+
+                            <!-- Scholarship Breakdown list -->
+                            <div v-if="financeStats.scholarship.breakdown && financeStats.scholarship.breakdown.length > 0" class="space-y-2 mt-4 pt-4 border-t">
+                                <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Student Count by Scholarship</h4>
+                                <div class="max-h-[150px] overflow-y-auto pr-1 space-y-2">
+                                    <div v-for="sch in financeStats.scholarship.breakdown" :key="sch.id" class="flex justify-between items-center text-xs p-2 bg-slate-50 rounded border">
+                                        <div class="font-medium text-slate-800 truncate max-w-[200px]" :title="sch.name">
+                                            {{ sch.name }}
+                                        </div>
+                                        <Badge variant="outline" class="font-semibold">{{ sch.student_count }} Students</Badge>
+                                    </div>
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
