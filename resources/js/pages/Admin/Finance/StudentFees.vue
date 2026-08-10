@@ -72,6 +72,9 @@ const selectedDept = ref(props.filters.department_id || 'ALL');
 const selectedLevel = ref(props.filters.level || 'ALL');
 const selectedStatus = ref(props.filters.status || 'ALL');
 const searchQuery = ref(props.filters.search || '');
+const sortBy = ref(props.filters.sort_by || 'name');
+const sortOrder = ref(props.filters.sort_order || 'asc');
+const perPage = ref(props.filters.per_page || 20);
 
 const levels = ['100', '200', '300', '400', '500', '600'];
 
@@ -83,10 +86,22 @@ const updateFilters = () => {
         level: selectedLevel.value === 'ALL' ? '' : selectedLevel.value,
         status: selectedStatus.value === 'ALL' ? '' : selectedStatus.value,
         search: searchQuery.value,
+        sort_by: sortBy.value,
+        sort_order: sortOrder.value,
+        per_page: perPage.value,
     }, {
         preserveState: true,
         replace: true,
     });
+};
+
+const handleSort = (column: string) => {
+    if (sortBy.value === column) {
+        sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortBy.value = column;
+        sortOrder.value = 'asc';
+    }
 };
 
 // Debounce search
@@ -96,7 +111,7 @@ watch(searchQuery, () => {
     timeout = setTimeout(updateFilters, 500);
 });
 
-watch([selectedSession, selectedFaculty, selectedDept, selectedLevel, selectedStatus], () => {
+watch([selectedSession, selectedFaculty, selectedDept, selectedLevel, selectedStatus, sortBy, sortOrder, perPage], () => {
     updateFilters();
 });
 
@@ -207,8 +222,9 @@ const getStatusBadge = (status: string) => {
             </div>
 
             <!-- Filter Controls -->
-            <div class="bg-slate-50/50 p-2 rounded-2xl border border-slate-100 flex flex-wrap items-center gap-2">
+            <div class="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 flex flex-wrap items-end gap-4 animate-in slide-in-from-top duration-300">
                 <div class="flex-1 min-w-[300px]">
+                    <Label class="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Search Student</Label>
                     <div class="relative group">
                         <Search class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-primary transition-colors" />
                         <Input 
@@ -219,46 +235,72 @@ const getStatusBadge = (status: string) => {
                     </div>
                 </div>
 
-                <Select v-model="selectedSession">
-                    <SelectTrigger class="w-44 h-12 border-none bg-white rounded-xl shadow-sm font-bold text-sm">
-                        <SelectValue placeholder="Session" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem v-for="s in sessions" :key="s.id" :value="String(s.id)">{{ s.name }}</SelectItem>
-                    </SelectContent>
-                </Select>
+                <div class="w-44">
+                    <Label class="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Academic Session</Label>
+                    <Select v-model="selectedSession">
+                        <SelectTrigger class="w-full h-12 border-none bg-white rounded-xl shadow-sm font-bold text-sm">
+                            <SelectValue placeholder="Session" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem v-for="s in sessions" :key="s.id" :value="String(s.id)">{{ s.name }}</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
 
-                <Select v-model="selectedFaculty">
-                    <SelectTrigger class="w-52 h-12 border-none bg-white rounded-xl shadow-sm font-bold text-sm">
-                        <SelectValue placeholder="Faculty" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="ALL">All Faculties</SelectItem>
-                        <SelectItem v-for="f in faculties" :key="f.id" :value="String(f.id)">{{ f.name }}</SelectItem>
-                    </SelectContent>
-                </Select>
+                <div class="w-52">
+                    <Label class="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Faculty</Label>
+                    <Select v-model="selectedFaculty">
+                        <SelectTrigger class="w-full h-12 border-none bg-white rounded-xl shadow-sm font-bold text-sm">
+                            <SelectValue placeholder="Faculty" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="ALL">All Faculties</SelectItem>
+                            <SelectItem v-for="f in faculties" :key="f.id" :value="String(f.id)">{{ f.name }}</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
 
-                <Select v-model="selectedStatus">
-                    <SelectTrigger class="w-44 h-12 border-none bg-white rounded-xl shadow-sm font-bold text-sm">
-                        <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="ALL">All Status</SelectItem>
-                        <SelectItem value="paid">Fully Paid</SelectItem>
-                        <SelectItem value="partial">Partially Paid</SelectItem>
-                        <SelectItem value="unpaid">Unpaid</SelectItem>
-                    </SelectContent>
-                </Select>
+                <div class="w-44">
+                    <Label class="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Payment Status</Label>
+                    <Select v-model="selectedStatus">
+                        <SelectTrigger class="w-full h-12 border-none bg-white rounded-xl shadow-sm font-bold text-sm">
+                            <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="ALL">All Status</SelectItem>
+                            <SelectItem value="paid">Fully Paid</SelectItem>
+                            <SelectItem value="partial">Partially Paid</SelectItem>
+                            <SelectItem value="unpaid">Unpaid</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
 
-                <Select v-model="selectedLevel">
-                    <SelectTrigger class="w-32 h-12 border-none bg-white rounded-xl shadow-sm font-bold text-sm">
-                        <SelectValue placeholder="Level" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="ALL">All Levels</SelectItem>
-                        <SelectItem v-for="l in levels" :key="l" :value="l">{{ l }}</SelectItem>
-                    </SelectContent>
-                </Select>
+                <div class="w-32">
+                    <Label class="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Level</Label>
+                    <Select v-model="selectedLevel">
+                        <SelectTrigger class="w-full h-12 border-none bg-white rounded-xl shadow-sm font-bold text-sm">
+                            <SelectValue placeholder="Level" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="ALL">All Levels</SelectItem>
+                            <SelectItem v-for="l in levels" :key="l" :value="l">{{ l }}</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div class="w-36">
+                    <Label class="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Per Page</Label>
+                    <Select v-model="perPage">
+                        <SelectTrigger class="w-full h-12 border-none bg-white rounded-xl shadow-sm font-bold text-sm">
+                            <SelectValue placeholder="Per Page" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="20">20 Per Page</SelectItem>
+                            <SelectItem value="50">50 Per Page</SelectItem>
+                            <SelectItem value="100">100 Per Page</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
 
             <!-- Data Table -->
@@ -266,12 +308,26 @@ const getStatusBadge = (status: string) => {
                 <Table>
                     <TableHeader class="bg-slate-50/50">
                         <TableRow class="hover:bg-transparent border-slate-100">
-                            <TableHead class="py-6 px-8 text-xs font-black uppercase text-slate-400 tracking-widest">Student</TableHead>
+                            <TableHead class="py-6 px-8 text-xs font-black uppercase text-slate-400 tracking-widest">
+                                <div class="flex items-center gap-3">
+                                    <span>Student</span>
+                                    <button @click="handleSort('name')" class="text-slate-400 hover:text-primary transition-colors font-bold text-[9px] border border-slate-200 px-2 py-0.5 rounded" :class="sortBy === 'name' ? 'bg-primary/5 text-primary border-primary/20' : ''">
+                                        Name {{ sortBy === 'name' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕' }}
+                                    </button>
+                                    <button @click="handleSort('reg_number')" class="text-slate-400 hover:text-primary transition-colors font-bold text-[9px] border border-slate-200 px-2 py-0.5 rounded" :class="sortBy === 'reg_number' ? 'bg-primary/5 text-primary border-primary/20' : ''">
+                                        Reg No {{ sortBy === 'reg_number' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕' }}
+                                    </button>
+                                </div>
+                            </TableHead>
                             <TableHead class="py-6 text-xs font-black uppercase text-slate-400 tracking-widest">Programme Info</TableHead>
                             <TableHead class="py-6 text-xs font-black uppercase text-slate-400 tracking-widest text-right">Billing</TableHead>
                             <TableHead class="py-6 text-xs font-black uppercase text-slate-400 tracking-widest text-right">Paid</TableHead>
-                            <TableHead class="py-6 text-xs font-black uppercase text-slate-400 tracking-widest text-right">Balance</TableHead>
-                            <TableHead class="py-6 px-8 text-xs font-black uppercase text-slate-400 tracking-widest text-center">Status</TableHead>
+                            <TableHead class="py-6 text-xs font-black uppercase text-slate-400 tracking-widest text-right cursor-pointer hover:text-primary transition-colors" @click="handleSort('balance')">
+                                Balance {{ sortBy === 'balance' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕' }}
+                            </TableHead>
+                            <TableHead class="py-6 px-8 text-xs font-black uppercase text-slate-400 tracking-widest text-center cursor-pointer hover:text-primary transition-colors" @click="handleSort('status')">
+                                Status {{ sortBy === 'status' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕' }}
+                            </TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>

@@ -81,6 +81,8 @@ const manualPaymentForm = ref({
     invoice_ref: '',
     amount: 0,
     max_amount: 0,
+    paid_at: new Date().toISOString().split('T')[0],
+    channel: 'transfer',
     processing: false
 });
 
@@ -92,6 +94,8 @@ const openPaymentDialog = (invoice: any) => {
         invoice_ref: invoice.reference,
         amount: invoice.amount - (invoice.paid_amount || 0),
         max_amount: invoice.amount - (invoice.paid_amount || 0),
+        paid_at: new Date().toISOString().split('T')[0],
+        channel: 'transfer',
         processing: false
     };
     isPaymentDialogOpen.value = true;
@@ -100,7 +104,9 @@ const openPaymentDialog = (invoice: any) => {
 const submitManualPayment = () => {
     manualPaymentForm.value.processing = true;
     router.post(route('admin.invoices.mark-as-paid', manualPaymentForm.value.invoice_id), {
-        amount: manualPaymentForm.value.amount
+        amount: manualPaymentForm.value.amount,
+        paid_at: manualPaymentForm.value.paid_at,
+        channel: manualPaymentForm.value.channel,
     }, {
         onSuccess: () => {
             isPaymentDialogOpen.value = false;
@@ -411,15 +417,44 @@ const breadcrumbs = [
                         </DialogDescription>
                     </DialogHeader>
                     <div class="space-y-4 py-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="space-y-2">
+                                <Label for="paid_at" class="text-sm font-semibold">Payment Date</Label>
+                                <Input 
+                                    id="paid_at"
+                                    type="date" 
+                                    v-model="manualPaymentForm.paid_at" 
+                                    class="w-full"
+                                />
+                            </div>
+                            <div class="space-y-2">
+                                <Label for="channel" class="text-sm font-semibold">Payment Method</Label>
+                                <Select v-model="manualPaymentForm.channel">
+                                    <SelectTrigger class="w-full">
+                                        <SelectValue placeholder="Method" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="transfer">Bank Transfer</SelectItem>
+                                        <SelectItem value="pos">POS Terminal</SelectItem>
+                                        <SelectItem value="cash">Cash Payment</SelectItem>
+                                        <SelectItem value="manual">Manual Register</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
                         <div class="space-y-2">
-                            <Label for="amount">Amount to Record (₦)</Label>
-                            <Input 
-                                id="amount" 
-                                type="number" 
-                                v-model="manualPaymentForm.amount"
-                                :max="manualPaymentForm.max_amount"
-                                step="0.01"
-                            />
+                            <Label for="amount" class="text-sm font-semibold">Amount to Record (₦)</Label>
+                            <div class="relative">
+                                <Input 
+                                    id="amount" 
+                                    type="number" 
+                                    v-model="manualPaymentForm.amount"
+                                    :max="manualPaymentForm.max_amount"
+                                    class="text-lg font-bold pl-8"
+                                    step="0.01"
+                                />
+                                <span class="absolute left-3 top-2.5 text-slate-400 font-bold">₦</span>
+                            </div>
                             <div v-if="manualPaymentForm.amount" class="text-[10px] text-emerald-600 font-bold uppercase tracking-wider mt-1">
                                 Confirming: {{ formatCurrency(manualPaymentForm.amount) }}
                             </div>

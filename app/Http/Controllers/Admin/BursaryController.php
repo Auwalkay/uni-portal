@@ -16,8 +16,17 @@ class BursaryController extends Controller
 {
     public function studentFeesReport(Request $request)
     {
+        $sessionId = $request->session_id ?? Session::current()?->id;
+
         $query = Student::query()
-            ->with(['user', 'faculty', 'department', 'program', 'academicDepartment', 'scholarship']);
+            ->select('students.*')
+            ->join('users', 'users.id', '=', 'students.user_id')
+            ->leftJoin('invoices', function ($join) use ($sessionId) {
+                $join->on('invoices.user_id', '=', 'students.user_id')
+                    ->where('invoices.type', '=', 'school_fee')
+                    ->where('invoices.session_id', '=', $sessionId);
+            })
+            ->with(['user', 'faculty', 'department', 'program', 'academicDepartment', 'scholarship', 'invoices']);
 
         // Filters
         if ($request->filled('session_id')) {
@@ -26,43 +35,40 @@ class BursaryController extends Controller
             });
         }
 
-        if ($request->filled('faculty_id')) {
-            $query->where('faculty_id', $request->faculty_id);
+        if ($request->filled('faculty_id') && $request->faculty_id !== 'ALL') {
+            $query->where('students.faculty_id', $request->faculty_id);
         }
 
-        if ($request->filled('department_id')) {
-            $query->where('department_id', $request->department_id);
+        if ($request->filled('department_id') && $request->department_id !== 'ALL') {
+            $query->where('students.department_id', $request->department_id);
         }
 
-        if ($request->filled('program_id')) {
-            $query->where('program_id', $request->program_id);
+        if ($request->filled('program_id') && $request->program_id !== 'ALL') {
+            $query->where('students.program_id', $request->program_id);
         }
 
-        if ($request->filled('level')) {
-            $query->where('current_level', $request->level);
+        if ($request->filled('level') && $request->level !== 'ALL') {
+            $query->where('students.current_level', $request->level);
         }
 
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('matriculation_number', 'like', "%{$search}%")
-                    ->orWhereHas('user', function ($u) use ($search) {
-                        $u->where('name', 'like', "%{$search}%");
-                    });
+                $q->where('students.matriculation_number', 'like', "%{$search}%")
+                    ->orWhere('users.name', 'like', "%{$search}%");
             });
         }
 
         // Apply specific fee status filter if requested
-        if ($request->filled('status')) {
+        if ($request->filled('status') && $request->status !== 'ALL') {
             $status = $request->status;
-            $sessionId = $request->session_id ?? Session::current()?->id;
 
             if ($status === 'unpaid') {
                 $query->where(function ($q) use ($sessionId) {
                     $q->whereDoesntHave('invoices', function ($sq) use ($sessionId) {
                         $sq->where('type', 'school_fee')->where('session_id', $sessionId);
                     })->orWhereHas('invoices', function ($sq) use ($sessionId) {
-                        $sq->where('type', 'school_fee')->where('session_id', $sessionId)->where('status', 'unpaid');
+                        $sq->where('type', 'school_fee')->where('session_id', $sessionId)->whereIn('status', ['unpaid', 'pending']);
                     });
                 });
             } else {
@@ -72,9 +78,22 @@ class BursaryController extends Controller
             }
         }
 
-        $sessionId = $request->session_id ?? Session::current()?->id;
+        // Sorting
+        $sortBy = $request->query('sort_by', 'name');
+        $sortOrder = $request->query('sort_order', 'asc');
 
-        $students = $query->paginate(20)->withQueryString();
+        if ($sortBy === 'reg_number') {
+            $query->orderBy('students.matriculation_number', $sortOrder);
+        } elseif ($sortBy === 'status') {
+            $query->orderByRaw("COALESCE(invoices.status, 'unpaid') " . $sortOrder);
+        } elseif ($sortBy === 'balance') {
+            $query->orderByRaw("(COALESCE(invoices.amount, 0) - COALESCE(invoices.paid_amount, 0)) " . $sortOrder);
+        } else {
+            $query->orderBy('users.name', $sortOrder);
+        }
+
+        $perPage = $request->query('per_page', 20);
+        $students = $query->paginate($perPage)->withQueryString();
 
         // Calculate Stats for the whole filtered set (not just paginated)
         $totalStatsQuery = clone $query;
@@ -139,7 +158,18 @@ class BursaryController extends Controller
             'faculties' => \App\Services\AcademicCacheService::getAllFaculties(),
             'departments' => \App\Services\AcademicCacheService::getAllDepartments(),
             'programs' => \App\Services\AcademicCacheService::getAllProgrammes(),
-            'filters' => $request->only(['session_id', 'faculty_id', 'department_id', 'program_id', 'level', 'status', 'search']),
+            'filters' => [
+                'session_id' => $request->query('session_id'),
+                'faculty_id' => $request->query('faculty_id'),
+                'department_id' => $request->query('department_id'),
+                'program_id' => $request->query('program_id'),
+                'level' => $request->query('level'),
+                'status' => $request->query('status'),
+                'search' => $request->query('search'),
+                'sort_by' => $sortBy,
+                'sort_order' => $sortOrder,
+                'per_page' => (int)$perPage,
+            ],
         ]);
     }
 

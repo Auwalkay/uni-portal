@@ -52,32 +52,38 @@ const props = defineProps<{
     staff: any;
     departments: any[];
     filters: any;
+    stats: any;
 }>();
 
 const formatCurrency = (val: any) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(val || 0);
 
 const search = ref(props.filters.search || '');
 const department_id = ref(props.filters.department_id || '');
+const sortBy = ref(props.filters.sort_by || 'staff_number');
+const sortOrder = ref(props.filters.sort_order || 'asc');
+const per_page = ref(props.filters.per_page || 15);
 
-// Stats calculation (from current page data)
-const stats = computed(() => {
-    const data = props.staff.data || [];
-    return {
-        totalBasic: data.reduce((acc: number, s: any) => acc + Number(s.basic_salary || 0), 0),
-        totalAllowances: data.reduce((acc: number, s: any) => acc + Number(s.allowances || 0), 0),
-        totalDeductions: data.reduce((acc: number, s: any) => acc + Number(s.deductions || 0), 0),
-        avgNet: data.length > 0 
-            ? data.reduce((acc: number, s: any) => acc + (Number(s.basic_salary) + Number(s.allowances) + Number(s.bonuses) - Number(s.deductions)), 0) / data.length 
-            : 0
-    };
-});
+const handleSort = (column: string) => {
+    if (sortBy.value === column) {
+        sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortBy.value = column;
+        sortOrder.value = 'asc';
+    }
+};
 
 // Debounce search
 let timeout: any;
-watch([search, department_id], () => {
+watch([search, department_id, sortBy, sortOrder, per_page], () => {
     clearTimeout(timeout);
     timeout = setTimeout(() => {
-        router.get(route('admin.finance.salary.index'), { search: search.value, department_id: department_id.value }, { preserveState: true, replace: true });
+        router.get(route('admin.finance.salary.index'), { 
+            search: search.value, 
+            department_id: department_id.value === 'all' ? null : department_id.value,
+            sort_by: sortBy.value,
+            sort_order: sortOrder.value,
+            per_page: per_page.value
+        }, { preserveState: true, replace: true });
     }, 300);
 });
 
@@ -143,7 +149,7 @@ const handleImport = () => {
 <template>
     <Head title="Salary Management" />
     <AdminLayout>
-        <div class="p-6 space-y-8 max-w-[1600px] mx-auto">
+        <div class="p-6 space-y-8 w-full max-w-none">
             <!-- Header Section -->
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
@@ -221,16 +227,20 @@ const handleImport = () => {
 
             <!-- Filters & Table Section -->
             <div class="space-y-4">
-                <div class="flex flex-wrap items-center gap-4 bg-card p-4 rounded-xl border shadow-sm">
+                <div class="flex flex-wrap items-end gap-4 bg-card p-4 rounded-xl border shadow-sm">
                     <div class="relative flex-1 min-w-[300px]">
-                        <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            placeholder="Search by name, email or ID..." 
-                            v-model="search" 
-                            class="pl-10 h-11 border-muted bg-muted/20 focus:bg-background transition-all" 
-                        />
+                        <Label class="text-xs font-semibold text-muted-foreground mb-1.5 block">Search Comp.</Label>
+                        <div class="relative">
+                            <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                                placeholder="Search by name, email or ID..." 
+                                v-model="search" 
+                                class="pl-10 h-11 border-muted bg-muted/20 focus:bg-background transition-all" 
+                            />
+                        </div>
                     </div>
                     <div class="w-[200px]">
+                        <Label class="text-xs font-semibold text-muted-foreground mb-1.5 block">Department</Label>
                         <Select v-model="department_id">
                             <SelectTrigger class="h-11 border-muted bg-muted/20">
                                 <SelectValue placeholder="All Departments" />
@@ -241,17 +251,67 @@ const handleImport = () => {
                             </SelectContent>
                         </Select>
                     </div>
+                    <div class="w-[160px]">
+                        <Label class="text-xs font-semibold text-muted-foreground mb-1.5 block">Sort By</Label>
+                        <Select v-model="sortBy">
+                            <SelectTrigger class="h-11 border-muted bg-muted/20">
+                                <SelectValue placeholder="Sort By" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="staff_number">Staff ID</SelectItem>
+                                <SelectItem value="name">Staff Name</SelectItem>
+                                <SelectItem value="department">Department</SelectItem>
+                                <SelectItem value="net">Net Pay</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div>
+                        <Label class="text-xs font-semibold text-muted-foreground mb-1.5 block">Order</Label>
+                        <Button 
+                            variant="outline" 
+                            class="h-11 px-3 border-muted bg-muted/20" 
+                            @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'"
+                        >
+                            {{ sortOrder === 'asc' ? 'Ascending' : 'Descending' }}
+                        </Button>
+                    </div>
+                    <div class="w-[130px]">
+                        <Label class="text-xs font-semibold text-muted-foreground mb-1.5 block">Per Page</Label>
+                        <Select v-model="per_page">
+                            <SelectTrigger class="h-11 border-muted bg-muted/20">
+                                <SelectValue placeholder="Per Page" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="15">15 Per Page</SelectItem>
+                                <SelectItem value="25">25 Per Page</SelectItem>
+                                <SelectItem value="50">50 Per Page</SelectItem>
+                                <SelectItem value="100">100 Per Page</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
 
                 <div class="bg-card rounded-xl border shadow-sm overflow-hidden">
                     <Table>
                         <TableHeader>
                             <TableRow class="bg-muted/30">
-                                <TableHead class="font-bold py-4">Staff Details</TableHead>
-                                <TableHead class="font-bold">Department</TableHead>
-                                <TableHead class="font-bold text-center">Basic</TableHead>
+                                <TableHead class="font-bold py-4 cursor-pointer hover:bg-slate-100/50" @click="handleSort('name')">
+                                    Staff Details
+                                    <span v-if="sortBy === 'name'">{{ sortOrder === 'asc' ? ' ▲' : ' ▼' }}</span>
+                                </TableHead>
+                                <TableHead class="font-bold cursor-pointer hover:bg-slate-100/50" @click="handleSort('department')">
+                                    Department
+                                    <span v-if="sortBy === 'department'">{{ sortOrder === 'asc' ? ' ▲' : ' ▼' }}</span>
+                                </TableHead>
+                                <TableHead class="font-bold text-center cursor-pointer hover:bg-slate-100/50" @click="handleSort('basic_salary')">
+                                    Basic
+                                    <span v-if="sortBy === 'basic_salary'">{{ sortOrder === 'asc' ? ' ▲' : ' ▼' }}</span>
+                                </TableHead>
                                 <TableHead class="font-bold text-center">Extras/Ded.</TableHead>
-                                <TableHead class="font-bold text-center">Net Pay</TableHead>
+                                <TableHead class="font-bold text-center cursor-pointer hover:bg-slate-100/50" @click="handleSort('net')">
+                                    Net Pay
+                                    <span v-if="sortBy === 'net'">{{ sortOrder === 'asc' ? ' ▲' : ' ▼' }}</span>
+                                </TableHead>
                                 <TableHead class="font-bold">Bank Info</TableHead>
                                 <TableHead class="text-right font-bold pr-6">Actions</TableHead>
                             </TableRow>
@@ -261,11 +321,11 @@ const handleImport = () => {
                                 <TableCell>
                                     <div class="flex items-center gap-3">
                                         <div class="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
-                                            {{ member.user?.first_name?.[0] }}{{ member.user?.last_name?.[0] }}
+                                            {{ member.user?.name?.[0] }}
                                         </div>
                                         <div>
                                             <div class="font-semibold">{{ member.user?.name }}</div>
-                                            <div class="text-xs text-muted-foreground">{{ member.user?.email }}</div>
+                                            <div class="text-xs text-muted-foreground font-mono">{{ member.staff_number }}</div>
                                         </div>
                                     </div>
                                 </TableCell>

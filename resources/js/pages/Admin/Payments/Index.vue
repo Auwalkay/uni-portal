@@ -44,7 +44,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-
+import { Label } from '@/components/ui/label';
 const props = defineProps<{
     payments: {
         data: Array<any>;
@@ -58,6 +58,12 @@ const props = defineProps<{
         session_id?: string;
         faculty_id?: string;
         department_id?: string;
+        status?: string;
+        method?: string;
+        start_date?: string;
+        end_date?: string;
+        sort_by?: string;
+        sort_order?: string;
     };
     sessions: Array<{ id: string; name: string }>;
     faculties: Array<{ id: string; name: string }>;
@@ -75,43 +81,66 @@ const search = ref(props.filters.search || '');
 const selectedSession = ref(props.filters.session_id || '');
 const selectedFaculty = ref(props.filters.faculty_id || '');
 const selectedDepartment = ref(props.filters.department_id || '');
+const selectedStatus = ref(props.filters.status || 'ALL');
+const selectedMethod = ref(props.filters.method || 'ALL');
+const startDate = ref(props.filters.start_date || '');
+const endDate = ref(props.filters.end_date || '');
+const sortBy = ref(props.filters.sort_by || 'date');
+const sortOrder = ref(props.filters.sort_order || 'desc');
 
-// Derived state for stats (Client-side approximation based on current page/data)
-// Ideally this should be passed from backend if we want global totals, but using page data for now or props.
-// Since existing code calculated from page data, we keep it consistent or assume backend might pass it later.
-// For now, let's calculate from props.payments.data
+// Derived state for stats
 const totalAmount = computed(() => {
     return props.payments.data.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
 });
 
 // Computed departments based on selected faculty
 const filteredDepartments = computed(() => {
-    if (!selectedFaculty.value) return props.departments;
+    if (!selectedFaculty.value || selectedFaculty.value === 'ALL_FACULTIES_RESET_VALUE') return props.departments;
     return props.departments.filter(dept => dept.faculty_id === selectedFaculty.value);
 });
 
-// Watchers for filters
-const updateFilters = debounce(() => {
+// Apply filters handler
+const applyFilters = () => {
     router.get(route('admin.payments.index'), { 
         search: search.value,
         session_id: selectedSession.value,
         faculty_id: selectedFaculty.value,
         department_id: selectedDepartment.value,
+        status: selectedStatus.value,
+        method: selectedMethod.value,
+        start_date: startDate.value,
+        end_date: endDate.value,
+        sort_by: sortBy.value,
+        sort_order: sortOrder.value,
     }, {
         preserveState: true,
         replace: true,
         preserveScroll: true,
     });
-}, 300);
+};
 
-watch([search, selectedSession, selectedFaculty, selectedDepartment], () => {
+const handleSort = (column: string) => {
+    if (sortBy.value === column) {
+        sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortBy.value = column;
+        sortOrder.value = 'asc';
+    }
+};
+
+// Auto clear department if faculty mismatch
+watch(selectedFaculty, () => {
     if (selectedFaculty.value && selectedDepartment.value) {
          const dept = props.departments.find(d => d.id === selectedDepartment.value);
          if (dept && dept.faculty_id !== selectedFaculty.value) {
-             selectedDepartment.value = '';
+              selectedDepartment.value = '';
          }
     }
-    updateFilters();
+});
+
+// Sort immediately when headers are clicked
+watch([sortBy, sortOrder], () => {
+    applyFilters();
 });
 
 const clearFilters = () => {
@@ -119,6 +148,12 @@ const clearFilters = () => {
     selectedSession.value = '';
     selectedFaculty.value = '';
     selectedDepartment.value = '';
+    selectedStatus.value = 'ALL';
+    selectedMethod.value = 'ALL';
+    startDate.value = '';
+    endDate.value = '';
+    sortBy.value = 'date';
+    sortOrder.value = 'desc';
 };
 
 const formatDate = (dateString: string) => {
@@ -163,7 +198,7 @@ const downloadReceipt = (paymentId: string) => {
     <Head title="Payments Management" />
 
     <AdminLayout>
-        <div class="py-8 px-6 space-y-6 w-full max-w-[1600px] mx-auto">
+        <div class="py-8 px-6 space-y-6 w-full max-w-none">
             
             <!-- Header & Stats -->
             <div class="flex flex-col gap-6">
@@ -231,67 +266,126 @@ const downloadReceipt = (paymentId: string) => {
             </div>
 
             <!-- Filters -->
-            <div class="flex flex-col lg:flex-row gap-4 items-end lg:items-center justify-between">
-                <div class="flex flex-col sm:flex-row gap-3 w-full lg:w-auto flex-1">
-                     <div class="relative w-full sm:w-[300px]">
-                        <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          type="search"
-                          placeholder="Search reference, name..."
-                          class="pl-8"
-                          v-model="search"
-                        />
-                      </div>
-                      
-                      <!-- Session Filter -->
-                       <Select v-model="selectedSession">
-                        <SelectTrigger class="w-[180px]">
-                          <SelectValue placeholder="Session" />
-                        </SelectTrigger>
-                        <SelectContent>
-                           <SelectItem value="ALL_SESSIONS_RESET_VALUE">All Sessions</SelectItem>
-                          <SelectItem v-for="session in sessions" :key="session.id" :value="session.id">
-                            {{ session.name }}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
+            <div class="bg-card p-4 rounded-xl border shadow-sm space-y-4">
+                <div class="flex flex-wrap items-end gap-4">
+                    <div class="relative w-full sm:w-[250px]">
+                        <Label class="text-xs font-semibold text-muted-foreground mb-1.5 block">Search Reference/Name</Label>
+                        <div class="relative">
+                            <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              type="search"
+                              placeholder="Search reference, name..."
+                              class="pl-8"
+                              v-model="search"
+                            />
+                        </div>
+                    </div>
+                    
+                    <div class="w-[180px]">
+                        <Label class="text-xs font-semibold text-muted-foreground mb-1.5 block">Academic Session</Label>
+                        <Select v-model="selectedSession">
+                            <SelectTrigger class="w-full">
+                              <SelectValue placeholder="Session" />
+                            </SelectTrigger>
+                            <SelectContent>
+                               <SelectItem value="ALL_SESSIONS_RESET_VALUE">All Sessions</SelectItem>
+                              <SelectItem v-for="session in sessions" :key="session.id" :value="session.id">
+                                {{ session.name }}
+                              </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
 
-                      <!-- Faculty Filter -->
-                       <Select v-model="selectedFaculty">
-                        <SelectTrigger class="w-[180px]">
-                          <SelectValue placeholder="Faculty" />
-                        </SelectTrigger>
-                        <SelectContent>
-                           <SelectItem value="ALL_FACULTIES_RESET_VALUE">All Faculties</SelectItem>
-                          <SelectItem v-for="faculty in faculties" :key="faculty.id" :value="faculty.id">
-                            {{ faculty.name }}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
+                    <div class="w-[180px]">
+                        <Label class="text-xs font-semibold text-muted-foreground mb-1.5 block">Faculty</Label>
+                        <Select v-model="selectedFaculty">
+                            <SelectTrigger class="w-full">
+                              <SelectValue placeholder="Faculty" />
+                            </SelectTrigger>
+                            <SelectContent>
+                               <SelectItem value="ALL_FACULTIES_RESET_VALUE">All Faculties</SelectItem>
+                              <SelectItem v-for="faculty in faculties" :key="faculty.id" :value="faculty.id">
+                                {{ faculty.name }}
+                              </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
 
-                      <!-- Department Filter -->
-                       <Select v-model="selectedDepartment" :disabled="!selectedFaculty">
-                        <SelectTrigger class="w-[200px]">
-                          <SelectValue placeholder="Department" />
-                        </SelectTrigger>
-                        <SelectContent>
-                           <SelectItem value="ALL_DEPARTMENTS_RESET_VALUE">All Departments</SelectItem>
-                          <SelectItem v-for="dept in filteredDepartments" :key="dept.id" :value="dept.id">
-                            {{ dept.name }}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
+                    <div class="w-[200px]">
+                        <Label class="text-xs font-semibold text-muted-foreground mb-1.5 block">Department</Label>
+                        <Select v-model="selectedDepartment" :disabled="!selectedFaculty || selectedFaculty === 'ALL_FACULTIES_RESET_VALUE'">
+                            <SelectTrigger class="w-full">
+                              <SelectValue placeholder="Department" />
+                            </SelectTrigger>
+                            <SelectContent>
+                               <SelectItem value="ALL_DEPARTMENTS_RESET_VALUE">All Departments</SelectItem>
+                              <SelectItem v-for="dept in filteredDepartments" :key="dept.id" :value="dept.id">
+                                {{ dept.name }}
+                              </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div class="w-[140px]">
+                        <Label class="text-xs font-semibold text-muted-foreground mb-1.5 block">Payment Status</Label>
+                        <Select v-model="selectedStatus">
+                            <SelectTrigger class="w-full">
+                              <SelectValue placeholder="Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL">All Status</SelectItem>
+                                <SelectItem value="success">Successful</SelectItem>
+                                <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="failed">Failed</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div class="w-[160px]">
+                        <Label class="text-xs font-semibold text-muted-foreground mb-1.5 block">Payment Method</Label>
+                        <Select v-model="selectedMethod">
+                            <SelectTrigger class="w-full">
+                              <SelectValue placeholder="Method" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL">All Methods</SelectItem>
+                                <SelectItem value="card">Card Payment</SelectItem>
+                                <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                                <SelectItem value="squadco">Squadco Gateway</SelectItem>
+                                <SelectItem value="manual">Manual Register</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div class="w-[150px]">
+                        <Label class="text-xs font-semibold text-muted-foreground mb-1.5 block">Start Date</Label>
+                        <Input type="date" v-model="startDate" class="w-full" />
+                    </div>
+
+                    <div class="w-[150px]">
+                        <Label class="text-xs font-semibold text-muted-foreground mb-1.5 block">End Date</Label>
+                        <Input type="date" v-model="endDate" class="w-full" />
+                    </div>
+
+                    <div class="ml-auto flex items-center gap-2">
+                        <Button 
+                            variant="default" 
+                            @click="applyFilters"
+                            class="h-10 px-4 font-bold bg-primary hover:bg-primary/90"
+                        >
+                            Apply Filters
+                        </Button>
+                        <Button 
+                            v-if="search || selectedSession || selectedFaculty || selectedDepartment || selectedStatus !== 'ALL' || selectedMethod !== 'ALL' || startDate || endDate" 
+                            variant="ghost" 
+                            @click="clearFilters"
+                            class="text-destructive hover:text-destructive hover:bg-destructive/10 h-10"
+                        >
+                            <X class="w-4 h-4 mr-2" />
+                            Clear Filters
+                        </Button>
+                    </div>
                 </div>
-                
-                <Button 
-                    v-if="search || selectedSession || selectedFaculty || selectedDepartment" 
-                    variant="ghost" 
-                    @click="clearFilters"
-                    class="text-destructive hover:text-destructive hover:bg-destructive/10"
-                >
-                    <X class="w-4 h-4 mr-2" />
-                    Clear Filters
-                </Button>
             </div>
 
             <!-- Data Table -->
@@ -300,11 +394,25 @@ const downloadReceipt = (paymentId: string) => {
                     <TableHeader>
                         <TableRow>
                             <TableHead>Reference</TableHead>
-                            <TableHead>Student</TableHead>
+                            <TableHead>
+                                <div class="flex items-center gap-2">
+                                    <span>Student</span>
+                                    <button @click="handleSort('name')" class="text-slate-400 hover:text-primary transition-colors font-bold text-[9px] border border-slate-200 px-1.5 py-0.5 rounded" :class="sortBy === 'name' ? 'bg-primary/5 text-primary border-primary/20' : ''">
+                                        Name {{ sortBy === 'name' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕' }}
+                                    </button>
+                                    <button @click="handleSort('reg_number')" class="text-slate-400 hover:text-primary transition-colors font-bold text-[9px] border border-slate-200 px-1.5 py-0.5 rounded" :class="sortBy === 'reg_number' ? 'bg-primary/5 text-primary border-primary/20' : ''">
+                                        Reg No {{ sortBy === 'reg_number' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕' }}
+                                    </button>
+                                </div>
+                            </TableHead>
                             <TableHead>Type / Session</TableHead>
                             <TableHead>Amount</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Date</TableHead>
+                            <TableHead class="cursor-pointer hover:text-primary transition-colors" @click="handleSort('status')">
+                                Status {{ sortBy === 'status' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕' }}
+                            </TableHead>
+                            <TableHead class="cursor-pointer hover:text-primary transition-colors" @click="handleSort('date')">
+                                Date {{ sortBy === 'date' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕' }}
+                            </TableHead>
                             <TableHead class="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
