@@ -16,25 +16,67 @@ class SalaryController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Staff::with(['user', 'department']);
+        $query = Staff::query()
+            ->select('staff.*')
+            ->join('users', 'users.id', '=', 'staff.user_id')
+            ->leftJoin('departments', 'departments.id', '=', 'staff.department_id')
+            ->with(['user', 'department']);
 
+        // Search Filter
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->whereHas('user', function ($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->where('staff.staff_number', 'like', "%{$search}%")
+                    ->orWhere('users.name', 'like', "%{$search}%")
+                    ->orWhere('users.email', 'like', "%{$search}%");
             });
         }
 
-        if ($request->filled('department_id')) {
-            $query->where('department_id', $request->department_id);
+        // Department Filter
+        if ($request->filled('department_id') && $request->department_id !== 'all') {
+            $query->where('staff.department_id', $request->department_id);
         }
 
+        // Sorting
+        $sortBy = $request->query('sort_by', 'staff_number');
+        $sortOrder = $request->query('sort_order', 'asc');
+
+        if ($sortBy === 'name') {
+            $query->orderBy('users.name', $sortOrder);
+        } elseif ($sortBy === 'department') {
+            $query->orderBy('departments.name', $sortOrder);
+        } elseif ($sortBy === 'net') {
+            $query->orderByRaw('(staff.basic_salary + staff.allowances + staff.bonuses - staff.deductions) ' . $sortOrder);
+        } else {
+            $query->orderBy('staff.staff_number', $sortOrder);
+        }
+
+        // Calculate Stats based on the filtered query (ignoring pagination limit)
+        $statsQuery = clone $query;
+        $totalCount = $statsQuery->count();
+        $stats = [
+            'totalBasic' => (double)$statsQuery->sum('staff.basic_salary'),
+            'totalAllowances' => (double)$statsQuery->sum('staff.allowances'),
+            'totalDeductions' => (double)$statsQuery->sum('staff.deductions'),
+            'avgNet' => $totalCount > 0 
+                ? (double)(($statsQuery->sum('staff.basic_salary') + $statsQuery->sum('staff.allowances') + $statsQuery->sum('staff.bonuses') - $statsQuery->sum('staff.deductions')) / $totalCount)
+                : 0.0
+        ];
+
+        // Pagination
+        $perPage = $request->query('per_page', 15);
+
         return Inertia::render('Admin/Finance/Salary/Index', [
-            'staff' => $query->paginate(15)->withQueryString(),
+            'staff' => $query->paginate($perPage)->withQueryString(),
             'departments' => AcademicCacheService::getAllDepartments(),
-            'filters' => $request->only(['search', 'department_id']),
+            'stats' => $stats,
+            'filters' => [
+                'search' => $request->query('search'),
+                'department_id' => $request->query('department_id'),
+                'sort_by' => $sortBy,
+                'sort_order' => $sortOrder,
+                'per_page' => (int)$perPage,
+            ],
         ]);
     }
 

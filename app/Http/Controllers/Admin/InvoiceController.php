@@ -16,7 +16,7 @@ class InvoiceController extends Controller
         $filters = $request->only(['search', 'status', 'type', 'session_id']);
 
         $query = Invoice::query()
-            ->with(['user.student', 'session']);
+            ->with(['user.student', 'session', 'creator']);
 
         // Scope to user role if not admin/bursar? 
         // Admin middleware allows finance_officer now.
@@ -163,7 +163,7 @@ class InvoiceController extends Controller
             })
             ->with([
                 'student' => function ($q) {
-                    $q->select('id', 'user_id', 'matriculation_number', 'department', 'level');
+                    $q->select('id', 'user_id', 'matriculation_number', 'department_id', 'current_level')->with('department');
                 }
             ])
             ->limit(10)
@@ -197,6 +197,7 @@ class InvoiceController extends Controller
             'status' => 'pending',
             'paid_amount' => 0,
             'currency' => 'NGN', // Default
+            'created_by' => Auth::id(),
         ]);
 
         return redirect()->route('admin.invoices.show', $invoice)->with('success', 'Invoice generated successfully.');
@@ -204,11 +205,11 @@ class InvoiceController extends Controller
 
     public function show(Invoice $invoice)
     {
-        $invoice->load(['user.student', 'session', 'items', 'payments.user']);
+        $invoice->load(['user.student', 'session', 'items', 'payments.user', 'payments.recorder', 'creator']);
 
         return Inertia::render('Admin/Invoices/Show', [
             'invoice' => $invoice,
-            'payments' => $invoice->payments()->latest()->get(),
+            'payments' => $invoice->payments()->with(['user', 'recorder'])->latest()->get(),
         ]);
     }
 
@@ -220,6 +221,8 @@ class InvoiceController extends Controller
 
         $request->validate([
             'amount' => 'nullable|numeric|min:1|max:' . ($invoice->amount - $invoice->paid_amount),
+            'paid_at' => 'required|date',
+            'channel' => 'required|string|in:transfer,pos,cash,manual',
         ]);
 
         if ($invoice->status === 'paid') {
@@ -241,8 +244,8 @@ class InvoiceController extends Controller
             'gateway_reference' => 'MANUAL-' . strtoupper(uniqid()),
             'amount' => $amountToRecord,
             'status' => 'success',
-            'channel' => 'manual',
-            'paid_at' => now(),
+            'channel' => $request->channel,
+            'paid_at' => $request->paid_at,
         ]);
 
         $newTotalPaid = $invoice->paid_amount + $amountToRecord;

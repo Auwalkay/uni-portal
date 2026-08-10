@@ -51,4 +51,9 @@ class Invoice extends Model
     {
         return $this->belongsTo(StudentSession::class);
     }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 }

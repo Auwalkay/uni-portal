@@ -11,68 +11,91 @@ class PaymentController extends Controller
 {
     public function index(Request $request)
     {
-        $filters = $request->only(['search', 'session_id', 'faculty_id', 'department_id']);
+        $filters = $request->only(['search', 'session_id', 'faculty_id', 'department_id', 'status', 'method', 'start_date', 'end_date', 'sort_by', 'sort_order']);
 
-        $query = \App\Models\Payment::query()
+        $query = Payment::query()
+            ->select('payments.*')
+            ->join('users', 'users.id', '=', 'payments.user_id')
+            ->leftJoin('students', 'students.user_id', '=', 'payments.user_id')
             ->with(['invoice.session', 'user.student.academicDepartment.faculty']);
 
         // Search Filter
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('gateway_reference', 'like', "%{$search}%")
-                    ->orWhereHas('user', function ($u) use ($search) {
-                        $u->where('name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%")
-                            ->orWhereHas('student', function ($s) use ($search) {
-                                $s->where('matriculation_number', 'like', "%{$search}%");
-                            });
-                    });
+                $q->where('payments.gateway_reference', 'like', "%{$search}%")
+                    ->orWhere('users.name', 'like', "%{$search}%")
+                    ->orWhere('users.email', 'like', "%{$search}%")
+                    ->orWhere('students.matriculation_number', 'like', "%{$search}%");
             });
         }
 
         // Session Filter
-        if ($request->filled('session_id')) {
+        if ($request->filled('session_id') && $request->session_id !== 'ALL_SESSIONS_RESET_VALUE') {
             $query->whereHas('invoice', function ($q) use ($request) {
                 $q->where('session_id', $request->session_id);
             });
         }
 
         // Department Filter
-        if ($request->filled('department_id')) {
-            $query->whereHas('user.student', function ($q) use ($request) {
-                $q->where('department_id', $request->department_id);
-            });
+        if ($request->filled('department_id') && $request->department_id !== 'ALL_DEPARTMENTS_RESET_VALUE') {
+            $query->where('students.department_id', $request->department_id);
         }
 
-        // Faculty Filter (if department is not selected, or to narrow down departments)
-        if ($request->filled('faculty_id') && !$request->filled('department_id')) {
-            $query->whereHas('user.student.academicDepartment', function ($q) use ($request) {
-                $q->where('faculty_id', $request->faculty_id);
-            });
+        // Faculty Filter
+        if ($request->filled('faculty_id') && $request->faculty_id !== 'ALL_FACULTIES_RESET_VALUE' && !$request->filled('department_id')) {
+            $query->where('students.faculty_id', $request->faculty_id);
         }
 
-        $payments = $query->latest()->paginate(15)->withQueryString();
+        // Status Filter
+        if ($request->filled('status') && $request->status !== 'ALL') {
+            $query->where('payments.status', $request->status);
+        }
 
-        // Calculate Stats (Respecting filters would be cool, but global stats are usually expected on top unless specified. 
-        // Let's do Global Stats for general overview, or Filtered Stats? 
-        // Let's do Filtered Stats so they update as you filter.
+        // Method Filter (bank payment, manual, card, squadco)
+        if ($request->filled('method') && $request->method !== 'ALL') {
+            $method = $request->method;
+            if ($method === 'manual') {
+                $query->where('payments.gateway', 'manual');
+            } elseif ($method === 'squadco') {
+                $query->where('payments.gateway', 'squadco');
+            } elseif ($method === 'bank_transfer') {
+                $query->where('payments.channel', 'bank_transfer');
+            } elseif ($method === 'card') {
+                $query->where('payments.channel', 'card');
+            }
+        }
 
-        // Clone query for stats to avoid messing up pagination
-        $statsQuery = clone $query;
-        // Removing ordering and pagination for aggregation
-        $statsQuery->getQuery()->orders = null;
+        // Date Range Filters (based on payment date)
+        if ($request->filled('start_date')) {
+            $query->whereDate('payments.paid_at', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('payments.paid_at', '<=', $request->end_date);
+        }
 
-        // However, cloning the builder with Eager Loading might be heavy if we just want aggregates.
-        // Let's optimize by just using the base filter logic without eager loads for stats.
-        // Re-applying filters to a fresh query is cleaner.
+        // Sorting
+        $sortBy = $request->query('sort_by', 'date');
+        $sortOrder = $request->query('sort_order', 'desc');
+
+        if ($sortBy === 'name') {
+            $query->orderBy('users.name', $sortOrder);
+        } elseif ($sortBy === 'reg_number') {
+            $query->orderBy('students.matriculation_number', $sortOrder);
+        } elseif ($sortBy === 'status') {
+            $query->orderBy('payments.status', $sortOrder);
+        } else {
+            $query->orderBy('payments.paid_at', $sortOrder);
+        }
+
+        $payments = $query->paginate(15)->withQueryString();
 
         $stats = [
-            'total_revenue' => \App\Models\Payment::where('status', 'paid')->sum('amount'), // Global Total
-            'today_revenue' => \App\Models\Payment::where('status', 'paid')->whereDate('paid_at', today())->sum('amount'),
-            'successful_count' => \App\Models\Payment::where('status', 'paid')->count(),
-            'pending_count' => \App\Models\Payment::where('status', 'pending')->count(),
-            'failed_count' => \App\Models\Payment::where('status', 'failed')->count(),
+            'total_revenue' => Payment::where('status', 'success')->sum('amount'), // Global Total
+            'today_revenue' => Payment::where('status', 'success')->whereDate('paid_at', today())->sum('amount'),
+            'successful_count' => Payment::where('status', 'success')->count(),
+            'pending_count' => Payment::where('status', 'pending')->count(),
+            'failed_count' => Payment::where('status', 'failed')->count(),
         ];
 
         return \Inertia\Inertia::render('Admin/Payments/Index', [
