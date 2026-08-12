@@ -133,10 +133,11 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const selectedSession = ref(props.filters.session_id);
+const selectedPeriod = ref(props.filters.period || 'weekly');
 
-watch(selectedSession, (newSession) => {
+watch([selectedSession, selectedPeriod], ([newSession, newPeriod]) => {
     router.visit(route('admin.dashboard'), {
-        data: { session_id: newSession },
+        data: { session_id: newSession, period: newPeriod },
         preserveState: true,
         preserveScroll: true,
         only: ['stats', 'recentActivity', 'charts', 'currentSessionName', 'filters']
@@ -312,24 +313,40 @@ const staffChartData = {
                         </p>
                     </div>
 
-                    <div class="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/10 min-w-[240px]">
-                         <div class="flex items-center justify-between mb-4">
-                            <span class="text-sm font-semibold text-white/70 uppercase tracking-widest">Selected Session</span>
-                            <Calendar class="w-4 h-4 text-white/50" />
+                    <div class="flex flex-col sm:flex-row gap-4 bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/10 min-w-[240px] sm:min-w-[400px]">
+                        <div class="flex-1">
+                             <div class="flex items-center justify-between mb-4">
+                                <span class="text-sm font-semibold text-white/70 uppercase tracking-widest">Selected Session</span>
+                                <Calendar class="w-4 h-4 text-white/50" />
+                            </div>
+                             <Select v-model="selectedSession">
+                                <SelectTrigger class="w-full h-11 bg-white/20 border-0 text-white focus:ring-offset-slate-900">
+                                    <SelectValue placeholder="Select Session" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="session in sessions" :key="session.id" :value="session.id">
+                                        {{ session.name }} Session
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
-                         <Select v-model="selectedSession">
-                            <SelectTrigger class="w-full h-11 bg-white/20 border-0 text-white focus:ring-offset-slate-900">
-                                <SelectValue placeholder="Select Session" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem v-for="session in sessions" :key="session.id" :value="session.id">
-                                    {{ session.name }} Session
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                         <p v-if="can.view_system_status" class="text-[10px] text-white/50 mt-3 flex items-center gap-1.5 font-mono">
-                            <Activity class="w-3 h-3" /> System Status: Optimal Performance
-                        </p>
+                        <div class="flex-1">
+                             <div class="flex items-center justify-between mb-4">
+                                <span class="text-sm font-semibold text-white/70 uppercase tracking-widest">Date Range</span>
+                                <CalendarClock class="w-4 h-4 text-white/50" />
+                            </div>
+                             <Select v-model="selectedPeriod">
+                                <SelectTrigger class="w-full h-11 bg-white/20 border-0 text-white focus:ring-offset-slate-900">
+                                    <SelectValue placeholder="Select Period" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="daily">Daily</SelectItem>
+                                    <SelectItem value="weekly">Weekly</SelectItem>
+                                    <SelectItem value="monthly">Monthly</SelectItem>
+                                    <SelectItem value="yearly">Yearly</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
                 </div>
             </div>

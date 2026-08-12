@@ -122,6 +122,7 @@ const props = defineProps<{
         entry_mode?: string | null;
         start_date?: string | null;
         end_date?: string | null;
+        period?: string | null;
     };
 }>();
 
@@ -138,6 +139,7 @@ const filterForm = ref({
     entry_mode: props.filters.entry_mode || 'all',
     start_date: props.filters.start_date || '',
     end_date: props.filters.end_date || '',
+    period: props.filters.period || 'monthly',
 });
 
 // Filter lists computed based on parent selections
@@ -183,6 +185,7 @@ const clearFilters = () => {
         entry_mode: 'all',
         start_date: '',
         end_date: '',
+        period: 'monthly',
     };
     router.get(route('admin.reports.index'), {}, {
         preserveState: true,
@@ -197,7 +200,8 @@ watch(() => [
     filterForm.value.gender,
     filterForm.value.entry_mode,
     filterForm.value.start_date,
-    filterForm.value.end_date
+    filterForm.value.end_date,
+    filterForm.value.period
 ], () => {
     applyFilters();
 });
@@ -319,6 +323,17 @@ const hasActiveFilters = computed(() => {
     return Object.values(props.filters).some(val => val !== null && val !== undefined);
 });
 
+const reconciliationExportUrl = computed(() => {
+    const params = new URLSearchParams();
+    params.append('type', 'reconciliation');
+    Object.entries(filterForm.value).forEach(([key, val]) => {
+        if (val !== 'all' && val !== '' && val !== null && val !== undefined) {
+            params.append(key, val);
+        }
+    });
+    return route('admin.reports.export') + '?' + params.toString();
+});
+
 const breadcrumbs = [
     { title: 'Dashboard', href: '/admin/dashboard' },
     { title: 'Reports', href: '/admin/reports' },
@@ -355,7 +370,7 @@ const breadcrumbs = [
                     <Filter class="w-4 h-4 text-indigo-600" />
                     <CardTitle class="text-sm font-semibold">Report Filters</CardTitle>
                 </CardHeader>
-                <CardContent class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-4">
+                <CardContent class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-10 gap-4">
                     <div class="space-y-1.5">
                         <Label class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Session</Label>
                         <Select v-model="filterForm.session_id">
@@ -439,11 +454,25 @@ const breadcrumbs = [
                     </div>
 
                     <div class="space-y-1.5">
+                        <Label class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Period</Label>
+                        <Select v-model="filterForm.period">
+                            <SelectTrigger class="h-9"><SelectValue placeholder="Select Period" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="daily">Daily</SelectItem>
+                                <SelectItem value="weekly">Weekly</SelectItem>
+                                <SelectItem value="monthly">Monthly</SelectItem>
+                                <SelectItem value="yearly">Yearly</SelectItem>
+                                <SelectItem value="custom">Custom Range</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div v-if="filterForm.period === 'custom'" class="space-y-1.5">
                         <Label class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Start Date</Label>
                         <Input type="date" v-model="filterForm.start_date" class="h-9 text-xs dark:bg-gray-900" />
                     </div>
 
-                    <div class="space-y-1.5">
+                    <div v-if="filterForm.period === 'custom'" class="space-y-1.5">
                         <Label class="text-[11px] font-bold uppercase tracking-wider text-slate-500">End Date</Label>
                         <Input type="date" v-model="filterForm.end_date" class="h-9 text-xs dark:bg-gray-900" />
                     </div>
@@ -688,6 +717,14 @@ const breadcrumbs = [
 
             <!-- TAB CONTENT: FINANCE & PAYROLL -->
             <div v-if="activeTab === 'finance'" class="space-y-6 animate-in fade-in duration-300">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Financial Overview & Audits</h2>
+                    <Button as-child variant="outline" class="border-indigo-200 text-indigo-700 hover:bg-indigo-50 shadow-sm">
+                        <a :href="reconciliationExportUrl">
+                            <Download class="w-4 h-4 mr-2" /> Export Reconciliation Report
+                        </a>
+                    </Button>
+                </div>
                 <div class="grid gap-4 md:grid-cols-4">
                     <Card>
                         <CardContent class="p-6">

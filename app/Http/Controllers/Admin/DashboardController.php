@@ -19,14 +19,35 @@ class DashboardController extends Controller
 {
     public function index(Request $request)
     {
+        $user = $request->user();
+
         // 1. Session Context
         $currentSession = Session::current();
         $sessionId = $request->input('session_id', $currentSession?->id);
         $selectedSession = Session::find($sessionId) ?? $currentSession;
 
+        // 2. Resolve User Role & Permissions First
+        $canViewFinance = $user->can('view_revenue_stats');
+        $canViewAdmissions = $user->can('view_admission_stats');
+        $canViewResults = $user->can('view_academic_stats');
+        $canViewStaff = $user->can('manage_staff');
+        $canViewSettings = $user->can('manage_system_settings');
+        $canViewGlobalAnalytics = $user->can('view_global_analytics');
+        $canViewActivity = $user->can('view_recent_activities');
+        $canViewSystemStatus = $user->can('view_system_status');
+
+        $primaryRole = 'admin'; // Default
+        if ($user->hasRole('admin')) {
+            $primaryRole = 'admin';
+        } elseif ($user->hasAnyRole(['bursar', 'finance_officer', 'finance_clerk'])) {
+            $primaryRole = 'finance';
+        } elseif ($user->hasAnyRole(['lecturer', 'course_coordinator', 'dean', 'hod'])) {
+            $primaryRole = 'academic';
+        } elseif ($user->hasAnyRole(['registrar', 'admissions_manager', 'admissions_officer', 'admissions_clerk'])) {
+            $primaryRole = 'admissions';
+        }
+
         if (! $selectedSession) {
-            // Fallback if absolutely no session exists
-            $user = $request->user();
             return Inertia::render('Admin/Dashboard', [
                 'stats' => [
                     'total_students' => 0,
@@ -56,113 +77,176 @@ class DashboardController extends Controller
                     'program' => ['labels' => [], 'data' => []],
                     'staff_department' => ['labels' => [], 'data' => []],
                 ],
-                'userRole' => $user->hasRole('admin') ? 'admin' : 'staff',
+                'userRole' => $primaryRole,
                 'can' => [
                     'manage_students' => $user->can('manage_staff'),
-                    'manage_finance' => $user->can('view_revenue_stats'),
+                    'manage_finance' => $canViewFinance,
                     'manage_results' => $user->can('manage_results'),
-                    'manage_settings' => $user->can('manage_system_settings'),
-                    'view_global_analytics' => $user->can('view_global_analytics'),
-                    'view_system_status' => $user->can('view_system_status'),
+                    'manage_settings' => $canViewSettings,
+                    'view_global_analytics' => $canViewGlobalAnalytics,
+                    'view_system_status' => $canViewSystemStatus,
                 ],
             ]);
         }
 
-        // 2. Global Dashboard Data Caching
-        $cacheKey = 'admin_dashboard_global_' . ($sessionId ?? 'current');
+        // 3. Global Dashboard Data Caching (scoped conditionally by permissions)
+        $period = $request->input('period', 'weekly');
+        $cacheKey = 'admin_dashboard_global_' . ($sessionId ?? 'current') . '_' . $period . '_f' . (int)$canViewFinance . '_a' . (int)$canViewAdmissions . '_g' . (int)$canViewGlobalAnalytics . '_r' . (int)$canViewResults;
 
-        $globalData = Cache::remember($cacheKey, 600, function () use ($sessionId, $selectedSession) {
-            // Total Students
-            $totalStudents = Student::count();
+        $globalData = Cache::remember($cacheKey, 600, function () use ($sessionId, $selectedSession, $period, $canViewFinance, $canViewAdmissions, $canViewGlobalAnalytics, $canViewResults) {
+            // Calculate date range based on period selection
+            $startDate = match ($period) {
+                'daily' => now()->startOfDay(),
+                'weekly' => now()->subDays(6)->startOfDay(),
+                'monthly' => now()->subDays(29)->startOfDay(),
+                'yearly' => now()->subDays(364)->startOfDay(),
+                default => now()->subDays(6)->startOfDay(),
+            };
+            $endDate = now()->endOfDay();
 
-            // Fresh Students (Admitted in this session)
-            $freshStudents = Student::where('admitted_session_id', $sessionId)->count();
-
-            // Revenue (Paid Invoices in session)
-            $revenue = Invoice::where('session_id', $sessionId)
-                ->where('status', 'paid')
-                ->sum('amount');
-
-            // Active Courses (Courses with at least one registration)
-            $activeCoursesCount = CourseRegistration::where('session_id', $sessionId)
-                ->distinct('course_id')
-                ->count('course_id');
-
-            // Application Count
-            $applicationsCount = User::whereHas('roles', function ($query) {
-                $query->where('name', 'applicant');
-            })->count();
-
-            // Trends (vs Previous Session if possible)
-            $previousSession = Session::where('start_date', '<', $selectedSession->start_date)
-                ->orderBy('start_date', 'desc')
-                ->first();
-
+            $totalStudents = 0;
+            $freshStudents = 0;
+            $revenue = 0;
             $revenueGrowth = 0;
             $studentGrowth = 0;
+            $outstandingFees = 0;
+            $registrationCompliance = 0;
+            $malePercentage = 0;
+            $femalePercentage = 0;
+            $totalOutflow = 0;
+            $netCashFlow = 0;
+            $activeCoursesCount = 0;
+            $applicationsCount = 0;
 
-            if ($previousSession) {
-                $prevRevenue = Invoice::where('session_id', $previousSession->id)->where('status', 'paid')->sum('amount');
-                if ($prevRevenue > 0) {
-                    $revenueGrowth = (($revenue - $prevRevenue) / $prevRevenue) * 100;
+            // Conditional Calculations based on permissions
+            if ($canViewGlobalAnalytics) {
+                $totalStudents = Student::count();
+                $freshStudents = Student::where('admitted_session_id', $sessionId)
+                    ->whereBetween('created_at', [$startDate, $endDate])
+                    ->count();
+
+                $previousSession = Session::where('start_date', '<', $selectedSession->start_date)
+                    ->orderBy('start_date', 'desc')
+                    ->first();
+
+                if ($previousSession) {
+                    $prevFresh = Student::where('admitted_session_id', $previousSession->id)->count();
+                    if ($prevFresh > 0) {
+                        $studentGrowth = (($freshStudents - $prevFresh) / $prevFresh) * 100;
+                    }
                 }
 
-                $prevFresh = Student::where('admitted_session_id', $previousSession->id)->count();
-                if ($prevFresh > 0) {
-                    $studentGrowth = (($freshStudents - $prevFresh) / $prevFresh) * 100;
-                }
+                $registeredStudentCount = CourseRegistration::where('session_id', $sessionId)
+                    ->distinct('student_id')
+                    ->count('student_id');
+                $registrationCompliance = $totalStudents > 0 ? round(($registeredStudentCount / $totalStudents) * 100, 1) : 0;
+
+                $genderStats = Student::select('gender', DB::raw('count(*) as count'))
+                    ->groupBy('gender')
+                    ->pluck('count', 'gender')
+                    ->toArray();
+                $malePercentage = $totalStudents > 0 ? round((($genderStats['male'] ?? 0) / $totalStudents) * 100, 1) : 0;
+                $femalePercentage = $totalStudents > 0 ? round((($genderStats['female'] ?? 0) / $totalStudents) * 100, 1) : 0;
             }
 
-            // Recent Activity (Aggregated)
-            $payments = Invoice::where('session_id', $sessionId)
-                ->where('status', 'paid')
-                ->with(['user'])
-                ->latest('updated_at')
-                ->take(5)
-                ->get()
-                ->map(fn ($inv) => [
-                    'id' => $inv->id,
-                    'type' => 'payment',
-                    'title' => 'Payment Received',
-                    'description' => "{$inv->user->name} paid ".number_format($inv->amount),
-                    'amount' => $inv->amount,
-                    'time_ago' => $inv->updated_at->diffForHumans(),
-                    'timestamp' => $inv->updated_at,
-                    'icon' => 'CreditCard',
-                ]);
+            if ($canViewFinance) {
+                $revenue = Invoice::where('session_id', $sessionId)
+                    ->where('status', 'paid')
+                    ->whereBetween('updated_at', [$startDate, $endDate])
+                    ->sum('amount');
 
-            $registrations = Student::where('admitted_session_id', $sessionId)
-                ->with(['user', 'department'])
-                ->latest('created_at')
-                ->take(5)
-                ->get()
-                ->map(fn ($std) => [
-                    'id' => $std->id,
-                    'type' => 'student',
-                    'title' => 'New Student',
-                    'description' => "{$std->user->name} joined " . ($std->department->name ?? 'General'),
-                    'time_ago' => $std->created_at->diffForHumans(),
-                    'timestamp' => $std->created_at,
-                    'icon' => 'UserPlus',
-                    'department_id' => $std->department_id,
-                ]);
+                $previousSession = Session::where('start_date', '<', $selectedSession->start_date)
+                    ->orderBy('start_date', 'desc')
+                    ->first();
 
-            $results = CourseRegistration::where('session_id', $sessionId)
-                ->whereNotNull('score')
-                ->with(['student.user', 'course'])
-                ->latest('updated_at')
-                ->take(5)
-                ->get()
-                ->map(fn ($reg) => [
-                    'id' => $reg->id,
-                    'type' => 'result',
-                    'title' => 'Result Entered',
-                    'description' => "Grade for {$reg->student->user->name} in {$reg->course->code}",
-                    'time_ago' => $reg->updated_at->diffForHumans(),
-                    'timestamp' => $reg->updated_at,
-                    'icon' => 'FileText',
-                    'course_id' => $reg->course_id,
-                ]);
+                if ($previousSession) {
+                    $prevRevenue = Invoice::where('session_id', $previousSession->id)->where('status', 'paid')->sum('amount');
+                    if ($prevRevenue > 0) {
+                        $revenueGrowth = (($revenue - $prevRevenue) / $prevRevenue) * 100;
+                    }
+                }
+
+                $outstandingFees = Invoice::where('session_id', $sessionId)
+                    ->where('status', '!=', 'paid')
+                    ->selectRaw('SUM(amount - paid_amount) as total')
+                    ->value('total') ?? 0;
+
+                $totalOutflow = (float) Expense::where('status', 'approved')->sum('amount') + (float) Payroll::where('status', 'paid')->sum('total_amount');
+                $totalInflow = (float) Invoice::where('status', 'paid')->sum('amount');
+                $netCashFlow = $totalInflow - $totalOutflow;
+            }
+
+            if ($canViewResults) {
+                $activeCoursesCount = CourseRegistration::where('session_id', $sessionId)
+                    ->distinct('course_id')
+                    ->count('course_id');
+            }
+
+            if ($canViewAdmissions) {
+                $applicationsCount = User::whereHas('roles', function ($query) {
+                    $query->where('name', 'applicant');
+                })->whereBetween('created_at', [$startDate, $endDate])->count();
+            }
+
+            // Recent Activity (Aggregated conditionally)
+            $payments = collect();
+            if ($canViewFinance) {
+                $payments = Invoice::where('session_id', $sessionId)
+                    ->where('status', 'paid')
+                    ->with(['user'])
+                    ->latest('updated_at')
+                    ->take(5)
+                    ->get()
+                    ->map(fn ($inv) => [
+                        'id' => $inv->id,
+                        'type' => 'payment',
+                        'title' => 'Payment Received',
+                        'description' => "{$inv->user->name} paid ".number_format($inv->amount),
+                        'amount' => $inv->amount,
+                        'time_ago' => $inv->updated_at->diffForHumans(),
+                        'timestamp' => $inv->updated_at,
+                        'icon' => 'CreditCard',
+                    ]);
+            }
+
+            $registrations = collect();
+            if ($canViewGlobalAnalytics || $canViewAdmissions) {
+                $registrations = Student::where('admitted_session_id', $sessionId)
+                    ->with(['user', 'department'])
+                    ->latest('created_at')
+                    ->take(5)
+                    ->get()
+                    ->map(fn ($std) => [
+                        'id' => $std->id,
+                        'type' => 'student',
+                        'title' => 'New Student',
+                        'description' => "{$std->user->name} joined " . ($std->department->name ?? 'General'),
+                        'time_ago' => $std->created_at->diffForHumans(),
+                        'timestamp' => $std->created_at,
+                        'icon' => 'UserPlus',
+                        'department_id' => $std->department_id,
+                    ]);
+            }
+
+            $results = collect();
+            if ($canViewResults) {
+                $results = CourseRegistration::where('session_id', $sessionId)
+                    ->whereNotNull('score')
+                    ->with(['student.user', 'course'])
+                    ->latest('updated_at')
+                    ->take(5)
+                    ->get()
+                    ->map(fn ($reg) => [
+                        'id' => $reg->id,
+                        'type' => 'result',
+                        'title' => 'Result Entered',
+                        'description' => "Grade for {$reg->student->user->name} in {$reg->course->code}",
+                        'time_ago' => $reg->updated_at->diffForHumans(),
+                        'timestamp' => $reg->updated_at,
+                        'icon' => 'FileText',
+                        'course_id' => $reg->course_id,
+                    ]);
+            }
 
             $recentActivity = $payments->concat($registrations)->concat($results)
                 ->sortByDesc('timestamp')
@@ -171,148 +255,128 @@ class DashboardController extends Controller
                 ->toArray();
 
             // Chart Data
-            // Revenue Trend (Monthly)
-            $revenueTrend = Invoice::where('session_id', $sessionId)
-                ->where('status', 'paid')
-                ->selectRaw('DATE_FORMAT(updated_at, "%Y-%m") as month, SUM(amount) as total')
-                ->groupBy('month')
-                ->orderBy('month')
-                ->get();
+            $revenueChart = ['labels' => [], 'data' => []];
+            $combinedFinancialChart = ['labels' => [], 'inflow' => [], 'outflow' => []];
+            $expenseCategoryChart = ['labels' => [], 'data' => []];
 
-            $revenueChart = [
-                'labels' => $revenueTrend->map(fn ($r) => \Carbon\Carbon::createFromFormat('Y-m', (string) $r->month)->format('M'))->toArray(),
-                'data' => $revenueTrend->pluck('total')->toArray(),
-            ];
+            if ($canViewFinance) {
+                $revenueTrend = Invoice::where('session_id', $sessionId)
+                    ->where('status', 'paid')
+                    ->selectRaw('DATE_FORMAT(updated_at, "%Y-%m") as month, SUM(amount) as total')
+                    ->groupBy('month')
+                    ->orderBy('month')
+                    ->get();
 
-            // Faculty Distribution
-            $facultyStats = Student::select('faculties.name', DB::raw('count(*) as total'))
-                ->leftJoin('departments', 'students.department_id', '=', 'departments.id')
-                ->leftJoin('faculties', 'departments.faculty_id', '=', 'faculties.id')
-                ->whereNotNull('faculties.name')
-                ->groupBy('faculties.name')
-                ->limit(5)
-                ->get();
+                $revenueChart = [
+                    'labels' => $revenueTrend->map(fn ($r) => \Carbon\Carbon::createFromFormat('Y-m', (string) $r->month)->format('M'))->toArray(),
+                    'data' => $revenueTrend->pluck('total')->toArray(),
+                ];
 
-            $facultyChart = [
-                'labels' => $facultyStats->pluck('name')->toArray(),
-                'data' => $facultyStats->pluck('total')->toArray(),
-            ];
+                $expenseTrend = Expense::where('status', 'approved')
+                    ->selectRaw('DATE_FORMAT(updated_at, "%Y-%m") as month, SUM(amount) as total')
+                    ->groupBy('month')
+                    ->orderBy('month')
+                    ->get()
+                    ->keyBy('month');
 
-            // Students by Level (Bar Chart)
-            $levelStats = Student::select('current_level', DB::raw('count(*) as total'))
-                ->whereNotNull('current_level')
-                ->groupBy('current_level')
-                ->orderBy('current_level')
-                ->get();
+                $financialTrendLabels = $revenueTrend->pluck('month')->merge($expenseTrend->pluck('month'))->unique()->sort()->values();
 
-            $levelChart = [
-                'labels' => $levelStats->pluck('current_level')->map(fn ($l) => $l.' Lvl')->toArray(),
-                'data' => $levelStats->pluck('total')->toArray(),
-            ];
+                $combinedFinancialChart = [
+                    'labels' => $financialTrendLabels->map(fn ($m) => \Carbon\Carbon::createFromFormat('Y-m', (string) $m)->format('M'))->toArray(),
+                    'inflow' => $financialTrendLabels->map(fn ($m) => $revenueTrend->firstWhere('month', $m)?->total ?? 0)->toArray(),
+                    'outflow' => $financialTrendLabels->map(fn ($m) => $expenseTrend->get((string) $m)?->total ?? 0)->toArray(),
+                ];
 
-            // Top Programs (Doughnut)
-            $programStats = Student::select('programmes.name', DB::raw('count(*) as total'))
-                ->leftJoin('programmes', 'students.program_id', '=', 'programmes.id')
-                ->whereNotNull('programmes.name')
-                ->groupBy('programmes.name')
-                ->orderByDesc('total')
-                ->limit(5)
-                ->get();
+                $expenseByCategory = Expense::where('status', 'approved')
+                    ->with('category')
+                    ->select('expense_category_id', DB::raw('SUM(amount) as total'))
+                    ->groupBy('expense_category_id')
+                    ->get();
 
-            $programChart = [
-                'labels' => $programStats->pluck('name')->map(fn ($n) => \Illuminate\Support\Str::limit((string) $n, 15))->toArray(),
-                'data' => $programStats->pluck('total')->toArray(),
-            ];
+                $expenseCategoryChart = [
+                    'labels' => $expenseByCategory->map(fn ($e) => $e->category?->name ?? 'Uncategorized')->toArray(),
+                    'data' => $expenseByCategory->pluck('total')->toArray(),
+                ];
+            }
 
-            // Expense Trend (Monthly)
-            $expenseTrend = Expense::where('status', 'approved')
-                ->selectRaw('DATE_FORMAT(updated_at, "%Y-%m") as month, SUM(amount) as total')
-                ->groupBy('month')
-                ->orderBy('month')
-                ->get()
-                ->keyBy('month');
+            $facultyChart = ['labels' => [], 'data' => []];
+            $levelChart = ['labels' => [], 'data' => []];
+            $programChart = ['labels' => [], 'data' => []];
+            $staffDeptChart = ['labels' => [], 'data' => []];
 
-            // Combined Financial Trend
-            $financialTrendLabels = $revenueTrend->pluck('month')->merge($expenseTrend->pluck('month'))->unique()->sort()->values();
+            if ($canViewGlobalAnalytics) {
+                $facultyStats = Student::select('faculties.name', DB::raw('count(*) as total'))
+                    ->leftJoin('departments', 'students.department_id', '=', 'departments.id')
+                    ->leftJoin('faculties', 'departments.faculty_id', '=', 'faculties.id')
+                    ->whereNotNull('faculties.name')
+                    ->groupBy('faculties.name')
+                    ->limit(5)
+                    ->get();
 
-            $combinedFinancialChart = [
-                'labels' => $financialTrendLabels->map(fn ($m) => \Carbon\Carbon::createFromFormat('Y-m', (string) $m)->format('M'))->toArray(),
-                'inflow' => $financialTrendLabels->map(fn ($m) => $revenueTrend->firstWhere('month', $m)?->total ?? 0)->toArray(),
-                'outflow' => $financialTrendLabels->map(fn ($m) => $expenseTrend->get((string) $m)?->total ?? 0)->toArray(),
-            ];
+                $facultyChart = [
+                    'labels' => $facultyStats->pluck('name')->toArray(),
+                    'data' => $facultyStats->pluck('total')->toArray(),
+                ];
 
-            // Expense by Category (Doughnut)
-            $expenseByCategory = Expense::where('status', 'approved')
-                ->with('category')
-                ->select('expense_category_id', DB::raw('SUM(amount) as total'))
-                ->groupBy('expense_category_id')
-                ->get();
+                $levelStats = Student::select('current_level', DB::raw('count(*) as total'))
+                    ->whereNotNull('current_level')
+                    ->groupBy('current_level')
+                    ->orderBy('current_level')
+                    ->get();
 
-            $expenseCategoryChart = [
-                'labels' => $expenseByCategory->map(fn ($e) => $e->category?->name ?? 'Uncategorized')->toArray(),
-                'data' => $expenseByCategory->pluck('total')->toArray(),
-            ];
+                $levelChart = [
+                    'labels' => $levelStats->pluck('current_level')->map(fn ($l) => $l.' Lvl')->toArray(),
+                    'data' => $levelStats->pluck('total')->toArray(),
+                ];
 
-            // Staff by Department (Bar Chart)
-            $staffDeptStats = \App\Models\Staff::select('departments.name', DB::raw('count(*) as total'))
-                ->leftJoin('departments', 'staff.department_id', '=', 'departments.id')
-                ->whereNotNull('departments.name')
-                ->groupBy('departments.name')
-                ->orderByDesc('total')
-                ->limit(10)
-                ->get();
+                $programStats = Student::select('programmes.name', DB::raw('count(*) as total'))
+                    ->leftJoin('programmes', 'students.program_id', '=', 'programmes.id')
+                    ->whereNotNull('programmes.name')
+                    ->groupBy('programmes.name')
+                    ->orderByDesc('total')
+                    ->limit(5)
+                    ->get();
 
-            $staffDeptChart = [
-                'labels' => $staffDeptStats->pluck('name')->toArray(),
-                'data' => $staffDeptStats->pluck('total')->toArray(),
-            ];
+                $programChart = [
+                    'labels' => $programStats->pluck('name')->map(fn ($n) => \Illuminate\Support\Str::limit((string) $n, 15))->toArray(),
+                    'data' => $programStats->pluck('total')->toArray(),
+                ];
 
-            // Admissions Funnel
-            $admissionsFunnel = [
-                'total_applicants' => $applicationsCount,
-                'screened_applicants' => User::role('applicant')->whereHas('student', function ($q) {
-                    $q->whereNotNull('matriculation_number');
-                })->count(),
-                'pending_screening' => User::role('applicant')->whereDoesntHave('student')->count(),
-            ];
+                $staffDeptStats = \App\Models\Staff::select('departments.name', DB::raw('count(*) as total'))
+                    ->leftJoin('departments', 'staff.department_id', '=', 'departments.id')
+                    ->whereNotNull('departments.name')
+                    ->groupBy('departments.name')
+                    ->orderByDesc('total')
+                    ->limit(10)
+                    ->get();
 
-            // Outstanding Fees
-            $outstandingFees = Invoice::where('session_id', $sessionId)
-                ->where('status', '!=', 'paid')
-                ->selectRaw('SUM(amount - paid_amount) as total')
-                ->value('total') ?? 0;
+                $staffDeptChart = [
+                    'labels' => $staffDeptStats->pluck('name')->toArray(),
+                    'data' => $staffDeptStats->pluck('total')->toArray(),
+                ];
+            }
 
-            // Registration Compliance
-            $registeredStudentCount = CourseRegistration::where('session_id', $sessionId)
-                ->distinct('student_id')
-                ->count('student_id');
+            $admissionsFunnel = ['total_applicants' => 0, 'screened_applicants' => 0, 'pending_screening' => 0];
+            if ($canViewAdmissions) {
+                $admissionsFunnel = [
+                    'total_applicants' => $applicationsCount,
+                    'screened_applicants' => User::role('applicant')->whereHas('student', function ($q) {
+                        $q->whereNotNull('matriculation_number');
+                    })->count(),
+                    'pending_screening' => User::role('applicant')->whereDoesntHave('student')->count(),
+                ];
+            }
 
-            $registrationCompliance = $totalStudents > 0 ? round(($registeredStudentCount / $totalStudents) * 100, 1) : 0;
-
-            // Gender stats
-            $genderStats = Student::select('gender', DB::raw('count(*) as count'))
-                ->groupBy('gender')
-                ->pluck('count', 'gender')
-                ->toArray();
-
-            $malePercentage = $totalStudents > 0 ? round((($genderStats['male'] ?? 0) / $totalStudents) * 100, 1) : 0;
-            $femalePercentage = $totalStudents > 0 ? round((($genderStats['female'] ?? 0) / $totalStudents) * 100, 1) : 0;
-
-            // Structural stats
+            // Cached Structural stats
             $structuralStats = [
-                'faculties' => \App\Models\Faculty::count(),
-                'departments' => \App\Models\Department::count(),
-                'programs' => \App\Models\Programme::count(),
-                'sessions' => Session::count(),
-                'staff' => \App\Models\Staff::count(),
-                'academic_staff' => \App\Models\Staff::where('is_academic', true)->count(),
-                'non_academic_staff' => \App\Models\Staff::where('is_academic', false)->count(),
+                'faculties' => Cache::remember('faculties_count', 86400, fn() => \App\Models\Faculty::count()),
+                'departments' => Cache::remember('departments_count', 86400, fn() => \App\Models\Department::count()),
+                'programs' => Cache::remember('programmes_count', 86400, fn() => \App\Models\Programme::count()),
+                'sessions' => Cache::remember('sessions_count', 86400, fn() => Session::count()),
+                'staff' => Cache::remember('staff_count', 86400, fn() => \App\Models\Staff::count()),
+                'academic_staff' => Cache::remember('academic_staff_count', 86400, fn() => \App\Models\Staff::where('is_academic', true)->count()),
+                'non_academic_staff' => Cache::remember('non_academic_staff_count', 86400, fn() => \App\Models\Staff::where('is_academic', false)->count()),
             ];
-
-            // Cash metrics
-            $totalOutflow = (float) Expense::where('status', 'approved')->sum('amount') + (float) Payroll::where('status', 'paid')->sum('total_amount');
-            $totalInflow = (float) Invoice::where('status', 'paid')->sum('amount');
-            $netCashFlow = $totalInflow - $totalOutflow;
 
             return [
                 'totalStudents' => $totalStudents,
@@ -363,17 +427,6 @@ class DashboardController extends Controller
         $structuralStats = $globalData['structuralStats'];
         $totalOutflow = $globalData['totalOutflow'];
         $netCashFlow = $globalData['netCashFlow'];
-
-        // 3. User Specific Evaluations & Access Control Filters
-        $user = $request->user();
-        $canViewFinance = $user->can('view_revenue_stats');
-        $canViewAdmissions = $user->can('view_admission_stats');
-        $canViewResults = $user->can('view_academic_stats');
-        $canViewStaff = $user->can('manage_staff');
-        $canViewSettings = $user->can('manage_system_settings');
-        $canViewGlobalAnalytics = $user->can('view_global_analytics');
-        $canViewActivity = $user->can('view_recent_activities');
-        $canViewSystemStatus = $user->can('view_system_status');
 
         // Filter Recent Activity
         $recentActivity = $canViewActivity ? $recentActivity->filter(function ($item) use ($user, $canViewFinance, $canViewAdmissions, $canViewResults) {
@@ -429,18 +482,6 @@ class DashboardController extends Controller
             'active_students' => $canViewGlobalAnalytics ? $totalStudents : null,
         ];
 
-        // 7. Determine Primary Role for UI Layout
-        $primaryRole = 'admin'; // Default
-        if ($user->hasRole('admin')) {
-            $primaryRole = 'admin';
-        } elseif ($user->hasAnyRole(['bursar', 'finance_officer', 'finance_clerk'])) {
-            $primaryRole = 'finance';
-        } elseif ($user->hasAnyRole(['lecturer', 'course_coordinator', 'dean', 'hod'])) {
-            $primaryRole = 'academic';
-        } elseif ($user->hasAnyRole(['registrar', 'admissions_manager', 'admissions_officer', 'admissions_clerk'])) {
-            $primaryRole = 'admissions';
-        }
-
         // 7. My Course Allocations & Timetable (If Staff)
         $myAllocations = [];
         $myTimetable = [];
@@ -482,7 +523,10 @@ class DashboardController extends Controller
 
         return Inertia::render('Admin/Dashboard', [
             'currentSessionName' => $selectedSession->name,
-            'filters' => ['session_id' => $sessionId],
+            'filters' => [
+                'session_id' => $sessionId,
+                'period' => $period,
+            ],
             'sessions' => fn() => \App\Services\AcademicCacheService::getSessions(),
             'stats' => $dashboardStats,
             'lecturerStats' => $lecturerStats ?? null,
@@ -502,7 +546,7 @@ class DashboardController extends Controller
                 'manage_students' => $user->can('manage_staff'), // In this system registrar/admin manages students
                 'manage_finance' => $canViewFinance,
                 'manage_results' => $user->can('manage_results'),
-                'manage_settings' => $user->can('manage_system_settings'),
+                'manage_settings' => $canViewSettings,
                 'view_global_analytics' => $canViewGlobalAnalytics,
                 'view_system_status' => $canViewSystemStatus,
             ],

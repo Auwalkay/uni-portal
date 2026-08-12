@@ -30,6 +30,8 @@ class User extends Authenticatable
         'password',
         'is_active',
         'profile_photo_path',
+        'last_login_at',
+        'last_login_ip',
     ];
 
     /**
@@ -65,6 +67,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
             'is_active' => 'boolean',
+            'last_login_at' => 'datetime',
         ];
     }
     public function student(): \Illuminate\Database\Eloquent\Relations\HasOne

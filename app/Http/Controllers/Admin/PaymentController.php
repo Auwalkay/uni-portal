@@ -11,7 +11,24 @@ class PaymentController extends Controller
 {
     public function index(Request $request)
     {
-        $filters = $request->only(['search', 'session_id', 'faculty_id', 'department_id', 'status', 'method', 'start_date', 'end_date', 'sort_by', 'sort_order']);
+        $currentSession = \App\Services\AcademicCacheService::getCurrentSession();
+        $sessionId = $request->input('session_id');
+
+        // Default to current session on first load if no parameter is provided
+        if (is_null($sessionId) && $currentSession) {
+            $sessionId = $currentSession->id;
+        }
+
+        $filters = $request->only(['search', 'faculty_id', 'department_id', 'status', 'method', 'start_date', 'end_date', 'sort_by', 'sort_order']);
+        $filters['session_id'] = $sessionId;
+
+        // Check if an export was requested
+        if ($request->query('export') === 'reconciliation') {
+            return \Maatwebsite\Excel\Facades\Excel::download(
+                new \App\Exports\PaymentsReconciliationExport($filters),
+                'payments_reconciliation_report_' . now()->format('Y_m_d_His') . '.xlsx'
+            );
+        }
 
         $query = Payment::query()
             ->select('payments.*')
@@ -31,9 +48,9 @@ class PaymentController extends Controller
         }
 
         // Session Filter
-        if ($request->filled('session_id') && $request->session_id !== 'ALL_SESSIONS_RESET_VALUE') {
-            $query->whereHas('invoice', function ($q) use ($request) {
-                $q->where('session_id', $request->session_id);
+        if ($sessionId && $sessionId !== 'ALL_SESSIONS_RESET_VALUE') {
+            $query->whereHas('invoice', function ($q) use ($sessionId) {
+                $q->where('session_id', $sessionId);
             });
         }
 
