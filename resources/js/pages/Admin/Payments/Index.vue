@@ -60,6 +60,7 @@ const props = defineProps<{
         department_id?: string;
         status?: string;
         method?: string;
+        period?: string;
         start_date?: string;
         end_date?: string;
         sort_by?: string;
@@ -83,6 +84,7 @@ const selectedFaculty = ref(props.filters.faculty_id || '');
 const selectedDepartment = ref(props.filters.department_id || '');
 const selectedStatus = ref(props.filters.status || 'ALL');
 const selectedMethod = ref(props.filters.method || 'ALL');
+const selectedPeriod = ref(props.filters.period || 'monthly');
 const startDate = ref(props.filters.start_date || '');
 const endDate = ref(props.filters.end_date || '');
 const sortBy = ref(props.filters.sort_by || 'date');
@@ -108,6 +110,7 @@ const applyFilters = () => {
         department_id: selectedDepartment.value,
         status: selectedStatus.value,
         method: selectedMethod.value,
+        period: selectedPeriod.value,
         start_date: startDate.value,
         end_date: endDate.value,
         sort_by: sortBy.value,
@@ -118,6 +121,25 @@ const applyFilters = () => {
         preserveScroll: true,
     });
 };
+
+const reconciliationExportUrl = computed(() => {
+    const params = new URLSearchParams();
+    params.append('export', 'reconciliation');
+    
+    if (search.value) params.append('search', search.value);
+    if (selectedSession.value) params.append('session_id', selectedSession.value);
+    if (selectedFaculty.value) params.append('faculty_id', selectedFaculty.value);
+    if (selectedDepartment.value) params.append('department_id', selectedDepartment.value);
+    if (selectedStatus.value) params.append('status', selectedStatus.value);
+    if (selectedMethod.value) params.append('method', selectedMethod.value);
+    if (selectedPeriod.value) params.append('period', selectedPeriod.value);
+    if (startDate.value) params.append('start_date', startDate.value);
+    if (endDate.value) params.append('end_date', endDate.value);
+    if (sortBy.value) params.append('sort_by', sortBy.value);
+    if (sortOrder.value) params.append('sort_order', sortOrder.value);
+
+    return route('admin.payments.index') + '?' + params.toString();
+});
 
 const handleSort = (column: string) => {
     if (sortBy.value === column) {
@@ -150,6 +172,7 @@ const clearFilters = () => {
     selectedDepartment.value = '';
     selectedStatus.value = 'ALL';
     selectedMethod.value = 'ALL';
+    selectedPeriod.value = 'monthly';
     startDate.value = '';
     endDate.value = '';
     sortBy.value = 'date';
@@ -202,9 +225,16 @@ const downloadReceipt = (paymentId: string) => {
             
             <!-- Header & Stats -->
             <div class="flex flex-col gap-6">
-                <div>
-                    <h1 class="text-3xl font-bold tracking-tight text-foreground">Payments</h1>
-                    <p class="text-muted-foreground mt-1">Manage, search, and track all student payment records.</p>
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h1 class="text-3xl font-bold tracking-tight text-foreground">Payments</h1>
+                        <p class="text-muted-foreground mt-1">Manage, search, and track all student payment records.</p>
+                    </div>
+                    <Button as-child variant="outline" class="border-primary/20 text-primary hover:bg-primary/5 shadow-sm">
+                        <a :href="reconciliationExportUrl">
+                            <Download class="w-4 h-4 mr-2" /> Export Reconciliation Report
+                        </a>
+                    </Button>
                 </div>
                 
                 <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
@@ -357,12 +387,28 @@ const downloadReceipt = (paymentId: string) => {
                         </Select>
                     </div>
 
-                    <div class="w-[150px]">
+                    <div class="w-[140px]">
+                        <Label class="text-xs font-semibold text-muted-foreground mb-1.5 block">Period</Label>
+                        <Select v-model="selectedPeriod">
+                            <SelectTrigger class="w-full">
+                              <SelectValue placeholder="Period" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="daily">Daily</SelectItem>
+                                <SelectItem value="weekly">Weekly</SelectItem>
+                                <SelectItem value="monthly">Monthly</SelectItem>
+                                <SelectItem value="yearly">Yearly</SelectItem>
+                                <SelectItem value="custom">Custom Date</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div class="w-[150px]" v-if="selectedPeriod === 'custom'">
                         <Label class="text-xs font-semibold text-muted-foreground mb-1.5 block">Start Date</Label>
                         <Input type="date" v-model="startDate" class="w-full" />
                     </div>
 
-                    <div class="w-[150px]">
+                    <div class="w-[150px]" v-if="selectedPeriod === 'custom'">
                         <Label class="text-xs font-semibold text-muted-foreground mb-1.5 block">End Date</Label>
                         <Input type="date" v-model="endDate" class="w-full" />
                     </div>
@@ -376,7 +422,7 @@ const downloadReceipt = (paymentId: string) => {
                             Apply Filters
                         </Button>
                         <Button 
-                            v-if="search || selectedSession || selectedFaculty || selectedDepartment || selectedStatus !== 'ALL' || selectedMethod !== 'ALL' || startDate || endDate" 
+                            v-if="search || selectedSession || selectedFaculty || selectedDepartment || selectedStatus !== 'ALL' || selectedMethod !== 'ALL' || selectedPeriod !== 'monthly' || startDate || endDate" 
                             variant="ghost" 
                             @click="clearFilters"
                             class="text-destructive hover:text-destructive hover:bg-destructive/10 h-10"

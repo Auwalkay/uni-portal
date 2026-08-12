@@ -11,7 +11,43 @@ class PaymentController extends Controller
 {
     public function index(Request $request)
     {
-        $filters = $request->only(['search', 'session_id', 'faculty_id', 'department_id', 'status', 'method', 'start_date', 'end_date', 'sort_by', 'sort_order']);
+        $currentSession = \App\Services\AcademicCacheService::getCurrentSession();
+        $sessionId = $request->input('session_id');
+
+        // Default to current session on first load if no parameter is provided
+        if (is_null($sessionId) && $currentSession) {
+            $sessionId = $currentSession->id;
+        }
+
+        // Date range period logic (default: monthly)
+        $period = $request->input('period', 'monthly');
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+
+        if ($period !== 'custom') {
+            $startDate = match ($period) {
+                'daily' => now()->startOfDay()->toDateString(),
+                'weekly' => now()->subDays(6)->startOfDay()->toDateString(),
+                'monthly' => now()->subDays(29)->startOfDay()->toDateString(),
+                'yearly' => now()->subDays(364)->startOfDay()->toDateString(),
+                default => now()->subDays(29)->startOfDay()->toDateString(),
+            };
+            $endDate = now()->endOfDay()->toDateString();
+        }
+
+        $filters = $request->only(['search', 'faculty_id', 'department_id', 'status', 'method', 'sort_by', 'sort_order']);
+        $filters['session_id'] = $sessionId;
+        $filters['period'] = $period;
+        $filters['start_date'] = $startDate;
+        $filters['end_date'] = $endDate;
+
+        // Check if an export was requested
+        if ($request->query('export') === 'reconciliation') {
+            return \Maatwebsite\Excel\Facades\Excel::download(
+                new \App\Exports\PaymentsReconciliationExport($filters),
+                'payments_reconciliation_report_' . now()->format('Y_m_d_His') . '.xlsx'
+            );
+        }
 
         $query = Payment::query()
             ->select('payments.*')
@@ -31,9 +67,9 @@ class PaymentController extends Controller
         }
 
         // Session Filter
-        if ($request->filled('session_id') && $request->session_id !== 'ALL_SESSIONS_RESET_VALUE') {
-            $query->whereHas('invoice', function ($q) use ($request) {
-                $q->where('session_id', $request->session_id);
+        if ($sessionId && $sessionId !== 'ALL_SESSIONS_RESET_VALUE') {
+            $query->whereHas('invoice', function ($q) use ($sessionId) {
+                $q->where('session_id', $sessionId);
             });
         }
 
@@ -67,11 +103,11 @@ class PaymentController extends Controller
         }
 
         // Date Range Filters (based on payment date)
-        if ($request->filled('start_date')) {
-            $query->whereDate('payments.paid_at', '>=', $request->start_date);
+        if ($startDate) {
+            $query->where('payments.paid_at', '>=', $startDate . ' 00:00:00');
         }
-        if ($request->filled('end_date')) {
-            $query->whereDate('payments.paid_at', '<=', $request->end_date);
+        if ($endDate) {
+            $query->where('payments.paid_at', '<=', $endDate . ' 23:59:59');
         }
 
         // Sorting

@@ -45,6 +45,21 @@ class ReportController extends Controller
         }
 
         // Active filters
+        $period = $request->query('period', 'monthly');
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+
+        if ($period !== 'custom') {
+            $startDate = match ($period) {
+                'daily' => now()->startOfDay()->toDateString(),
+                'weekly' => now()->subDays(6)->startOfDay()->toDateString(),
+                'monthly' => now()->subDays(29)->startOfDay()->toDateString(),
+                'yearly' => now()->subDays(364)->startOfDay()->toDateString(),
+                default => now()->subDays(29)->startOfDay()->toDateString(),
+            };
+            $endDate = now()->endOfDay()->toDateString();
+        }
+
         $filters = [
             'session_id' => $sessionId,
             'faculty_id' => $request->query('faculty_id'),
@@ -53,8 +68,9 @@ class ReportController extends Controller
             'level' => $request->query('level'),
             'gender' => $request->query('gender'),
             'entry_mode' => $request->query('entry_mode'),
-            'start_date' => $request->query('start_date'),
-            'end_date' => $request->query('end_date'),
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'period' => $period,
         ];
 
         // 1. DYNAMIC QUERIES WITH FILTERS
@@ -100,13 +116,13 @@ class ReportController extends Controller
         }
 
         // Apply date range filters if provided
-        if ($request->filled('start_date')) {
-            $studentQuery->where('created_at', '>=', $request->start_date);
-            $applicantQuery->where('created_at', '>=', $request->start_date);
+        if ($startDate) {
+            $studentQuery->where('created_at', '>=', $startDate);
+            $applicantQuery->where('created_at', '>=', $startDate);
         }
-        if ($request->filled('end_date')) {
-            $studentQuery->where('created_at', '<=', $request->end_date . ' 23:59:59');
-            $applicantQuery->where('created_at', '<=', $request->end_date . ' 23:59:59');
+        if ($endDate) {
+            $studentQuery->where('created_at', '<=', $endDate . ' 23:59:59');
+            $applicantQuery->where('created_at', '<=', $endDate . ' 23:59:59');
         }
 
         // ACADEMICS & ADMISSIONS
@@ -240,13 +256,13 @@ class ReportController extends Controller
         }
 
         // Apply date range filters if provided
-        if ($request->filled('start_date')) {
-            $invoiceQuery->where('created_at', '>=', $request->start_date);
-            $paymentQuery->where('paid_at', '>=', $request->start_date);
+        if ($startDate) {
+            $invoiceQuery->where('created_at', '>=', $startDate);
+            $paymentQuery->where('paid_at', '>=', $startDate);
         }
-        if ($request->filled('end_date')) {
-            $invoiceQuery->where('created_at', '<=', $request->end_date . ' 23:59:59');
-            $paymentQuery->where('paid_at', '<=', $request->end_date . ' 23:59:59');
+        if ($endDate) {
+            $invoiceQuery->where('created_at', '<=', $endDate . ' 23:59:59');
+            $paymentQuery->where('paid_at', '<=', $endDate . ' 23:59:59');
         }
 
         $totalInvoiced = (double) $invoiceQuery->sum('amount');
@@ -264,11 +280,11 @@ class ReportController extends Controller
             ->get();
 
         $expenseQuery = Expense::where('status', 'approved');
-        if ($request->filled('start_date')) {
-            $expenseQuery->where('date', '>=', $request->start_date);
+        if ($startDate) {
+            $expenseQuery->where('date', '>=', $startDate);
         }
-        if ($request->filled('end_date')) {
-            $expenseQuery->where('date', '<=', $request->end_date);
+        if ($endDate) {
+            $expenseQuery->where('date', '<=', $endDate);
         }
 
         $expenseStats = [
@@ -281,11 +297,11 @@ class ReportController extends Controller
         ];
 
         $payrollQuery = Payroll::query();
-        if ($request->filled('start_date')) {
-            $payrollQuery->where('created_at', '>=', $request->start_date);
+        if ($startDate) {
+            $payrollQuery->where('created_at', '>=', $startDate);
         }
-        if ($request->filled('end_date')) {
-            $payrollQuery->where('created_at', '<=', $request->end_date . ' 23:59:59');
+        if ($endDate) {
+            $payrollQuery->where('created_at', '<=', $endDate . ' 23:59:59');
         }
 
         $payrollStats = [
@@ -329,13 +345,13 @@ class ReportController extends Controller
 
         // Calculate average attendance rates (last 30 days or custom range)
         $attendanceQuery = Attendance::query();
-        if ($request->filled('start_date')) {
-            $attendanceQuery->where('date', '>=', $request->start_date);
+        if ($startDate) {
+            $attendanceQuery->where('date', '>=', $startDate);
         }
-        if ($request->filled('end_date')) {
-            $attendanceQuery->where('date', '<=', $request->end_date);
+        if ($endDate) {
+            $attendanceQuery->where('date', '<=', $endDate);
         }
-        if (!$request->filled('start_date') && !$request->filled('end_date')) {
+        if (!$startDate && !$endDate) {
             $attendanceQuery->where('date', '>=', now()->subDays(30));
         }
 
@@ -363,11 +379,11 @@ class ReportController extends Controller
 
         // 6. LIBRARY
         $bookLoanQuery = BookLoan::query();
-        if ($request->filled('start_date')) {
-            $bookLoanQuery->where('borrowed_at', '>=', $request->start_date);
+        if ($startDate) {
+            $bookLoanQuery->where('borrowed_at', '>=', $startDate);
         }
-        if ($request->filled('end_date')) {
-            $bookLoanQuery->where('borrowed_at', '<=', $request->end_date . ' 23:59:59');
+        if ($endDate) {
+            $bookLoanQuery->where('borrowed_at', '<=', $endDate . ' 23:59:59');
         }
 
         $libraryStats = [
@@ -386,11 +402,11 @@ class ReportController extends Controller
 
         // 7. SICKBAY
         $sickbayVisitQuery = SickbayVisit::query();
-        if ($request->filled('start_date')) {
-            $sickbayVisitQuery->where('check_in_at', '>=', $request->start_date);
+        if ($startDate) {
+            $sickbayVisitQuery->where('check_in_at', '>=', $startDate);
         }
-        if ($request->filled('end_date')) {
-            $sickbayVisitQuery->where('check_in_at', '<=', $request->end_date . ' 23:59:59');
+        if ($endDate) {
+            $sickbayVisitQuery->where('check_in_at', '<=', $endDate . ' 23:59:59');
         }
 
         $sickbayStats = [
@@ -441,6 +457,29 @@ class ReportController extends Controller
 
     public function export(Request $request)
     {
+        if ($request->query('type') === 'reconciliation') {
+            $period = $request->query('period', 'monthly');
+            $startDate = $request->query('start_date');
+            $endDate = $request->query('end_date');
+
+            if ($period !== 'custom') {
+                $startDate = match ($period) {
+                    'daily' => now()->startOfDay()->toDateString(),
+                    'weekly' => now()->subDays(6)->startOfDay()->toDateString(),
+                    'monthly' => now()->subDays(29)->startOfDay()->toDateString(),
+                    'yearly' => now()->subDays(364)->startOfDay()->toDateString(),
+                    default => now()->subDays(29)->startOfDay()->toDateString(),
+                };
+                $endDate = now()->endOfDay()->toDateString();
+            }
+
+            $filters = $request->all();
+            $filters['start_date'] = $startDate;
+            $filters['end_date'] = $endDate;
+
+            return Excel::download(new \App\Exports\PaymentsReconciliationExport($filters), 'payments_reconciliation_report_' . now()->format('Y_m_d_His') . '.xlsx');
+        }
+
         return Excel::download(new SystemReportsExport($request->all()), 'system_master_report_' . now()->format('Y_m_d_His') . '.xlsx');
     }
 }
