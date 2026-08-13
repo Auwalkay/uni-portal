@@ -52,6 +52,7 @@ const props = defineProps<{
         enforce_hostel_fee_for_results: boolean;
         enable_exam_card_download: boolean;
         enable_hostel_booking: boolean;
+        promote_pending_payments: boolean;
     }
 }>();
 
@@ -89,6 +90,10 @@ const examCardForm = useForm({
 
 const hostelBookingForm = useForm({
     enabled: props.settings.enable_hostel_booking
+});
+
+const promotionForm = useForm({
+    promotePendingPayments: props.settings.promote_pending_payments
 });
 
 const submitResultVisibility = () => {
@@ -150,6 +155,26 @@ const submitHostelBookingSetting = () => {
                 icon: 'success',
                 title: 'Updated',
                 text: 'Hostel booking settings updated successfully',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
+            });
+        }
+    });
+};
+
+const submitPromotionSetting = () => {
+    router.post(route('admin.settings.update'), { 
+        key: 'promote_pending_payments', 
+        value: promotionForm.promotePendingPayments ? 'true' : 'false' 
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            Swal.fire({
+                icon: 'success',
+                title: 'Updated',
+                text: 'Student promotion settings updated successfully',
                 toast: true,
                 position: 'top-end',
                 showConfirmButton: false,
@@ -510,6 +535,33 @@ const settingsModules = [
                         </div>
                         <Button @click="submitHostelBookingSetting" class="w-full bg-sky-600 hover:bg-sky-700 text-white">
                             Update Hostel Booking Settings
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                <!-- Student Promotion Settings Card -->
+                <Card class="border-purple-200 bg-purple-50/30">
+                    <CardHeader class="flex flex-row items-center gap-4">
+                        <div class="bg-purple-100 p-3 rounded-xl text-purple-600">
+                            <UserCheck class="w-6 h-6" />
+                        </div>
+                        <div>
+                            <CardTitle>Promotion Settings</CardTitle>
+                            <CardDescription>Control academic promotion criteria.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent class="space-y-6">
+                        <div class="grid gap-4">
+                            <div class="flex items-center justify-between">
+                                <Label for="promote_pending_payments">Promote Students with Pending Fees</Label>
+                                <Switch 
+                                    id="promote_pending_payments" 
+                                    v-model:checked="promotionForm.promotePendingPayments" 
+                                />
+                            </div>
+                        </div>
+                        <Button @click="submitPromotionSetting" class="w-full bg-purple-600 hover:bg-purple-700 text-white">
+                            Update Promotion Settings
                         </Button>
                     </CardContent>
                 </Card>

@@ -181,6 +181,7 @@ class AcademicCacheService
             return [
                 'enable_exam_card_download' => filter_var(\App\Models\SystemSetting::get('enable_exam_card_download', true), FILTER_VALIDATE_BOOLEAN),
                 'enable_hostel_booking' => filter_var(\App\Models\SystemSetting::get('enable_hostel_booking', true), FILTER_VALIDATE_BOOLEAN),
+                'promote_pending_payments' => filter_var(\App\Models\SystemSetting::get('promote_pending_payments', false), FILTER_VALIDATE_BOOLEAN),
             ];
         });
     }

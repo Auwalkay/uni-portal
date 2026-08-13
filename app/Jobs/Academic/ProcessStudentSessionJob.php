@@ -52,6 +52,30 @@ class ProcessStudentSessionJob implements ShouldQueue
                     return;
                 }
 
+                // Check pending school fees setting
+                $promotePending = filter_var(\App\Models\SystemSetting::get('promote_pending_payments', false), FILTER_VALIDATE_BOOLEAN);
+                
+                if (!$promotePending) {
+                    $previousSession = Session::where('start_date', '<', $this->session->start_date)
+                        ->orderBy('start_date', 'desc')
+                        ->first();
+                        
+                    if ($previousSession) {
+                        $hasUnpaidFees = \App\Models\Invoice::where('user_id', $this->student->user_id)
+                            ->where('session_id', $previousSession->id)
+                            ->where('type', 'school_fee')
+                            ->where('status', '!=', 'paid')
+                            ->exists();
+                            
+                        if ($hasUnpaidFees) {
+                            $this->student->update([
+                                'pending_promotion_session_id' => $this->session->id
+                            ]);
+                            return;
+                        }
+                    }
+                }
+
                 $newLevel = $this->student->current_level;
                 $isGraduating = false;
 

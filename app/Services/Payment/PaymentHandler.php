@@ -74,6 +74,13 @@ class PaymentHandler
                 $payment->user->notify(new \App\Notifications\ApplicationSubmitted($applicant));
             }
         }
+
+        if ($invoice->type === 'school_fee' && $invoice->status === 'paid') {
+            $student = \App\Models\Student::where('user_id', $payment->user_id)->first();
+            if ($student) {
+                $student->checkAndPromoteStudent();
+            }
+        }
     }
 
     protected function sendReceipt($payment)
