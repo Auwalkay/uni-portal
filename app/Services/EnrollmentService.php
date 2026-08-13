@@ -24,8 +24,18 @@ class EnrollmentService
             }
 
             $year = date('y');
-            $facCode = $applicant->programme?->department?->faculty?->code ?? 'GEN';
-            $deptCode = $applicant->programme?->department?->code ?? 'GEN';
+
+            // ── Use the admin-specified admission details ──────────────────────
+            // Load the admitted programme (may differ from their application choice)
+            $admittedProgramme = $applicant->admitted_programme_id
+                ? \App\Models\Programme::with('department.faculty')->find($applicant->admitted_programme_id)
+                : null;
+
+            // Fall back to their programme choice if admin didn't override
+            $programme = $admittedProgramme ?? $applicant->programme;
+
+            $facCode  = $programme?->department?->faculty?->code ?? 'GEN';
+            $deptCode = $programme?->department?->code ?? 'GEN';
 
             $currentSession = \App\Models\Session::current();
             if (!$currentSession) {
@@ -34,27 +44,30 @@ class EnrollmentService
 
             $currenSemester = $currentSession->semesters()->where('is_current', true)->first();
 
-            $currentLevel = ($applicant->application_mode === 'DE') ? 200 : 100;
+            // Use the level the admin specified at admission; fall back to entry_mode logic
+            $currentLevel = $applicant->admitted_level
+                ? (int) $applicant->admitted_level
+                : (($applicant->application_mode === 'DE') ? 200 : 100);
 
             $matricNo = \App\Helpers\MatriculationNumberHelper::generate([
-                'dept_code' => $applicant->programme?->department?->code,
-                'level' => $currentLevel,
+                'dept_code' => $programme?->department?->code,
+                'level'     => $currentLevel,
             ]);
 
             $student = Student::create([
-                'user_id' => $userId,
+                'user_id'              => $userId,
                 'matriculation_number' => $matricNo,
-                'program_id' => $applicant->programme?->id,
-                'department_id' => $applicant->programme?->department?->id,
-                'faculty_id' => $applicant->programme?->department?->faculty?->id,
-                'state_id' => $applicant->state_id,
-                'lga_id' => $applicant->lga_id,
-                'current_level' => $currentLevel,
-                'gender' => $applicant->gender,
-                'entry_mode' => $applicant->application_mode,
-                'admitted_session_id' => $currentSession->id,
-                'program_duration' => max(($applicant->programme?->duration ?? 4) - ($currentLevel === 200 ? 1 : ($currentLevel === 300 ? 2 : 0)), 1),
-                'scholarship_id' => $applicant->scholarship_id,
+                'program_id'           => $programme?->id,
+                'department_id'        => $programme?->department?->id,
+                'faculty_id'           => $programme?->department?->faculty?->id,
+                'state_id'             => $applicant->state_id,
+                'lga_id'               => $applicant->lga_id,
+                'current_level'        => $currentLevel,
+                'gender'               => $applicant->gender,
+                'entry_mode'           => $applicant->application_mode,
+                'admitted_session_id'  => $currentSession->id,
+                'program_duration'     => max(($programme?->duration ?? 4) - ($currentLevel === 200 ? 1 : ($currentLevel === 300 ? 2 : 0)), 1),
+                'scholarship_id'       => $applicant->scholarship_id,
             ]);
 
             StudentSession::create([

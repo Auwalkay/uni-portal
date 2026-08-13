@@ -104,6 +104,7 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
         Route::middleware(['permission:manage_staff'])->group(function () {
             Route::get('staff/{staff}/edit', [StaffController::class, 'edit'])->name('staff.edit');
             Route::put('staff/{staff}', [StaffController::class, 'update'])->name('staff.update');
+            Route::put('staff/{staff}/toggle-status', [StaffController::class, 'toggleStatus'])->name('staff.toggle_status');
             Route::delete('staff/{staff}', [StaffController::class, 'destroy'])->name('staff.destroy');
 
             Route::post('staff/{staff}/reset-password', [StaffController::class, 'resetPassword'])->name('staff.reset_password');

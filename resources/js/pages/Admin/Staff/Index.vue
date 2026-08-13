@@ -399,11 +399,12 @@ const breadcrumbs = [
                 <Table>
                     <TableHeader class="bg-slate-50 dark:bg-slate-900">
                         <TableRow>
-                            <TableHead class="w-[300px]">Staff Member</TableHead>
+                            <TableHead>Staff Member</TableHead>
                             <TableHead>System Permissions</TableHead>
                             <TableHead>Department / Faculty</TableHead>
                             <TableHead>Type</TableHead>
                             <TableHead>Staff ID</TableHead>
+                            <TableHead>Status</TableHead>
                             <TableHead class="text-right">Manage</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -457,6 +458,11 @@ const breadcrumbs = [
                                     {{ user.staff?.staff_number || '---' }}
                                 </span>
                             </TableCell>
+                            <TableCell>
+                                <Badge :class="user.is_active ? 'bg-green-50 text-green-700 hover:bg-green-100 border-green-250' : 'bg-red-50 text-red-700 hover:bg-red-100 border-red-250'" variant="outline">
+                                    {{ user.is_active ? 'Active' : 'Deactivated' }}
+                                </Badge>
+                            </TableCell>
                             <TableCell class="text-right">
                                 <DropdownMenu>
                                     <DropdownMenuTrigger as-child>
@@ -476,6 +482,9 @@ const breadcrumbs = [
                                             <Link :href="route('admin.staff.edit', user.id)">
                                                 <Pencil class="w-4 h-4 mr-2" /> Edit Member
                                             </Link>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem @click="() => router.put(route('admin.staff.toggle_status', user.id))">
+                                            <Shield class="w-4 h-4 mr-2" /> {{ user.is_active ? 'Deactivate Account' : 'Activate Account' }}
                                         </DropdownMenuItem>
                                         <DropdownMenuItem class="text-destructive focus:text-destructive" @click="deleteStaff(user.id)">
                                             <Trash2 class="w-4 h-4 mr-2" /> Delete Member

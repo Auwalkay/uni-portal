@@ -239,17 +239,54 @@ class StudentController extends Controller
 
         // Date Range Filter
         if ($request->filled('date_from')) {
-            $query->whereDate('created_at', '>=', $request->date_from);
+            $query->whereDate('students.created_at', '>=', $request->date_from);
         }
         if ($request->filled('date_to')) {
-            $query->whereDate('created_at', '<=', $request->date_to);
+            $query->whereDate('students.created_at', '<=', $request->date_to);
         }
 
-        $students = $query->latest()->paginate(15)->withQueryString();
+        // Gender Filter
+        if ($request->filled('gender') && $request->gender !== 'ALL_GENDERS' && $request->gender !== 'all') {
+            $query->where('gender', strtolower($request->gender));
+        }
+
+        // Status Filter
+        if ($request->filled('status') && $request->status !== 'ALL_STATUS' && $request->status !== 'all') {
+            $query->whereHas('user', function ($q) use ($request) {
+                $q->where('is_active', $request->status === 'active');
+            });
+        }
+
+        // Entry Mode Filter
+        if ($request->filled('entry_mode') && $request->entry_mode !== 'ALL_MODES' && $request->entry_mode !== 'all') {
+            $query->where('entry_mode', $request->entry_mode);
+        }
+
+        // Sorting
+        $sortBy = $request->query('sort_by', 'created_at');
+        $sortOrder = $request->query('sort_order', 'desc');
+
+        if ($sortBy === 'name') {
+            $query->join('users', 'students.user_id', '=', 'users.id')
+                ->select('students.*')
+                ->orderBy('users.name', $sortOrder);
+        } elseif ($sortBy === 'matriculation_number') {
+            $query->orderBy('students.matriculation_number', $sortOrder);
+        } elseif ($sortBy === 'level') {
+            $query->orderBy('students.current_level', $sortOrder);
+        } else {
+            $query->orderBy('students.created_at', $sortOrder);
+        }
+
+        $students = $query->paginate(15)->withQueryString();
 
         return Inertia::render('Admin/Students/Index', [
             'students' => $students,
-            'filters' => $request->only(['search', 'session_id', 'faculty_id', 'department_id', 'level', 'program_id', 'program', 'scholarship_id', 'date_from', 'date_to']),
+            'filters' => $request->only([
+                'search', 'session_id', 'faculty_id', 'department_id', 'level',
+                'program_id', 'program', 'scholarship_id', 'date_from', 'date_to',
+                'gender', 'status', 'entry_mode', 'sort_by', 'sort_order'
+            ]),
             'sessions' => fn() => AcademicCacheService::getSessions(),
             'faculties' => fn() => AcademicCacheService::getFaculties(),
             'departments' => fn() => AcademicCacheService::getAllDepartments(),
@@ -358,22 +395,22 @@ class StudentController extends Controller
         }
 
         $request->validate([
-            'file' => 'required|mimes:csv,txt,xlsx|max:10240',
-            'session_id' => 'required|exists:academic_sessions,id',
-            'faculty_id' => 'required|exists:faculties,id',
-            'department_id' => 'required|exists:departments,id',
-            'program_id' => 'required|exists:programmes,id',
-            'level' => 'required|in:100,200,300,400,500',
-            'scholarship_id' => 'nullable|exists:scholarships,id',
+            'file'          => 'required|mimes:csv,txt,xlsx|max:10240',
+            'session_id'    => 'required|exists:academic_sessions,id',
+            'faculty_id'    => 'nullable|exists:faculties,id',
+            'department_id' => 'nullable|exists:departments,id',
+            'program_id'    => 'nullable|exists:programmes,id',
+            'level'         => 'nullable|in:100,200,300,400,500',
+            'scholarship_id'=> 'nullable|exists:scholarships,id',
         ]);
 
         try {
             $import = new StudentImport(
-                $request->faculty_id,
-                $request->department_id,
-                $request->program_id,
+                $request->faculty_id    ?: null,
+                $request->department_id ?: null,
+                $request->program_id    ?: null,
                 $request->session_id,
-                $request->level,
+                $request->level         ?: null,
                 $request->scholarship_id
             );
             Excel::import($import, $request->file('file'));
@@ -391,20 +428,23 @@ class StudentController extends Controller
             {
                 return collect([
                     [
-                        'first_name' => 'John',
-                        'last_name' => 'Doe',
-                        'email' => 'john.doe@example.com',
-                        'phone_number' => '08012345678',
-                        'gender' => 'male',
-                        'dob' => '2000-01-01',
-                        'address' => '123 University Road',
-                        'state' => 'Lagos',
-                        'lga' => 'Ikeja',
-                        'entry_mode' => 'UTME',
-                        'matric_number' => 'UNI/2024/0001',
-                        'jamb_reg' => '2024123456AB',
-                        'jamb_score' => '280',
+                        'first_name'           => 'John',
+                        'last_name'            => 'Doe',
+                        'email'                => 'john.doe@example.com',
+                        'phone_number'         => '08012345678',
+                        'gender'               => 'male',
+                        'dob'                  => '2000-01-01',
+                        'address'              => '123 University Road',
+                        'state'                => 'Lagos',
+                        'lga'                  => 'Ikeja',
+                        'entry_mode'           => 'UTME',
+                        'matric_number'        => 'UNI/2024/0001',
+                        'jamb_reg'             => '2024123456AB',
+                        'jamb_score'           => '280',
                         'previous_institution' => '',
+                        'programme'            => 'Computer Science',  // Used if Programme not selected on form
+                        'level'                => '100',               // Used if Level not selected on form
+                        'scholarship'          => 'Full Tuition',      // Optional: name of scholarship
                     ]
                 ]);
             }
@@ -426,6 +466,9 @@ class StudentController extends Controller
                     'jamb_reg',
                     'jamb_score',
                     'previous_institution',
+                    'programme',   // Optional: overridden by form selection
+                    'level',       // Optional: overridden by form selection
+                    'scholarship', // Optional: name of scholarship
                 ];
             }
         };
@@ -555,5 +598,106 @@ class StudentController extends Controller
         } catch (\Exception $e) {
             return back()->with('error', 'Promotion failed: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Toggle a student user active/deactive status.
+     */
+    public function toggleStatus(Request $request, Student $student)
+    {
+        if (!$request->user()->can('edit_students')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $user = $student->user;
+        $newStatus = !$user->is_active;
+
+        $user->update(['is_active' => $newStatus]);
+
+        activity('student')
+            ->performedOn($student)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'student_name' => $user->name,
+                'status' => $newStatus ? 'activated' : 'deactivated',
+            ])
+            ->log("Student account " . ($newStatus ? 'activated' : 'deactivated'));
+
+        $statusText = $newStatus ? 'activated' : 'deactivated';
+        return back()->with('success', "Student account has been successfully {$statusText}.");
+    }
+
+    /**
+     * Bulk assign scholarship to multiple students.
+     */
+    public function bulkAssignScholarship(Request $request)
+    {
+        if (!$request->user()->can('edit_students')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $validated = $request->validate([
+            'student_ids' => 'required|array',
+            'student_ids.*' => 'required|exists:students,id',
+            'scholarship_id' => 'nullable|exists:scholarships,id',
+        ]);
+
+        $scholarshipId = $validated['scholarship_id'] ?? null;
+
+        // Perform mass update
+        Student::whereIn('id', $validated['student_ids'])->update([
+            'scholarship_id' => $scholarshipId,
+        ]);
+
+        // Log activity for each student
+        $students = Student::whereIn('id', $validated['student_ids'])->with('user')->get();
+        foreach ($students as $student) {
+            activity('student')
+                ->performedOn($student)
+                ->causedBy(auth()->user())
+                ->withProperties([
+                    'student_name' => $student->user->name,
+                    'scholarship_id' => $scholarshipId,
+                ])
+                ->log("Scholarship assigned/updated in bulk");
+        }
+
+        return back()->with('success', count($validated['student_ids']) . ' students updated successfully.');
+    }
+
+    /**
+     * Search students for bulk scholarship assignment.
+     */
+    public function searchBulk(Request $request)
+    {
+        if (!$request->user()->can('edit_students')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $query = $request->query('query');
+        if (empty($query)) {
+            return response()->json([]);
+        }
+
+        $students = Student::with('user')
+            ->where(function ($q) use ($query) {
+                $q->where('matriculation_number', 'like', "%{$query}%")
+                  ->orWhereHas('user', function ($uq) use ($query) {
+                      $uq->where('name', 'like', "%{$query}%")
+                        ->orWhere('email', 'like', "%{$query}%");
+                  });
+            })
+            ->limit(10)
+            ->get()
+            ->map(function ($student) {
+                return [
+                    'id' => $student->id,
+                    'name' => $student->user->name,
+                    'matriculation_number' => $student->matriculation_number,
+                    'email' => $student->user->email,
+                ];
+            });
+
+        return response()->json($students);
     }
 }
