@@ -35,6 +35,8 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
 
     protected $lgas = [];
 
+    protected $scholarships = [];
+
     public function __construct($facultyId, $departmentId, $programmeId, $sessionId, $level, $scholarshipId = null)
     {
         $this->facultyId = $facultyId;
@@ -138,6 +140,12 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
             $entryLevel  = (int) $level;
             $duration    = max(($prog?->duration ?? 4) - ($entryLevel === 200 ? 1 : ($entryLevel === 300 ? 2 : 0)), 1);
 
+            // Resolve Scholarship (batch default OR per-row from Excel)
+            $scholarshipId = $this->scholarshipId;
+            if (!empty($row['scholarship'])) {
+                $scholarshipId = $this->getLookupId('scholarship', $row['scholarship']);
+            }
+
             $student = Student::updateOrCreate(
                 ['user_id' => $user->id],
                 [
@@ -158,7 +166,7 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
                     'jamb_score'            => $row['jamb_score'] ?? null,
                     'previous_institution'  => $row['previous_institution'] ?? null,
                     'program_duration'      => $duration,
-                    'scholarship_id'        => $this->scholarshipId,
+                    'scholarship_id'        => $scholarshipId,
                 ]
             );
 

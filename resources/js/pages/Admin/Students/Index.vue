@@ -332,9 +332,9 @@ const handleExport = () => {
                                         </p>
                                         <ul class="list-disc list-inside space-y-1 text-muted-foreground font-medium">
                                             <li>Required columns: <strong class="text-foreground">first_name, last_name, email</strong></li>
-                                            <li>Optional columns: phone_number, gender, dob, address, state, lga, entry_mode, matric_number, jamb_reg, jamb_score, previous_institution</li>
-                                            <li>Per-row columns (if not selected above): <strong class="text-foreground">programme</strong> (name match), <strong class="text-foreground">level</strong> (100–500)</li>
-                                            <li>If Programme/Level are selected above, they apply to <em>all rows</em> and override the file columns</li>
+                                            <li>Optional columns: phone_number, gender, dob, address, state, lga, entry_mode, matric_number, jamb_reg, jamb_score, previous_institution, <strong class="text-foreground">scholarship</strong> (name match)</li>
+                                            <li>Per-row columns (if not selected above): <strong class="text-foreground">programme</strong> (name match), <strong class="text-foreground">level</strong> (100–500), <strong class="text-foreground">scholarship</strong></li>
+                                            <li>If Programme/Level/Scholarship are selected above, they apply to <em>all rows</em> and override the file columns</li>
                                         </ul>
                                         <div class="pt-2">
                                             <a 

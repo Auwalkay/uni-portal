@@ -407,6 +407,7 @@ class StudentController extends Controller
                         'previous_institution' => '',
                         'programme'            => 'Computer Science',  // Used if Programme not selected on form
                         'level'                => '100',               // Used if Level not selected on form
+                        'scholarship'          => 'Full Tuition',      // Optional: name of scholarship
                     ]
                 ]);
             }
@@ -430,6 +431,7 @@ class StudentController extends Controller
                     'previous_institution',
                     'programme',   // Optional: overridden by form selection
                     'level',       // Optional: overridden by form selection
+                    'scholarship', // Optional: name of scholarship
                 ];
             }
         };
