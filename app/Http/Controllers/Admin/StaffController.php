@@ -423,6 +423,35 @@ class StaffController extends Controller
             ->with('success', 'Staff member deleted successfully.');
     }
 
+    /**
+     * Toggle a staff user active/deactive status.
+     */
+    public function toggleStatus(Request $request, User $staff)
+    {
+        if (!$request->user()->can('manage_staff')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        if (!$staff->hasRole('staff')) {
+            abort(404);
+        }
+
+        $newStatus = !$staff->is_active;
+        $staff->update(['is_active' => $newStatus]);
+
+        activity('staff')
+            ->performedOn($staff)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'staff_name' => $staff->name,
+                'status' => $newStatus ? 'activated' : 'deactivated',
+            ])
+            ->log("Staff account " . ($newStatus ? 'activated' : 'deactivated'));
+
+        $statusText = $newStatus ? 'activated' : 'deactivated';
+        return back()->with('success', "Staff account has been successfully {$statusText}.");
+    }
+
     public function resetPassword(User $staff)
     {
         if (!$staff->hasRole('staff')) {

@@ -358,22 +358,22 @@ class StudentController extends Controller
         }
 
         $request->validate([
-            'file' => 'required|mimes:csv,txt,xlsx|max:10240',
-            'session_id' => 'required|exists:academic_sessions,id',
-            'faculty_id' => 'required|exists:faculties,id',
-            'department_id' => 'required|exists:departments,id',
-            'program_id' => 'required|exists:programmes,id',
-            'level' => 'required|in:100,200,300,400,500',
-            'scholarship_id' => 'nullable|exists:scholarships,id',
+            'file'          => 'required|mimes:csv,txt,xlsx|max:10240',
+            'session_id'    => 'required|exists:academic_sessions,id',
+            'faculty_id'    => 'nullable|exists:faculties,id',
+            'department_id' => 'nullable|exists:departments,id',
+            'program_id'    => 'nullable|exists:programmes,id',
+            'level'         => 'nullable|in:100,200,300,400,500',
+            'scholarship_id'=> 'nullable|exists:scholarships,id',
         ]);
 
         try {
             $import = new StudentImport(
-                $request->faculty_id,
-                $request->department_id,
-                $request->program_id,
+                $request->faculty_id    ?: null,
+                $request->department_id ?: null,
+                $request->program_id    ?: null,
                 $request->session_id,
-                $request->level,
+                $request->level         ?: null,
                 $request->scholarship_id
             );
             Excel::import($import, $request->file('file'));
@@ -391,20 +391,22 @@ class StudentController extends Controller
             {
                 return collect([
                     [
-                        'first_name' => 'John',
-                        'last_name' => 'Doe',
-                        'email' => 'john.doe@example.com',
-                        'phone_number' => '08012345678',
-                        'gender' => 'male',
-                        'dob' => '2000-01-01',
-                        'address' => '123 University Road',
-                        'state' => 'Lagos',
-                        'lga' => 'Ikeja',
-                        'entry_mode' => 'UTME',
-                        'matric_number' => 'UNI/2024/0001',
-                        'jamb_reg' => '2024123456AB',
-                        'jamb_score' => '280',
+                        'first_name'           => 'John',
+                        'last_name'            => 'Doe',
+                        'email'                => 'john.doe@example.com',
+                        'phone_number'         => '08012345678',
+                        'gender'               => 'male',
+                        'dob'                  => '2000-01-01',
+                        'address'              => '123 University Road',
+                        'state'                => 'Lagos',
+                        'lga'                  => 'Ikeja',
+                        'entry_mode'           => 'UTME',
+                        'matric_number'        => 'UNI/2024/0001',
+                        'jamb_reg'             => '2024123456AB',
+                        'jamb_score'           => '280',
                         'previous_institution' => '',
+                        'programme'            => 'Computer Science',  // Used if Programme not selected on form
+                        'level'                => '100',               // Used if Level not selected on form
                     ]
                 ]);
             }
@@ -426,6 +428,8 @@ class StudentController extends Controller
                     'jamb_reg',
                     'jamb_score',
                     'previous_institution',
+                    'programme',   // Optional: overridden by form selection
+                    'level',       // Optional: overridden by form selection
                 ];
             }
         };
@@ -555,5 +559,32 @@ class StudentController extends Controller
         } catch (\Exception $e) {
             return back()->with('error', 'Promotion failed: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Toggle a student user active/deactive status.
+     */
+    public function toggleStatus(Request $request, Student $student)
+    {
+        if (!$request->user()->can('edit_students')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $user = $student->user;
+        $newStatus = !$user->is_active;
+
+        $user->update(['is_active' => $newStatus]);
+
+        activity('student')
+            ->performedOn($student)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'student_name' => $user->name,
+                'status' => $newStatus ? 'activated' : 'deactivated',
+            ])
+            ->log("Student account " . ($newStatus ? 'activated' : 'deactivated'));
+
+        $statusText = $newStatus ? 'activated' : 'deactivated';
+        return back()->with('success', "Student account has been successfully {$statusText}.");
     }
 }

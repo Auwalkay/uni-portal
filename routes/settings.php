@@ -189,6 +189,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware(['permission:edit_students'])->group(function () {
             Route::get('/students/{student}/edit', [StudentController::class, 'edit'])->name('students.edit');
             Route::put('/students/{student}', [StudentController::class, 'update'])->name('students.update');
+            Route::put('/students/{student}/toggle-status', [StudentController::class, 'toggleStatus'])->name('students.toggle_status');
             Route::post('/students/{student}/sessions', [\App\Http\Controllers\Admin\StudentSessionController::class, 'store'])->name('students.sessions.store');
             Route::put('/students/{student}/sessions/{session}', [\App\Http\Controllers\Admin\StudentSessionController::class, 'update'])->name('students.sessions.update');
         });

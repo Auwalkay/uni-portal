@@ -57,17 +57,46 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
 
             if (!$user) {
                 $user = User::create([
-                    'name' => $row['first_name'] . ' ' . $row['last_name'],
-                    'email' => $row['email'],
+                    'name'     => $row['first_name'] . ' ' . $row['last_name'],
+                    'email'    => $row['email'],
                     'password' => Hash::make($password),
                 ]);
                 $isNewUser = true;
             } else {
-                // Optionally update name if user exists
                 $user->update(['name' => $row['first_name'] . ' ' . $row['last_name']]);
             }
 
             $user->syncRoles(['student']);
+
+            // ── Resolve Programme (batch default OR per-row from Excel) ──────────
+            $facultyId    = $this->facultyId;
+            $departmentId = $this->departmentId;
+            $programmeId  = $this->programmeId;
+            $deptCode     = $this->deptCode;
+
+            if (!$programmeId && !empty($row['programme'])) {
+                $prog = \App\Models\Programme::with('department.faculty')
+                    ->where('name', 'like', '%' . trim($row['programme']) . '%')
+                    ->first();
+
+                if ($prog) {
+                    $programmeId  = $prog->id;
+                    $departmentId = $prog->department_id;
+                    $facultyId    = $prog->department?->faculty_id;
+                    $deptCode     = $prog->department?->code;
+                }
+            }
+
+            // ── Resolve Level (batch default OR per-row from Excel) ──────────────
+            $level = $this->level;
+            if (!$level && !empty($row['level'])) {
+                $rowLevel = (string) intval($row['level']);
+                if (in_array($rowLevel, ['100', '200', '300', '400', '500'])) {
+                    $level = $rowLevel;
+                }
+            }
+            // Final fallback
+            $level = $level ?? '100';
 
             // State & LGA (Optional)
             $stateId = null;
@@ -77,10 +106,6 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
 
             $lgaId = null;
             if (! empty($row['lga']) && $stateId) {
-                // For LGA, we need to handle it carefully as names might be duplicated across states.
-                // Simplified caching for now, assuming unique names or combined key could be used but
-                // given the structure, let's just cache by name for simplicity or exact query if needed.
-                // To be safe/correct with state dependency, let's query if not cached, or cache with state key.
                 $lgaKey = $row['lga'].'_'.$stateId;
                 if (! isset($this->lgas[$lgaKey])) {
                     $this->lgas[$lgaKey] = Lga::where('name', 'like', '%'.$row['lga'].'%')
@@ -94,8 +119,8 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
             $matricNumber = !empty($row['matric_number'])
                 ? strtoupper(trim($row['matric_number']))
                 : MatriculationNumberHelper::generate([
-                    'dept_code' => $this->deptCode,
-                    'level' => $this->level,
+                    'dept_code' => $deptCode,
+                    'level'     => $level,
                 ]);
 
             $dob = null;
@@ -109,47 +134,50 @@ class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithVa
                 }
             }
 
-            $prog = \App\Models\Programme::find($this->programmeId);
-            $entryLevel = (int) $this->level;
-            $duration = max(($prog?->duration ?? 4) - ($entryLevel === 200 ? 1 : ($entryLevel === 300 ? 2 : 0)), 1);
+            $prog        = \App\Models\Programme::find($programmeId);
+            $entryLevel  = (int) $level;
+            $duration    = max(($prog?->duration ?? 4) - ($entryLevel === 200 ? 1 : ($entryLevel === 300 ? 2 : 0)), 1);
 
             $student = Student::updateOrCreate(
                 ['user_id' => $user->id],
                 [
-                    'matriculation_number' => $matricNumber,
-                    'faculty_id' => $this->facultyId,
-                    'department_id' => $this->departmentId,
-                    'program_id' => $this->programmeId,
-                    'admitted_session_id' => $this->sessionId,
-                    'current_level' => $this->level,
-                    'gender' => strtolower($row['gender'] ?? 'male'),
-                    'dob' => $dob,
-                    'phone_number' => $row['phone_number'] ?? null,
-                    'address' => $row['address'] ?? null,
-                    'entry_mode' => $row['entry_mode'] ?? 'UTME',
-                    'state_id' => $stateId,
-                    'lga_id' => $lgaId,
+                    'matriculation_number'  => $matricNumber,
+                    'faculty_id'            => $facultyId,
+                    'department_id'         => $departmentId,
+                    'program_id'            => $programmeId,
+                    'admitted_session_id'   => $this->sessionId,
+                    'current_level'         => $level,
+                    'gender'                => strtolower($row['gender'] ?? 'male'),
+                    'dob'                   => $dob,
+                    'phone_number'          => $row['phone_number'] ?? null,
+                    'address'               => $row['address'] ?? null,
+                    'entry_mode'            => $row['entry_mode'] ?? 'UTME',
+                    'state_id'              => $stateId,
+                    'lga_id'               => $lgaId,
                     'jamb_registration_number' => $row['jamb_reg'] ?? null,
-                    'jamb_score' => $row['jamb_score'] ?? null,
-                    'previous_institution' => $row['previous_institution'] ?? null,
-                    'program_duration' => $duration,
-                    'scholarship_id' => $this->scholarshipId,
+                    'jamb_score'            => $row['jamb_score'] ?? null,
+                    'previous_institution'  => $row['previous_institution'] ?? null,
+                    'program_duration'      => $duration,
+                    'scholarship_id'        => $this->scholarshipId,
                 ]
             );
 
-
             $currentActiveSession = \App\Models\Session::current();
-            $enrollmentSession = $currentActiveSession ?? \App\Models\Session::find($this->sessionId);
+            $enrollmentSession    = $currentActiveSession ?? \App\Models\Session::find($this->sessionId);
+            $currenSemester       = $enrollmentSession ? $enrollmentSession->semesters()->where('is_current', true)->first() : null;
 
-            $currenSemester = $enrollmentSession ? $enrollmentSession->semesters()->where('is_current', true)->first() : null;
+            StudentSession::updateOrCreate(
+                [
+                    'student_id' => $student->id,
+                    'session_id' => $enrollmentSession?->id ?? $this->sessionId,
+                ],
+                [
+                    'level'    => $level,
+                    'status'   => 'active',
+                    'semester' => $currenSemester?->name ?? 'First Semester',
+                ]
+            );
 
-            StudentSession::create([
-                'student_id' => $student->id,
-                'session_id' => $enrollmentSession?->id ?? $this->sessionId,
-                'level' => $this->level,
-                'status' => 'active',
-                'semester' => $currenSemester?->name ?? 'First Semester',
-            ]);
             if ($isNewUser) {
                 Mail::to($user->email)->send(new StudentAccountCreated($user, $password));
             }

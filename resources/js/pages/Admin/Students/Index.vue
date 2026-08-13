@@ -241,10 +241,10 @@ const handleExport = () => {
 
                                     <!-- Level Select -->
                                     <div class="flex flex-col gap-2">
-                                        <Label for="import_level">Level</Label>
+                                        <Label for="import_level">Level <span class="text-muted-foreground text-xs">(optional — or specify per row in file)</span></Label>
                                         <Select v-model="importForm.level">
                                             <SelectTrigger id="import_level">
-                                                <SelectValue placeholder="Select Level" />
+                                                <SelectValue placeholder="Per-row in file" />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="100">100 Level</SelectItem>
@@ -259,10 +259,10 @@ const handleExport = () => {
 
                                     <!-- Faculty Select -->
                                     <div class="flex flex-col gap-2">
-                                        <Label for="import_faculty">Faculty</Label>
+                                        <Label for="import_faculty">Faculty <span class="text-muted-foreground text-xs">(optional)</span></Label>
                                         <Select v-model="importForm.faculty_id" @update:model-value="importForm.department_id = ''; importForm.program_id = ''">
                                             <SelectTrigger id="import_faculty">
-                                                <SelectValue placeholder="Select Faculty" />
+                                                <SelectValue placeholder="Per-row in file" />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem v-for="f in faculties" :key="f.id" :value="f.id">{{ f.name }}</SelectItem>
@@ -273,10 +273,10 @@ const handleExport = () => {
 
                                     <!-- Department Select -->
                                     <div class="flex flex-col gap-2">
-                                        <Label for="import_department">Department</Label>
+                                        <Label for="import_department">Department <span class="text-muted-foreground text-xs">(optional)</span></Label>
                                         <Select v-model="importForm.department_id" :disabled="!importForm.faculty_id" @update:model-value="importForm.program_id = ''">
                                             <SelectTrigger id="import_department">
-                                                <SelectValue placeholder="Select Department" />
+                                                <SelectValue placeholder="Per-row in file" />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem v-for="d in filteredImportDepartments" :key="d.id" :value="d.id">{{ d.name }}</SelectItem>
@@ -287,10 +287,10 @@ const handleExport = () => {
 
                                     <!-- Program Select -->
                                     <div class="flex flex-col gap-2">
-                                        <Label for="import_program">Program / Course of Study</Label>
+                                        <Label for="import_program">Programme <span class="text-muted-foreground text-xs">(optional — or specify per row in file)</span></Label>
                                         <Select v-model="importForm.program_id" :disabled="!importForm.department_id">
                                             <SelectTrigger id="import_program">
-                                                <SelectValue placeholder="Select Program" />
+                                                <SelectValue placeholder="Per-row in file" />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem v-for="p in filteredImportProgrammes" :key="p.id" :value="p.id">{{ p.name }}</SelectItem>
@@ -331,9 +331,10 @@ const handleExport = () => {
                                             <FileSpreadsheet class="w-3 h-3 text-primary" /> Excel Format Requirements:
                                         </p>
                                         <ul class="list-disc list-inside space-y-1 text-muted-foreground font-medium">
-                                            <li>Standard headers: first_name, last_name, email</li>
-                                            <li>Other columns (optional): phone_number, gender, dob, address, state, lga, entry_mode, matric_number, jamb_reg, jamb_score, previous_institution</li>
-                                            <li>All students in the file will be imported into the selected session, program, and level</li>
+                                            <li>Required columns: <strong class="text-foreground">first_name, last_name, email</strong></li>
+                                            <li>Optional columns: phone_number, gender, dob, address, state, lga, entry_mode, matric_number, jamb_reg, jamb_score, previous_institution</li>
+                                            <li>Per-row columns (if not selected above): <strong class="text-foreground">programme</strong> (name match), <strong class="text-foreground">level</strong> (100–500)</li>
+                                            <li>If Programme/Level are selected above, they apply to <em>all rows</em> and override the file columns</li>
                                         </ul>
                                         <div class="pt-2">
                                             <a 
@@ -350,7 +351,7 @@ const handleExport = () => {
                                     <Button 
                                         type="submit" 
                                         @click="submitImport" 
-                                        :disabled="importForm.processing || !importForm.file || !importForm.session_id || !importForm.faculty_id || !importForm.department_id || !importForm.program_id || !importForm.level"
+                                        :disabled="importForm.processing || !importForm.file || !importForm.session_id"
                                         class="w-full"
                                     >
                                         {{ importForm.processing ? 'Importing...' : 'Start Import' }}
@@ -521,7 +522,7 @@ const handleExport = () => {
                             <TableHead>Department / Faculty</TableHead>
                             <TableHead>Session</TableHead>
                             <TableHead>Level & Program</TableHead>
-                            <TableHead>Scholarship</TableHead>
+                            <TableHead>Status</TableHead>
                             <TableHead class="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -554,10 +555,9 @@ const handleExport = () => {
                                 </div>
                             </TableCell>
                             <TableCell>
-                                <Badge v-if="student.scholarship" variant="default" class="bg-primary/20 text-primary hover:bg-primary/30 border-transparent text-[10px] uppercase font-bold">
-                                    {{ student.scholarship.name }}
+                                <Badge :class="student.user.is_active ? 'bg-green-150 text-green-700 hover:bg-green-200 border-green-200' : 'bg-red-150 text-red-700 hover:bg-red-200 border-red-200'" variant="outline">
+                                    {{ student.user.is_active ? 'Active' : 'Deactivated' }}
                                 </Badge>
-                                <span v-else class="text-xs text-muted-foreground">-</span>
                             </TableCell>
                             <TableCell class="text-right">
                                 <div class="flex justify-end gap-2">
@@ -570,6 +570,13 @@ const handleExport = () => {
                                         <Link :href="route('admin.students.edit', student.id)">
                                             Edit
                                         </Link>
+                                    </Button>
+                                    <Button 
+                                        :variant="student.user.is_active ? 'destructive' : 'default'" 
+                                        size="sm"
+                                        @click="() => router.put(route('admin.students.toggle_status', student.id))"
+                                    >
+                                        {{ student.user.is_active ? 'Deactivate' : 'Activate' }}
                                     </Button>
                                 </div>
                             </TableCell>
