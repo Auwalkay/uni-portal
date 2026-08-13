@@ -3,6 +3,7 @@ import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, watch, computed } from 'vue';
 import { debounce } from 'lodash';
+import axios from 'axios';
 import { 
     Search, 
     Filter, 
@@ -28,6 +29,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 
 // Shadcn UI Components
 import { Button } from '@/components/ui/button';
@@ -100,11 +102,95 @@ const selectedScholarship = ref(props.filters.scholarship_id || '');
 const dateFrom = ref(props.filters.date_from || '');
 const dateTo = ref(props.filters.date_to || '');
 
+// New filters
+const selectedGender = ref(props.filters.gender || '');
+const selectedStatus = ref(props.filters.status || '');
+const selectedEntryMode = ref(props.filters.entry_mode || '');
+
+// Sorting states
+const sortBy = ref(props.filters.sort_by || 'created_at');
+const sortOrder = ref(props.filters.sort_order || 'desc');
+
+// Interactive Bulk Scholarship Modal States
+const showBulkScholarshipModal = ref(false);
+const bulkSelectedScholarshipId = ref('');
+const studentSearchQuery = ref('');
+const searchedStudents = ref<any[]>([]);
+const selectedBulkStudents = ref<any[]>([]);
+const isSearching = ref(false);
+
+const openBulkModal = () => {
+    showBulkScholarshipModal.value = true;
+    bulkSelectedScholarshipId.value = '';
+    studentSearchQuery.value = '';
+    searchedStudents.value = [];
+    selectedBulkStudents.value = [];
+};
+
+const selectedBulkScholarshipDetails = computed(() => {
+    if (!bulkSelectedScholarshipId.value) return null;
+    return props.scholarships.find(s => s.id === bulkSelectedScholarshipId.value) || null;
+});
+
+const searchStudents = async () => {
+    if (!studentSearchQuery.value.trim()) {
+        searchedStudents.value = [];
+        return;
+    }
+    isSearching.value = true;
+    try {
+        const response = await axios.get(route('admin.students.search-bulk'), {
+            params: { query: studentSearchQuery.value }
+        });
+        searchedStudents.value = response.data;
+    } catch (e) {
+        console.error(e);
+    } finally {
+        isSearching.value = false;
+    }
+};
+
+const selectBulkStudent = (student: any) => {
+    if (!selectedBulkStudents.value.some(s => s.id === student.id)) {
+        selectedBulkStudents.value.push(student);
+    }
+    searchedStudents.value = [];
+    studentSearchQuery.value = '';
+};
+
+const removeBulkStudent = (studentId: string) => {
+    selectedBulkStudents.value = selectedBulkStudents.value.filter(s => s.id !== studentId);
+};
+
+const confirmBulkScholarship = () => {
+    if (selectedBulkStudents.value.length === 0) return;
+    router.post(route('admin.students.bulk-assign-scholarship'), {
+        student_ids: selectedBulkStudents.value.map(s => s.id),
+        scholarship_id: bulkSelectedScholarshipId.value === 'none' ? null : bulkSelectedScholarshipId.value
+    }, {
+        onSuccess: () => {
+            showBulkScholarshipModal.value = false;
+            bulkSelectedScholarshipId.value = '';
+            selectedBulkStudents.value = [];
+        }
+    });
+};
+
 // Computed departments based on selected faculty
 const filteredDepartments = computed(() => {
     if (!selectedFaculty.value) return props.departments;
     return props.departments.filter(dept => dept.faculty_id === selectedFaculty.value);
 });
+
+// Sorting handler
+const handleSort = (column: string) => {
+    if (sortBy.value === column) {
+        sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortBy.value = column;
+        sortOrder.value = 'asc';
+    }
+};
 
 // Watchers
 const updateFilters = debounce(() => {
@@ -114,10 +200,15 @@ const updateFilters = debounce(() => {
         faculty_id: selectedFaculty.value,
         department_id: selectedDepartment.value,
         level: selectedLevel.value,
-        program_id: selectedProgram.value, // Changed to program_id
+        program_id: selectedProgram.value,
         scholarship_id: selectedScholarship.value,
         date_from: dateFrom.value,
         date_to: dateTo.value,
+        gender: selectedGender.value,
+        status: selectedStatus.value,
+        entry_mode: selectedEntryMode.value,
+        sort_by: sortBy.value,
+        sort_order: sortOrder.value,
     }, {
         preserveState: true,
         replace: true,
@@ -125,14 +216,29 @@ const updateFilters = debounce(() => {
     });
 }, 300);
 
-watch([search, selectedSession, selectedFaculty, selectedDepartment, selectedLevel, selectedProgram, selectedScholarship, dateFrom, dateTo], () => {
+watch([
+    search, 
+    selectedSession, 
+    selectedFaculty, 
+    selectedDepartment, 
+    selectedLevel, 
+    selectedProgram, 
+    selectedScholarship, 
+    dateFrom, 
+    dateTo,
+    selectedGender,
+    selectedStatus,
+    selectedEntryMode,
+    sortBy,
+    sortOrder
+], () => {
      if (selectedFaculty.value && selectedDepartment.value) {
-         const dept = props.departments.find(d => d.id === selectedDepartment.value);
-         if (dept && dept.faculty_id !== selectedFaculty.value) {
-             selectedDepartment.value = '';
-         }
-    }
-    updateFilters();
+          const dept = props.departments.find(d => d.id === selectedDepartment.value);
+          if (dept && dept.faculty_id !== selectedFaculty.value) {
+              selectedDepartment.value = '';
+          }
+     }
+     updateFilters();
 });
 
 const clearFilters = () => {
@@ -145,6 +251,11 @@ const clearFilters = () => {
     selectedScholarship.value = '';
     dateFrom.value = '';
     dateTo.value = '';
+    selectedGender.value = '';
+    selectedStatus.value = '';
+    selectedEntryMode.value = '';
+    sortBy.value = 'created_at';
+    sortOrder.value = 'desc';
 };
 
 const showImportModal = ref(false);
@@ -364,6 +475,10 @@ const handleExport = () => {
                             <FileSpreadsheet class="w-4 h-4 mr-2" /> Export
                         </Button>
 
+                        <Button variant="outline" @click="openBulkModal" class="border-primary/30 text-primary hover:bg-primary/10">
+                            <Award class="w-4 h-4 mr-2" /> Assign Scholarship
+                        </Button>
+
                         <Button as-child shadow="md">
                             <Link :href="route('admin.students.create')">
                                 <UserPlus class="w-4 h-4 mr-2" /> Add Student
@@ -500,10 +615,50 @@ const handleExport = () => {
                             <Input type="date" v-model="dateTo" class="w-[150px]" title="Admitted To" />
                         </div>
                     </div>
+
+                    <!-- New Filters (Gender, Status, Entry Mode) -->
+                    <div class="flex flex-col sm:flex-row gap-3 flex-wrap border-t pt-3 mt-1">
+                        <!-- Gender -->
+                        <Select v-model="selectedGender">
+                            <SelectTrigger class="w-[150px]">
+                                <SelectValue placeholder="Filter Gender" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL_GENDERS">All Genders</SelectItem>
+                                <SelectItem value="male">Male</SelectItem>
+                                <SelectItem value="female">Female</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <!-- Status -->
+                        <Select v-model="selectedStatus">
+                            <SelectTrigger class="w-[150px]">
+                                <SelectValue placeholder="Filter Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL_STATUS">All Status</SelectItem>
+                                <SelectItem value="active">Active</SelectItem>
+                                <SelectItem value="deactivated">Deactivated</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <!-- Entry Mode -->
+                        <Select v-model="selectedEntryMode">
+                            <SelectTrigger class="w-[170px]">
+                                <SelectValue placeholder="Filter Entry Mode" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL_MODES">All Entry Modes</SelectItem>
+                                <SelectItem value="UTME">UTME</SelectItem>
+                                <SelectItem value="DE">Direct Entry (DE)</SelectItem>
+                                <SelectItem value="PG">Postgraduate (PG)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
 
                 <Button 
-                    v-if="search || selectedSession || selectedFaculty || selectedDepartment || selectedLevel || selectedProgram || selectedScholarship || dateFrom || dateTo" 
+                    v-if="search || selectedSession || selectedFaculty || selectedDepartment || selectedLevel || selectedProgram || selectedScholarship || dateFrom || dateTo || selectedGender || selectedStatus || selectedEntryMode || sortBy !== 'created_at' || sortOrder !== 'desc'" 
                     variant="ghost" 
                     @click="clearFilters"
                     class="text-destructive hover:text-destructive hover:bg-destructive/10"
@@ -518,10 +673,16 @@ const handleExport = () => {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Student</TableHead>
+                            <TableHead class="cursor-pointer hover:bg-muted/50 select-none" @click="handleSort('name')">
+                                Student
+                                <span class="ml-1 text-[10px]">{{ sortBy === 'name' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                            </TableHead>
                             <TableHead>Department / Faculty</TableHead>
                             <TableHead>Session</TableHead>
-                            <TableHead>Level & Program</TableHead>
+                            <TableHead class="cursor-pointer hover:bg-muted/50 select-none" @click="handleSort('level')">
+                                Level & Program
+                                <span class="ml-1 text-[10px]">{{ sortBy === 'level' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                            </TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead class="text-right">Actions</TableHead>
                         </TableRow>
@@ -610,5 +771,148 @@ const handleExport = () => {
                 </CardFooter>
             </Card>
         </div>
+
+        <!-- Bulk Scholarship Assignment Modal -->
+        <Dialog v-model:open="showBulkScholarshipModal">
+            <DialogContent class="sm:max-w-[850px] p-0 overflow-hidden">
+                <DialogHeader class="p-6 pb-0">
+                    <DialogTitle class="text-xl">Bulk Scholarship Assignment</DialogTitle>
+                    <DialogDescription>
+                        Select a scholarship, search for students by registration number, and confirm their assignment.
+                    </DialogDescription>
+                </DialogHeader>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x border-t mt-4">
+                    <!-- Left Side: Scholarship Selection & Details -->
+                    <div class="p-6 space-y-4">
+                        <div class="space-y-2">
+                            <Label for="bulk_scholarship" class="text-sm font-semibold">1. Choose Scholarship</Label>
+                            <Select v-model="bulkSelectedScholarshipId">
+                                <SelectTrigger id="bulk_scholarship">
+                                    <SelectValue placeholder="Choose Scholarship" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">Remove Scholarship (Set to None)</SelectItem>
+                                    <SelectItem v-for="s in scholarships" :key="s.id" :value="s.id">
+                                        {{ s.name }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <!-- Scholarship Details Box -->
+                        <div class="space-y-2">
+                            <Label class="text-sm font-semibold">Scholarship Details</Label>
+                            <div v-if="selectedBulkScholarshipDetails" class="bg-primary/5 p-4 rounded-lg border border-primary/10 text-xs space-y-2.5">
+                                <div class="font-bold text-foreground text-sm border-b pb-1 mb-1">{{ selectedBulkScholarshipDetails.name }}</div>
+                                <div class="grid grid-cols-2 gap-y-2 text-sm">
+                                    <span class="text-muted-foreground">Type:</span>
+                                    <span class="font-semibold capitalize text-foreground">{{ selectedBulkScholarshipDetails.type || 'N/A' }}</span>
+                                    
+                                    <span class="text-muted-foreground">Value:</span>
+                                    <span class="font-semibold text-foreground">
+                                        {{ selectedBulkScholarshipDetails.type === 'percentage' 
+                                           ? selectedBulkScholarshipDetails.percentage + '%' 
+                                           : '₦' + Number(selectedBulkScholarshipDetails.amount || 0).toLocaleString() }}
+                                    </span>
+                                    
+                                    <span class="text-muted-foreground">Covers Admin Charges:</span>
+                                    <span class="font-semibold text-foreground">{{ selectedBulkScholarshipDetails.covers_admin_charges ? 'Yes' : 'No' }}</span>
+                                    
+                                    <span class="text-muted-foreground">Covers Hostel Fees:</span>
+                                    <span class="font-semibold text-foreground">{{ selectedBulkScholarshipDetails.covers_hostel_fees ? 'Yes' : 'No' }}</span>
+                                    
+                                    <span class="text-muted-foreground">Status:</span>
+                                    <span :class="selectedBulkScholarshipDetails.is_active ? 'text-green-600 font-bold' : 'text-red-600 font-bold'">
+                                        {{ selectedBulkScholarshipDetails.is_active ? 'Active' : 'Inactive' }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div v-else class="text-center p-6 border border-dashed rounded-md text-xs text-muted-foreground bg-muted/20">
+                                Please select a scholarship to view details.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Side: Search and Selected Students -->
+                    <div class="p-6 space-y-4">
+                        <!-- Search Student Section -->
+                        <div class="space-y-2 relative">
+                            <Label for="student_search" class="text-sm font-semibold">2. Search & Select Students</Label>
+                            <div class="flex gap-2">
+                                <Input 
+                                    id="student_search"
+                                    v-model="studentSearchQuery"
+                                    placeholder="Type student name or reg number..."
+                                    @keyup.enter="searchStudents"
+                                />
+                                <Button type="button" variant="secondary" @click="searchStudents" :disabled="isSearching">
+                                    {{ isSearching ? 'Searching...' : 'Search' }}
+                                </Button>
+                            </div>
+
+                            <!-- Search Results Dropdown -->
+                            <div v-if="searchedStudents.length > 0" class="absolute z-50 left-0 right-0 mt-1 bg-popover text-popover-foreground border rounded-md shadow-md max-h-[160px] overflow-y-auto">
+                                <div 
+                                    v-for="student in searchedStudents" 
+                                    :key="student.id"
+                                    @click="selectBulkStudent(student)"
+                                    class="p-2 hover:bg-muted cursor-pointer border-b last:border-0 text-xs flex flex-col gap-0.5"
+                                >
+                                    <span class="font-semibold text-foreground">{{ student.name }}</span>
+                                    <span class="text-[10px] text-muted-foreground font-mono">{{ student.matriculation_number || 'No Matric' }} - {{ student.email }}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Selected Students List -->
+                        <div class="space-y-2">
+                            <Label class="text-sm font-semibold">Selected Students ({{ selectedBulkStudents.length }})</Label>
+                            <div v-if="selectedBulkStudents.length > 0" class="border rounded-md divide-y max-h-[180px] overflow-y-auto bg-background shadow-inner">
+                                <div 
+                                    v-for="student in selectedBulkStudents" 
+                                    :key="student.id"
+                                    class="p-2 flex justify-between items-center text-xs"
+                                >
+                                    <div class="flex flex-col gap-0.5">
+                                        <span class="font-semibold text-foreground">{{ student.name }}</span>
+                                        <span class="text-[10px] text-muted-foreground font-mono">{{ student.matriculation_number || 'No Matric' }}</span>
+                                    </div>
+                                    <Button 
+                                        type="button" 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        class="h-6 w-6 text-destructive hover:bg-destructive/10" 
+                                        @click="removeBulkStudent(student.id)"
+                                    >
+                                        <X class="w-3.5 h-3.5" />
+                                    </Button>
+                                </div>
+                            </div>
+                            <div v-else class="text-center p-6 border border-dashed rounded-md text-xs text-muted-foreground bg-muted/20">
+                                No students selected yet. Search and select above.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <DialogFooter class="p-6 border-t bg-muted/20 flex items-center justify-between">
+                    <Button 
+                        type="button" 
+                        variant="outline" 
+                        @click="showBulkScholarshipModal = false"
+                    >
+                        Cancel
+                    </Button>
+                    <Button 
+                        type="button" 
+                        @click="confirmBulkScholarship" 
+                        :disabled="selectedBulkStudents.length === 0 || !bulkSelectedScholarshipId"
+                    >
+                        Confirm Assignment
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </AdminLayout>
 </template>

@@ -239,17 +239,54 @@ class StudentController extends Controller
 
         // Date Range Filter
         if ($request->filled('date_from')) {
-            $query->whereDate('created_at', '>=', $request->date_from);
+            $query->whereDate('students.created_at', '>=', $request->date_from);
         }
         if ($request->filled('date_to')) {
-            $query->whereDate('created_at', '<=', $request->date_to);
+            $query->whereDate('students.created_at', '<=', $request->date_to);
         }
 
-        $students = $query->latest()->paginate(15)->withQueryString();
+        // Gender Filter
+        if ($request->filled('gender') && $request->gender !== 'ALL_GENDERS' && $request->gender !== 'all') {
+            $query->where('gender', strtolower($request->gender));
+        }
+
+        // Status Filter
+        if ($request->filled('status') && $request->status !== 'ALL_STATUS' && $request->status !== 'all') {
+            $query->whereHas('user', function ($q) use ($request) {
+                $q->where('is_active', $request->status === 'active');
+            });
+        }
+
+        // Entry Mode Filter
+        if ($request->filled('entry_mode') && $request->entry_mode !== 'ALL_MODES' && $request->entry_mode !== 'all') {
+            $query->where('entry_mode', $request->entry_mode);
+        }
+
+        // Sorting
+        $sortBy = $request->query('sort_by', 'created_at');
+        $sortOrder = $request->query('sort_order', 'desc');
+
+        if ($sortBy === 'name') {
+            $query->join('users', 'students.user_id', '=', 'users.id')
+                ->select('students.*')
+                ->orderBy('users.name', $sortOrder);
+        } elseif ($sortBy === 'matriculation_number') {
+            $query->orderBy('students.matriculation_number', $sortOrder);
+        } elseif ($sortBy === 'level') {
+            $query->orderBy('students.current_level', $sortOrder);
+        } else {
+            $query->orderBy('students.created_at', $sortOrder);
+        }
+
+        $students = $query->paginate(15)->withQueryString();
 
         return Inertia::render('Admin/Students/Index', [
             'students' => $students,
-            'filters' => $request->only(['search', 'session_id', 'faculty_id', 'department_id', 'level', 'program_id', 'program', 'scholarship_id', 'date_from', 'date_to']),
+            'filters' => $request->only([
+                'search', 'session_id', 'faculty_id', 'department_id', 'level',
+                'program_id', 'program', 'scholarship_id', 'date_from', 'date_to',
+                'gender', 'status', 'entry_mode', 'sort_by', 'sort_order'
+            ]),
             'sessions' => fn() => AcademicCacheService::getSessions(),
             'faculties' => fn() => AcademicCacheService::getFaculties(),
             'departments' => fn() => AcademicCacheService::getAllDepartments(),
@@ -588,5 +625,79 @@ class StudentController extends Controller
 
         $statusText = $newStatus ? 'activated' : 'deactivated';
         return back()->with('success', "Student account has been successfully {$statusText}.");
+    }
+
+    /**
+     * Bulk assign scholarship to multiple students.
+     */
+    public function bulkAssignScholarship(Request $request)
+    {
+        if (!$request->user()->can('edit_students')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $validated = $request->validate([
+            'student_ids' => 'required|array',
+            'student_ids.*' => 'required|exists:students,id',
+            'scholarship_id' => 'nullable|exists:scholarships,id',
+        ]);
+
+        $scholarshipId = $validated['scholarship_id'] ?? null;
+
+        // Perform mass update
+        Student::whereIn('id', $validated['student_ids'])->update([
+            'scholarship_id' => $scholarshipId,
+        ]);
+
+        // Log activity for each student
+        $students = Student::whereIn('id', $validated['student_ids'])->with('user')->get();
+        foreach ($students as $student) {
+            activity('student')
+                ->performedOn($student)
+                ->causedBy(auth()->user())
+                ->withProperties([
+                    'student_name' => $student->user->name,
+                    'scholarship_id' => $scholarshipId,
+                ])
+                ->log("Scholarship assigned/updated in bulk");
+        }
+
+        return back()->with('success', count($validated['student_ids']) . ' students updated successfully.');
+    }
+
+    /**
+     * Search students for bulk scholarship assignment.
+     */
+    public function searchBulk(Request $request)
+    {
+        if (!$request->user()->can('edit_students')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $query = $request->query('query');
+        if (empty($query)) {
+            return response()->json([]);
+        }
+
+        $students = Student::with('user')
+            ->where(function ($q) use ($query) {
+                $q->where('matriculation_number', 'like', "%{$query}%")
+                  ->orWhereHas('user', function ($uq) use ($query) {
+                      $uq->where('name', 'like', "%{$query}%")
+                        ->orWhere('email', 'like', "%{$query}%");
+                  });
+            })
+            ->limit(10)
+            ->get()
+            ->map(function ($student) {
+                return [
+                    'id' => $student->id,
+                    'name' => $student->user->name,
+                    'matriculation_number' => $student->matriculation_number,
+                    'email' => $student->user->email,
+                ];
+            });
+
+        return response()->json($students);
     }
 }
