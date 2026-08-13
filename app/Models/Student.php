@@ -45,6 +45,7 @@ class Student extends Model
         'next_of_kin_relationship',
         'scholarship_id',
         'fee_policy',
+        'pending_promotion_session_id',
     ];
 
     protected $casts = [
@@ -124,5 +125,41 @@ class Student extends Model
     public function invoices()
     {
         return $this->hasMany(Invoice::class, 'user_id', 'user_id');
+    }
+
+    /**
+     * Check if the student has cleared previous session fees and promote them.
+     */
+    public function checkAndPromoteStudent()
+    {
+        if ($this->pending_promotion_session_id) {
+            $targetSession = \App\Models\Session::find($this->pending_promotion_session_id);
+            if ($targetSession) {
+                $previousSession = \App\Models\Session::where('start_date', '<', $targetSession->start_date)
+                    ->orderBy('start_date', 'desc')
+                    ->first();
+                
+                $hasUnpaid = false;
+                if ($previousSession) {
+                    $hasUnpaid = \App\Models\Invoice::where('user_id', $this->user_id)
+                        ->where('session_id', $previousSession->id)
+                        ->where('type', 'school_fee')
+                        ->where('status', '!=', 'paid')
+                        ->exists();
+                }
+
+                if (!$hasUnpaid) {
+                    $currentSemesterName = $targetSession->semesters()->where('is_current', true)->value('name')
+                        ?? $targetSession->semesters()->where('name', 'First Semester')->value('name')
+                        ?? 'First Semester';
+                    
+                    // Clear the pending promotion flag
+                    $this->update(['pending_promotion_session_id' => null]);
+                    
+                    // Dispatch the promotion job
+                    \App\Jobs\Academic\ProcessStudentSessionJob::dispatch($this, $targetSession, $currentSemesterName);
+                }
+            }
+        }
     }
 }

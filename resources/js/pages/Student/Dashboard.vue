@@ -36,6 +36,7 @@ const props = defineProps<{
         semester: string;
     };
     timetable?: Array<any>;
+    pendingSession?: string;
 }>();
 
 const hasPaidEnough = computed(() => {
@@ -101,14 +102,33 @@ const greeting = () => {
                         <p class="mt-2 text-blue-100">
                             {{ student?.matriculation_number || 'Matriculation Pending' }} &bull; {{ student?.program?.name || 'Program N/A' }}
                         </p>
-                        <div class="mt-4 inline-flex items-center rounded-full bg-white/20 px-3 py-1 text-sm backdrop-blur-sm">
-                            <CalendarDays class="mr-2 h-4 w-4" />
-                            {{ stats?.session }} Session &bull; {{ stats?.semester }}
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            <div class="inline-flex items-center rounded-full bg-white/20 px-3 py-1 text-sm backdrop-blur-sm">
+                                <CalendarDays class="mr-2 h-4 w-4" />
+                                {{ stats?.session }} Session &bull; {{ stats?.semester }}
+                            </div>
+                            <div v-if="pendingSession" class="inline-flex items-center rounded-full bg-amber-500/30 border border-amber-400/40 text-amber-100 px-3 py-1 text-sm backdrop-blur-sm font-medium">
+                                <Clock class="mr-2 h-4 w-4 text-amber-300" />
+                                Promotion Pending to {{ pendingSession }}
+                            </div>
                         </div>
                     </div>
                 </div>
                 <!-- Decorative Circle -->
                 <div class="absolute -right-12 -top-12 h-64 w-64 rounded-full bg-white/10 blur-3xl"></div>
+            </div>
+
+            <!-- Pending Promotion Notification -->
+            <div v-if="pendingSession" class="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm flex items-start gap-4 text-amber-900">
+                <div class="rounded-full bg-amber-100 p-2">
+                    <AlertCircle class="h-6 w-6 text-amber-600" />
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-semibold text-amber-800">Academic Promotion Pending</h3>
+                    <p class="mt-1 text-sm text-amber-700">
+                        Your academic promotion to the **{{ pendingSession }}** session is currently pending. Please resolve any outstanding school fees for the previous session ({{ stats?.session }}) to automatically complete your promotion and register courses.
+                    </p>
+                </div>
             </div>
 
             <!-- Registration Notification -->

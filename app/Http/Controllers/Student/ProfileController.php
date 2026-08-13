@@ -27,10 +27,23 @@ class ProfileController extends Controller
         $currentSemester = Semester::current();
 
         $currentStudentSession = null;
-        if ($student && $currentSession) {
+        if ($student) {
             $currentStudentSession = StudentSession::where('student_id', $student->id)
-                ->where('session_id', $currentSession->id)
+                ->where('status', 'active')
+                ->latest()
                 ->first();
+        }
+
+        // Fallback to active global session if student has no specific active student session record
+        $resolvedSession = $currentStudentSession?->session ?? $currentSession;
+        $resolvedSemester = $currentStudentSession?->semester 
+            ? Semester::where('session_id', $resolvedSession?->id)->where('name', $currentStudentSession->semester)->first()
+            : $currentSemester;
+
+        // Check for pending promotion
+        $pendingSessionName = null;
+        if ($student && $student->pending_promotion_session_id) {
+            $pendingSessionName = Session::where('id', $student->pending_promotion_session_id)->value('name');
         }
 
         // Stats Calculations
@@ -86,20 +99,20 @@ class ProfileController extends Controller
         $registrationMessage = '';
         $isRegistrationActive = false;
 
-        if ($student && $currentSession && $currentStudentSession) {
+        if ($student && $resolvedSession && $currentStudentSession) {
             $totalUnits = CourseRegistration::where('student_session_id', $currentStudentSession->id)
                 ->join('courses', 'course_registrations.course_id', '=', 'courses.id')
                 ->sum('courses.units');
         }
 
-        if ($student && $currentSession) {
+        if ($student && $resolvedSession) {
             // Check for Registration Notification
-            if ($currentSemester) {
+            if ($resolvedSemester) {
                 $now = now();
-                $start = $currentSemester->registration_starts_at;
-                $end = $currentSemester->registration_ends_at;
+                $start = $resolvedSemester->registration_starts_at;
+                $end = $resolvedSemester->registration_ends_at;
 
-                $isOpen = (bool) $currentSession->registration_enabled;
+                $isOpen = (bool) $resolvedSession->registration_enabled;
                 if ($start && $now->lt($start)) {
                     $isOpen = false;
                 }
@@ -113,27 +126,27 @@ class ProfileController extends Controller
                     $hasRegistered = false;
                     if ($currentStudentSession) {
                         $hasRegistered = CourseRegistration::where('student_session_id', $currentStudentSession->id)
-                            ->where('semester_id', $currentSemester->id)
+                            ->where('semester_id', $resolvedSemester->id)
                             ->exists();
                     }
 
                     if (! $hasRegistered) {
                         $showRegistrationNotification = true;
                         if ($end) {
-                            $registrationMessage = "Registration for {$currentSemester->name} closes on ".$end->format('M d, Y').'. Register now to avoid penalties.';
+                            $registrationMessage = "Registration for {$resolvedSemester->name} closes on ".$end->format('M d, Y').'. Register now to avoid penalties.';
                         } else {
-                            $registrationMessage = "Registration for {$currentSemester->name} is now open.";
+                            $registrationMessage = "Registration for {$resolvedSemester->name} is now open.";
                         }
                     }
                 } else {
                     $showRegistrationNotification = true;
                     $isRegistrationActive = false;
                     if ($end && $now->gt($end)) {
-                        $registrationMessage = "Course registration for {$currentSemester->name} is currently closed. The deadline was " . $end->format('M d, Y') . ".";
+                        $registrationMessage = "Course registration for {$resolvedSemester->name} is currently closed. The deadline was " . $end->format('M d, Y') . ".";
                     } elseif ($start && $now->lt($start)) {
-                        $registrationMessage = "Course registration for {$currentSemester->name} is not active yet. It is scheduled to open on " . $start->format('M d, Y') . ".";
+                        $registrationMessage = "Course registration for {$resolvedSemester->name} is not active yet. It is scheduled to open on " . $start->format('M d, Y') . ".";
                     } else {
-                        $registrationMessage = "Course registration for {$currentSemester->name} is currently closed.";
+                        $registrationMessage = "Course registration for {$resolvedSemester->name} is currently closed.";
                     }
                 }
             }
@@ -143,9 +156,9 @@ class ProfileController extends Controller
         $hostelNotificationMessage = '';
         $bookingEnabled = filter_var(\App\Models\SystemSetting::get('enable_hostel_booking', true), FILTER_VALIDATE_BOOLEAN);
 
-        if ($bookingEnabled && $student && $currentSession) {
+        if ($bookingEnabled && $student && $resolvedSession) {
             $hasBooked = \App\Models\HostelBooking::where('student_id', $student->id)
-                ->where('session_id', $currentSession->id)
+                ->where('session_id', $resolvedSession->id)
                 ->exists();
 
             if (!$hasBooked) {
@@ -156,13 +169,13 @@ class ProfileController extends Controller
 
         // Fetch Timetable for Registered Courses
         $timetable = [];
-        if ($student && $currentSession && $currentStudentSession) {
+        if ($student && $resolvedSession && $currentStudentSession) {
             $timetable = \App\Services\AcademicCacheService::getStudentTimetable($student->id, $currentStudentSession->session_id);
         }
 
         // Check School Fee status for CURRENT session
         $schoolFeeStatus = 'unpaid';
-        if ($currentSession && $currentStudentSession) {
+        if ($resolvedSession && $currentStudentSession) {
             $schoolFeeInvoice = Invoice::where('user_id', auth()->id())
                 ->where('type', 'school_fee')
                 ->where('student_session_id', $currentStudentSession->id)
@@ -183,13 +196,14 @@ class ProfileController extends Controller
             'isRegistrationActive' => $isRegistrationActive,
             'showHostelNotification' => $showHostelNotification,
             'hostelNotificationMessage' => $hostelNotificationMessage,
+            'pendingSession' => $pendingSessionName,
             'stats' => [
                 'cgpa' => $cgpa,
                 'totalUnits' => $totalUnits,
                 'level' => $level,
                 'status' => $academicStatus,
-                'session' => $currentSession->name ?? 'N/A',
-                'semester' => $currentSemester->name ?? 'N/A',
+                'session' => $resolvedSession->name ?? $student->admittedSession?->name ?? 'N/A',
+                'semester' => $currentStudentSession?->semester ?? $resolvedSemester->name ?? 'N/A',
             ],
             'timetable' => $timetable,
         ]);

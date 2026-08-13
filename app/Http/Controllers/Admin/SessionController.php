@@ -73,10 +73,6 @@ class SessionController extends Controller
 
     public function activate(Session $session)
     {
-        if ($session->is_current) {
-            return back()->with('info', 'This session is already active.');
-        }
-
         $this->performActivation($session);
 
         AcademicCacheService::clearAll();

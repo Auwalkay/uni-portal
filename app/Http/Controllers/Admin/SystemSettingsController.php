@@ -33,6 +33,7 @@ class SystemSettingsController extends Controller
                 'enforce_hostel_fee_for_results' => filter_var(SystemSetting::get('enforce_hostel_fee_for_results', false), FILTER_VALIDATE_BOOLEAN),
                 'enable_exam_card_download' => filter_var(SystemSetting::get('enable_exam_card_download', true), FILTER_VALIDATE_BOOLEAN),
                 'enable_hostel_booking' => filter_var(SystemSetting::get('enable_hostel_booking', true), FILTER_VALIDATE_BOOLEAN),
+                'promote_pending_payments' => filter_var(SystemSetting::get('promote_pending_payments', false), FILTER_VALIDATE_BOOLEAN),
             ]
         ]);
     }
