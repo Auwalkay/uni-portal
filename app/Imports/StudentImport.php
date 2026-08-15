@@ -19,8 +19,9 @@ use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithValidation;
+use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
 
-class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithValidation
+class StudentImport implements ToModel, WithChunkReading, WithHeadingRow, WithValidation, SkipsEmptyRows
 {
     protected $processedCount = 0;
     protected $facultyId;
