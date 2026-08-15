@@ -308,6 +308,10 @@ class PaymentController extends Controller
             return redirect()->route('student.payments.index')->with('success', 'Payment successful!');
         }
 
+        if ($payment) {
+            $payment->update(['status' => 'failed']);
+        }
+
         return Inertia::render('Student/Finance/Failure', [
             'error' => $data['message'] ?? 'The payment gateway could not verify this transaction.',
             'reference' => $reference

@@ -335,6 +335,9 @@ class InvoiceController extends Controller
                 $statusMsg .= " (Reason: {$gatewayResponse})";
             }
             
+            // Auto mark the payment as failed
+            $payment->update(['status' => 'failed']);
+            
             return back()->with('error', "Payment verification failed. Gateway status: {$statusMsg}.");
         }
 
