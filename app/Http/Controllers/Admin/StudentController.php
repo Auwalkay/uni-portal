@@ -405,6 +405,12 @@ class StudentController extends Controller
         ]);
 
         try {
+            // Prevent timeout on larger import files
+            set_time_limit(180);
+
+            // Temporarily lower hashing cost for fast import speed
+            config(['hashing.bcrypt.rounds' => 4]);
+
             $import = new StudentImport(
                 $request->faculty_id    ?: null,
                 $request->department_id ?: null,
