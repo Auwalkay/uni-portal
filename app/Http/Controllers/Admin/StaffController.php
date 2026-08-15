@@ -52,7 +52,7 @@ class StaffController extends Controller
         }
 
         // Role Filter
-        if ($request->filled('role_id')) {
+        if ($request->filled('role_id') && $request->role_id !== 'ALL_ROLES') {
             $role = \App\Models\Role::find($request->role_id);
             if ($role) {
                 $query->role($role->name);
@@ -60,7 +60,7 @@ class StaffController extends Controller
         }
 
         // Department/Faculty Filter
-        if ($request->filled('faculty_id')) {
+        if ($request->filled('faculty_id') && $request->faculty_id !== 'ALL_FACULTIES') {
             $query->whereHas('staff.department', function ($q) use ($request) {
                 if ($request->faculty_id === 'NON_ACADEMIC') {
                     $q->whereNull('faculty_id');
@@ -70,17 +70,55 @@ class StaffController extends Controller
             });
         }
 
-        if ($request->filled('department_id')) {
+        if ($request->filled('department_id') && $request->department_id !== 'ALL_DEPARTMENTS') {
             $query->whereHas('staff', function ($q) use ($request) {
                 $q->where('department_id', $request->department_id);
             });
         }
 
-        $staff = $query->orderBy('name', 'asc')->paginate(15)->withQueryString();
+        // Type Filter (academic vs non-academic)
+        if ($request->filled('type') && $request->type !== 'ALL_TYPES') {
+            $query->whereHas('staff', function ($q) use ($request) {
+                $q->where('is_academic', $request->type === 'academic');
+            });
+        }
+
+        // Status Filter (active vs inactive)
+        if ($request->filled('status') && $request->status !== 'ALL_STATUS') {
+            $query->where('is_active', $request->status === 'active');
+        }
+
+        // Sorts
+        $sort = $request->get('sort', 'name_asc');
+        switch ($sort) {
+            case 'name_desc':
+                $query->orderBy('name', 'desc');
+                break;
+            case 'created_at_desc':
+                $query->latest();
+                break;
+            case 'staff_number':
+                $query->whereHas('staff')->orderBy(
+                    Staff::select('staff_number')->whereColumn('staff.user_id', 'users.id')->limit(1)
+                );
+                break;
+            case 'name_asc':
+            default:
+                $query->orderBy('name', 'asc');
+                break;
+        }
+
+        // Per Page
+        $perPage = $request->integer('per_page', 15);
+        if (!in_array($perPage, [10, 15, 25, 50, 100])) {
+            $perPage = 15;
+        }
+
+        $staff = $query->paginate($perPage)->withQueryString();
 
         return Inertia::render('Admin/Staff/Index', [
             'staff' => $staff,
-            'filters' => $request->only(['search', 'role_id', 'faculty_id', 'department_id']),
+            'filters' => $request->only(['search', 'role_id', 'faculty_id', 'department_id', 'type', 'status', 'sort', 'per_page']),
             'faculties' => fn() => AcademicCacheService::getFaculties(),
             'nonAcademicDepartments' => fn() => AcademicCacheService::getNonAcademicDepartments(),
             'roles' => fn() => \App\Models\Role::whereNotIn('name', ['student', 'applicant'])->get(['id', 'name']),

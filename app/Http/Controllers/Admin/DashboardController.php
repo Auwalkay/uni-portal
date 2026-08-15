@@ -86,6 +86,7 @@ class DashboardController extends Controller
                     'view_global_analytics' => $canViewGlobalAnalytics,
                     'view_system_status' => $canViewSystemStatus,
                 ],
+                'announcements' => [],
             ]);
         }
 
@@ -521,6 +522,15 @@ class DashboardController extends Controller
             $dashboardStats['active_students'] = $lecturerStats['total_students'];
         }
 
+        $announcements = Cache::remember('staff_dashboard_bulletins', 60 * 10, function () {
+            return \App\Models\Bulletin::with('author')
+                ->whereIn('target_audience', ['all', 'staff'])
+                ->orderBy('is_pinned', 'desc')
+                ->orderBy('published_at', 'desc')
+                ->limit(3)
+                ->get();
+        });
+
         return Inertia::render('Admin/Dashboard', [
             'currentSessionName' => $selectedSession->name,
             'filters' => [
@@ -531,6 +541,7 @@ class DashboardController extends Controller
             'stats' => $dashboardStats,
             'lecturerStats' => $lecturerStats ?? null,
             'recentActivity' => $recentActivity,
+            'announcements' => $announcements,
             'charts' => [
                 'revenue' => $canViewFinance ? $revenueChart : ['labels' => [], 'data' => []],
                 'financial_trend' => $canViewFinance ? $combinedFinancialChart : ['labels' => [], 'data' => [], 'inflow' => [], 'outflow' => []],

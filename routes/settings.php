@@ -125,6 +125,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/support', [\App\Http\Controllers\Student\SupportTicketController::class, 'store'])->name('support.store');
             Route::get('/support/{ticket}', [\App\Http\Controllers\Student\SupportTicketController::class, 'show'])->name('support.show');
             Route::post('/support/{ticket}/reply', [\App\Http\Controllers\Student\SupportTicketController::class, 'reply'])->name('support.reply');
+
+            // Announcements routes
+            Route::get('/announcements', [\App\Http\Controllers\Student\StudentAnnouncementController::class, 'index'])->name('announcements.index');
+
+            // User Manual route
+            Route::get('/manual', [\App\Http\Controllers\Student\ProfileController::class, 'manual'])->name('manual');
         });
     });
 
@@ -367,6 +373,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/sickbay/inventory', [\App\Http\Controllers\Admin\SickbayController::class, 'storeInventory'])->name('sickbay.inventory.store')->middleware('permission:manage_sickbay_inventory');
             Route::get('/sickbay/patients/{user}/history', [\App\Http\Controllers\Admin\SickbayController::class, 'patientHistory'])->name('sickbay.patient_history');
             Route::post('/sickbay/beds', [\App\Http\Controllers\Admin\SickbayController::class, 'storeBed'])->name('sickbay.beds.store')->middleware('permission:manage_observation_beds');
+        });
+
+        // Bulk Communications
+        Route::middleware(['permission:manage_bulk_communications'])->group(function () {
+            Route::get('/announcements', [\App\Http\Controllers\Admin\CommunicationController::class, 'index'])->name('announcements.index');
+            Route::get('/announcements/create', [\App\Http\Controllers\Admin\CommunicationController::class, 'create'])->name('announcements.create');
+            Route::post('/announcements', [\App\Http\Controllers\Admin\CommunicationController::class, 'store'])->name('announcements.store');
+            Route::get('/announcements/{bulletin}/edit', [\App\Http\Controllers\Admin\CommunicationController::class, 'edit'])->name('announcements.edit');
+            Route::post('/announcements/{bulletin}', [\App\Http\Controllers\Admin\CommunicationController::class, 'update'])->name('announcements.update');
+            Route::delete('/announcements/{bulletin}', [\App\Http\Controllers\Admin\CommunicationController::class, 'destroy'])->name('announcements.destroy');
         });
     });
 

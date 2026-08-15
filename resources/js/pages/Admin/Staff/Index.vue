@@ -90,6 +90,10 @@ const props = defineProps<{
         role_id?: string;
         faculty_id?: string;
         department_id?: string;
+        type?: string;
+        status?: string;
+        sort?: string;
+        per_page?: string;
     };
     faculties: Array<{ 
         id: string; 
@@ -110,6 +114,10 @@ const search = ref(props.filters.search || '');
 const selectedRole = ref(props.filters.role_id || '');
 const selectedFaculty = ref(props.filters.faculty_id || '');
 const selectedDepartment = ref(props.filters.department_id || '');
+const selectedType = ref(props.filters.type || '');
+const selectedStatus = ref(props.filters.status || '');
+const selectedSort = ref(props.filters.sort || 'name_asc');
+const selectedPerPage = ref(props.filters.per_page || '15');
 
 // Computed departments based on selected faculty
 const filteredDepartments = computed(() => {
@@ -126,6 +134,10 @@ const updateFilters = debounce(() => {
         role_id: selectedRole.value,
         faculty_id: selectedFaculty.value,
         department_id: selectedDepartment.value,
+        type: selectedType.value,
+        status: selectedStatus.value,
+        sort: selectedSort.value,
+        per_page: selectedPerPage.value,
     }, {
         preserveState: true,
         replace: true,
@@ -133,7 +145,7 @@ const updateFilters = debounce(() => {
     });
 }, 300);
 
-watch([search, selectedRole, selectedFaculty, selectedDepartment], () => {
+watch([search, selectedRole, selectedFaculty, selectedDepartment, selectedType, selectedStatus, selectedSort, selectedPerPage], () => {
     if (selectedFaculty.value === 'ALL_FACULTIES') {
         selectedDepartment.value = '';
     }
@@ -145,6 +157,10 @@ const clearFilters = () => {
     selectedRole.value = '';
     selectedFaculty.value = '';
     selectedDepartment.value = '';
+    selectedType.value = '';
+    selectedStatus.value = '';
+    selectedSort.value = 'name_asc';
+    selectedPerPage.value = '15';
 };
 
 const formatRoleName = (name: string) => {
@@ -379,11 +395,64 @@ const breadcrumbs = [
                             </SelectContent>
                         </Select>
                     </div>
+
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <!-- Type -->
+                        <Select v-model="selectedType">
+                            <SelectTrigger class="w-full sm:w-[200px] h-10">
+                                <SelectValue placeholder="Staff Type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL_TYPES">All Types</SelectItem>
+                                <SelectItem value="academic">Academic Staff</SelectItem>
+                                <SelectItem value="non_academic">Non-Academic Staff</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <!-- Status -->
+                        <Select v-model="selectedStatus">
+                            <SelectTrigger class="w-full sm:w-[200px] h-10">
+                                <SelectValue placeholder="Account Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL_STATUS">All Status</SelectItem>
+                                <SelectItem value="active">Active Only</SelectItem>
+                                <SelectItem value="inactive">Inactive Only</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <!-- Sort -->
+                        <Select v-model="selectedSort">
+                            <SelectTrigger class="w-full sm:w-[200px] h-10">
+                                <SelectValue placeholder="Sort By" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="name_asc">Name (A - Z)</SelectItem>
+                                <SelectItem value="name_desc">Name (Z - A)</SelectItem>
+                                <SelectItem value="created_at_desc">Newly Added</SelectItem>
+                                <SelectItem value="staff_number">Staff ID</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <!-- Per Page -->
+                        <Select v-model="selectedPerPage">
+                            <SelectTrigger class="w-full sm:w-[120px] h-10">
+                                <SelectValue placeholder="Per Page" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="10">10 per page</SelectItem>
+                                <SelectItem value="15">15 per page</SelectItem>
+                                <SelectItem value="25">25 per page</SelectItem>
+                                <SelectItem value="50">50 per page</SelectItem>
+                                <SelectItem value="100">100 per page</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
 
                 <div class="flex gap-2">
                     <Button 
-                        v-if="search || selectedRole || (selectedFaculty && selectedFaculty !== 'ALL_FACULTIES') || selectedDepartment" 
+                        v-if="search || selectedRole || (selectedFaculty && selectedFaculty !== 'ALL_FACULTIES') || selectedDepartment || selectedType || selectedStatus || selectedSort !== 'name_asc' || selectedPerPage !== '15'" 
                         variant="ghost" 
                         @click="clearFilters"
                         class="text-destructive hover:text-destructive hover:bg-destructive/10 h-10"

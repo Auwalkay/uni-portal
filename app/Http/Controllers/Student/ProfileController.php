@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\Bulletin;
 use App\Models\CourseRegistration;
 use App\Models\Invoice;
 use App\Models\Semester;
@@ -186,6 +187,16 @@ class ProfileController extends Controller
             }
         }
 
+        // Fetch latest bulletins/announcements for student dashboard
+        $announcements = \Illuminate\Support\Facades\Cache::remember('student_dashboard_bulletins', 60 * 10, function () {
+            return Bulletin::with('author')
+                ->whereIn('target_audience', ['all', 'students'])
+                ->orderBy('is_pinned', 'desc')
+                ->orderBy('published_at', 'desc')
+                ->limit(3)
+                ->get();
+        });
+
         return Inertia::render('Student/Dashboard', [
             'student' => $student->load(['program']),
             'user' => $student ? $student->user : auth()->user(),
@@ -197,6 +208,7 @@ class ProfileController extends Controller
             'showHostelNotification' => $showHostelNotification,
             'hostelNotificationMessage' => $hostelNotificationMessage,
             'pendingSession' => $pendingSessionName,
+            'announcements' => $announcements,
             'stats' => [
                 'cgpa' => $cgpa,
                 'totalUnits' => $totalUnits,
@@ -626,5 +638,10 @@ class ProfileController extends Controller
             'total' => $total - $discount,
             'scholarship_name' => $scholarship?->name
         ];
+    }
+
+    public function manual()
+    {
+        return Inertia::render('Student/Manual/Index');
     }
 }
