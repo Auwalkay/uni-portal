@@ -490,7 +490,7 @@ const updateProfile = () => {
                                                 Selected: {{ form.indigene_letter.name }}
                                             </p>
                                             <p class="text-xs text-muted-foreground mt-1">
-                                                Supported: PDF, JPG, PNG (Max 2MB)
+                                                Supported: PDF, JPG, PNG (Max 500KB)
                                             </p>
                                         </div>
                                         <div v-else class="p-4 bg-muted/50 rounded-lg border text-center text-muted-foreground text-sm">
@@ -642,7 +642,7 @@ const updateProfile = () => {
                                             </div>
                                             <div v-else>
                                                 <p class="text-sm font-medium">Upload Scanned Result</p>
-                                                <p class="text-xs text-muted-foreground">PDF, JPG, PNG</p>
+                                                <p class="text-xs text-muted-foreground">PDF, JPG, PNG (Max 500KB)</p>
                                             </div>
                                         </div>
                                         <div v-else class="p-4 bg-muted/50 rounded-lg border text-center text-muted-foreground text-sm">
