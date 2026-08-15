@@ -17,6 +17,25 @@ class Student extends Model
         return LogOptions::defaults()->logFillable()->logOnlyDirty()->dontLogEmptyChanges();
     }
 
+    protected static function booted()
+    {
+        static::saved(function ($student) {
+            static::clearStatsCache();
+        });
+
+        static::deleted(function ($student) {
+            static::clearStatsCache();
+        });
+    }
+
+    public static function clearStatsCache()
+    {
+        \Illuminate\Support\Facades\Cache::forget('students_stats_admin');
+        if (auth()->check()) {
+            \Illuminate\Support\Facades\Cache::forget('students_stats_' . auth()->id());
+        }
+    }
+
     protected $fillable = [
         'user_id',
         'matriculation_number',

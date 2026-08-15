@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, computed } from 'vue';
 import { route } from 'ziggy-js';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { BookOpen, CreditCard, Users, GraduationCap, TrendingUp, Calendar, ArrowRight, UserPlus, FileText, ArrowUpRight, ArrowDownRight, Activity, CalendarClock, MapPin, Building2, Library, School, Building, LineChart } from 'lucide-vue-next';
+import { BookOpen, CreditCard, Users, GraduationCap, TrendingUp, Calendar, ArrowRight, UserPlus, FileText, ArrowUpRight, ArrowDownRight, Activity, CalendarClock, MapPin, Building2, Library, School, Building, LineChart, Pin, Download } from 'lucide-vue-next';
 import StatsCard from '@/components/StatsCard.vue';
 import BarChart from '@/components/Charts/BarChart.vue';
 import DoughnutChart from '@/components/Charts/DoughnutChart.vue';
@@ -103,7 +103,12 @@ const props = defineProps<{
         view_global_analytics: boolean;
         view_system_status: boolean;
     };
+    announcements?: Array<any>;
  }>();
+
+const pinnedAnnouncements = computed(() => {
+    return props.announcements?.filter(bulletin => bulletin.is_pinned) || [];
+});
 
 const user = props.auth?.user;
 const roleColorMap: Record<string, string> = {
@@ -351,6 +356,38 @@ const staffChartData = {
                 </div>
             </div>
 
+            <!-- Pinned Announcements Banner -->
+            <div v-if="pinnedAnnouncements.length > 0" class="space-y-3 mb-2">
+                <div 
+                    v-for="bulletin in pinnedAnnouncements" 
+                    :key="bulletin.id" 
+                    class="rounded-xl border border-amber-200 bg-amber-50/70 p-5 shadow-sm flex items-start gap-4 text-amber-950 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100"
+                >
+                    <div class="rounded-full bg-amber-100 dark:bg-amber-950 p-2">
+                        <Pin class="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex flex-wrap items-center justify-between gap-4">
+                            <h3 class="font-bold text-base flex items-center gap-2">
+                                {{ bulletin.title }}
+                                <Badge class="bg-amber-600 hover:bg-amber-700 text-white border-0 text-[10px] py-0.5 px-2">Official Notice</Badge>
+                            </h3>
+                            <span class="text-xs opacity-75 whitespace-nowrap">{{ new Date(bulletin.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}</span>
+                        </div>
+                        <div v-if="bulletin.content" class="mt-2 text-sm opacity-90 leading-relaxed" v-html="bulletin.content"></div>
+                        <div v-if="bulletin.document_path" class="mt-3">
+                            <a 
+                                :href="`/storage/${bulletin.document_path}`" 
+                                target="_blank" 
+                                class="inline-flex items-center gap-1.5 text-xs font-bold text-amber-900 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 underline underline-offset-4"
+                            >
+                                <Download class="h-4 w-4" /> View Scanned Document Attachment
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+ 
             <!-- Role-Centric "Hero" Metrics -->
             <div class="grid gap-6">
                 <!-- FINANCE HERO -->

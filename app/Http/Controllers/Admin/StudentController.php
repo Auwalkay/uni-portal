@@ -170,6 +170,19 @@ class StudentController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
+
+        // Base query for counts/stats (unfiltered by search/pagination)
+        $statsQuery = Student::query();
+        if (!$user->can('manage_users')) {
+            $statsQuery->whereHas('registrations', function ($q) use ($user) {
+                $q->whereHas('course', function ($cq) use ($user) {
+                    $cq->whereHas('allocations', function ($aq) use ($user) {
+                        $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
+                    });
+                });
+            });
+        }
+
         $query = Student::query()
             ->with(['user', 'academicDepartment.faculty', 'admittedSession', 'program', 'scholarship']);
 
@@ -197,29 +210,29 @@ class StudentController extends Controller
         }
 
         // Session Filter (Admitted Session)
-        if ($request->filled('session_id')) {
+        if ($request->filled('session_id') && $request->session_id !== 'ALL_SESSIONS') {
             $query->where('admitted_session_id', $request->session_id);
         }
 
         // Faculty Filter
-        if ($request->filled('faculty_id')) {
+        if ($request->filled('faculty_id') && $request->faculty_id !== 'ALL_FACULTIES') {
             $query->whereHas('academicDepartment', function ($q) use ($request) {
                 $q->where('faculty_id', $request->faculty_id);
             });
         }
 
         // Department Filter
-        if ($request->filled('department_id')) {
+        if ($request->filled('department_id') && $request->department_id !== 'ALL_DEPARTMENTS') {
             $query->where('department_id', $request->department_id);
         }
 
         // Level Filter
-        if ($request->filled('level')) {
+        if ($request->filled('level') && $request->level !== 'ALL_LEVELS') {
             $query->where('current_level', $request->level);
         }
 
         // Program Filter
-        if ($request->filled('program_id')) {
+        if ($request->filled('program_id') && $request->program_id !== 'ALL_PROGRAMS') {
             $query->where('program_id', $request->program_id);
         } elseif ($request->filled('program')) {
             // Fallback for string search if needed, or legacy
@@ -229,7 +242,7 @@ class StudentController extends Controller
         }
 
         // Scholarship Filter
-        if ($request->filled('scholarship_id')) {
+        if ($request->filled('scholarship_id') && $request->scholarship_id !== 'ALL_SCHOLARSHIPS') {
             if ($request->scholarship_id === 'NONE' || $request->scholarship_id === 'none') {
                 $query->whereNull('scholarship_id');
             } else {
@@ -278,25 +291,36 @@ class StudentController extends Controller
             $query->orderBy('students.created_at', $sortOrder);
         }
 
-        $students = $query->paginate(15)->withQueryString();
+        $perPage = $request->integer('per_page', 15);
+        if (!in_array($perPage, [10, 15, 25, 50, 100])) {
+            $perPage = 15;
+        }
+
+        $students = $query->paginate($perPage)->withQueryString();
 
         return Inertia::render('Admin/Students/Index', [
             'students' => $students,
             'filters' => $request->only([
                 'search', 'session_id', 'faculty_id', 'department_id', 'level',
                 'program_id', 'program', 'scholarship_id', 'date_from', 'date_to',
-                'gender', 'status', 'entry_mode', 'sort_by', 'sort_order'
+                'gender', 'status', 'entry_mode', 'sort_by', 'sort_order', 'per_page'
             ]),
             'sessions' => fn() => AcademicCacheService::getSessions(),
             'faculties' => fn() => AcademicCacheService::getFaculties(),
             'departments' => fn() => AcademicCacheService::getAllDepartments(),
             'programmes' => fn() => AcademicCacheService::getProgrammes(),
             'scholarships' => fn() => AcademicCacheService::getScholarships(),
-            'stats' => [
-                'total' => (clone $query)->count(),
-                'new' => (clone $query)->where('admitted_session_id', Session::latest('start_date')->value('id'))->count(),
-                'graduating' => (clone $query)->whereIn('current_level', ['400', '500', '600'])->count(),
-            ],
+            'stats' => fn() => \Illuminate\Support\Facades\Cache::remember(
+                'students_stats_' . ($user->can('manage_users') ? 'admin' : $user->id),
+                60 * 5, // Cache for 5 minutes
+                function () use ($statsQuery) {
+                    return [
+                        'total' => (clone $statsQuery)->count(),
+                        'new' => (clone $statsQuery)->where('admitted_session_id', Session::latest('start_date')->value('id'))->count(),
+                        'graduating' => (clone $statsQuery)->whereIn('current_level', ['400', '500', '600'])->count(),
+                    ];
+                }
+            ),
         ]);
     }
 

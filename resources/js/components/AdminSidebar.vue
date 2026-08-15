@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building, Package, LifeBuoy, Library, Activity } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building, Package, LifeBuoy, Library, Activity, Megaphone } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -210,6 +210,12 @@ const financeItems = computed(() => {
 
 const administrationItems = computed(() => {
     return [
+        {
+            title: 'Announcements',
+            href: '/admin/announcements',
+            icon: Megaphone,
+            show: hasPermission('manage_bulk_communications'),
+        },
         {
             title: 'Staff Management',
             href: route().has('admin.staff.index') ? route('admin.staff.index') : '#',

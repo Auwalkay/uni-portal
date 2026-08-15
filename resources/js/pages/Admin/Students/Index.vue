@@ -79,6 +79,10 @@ const props = defineProps<{
         scholarship_id?: string;
         date_from?: string;
         date_to?: string;
+        gender?: string;
+        status?: string;
+        entry_mode?: string;
+        per_page?: string;
     };
     sessions: Array<{ id: string; name: string }>;
     faculties: Array<{ id: string; name: string }>;
@@ -106,6 +110,7 @@ const dateTo = ref(props.filters.date_to || '');
 const selectedGender = ref(props.filters.gender || '');
 const selectedStatus = ref(props.filters.status || '');
 const selectedEntryMode = ref(props.filters.entry_mode || '');
+const selectedPerPage = ref(props.filters.per_page || '15');
 
 // Sorting states
 const sortBy = ref(props.filters.sort_by || 'created_at');
@@ -209,6 +214,7 @@ const updateFilters = debounce(() => {
         entry_mode: selectedEntryMode.value,
         sort_by: sortBy.value,
         sort_order: sortOrder.value,
+        per_page: selectedPerPage.value,
     }, {
         preserveState: true,
         replace: true,
@@ -230,7 +236,8 @@ watch([
     selectedStatus,
     selectedEntryMode,
     sortBy,
-    sortOrder
+    sortOrder,
+    selectedPerPage
 ], () => {
      if (selectedFaculty.value && selectedDepartment.value) {
           const dept = props.departments.find(d => d.id === selectedDepartment.value);
@@ -256,6 +263,7 @@ const clearFilters = () => {
     selectedEntryMode.value = '';
     sortBy.value = 'created_at';
     sortOrder.value = 'desc';
+    selectedPerPage.value = '15';
 };
 
 const showImportModal = ref(false);
@@ -652,6 +660,20 @@ const handleExport = () => {
                                 <SelectItem value="UTME">UTME</SelectItem>
                                 <SelectItem value="DE">Direct Entry (DE)</SelectItem>
                                 <SelectItem value="PG">Postgraduate (PG)</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <!-- Per Page -->
+                        <Select v-model="selectedPerPage">
+                            <SelectTrigger class="w-[120px]">
+                                <SelectValue placeholder="Per Page" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="10">10 per page</SelectItem>
+                                <SelectItem value="15">15 per page</SelectItem>
+                                <SelectItem value="25">25 per page</SelectItem>
+                                <SelectItem value="50">50 per page</SelectItem>
+                                <SelectItem value="100">100 per page</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

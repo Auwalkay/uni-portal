@@ -4,7 +4,7 @@ import { Head, Link } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import StudentLayout from '@/layouts/StudentLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard, Calendar, CalendarClock, MapPin, FileText, Home } from 'lucide-vue-next';
+import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard, Calendar, CalendarClock, MapPin, FileText, Home, Megaphone, Download, Pin } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -37,7 +37,12 @@ const props = defineProps<{
     };
     timetable?: Array<any>;
     pendingSession?: string;
+    announcements?: Array<any>;
 }>();
+
+const pinnedAnnouncements = computed(() => {
+    return props.announcements?.filter(bulletin => bulletin.is_pinned) || [];
+});
 
 const hasPaidEnough = computed(() => {
     return props.schoolFeeStatus === 'paid' || props.schoolFeeStatus === 'partial';
@@ -170,6 +175,38 @@ const greeting = () => {
                 </div>
             </div>
 
+            <!-- Pinned Announcements Banner -->
+            <div v-if="pinnedAnnouncements.length > 0" class="space-y-3">
+                <div 
+                    v-for="bulletin in pinnedAnnouncements" 
+                    :key="bulletin.id" 
+                    class="rounded-xl border border-amber-200 bg-amber-50/70 p-5 shadow-sm flex items-start gap-4 text-amber-950 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100"
+                >
+                    <div class="rounded-full bg-amber-100 dark:bg-amber-950 p-2">
+                        <Pin class="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex flex-wrap items-center justify-between gap-4">
+                            <h3 class="font-bold text-base flex items-center gap-2">
+                                {{ bulletin.title }}
+                                <Badge class="bg-amber-600 hover:bg-amber-700 text-white border-0 text-[10px] py-0.5 px-2">Important Notice</Badge>
+                            </h3>
+                            <span class="text-xs opacity-75 whitespace-nowrap">{{ new Date(bulletin.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}</span>
+                        </div>
+                        <div v-if="bulletin.content" class="mt-2 text-sm opacity-90 leading-relaxed" v-html="bulletin.content"></div>
+                        <div v-if="bulletin.document_path" class="mt-3">
+                            <a 
+                                :href="`/storage/${bulletin.document_path}`" 
+                                target="_blank" 
+                                class="inline-flex items-center gap-1.5 text-xs font-bold text-amber-900 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 underline underline-offset-4"
+                            >
+                                <Download class="h-4 w-4" /> View Scanned Document Attachment
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+ 
             <!-- Stats Grid -->
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div class="rounded-xl border bg-card p-6 shadow-sm transition-all hover:shadow-md">
@@ -376,6 +413,55 @@ const greeting = () => {
                                         <div class="flex items-center gap-3 mt-1.5 text-xs text-indigo-200">
                                             <span class="flex items-center gap-1"><MapPin class="w-3 h-3 opacity-70" /> {{ cls.venue }}</span>
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <!-- Latest Announcements Card -->
+                    <Card class="border border-border bg-card shadow-sm">
+                        <CardHeader class="flex flex-row items-center justify-between pb-3 border-b">
+                            <CardTitle class="text-md font-semibold flex items-center gap-2 text-foreground">
+                                <Megaphone class="w-4 h-4 text-primary" /> Latest Announcements
+                            </CardTitle>
+                            <Link href="/student/announcements" class="text-xs text-primary hover:underline font-medium">
+                                View All
+                            </Link>
+                        </CardHeader>
+                        <CardContent class="pt-4 space-y-4">
+                            <div v-if="!announcements || announcements.length === 0" class="text-center py-6 text-muted-foreground text-sm">
+                                No announcements published.
+                            </div>
+                            <div v-else class="space-y-3.5">
+                                <div v-for="bulletin in announcements" :key="bulletin.id" class="relative pl-4 border-l-2 border-primary/20 pb-3 last:pb-0 last:border-0">
+                                    <!-- Pin Indicator -->
+                                    <div v-if="bulletin.is_pinned" class="absolute -left-[5px] top-1.5 h-2 w-2 rounded-full bg-amber-500 ring-4 ring-background"></div>
+                                    
+                                    <h4 class="font-semibold text-sm text-foreground line-clamp-1 flex items-center gap-1.5">
+                                        {{ bulletin.title }}
+                                        <Badge v-if="bulletin.is_pinned" variant="outline" class="h-4 px-1 text-[9px] border-amber-500 text-amber-600 bg-amber-500/5">
+                                            Pinned
+                                        </Badge>
+                                        <Badge v-if="bulletin.document_path" variant="outline" class="h-4 px-1 text-[9px] border-blue-500 text-blue-600 bg-blue-500/5">
+                                            File
+                                        </Badge>
+                                    </h4>
+                                    <p class="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                                        {{ bulletin.content || 'Scanned document attached.' }}
+                                    </p>
+                                    <div class="flex items-center justify-between mt-1.5">
+                                        <span class="text-[10px] text-muted-foreground">
+                                            {{ new Date(bulletin.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}
+                                        </span>
+                                        <a 
+                                            v-if="bulletin.document_path"
+                                            :href="`/storage/${bulletin.document_path}`" 
+                                            target="_blank" 
+                                            class="inline-flex items-center gap-1 text-[10px] font-semibold text-primary hover:underline"
+                                        >
+                                            <Download class="h-3 w-3" /> Scanned File
+                                        </a>
                                     </div>
                                 </div>
                             </div>
