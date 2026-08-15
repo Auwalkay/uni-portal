@@ -80,7 +80,7 @@ const manualSections = [
             <ul class="list-decimal pl-5 space-y-2 text-xs md:text-sm text-muted-foreground">
                 <li>Go to the <strong class="text-foreground">My Profile</strong> tab on the sidebar.</li>
                 <li>Enter all personal details: <em class="text-foreground">Date of Birth, Gender, Nationality, State of Origin, and LGA</em>.</li>
-                <li>Upload a high-quality passport photograph. The photo must be a formal portrait with a clean white background (JPEG/PNG format, maximum 2MB size).</li>
+                <li>Upload a high-quality passport photograph. The photo must be a formal portrait with a clean white background (JPEG/PNG format, maximum 500KB size).</li>
                 <li>Click <strong class="text-foreground">Save Profile</strong> at the bottom of the page to apply changes.</li>
             </ul>
             <div class="mt-4 p-4 bg-blue-50 border-l-4 border-blue-400 dark:bg-blue-950/20 dark:border-blue-500 rounded text-xs text-blue-950 dark:text-blue-200 font-medium">
