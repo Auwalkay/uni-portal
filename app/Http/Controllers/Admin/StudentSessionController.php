@@ -31,6 +31,7 @@ class StudentSessionController extends Controller
         \Illuminate\Support\Facades\DB::transaction(function () use ($student, $validated) {
             if ($validated['status'] === 'active') {
                 $student->sessions()->where('status', 'active')->update(['status' => 'completed']);
+                $student->update(['current_level' => $validated['level']]);
             }
             $student->sessions()->create($validated);
         });
@@ -65,6 +66,7 @@ class StudentSessionController extends Controller
         \Illuminate\Support\Facades\DB::transaction(function () use ($student, $session, $validated) {
             if ($validated['status'] === 'active') {
                 $student->sessions()->where('status', 'active')->where('id', '!=', $session->id)->update(['status' => 'completed']);
+                $student->update(['current_level' => $validated['level']]);
             }
             $session->update($validated);
         });
