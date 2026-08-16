@@ -69,11 +69,40 @@ class PayrollController extends Controller
         return back()->with('success', 'Payroll generated successfully.');
     }
 
-    public function show(Payroll $payroll)
+    public function show(Payroll $payroll, Request $request)
     {
+        $query = $payroll->items()->with(['staff.user', 'staff.department']);
+
+        // Search Filter
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('staff.user', function ($uq) use ($search) {
+                    $uq->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                })->orWhereHas('staff', function ($sq) use ($search) {
+                    $sq->where('staff_number', 'like', "%{$search}%");
+                });
+            });
+        }
+
+        // Status Filter
+        if ($request->filled('status') && $request->status !== 'ALL_STATUS') {
+            $query->where('status', $request->status);
+        }
+
+        // Per Page
+        $perPage = $request->integer('per_page', 20);
+        if (!in_array($perPage, [10, 20, 50, 100])) {
+            $perPage = 20;
+        }
+
+        $items = $query->paginate($perPage)->withQueryString();
+
         return Inertia::render('Admin/Finance/Payroll/Show', [
             'payroll' => $payroll->load('generatedBy'),
-            'items' => $payroll->items()->with(['staff.user', 'staff.department'])->paginate(20),
+            'items' => $items,
+            'filters' => $request->only(['search', 'status', 'per_page']),
         ]);
     }
 

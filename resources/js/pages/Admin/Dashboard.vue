@@ -4,7 +4,7 @@ import { ref, watch, onMounted, computed } from 'vue';
 import { route } from 'ziggy-js';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { BookOpen, CreditCard, Users, GraduationCap, TrendingUp, Calendar, ArrowRight, UserPlus, FileText, ArrowUpRight, ArrowDownRight, Activity, CalendarClock, MapPin, Building2, Library, School, Building, LineChart, Pin, Download } from 'lucide-vue-next';
+import { BookOpen, CreditCard, Users, GraduationCap, TrendingUp, Calendar, ArrowRight, UserPlus, FileText, ArrowUpRight, ArrowDownRight, Activity, CalendarClock, MapPin, Building2, Library, School, Building, LineChart, Pin, Download, RefreshCw } from 'lucide-vue-next';
 import StatsCard from '@/components/StatsCard.vue';
 import BarChart from '@/components/Charts/BarChart.vue';
 import DoughnutChart from '@/components/Charts/DoughnutChart.vue';
@@ -139,6 +139,24 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const selectedSession = ref(props.filters.session_id);
 const selectedPeriod = ref(props.filters.period || 'weekly');
+const isRefreshing = ref(false);
+
+const refreshStats = () => {
+    isRefreshing.value = true;
+    router.visit(route('admin.dashboard'), {
+        data: { 
+            session_id: selectedSession.value, 
+            period: selectedPeriod.value,
+            refresh: 'true' 
+        },
+        preserveState: true,
+        preserveScroll: true,
+        only: ['stats', 'recentActivity', 'charts', 'currentSessionName', 'filters'],
+        onFinish: () => {
+            isRefreshing.value = false;
+        }
+    });
+};
 
 watch([selectedSession, selectedPeriod], ([newSession, newPeriod]) => {
     router.visit(route('admin.dashboard'), {
@@ -317,41 +335,45 @@ const staffChartData = {
                             Here's what's happening at Mewar International University for the <span class="font-bold underline">{{ currentSessionName }}</span> session.
                         </p>
                     </div>
-
-                    <div class="flex flex-col sm:flex-row gap-4 bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/10 min-w-[240px] sm:min-w-[400px]">
-                        <div class="flex-1">
-                             <div class="flex items-center justify-between mb-4">
-                                <span class="text-sm font-semibold text-white/70 uppercase tracking-widest">Selected Session</span>
-                                <Calendar class="w-4 h-4 text-white/50" />
+                    <div class="flex flex-col gap-4 bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/10 min-w-[240px] sm:min-w-[400px]">
+                        <div class="flex flex-col sm:flex-row gap-4">
+                            <div class="flex-1">
+                                 <div class="flex items-center justify-between mb-4">
+                                    <span class="text-sm font-semibold text-white/70 uppercase tracking-widest">Selected Session</span>
+                                    <Calendar class="w-4 h-4 text-white/50" />
+                                </div>
+                                 <Select v-model="selectedSession">
+                                    <SelectTrigger class="w-full h-11 bg-white/20 border-0 text-white focus:ring-offset-slate-900">
+                                        <SelectValue placeholder="Select Session" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem v-for="session in sessions" :key="session.id" :value="session.id">
+                                            {{ session.name }} Session
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
-                             <Select v-model="selectedSession">
-                                <SelectTrigger class="w-full h-11 bg-white/20 border-0 text-white focus:ring-offset-slate-900">
-                                    <SelectValue placeholder="Select Session" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem v-for="session in sessions" :key="session.id" :value="session.id">
-                                        {{ session.name }} Session
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div class="flex-1">
-                             <div class="flex items-center justify-between mb-4">
-                                <span class="text-sm font-semibold text-white/70 uppercase tracking-widest">Date Range</span>
-                                <CalendarClock class="w-4 h-4 text-white/50" />
+                            <div class="flex-1">
+                                 <div class="flex items-center justify-between mb-4">
+                                    <span class="text-sm font-semibold text-white/70 uppercase tracking-widest">Date Range</span>
+                                    <CalendarClock class="w-4 h-4 text-white/50" />
+                                </div>
+                                 <Select v-model="selectedPeriod">
+                                    <SelectTrigger class="w-full h-11 bg-white/20 border-0 text-white focus:ring-offset-slate-900">
+                                        <SelectValue placeholder="Select Period" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="daily">Daily</SelectItem>
+                                        <SelectItem value="weekly">Weekly</SelectItem>
+                                        <SelectItem value="monthly">Monthly</SelectItem>
+                                        <SelectItem value="yearly">Yearly</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
-                             <Select v-model="selectedPeriod">
-                                <SelectTrigger class="w-full h-11 bg-white/20 border-0 text-white focus:ring-offset-slate-900">
-                                    <SelectValue placeholder="Select Period" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="daily">Daily</SelectItem>
-                                    <SelectItem value="weekly">Weekly</SelectItem>
-                                    <SelectItem value="monthly">Monthly</SelectItem>
-                                    <SelectItem value="yearly">Yearly</SelectItem>
-                                </SelectContent>
-                            </Select>
                         </div>
+                        <Button variant="secondary" @click="refreshStats" :disabled="isRefreshing" class="w-full h-10 bg-white/20 hover:bg-white/30 text-white border-0">
+                            <RefreshCw class="w-4 h-4 mr-2" :class="{ 'animate-spin': isRefreshing }" /> Refresh Analytics
+                        </Button>
                     </div>
                 </div>
             </div>
