@@ -353,6 +353,7 @@ class StudentController extends Controller
             'lga',
             'scholarship',
             'sessions.session',
+            'oLevelResults',
         ]);
 
         if ($canViewFinance) {
