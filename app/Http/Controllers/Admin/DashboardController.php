@@ -94,6 +94,10 @@ class DashboardController extends Controller
         $period = $request->input('period', 'weekly');
         $cacheKey = 'admin_dashboard_global_' . ($sessionId ?? 'current') . '_' . $period . '_f' . (int)$canViewFinance . '_a' . (int)$canViewAdmissions . '_g' . (int)$canViewGlobalAnalytics . '_r' . (int)$canViewResults;
 
+        if ($request->query('refresh') === 'true') {
+            Cache::forget($cacheKey);
+        }
+
         $globalData = Cache::remember($cacheKey, 600, function () use ($sessionId, $selectedSession, $period, $canViewFinance, $canViewAdmissions, $canViewGlobalAnalytics, $canViewResults) {
             // Calculate date range based on period selection
             $startDate = match ($period) {

@@ -30,6 +30,7 @@ use App\Models\Student;
 use App\Models\Attendance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use App\Exports\SystemReportsExport;
 use Maatwebsite\Excel\Facades\Excel;
@@ -38,18 +39,14 @@ class ReportController extends Controller
 {
     public function index(Request $request)
     {
-        $currentSession = Session::where('is_current', true)->first();
-        $sessionId = $request->query('session_id');
-        if (is_null($sessionId) && $currentSession) {
-            $sessionId = $currentSession->id;
-        }
+        $sessionId = $request->query('session_id', 'all');
 
         // Active filters
         $period = $request->query('period', 'monthly');
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
 
-        if ($period !== 'custom') {
+        if ($period !== 'custom' && $period !== 'all') {
             $startDate = match ($period) {
                 'daily' => now()->startOfDay()->toDateString(),
                 'weekly' => now()->subDays(6)->startOfDay()->toDateString(),
@@ -58,6 +55,9 @@ class ReportController extends Controller
                 default => now()->subDays(29)->startOfDay()->toDateString(),
             };
             $endDate = now()->endOfDay()->toDateString();
+        } elseif ($period === 'all') {
+            $startDate = null;
+            $endDate = null;
         }
 
         $filters = [
@@ -73,8 +73,17 @@ class ReportController extends Controller
             'period' => $period,
         ];
 
-        // 1. DYNAMIC QUERIES WITH FILTERS
-        $studentQuery = Student::query();
+        // Generate cache key representing active query parameters
+        $cacheKey = 'admin_reports_' . md5(json_encode($filters));
+
+        // On-demand flush check
+        if ($request->query('refresh') === 'true') {
+            Cache::forget($cacheKey);
+        }
+
+        $reportData = Cache::remember($cacheKey, now()->addMinutes(15), function () use ($request, $sessionId, $startDate, $endDate) {
+            // 1. DYNAMIC QUERIES WITH FILTERS
+            $studentQuery = Student::query();
         $applicantQuery = Applicant::query();
 
         if ($request->filled('faculty_id')) {
@@ -117,11 +126,9 @@ class ReportController extends Controller
 
         // Apply date range filters if provided
         if ($startDate) {
-            $studentQuery->where('created_at', '>=', $startDate);
             $applicantQuery->where('created_at', '>=', $startDate);
         }
         if ($endDate) {
-            $studentQuery->where('created_at', '<=', $endDate . ' 23:59:59');
             $applicantQuery->where('created_at', '<=', $endDate . ' 23:59:59');
         }
 
@@ -135,18 +142,24 @@ class ReportController extends Controller
             'students_by_gender' => (clone $studentQuery)->select('gender as label', DB::raw('count(*) as value'))
                 ->groupBy('gender')
                 ->get(),
+            'students_by_session' => (clone $studentQuery)
+                ->join('academic_sessions', 'students.admitted_session_id', '=', 'academic_sessions.id')
+                ->select('academic_sessions.name as label', DB::raw('count(students.id) as value'))
+                ->groupBy('academic_sessions.id', 'academic_sessions.name')
+                ->orderBy('academic_sessions.name')
+                ->get(),
             'total_faculties' => Faculty::count(),
             'total_departments' => Department::count(),
             'total_programmes' => Programme::count(),
             'total_courses' => Course::count(),
-            'total_registrations' => CourseRegistration::whereHas('student', function ($q) use ($request) {
+            'total_registrations' => CourseRegistration::whereHas('student', function ($q) use ($request, $sessionId) {
                 if ($request->filled('faculty_id')) $q->where('faculty_id', $request->faculty_id);
                 if ($request->filled('department_id')) $q->where('department_id', $request->department_id);
                 if ($request->filled('program_id')) $q->where('program_id', $request->program_id);
                 if ($request->filled('level')) $q->where('current_level', $request->level);
                 if ($request->filled('gender')) $q->where('gender', $request->gender);
                 if ($request->filled('entry_mode')) $q->where('entry_mode', $request->entry_mode);
-                if ($request->filled('session_id')) $q->where('admitted_session_id', $request->session_id);
+                if ($sessionId && $sessionId !== 'all') $q->where('admitted_session_id', $sessionId);
             })
             ->when($request->filled('start_date'), function ($q) use ($request) {
                 $q->where('created_at', '>=', $request->start_date);
@@ -171,14 +184,14 @@ class ReportController extends Controller
             $facQuery->where('faculties.id', $request->faculty_id);
         }
         $studentsByFaculty = $facQuery->select('faculties.name as label', DB::raw('count(students.id) as value'))
-            ->leftJoin('students', function ($join) use ($request) {
+            ->leftJoin('students', function ($join) use ($request, $sessionId) {
                 $join->on('faculties.id', '=', 'students.faculty_id');
                 if ($request->filled('department_id')) $join->where('students.department_id', $request->department_id);
                 if ($request->filled('program_id')) $join->where('students.program_id', $request->program_id);
                 if ($request->filled('level')) $join->where('students.current_level', $request->level);
                 if ($request->filled('gender')) $join->where('students.gender', $request->gender);
                 if ($request->filled('entry_mode')) $join->where('students.entry_mode', $request->entry_mode);
-                if ($request->filled('session_id')) $join->where('students.admitted_session_id', $request->session_id);
+                if ($sessionId && $sessionId !== 'all') $join->where('students.admitted_session_id', $sessionId);
             })
             ->groupBy('faculties.id', 'faculties.name')
             ->orderBy('value', 'desc')
@@ -194,13 +207,13 @@ class ReportController extends Controller
         }
         $studentsByDepartment = $deptQuery->select('departments.name as label', 'faculties.name as faculty', DB::raw('count(students.id) as value'))
             ->join('faculties', 'departments.faculty_id', '=', 'faculties.id')
-            ->leftJoin('students', function ($join) use ($request) {
+            ->leftJoin('students', function ($join) use ($request, $sessionId) {
                 $join->on('departments.id', '=', 'students.department_id');
                 if ($request->filled('program_id')) $join->where('students.program_id', $request->program_id);
                 if ($request->filled('level')) $join->where('students.current_level', $request->level);
                 if ($request->filled('gender')) $join->where('students.gender', $request->gender);
                 if ($request->filled('entry_mode')) $join->where('students.entry_mode', $request->entry_mode);
-                if ($request->filled('session_id')) $join->where('students.admitted_session_id', $request->session_id);
+                if ($sessionId && $sessionId !== 'all') $join->where('students.admitted_session_id', $sessionId);
             })
             ->groupBy('departments.id', 'departments.name', 'faculties.name')
             ->orderBy('value', 'desc')
@@ -220,12 +233,12 @@ class ReportController extends Controller
         }
         $studentsByProgramme = $progQuery->select('programmes.name as label', 'departments.name as department', DB::raw('count(students.id) as value'))
             ->join('departments', 'programmes.department_id', '=', 'departments.id')
-            ->leftJoin('students', function ($join) use ($request) {
+            ->leftJoin('students', function ($join) use ($request, $sessionId) {
                 $join->on('programmes.id', '=', 'students.program_id');
                 if ($request->filled('level')) $join->where('students.current_level', $request->level);
                 if ($request->filled('gender')) $join->where('students.gender', $request->gender);
                 if ($request->filled('entry_mode')) $join->where('students.entry_mode', $request->entry_mode);
-                if ($request->filled('session_id')) $join->where('students.admitted_session_id', $request->session_id);
+                if ($sessionId && $sessionId !== 'all') $join->where('students.admitted_session_id', $sessionId);
             })
             ->groupBy('programmes.id', 'programmes.name', 'departments.name')
             ->orderBy('value', 'desc')
@@ -235,10 +248,10 @@ class ReportController extends Controller
         $invoiceQuery = Invoice::query();
         $paymentQuery = Payment::query();
 
-        if ($request->filled('session_id')) {
-            $invoiceQuery->where('session_id', $request->session_id);
-            $paymentQuery->whereHas('invoice', function ($q) use ($request) {
-                $q->where('session_id', $request->session_id);
+        if ($sessionId && $sessionId !== 'all') {
+            $invoiceQuery->where('session_id', $sessionId);
+            $paymentQuery->whereHas('invoice', function ($q) use ($sessionId) {
+                $q->where('session_id', $sessionId);
             });
         }
 
@@ -424,27 +437,19 @@ class ReportController extends Controller
         $availableQty = (int) InventoryItem::sum('available_quantity');
         $assignedQty = max($totalQty - $availableQty, 0);
 
-        $inventoryStats = [
-            'total_unique_items' => $totalItemsCount,
-            'total_quantity' => $totalQty,
-            'assigned_quantity' => $assignedQty,
-            'available_quantity' => $availableQty,
-            'total_complaints' => InventoryComplaint::count(),
-            'pending_complaints' => InventoryComplaint::where('status', 'pending')->count(),
-        ];
+            $inventoryStats = [
+                'total_unique_items' => $totalItemsCount,
+                'total_quantity' => $totalQty,
+                'assigned_quantity' => $assignedQty,
+                'available_quantity' => $availableQty,
+                'total_complaints' => InventoryComplaint::count(),
+                'pending_complaints' => InventoryComplaint::where('status', 'pending')->count(),
+            ];
 
-        return Inertia::render('Admin/Reports/Index', [
-            'academicStats' => $academicStats,
-            'studentsByFaculty' => $studentsByFaculty,
-            'studentsByDepartment' => $studentsByDepartment,
-            'studentsByProgramme' => $studentsByProgramme,
-            'financeStats' => $financeStats,
-            'attendanceStats' => $attendanceStats,
-            'hostelStats' => $hostelStats,
-            'libraryStats' => $libraryStats,
-            'sickbayStats' => $sickbayStats,
-            'inventoryStats' => $inventoryStats,
-            
+            return compact('academicStats', 'studentsByFaculty', 'studentsByDepartment', 'studentsByProgramme', 'financeStats', 'attendanceStats', 'hostelStats', 'libraryStats', 'sickbayStats', 'inventoryStats');
+        });
+
+        return Inertia::render('Admin/Reports/Index', array_merge($reportData, [
             // Lookups for filters
             'sessions' => \App\Services\AcademicCacheService::getSessions(),
             'faculties' => \App\Services\AcademicCacheService::getAllFaculties(),
@@ -452,7 +457,7 @@ class ReportController extends Controller
             'programmes' => \App\Services\AcademicCacheService::getProgrammes(),
             'entryModes' => ['UTME', 'Direct Entry', 'Transfer', 'Postgraduate'],
             'filters' => $filters,
-        ]);
+        ]));
     }
 
     public function export(Request $request)

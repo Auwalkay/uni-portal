@@ -7,6 +7,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class InvoiceController extends Controller
@@ -37,15 +38,15 @@ class InvoiceController extends Controller
             });
         }
 
-        if ($request->filled('status')) {
+        if ($request->filled('status') && $request->status !== 'all') {
             $query->where('status', $request->status);
         }
 
-        if ($request->filled('type')) {
+        if ($request->filled('type') && $request->type !== 'all') {
             $query->where('type', $request->type);
         }
 
-        if ($request->filled('session_id')) {
+        if ($request->filled('session_id') && $request->session_id !== 'all') {
             $query->where('session_id', $request->session_id);
         }
 
@@ -172,33 +173,285 @@ class InvoiceController extends Controller
         return response()->json($students);
     }
 
+    public function calculateFee(Request $request)
+    {
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'session_id' => 'required|exists:academic_sessions,id',
+            'type' => 'required|string',
+        ]);
+
+        $user = \App\Models\User::findOrFail($validated['user_id']);
+        $student = $user->student;
+        $session = \App\Models\Session::findOrFail($validated['session_id']);
+
+        if (!$student) {
+            return response()->json(['amount' => 0, 'description' => '']);
+        }
+
+        if ($validated['type'] === 'school_fee') {
+            $targetSessionId = ($student->fee_policy === 'admission_session' && $student->admitted_session_id) 
+                ? $student->admitted_session_id 
+                : $session->id;
+
+            $allConfigs = \App\Models\FeeConfiguration::where('session_id', $targetSessionId)
+                ->where(function ($q) use ($student) {
+                    $q->where('level', $student->current_level)
+                        ->orWhereNull('level');
+                })
+                ->where(function ($q) use ($student) {
+                    $q->where('entry_mode', $student->entry_mode)
+                        ->orWhereNull('entry_mode');
+                })
+                ->where('is_compulsory', true)
+                ->with('feeType')
+                ->get();
+
+            $resolvedConfigs = collect();
+            $groupedConfigs = $allConfigs->groupBy('fee_type_id');
+
+            foreach ($groupedConfigs as $feeTypeId => $configs) {
+                $resolved = null;
+                if ($student->program_id) {
+                    $resolved = $configs->where('program_id', $student->program_id)->first();
+                }
+                if (!$resolved && $student->department_id) {
+                    $resolved = $configs->where('department_id', $student->department_id)
+                        ->whereNull('program_id')
+                        ->first();
+                }
+                if (!$resolved && $student->faculty_id) {
+                    $resolved = $configs->where('faculty_id', $student->faculty_id)
+                        ->whereNull('department_id')
+                        ->whereNull('program_id')
+                        ->first();
+                }
+                if (!$resolved) {
+                    $resolved = $configs->whereNull('faculty_id')
+                        ->whereNull('department_id')
+                        ->whereNull('program_id')
+                        ->first();
+                }
+                if ($resolved) {
+                    if ($resolved->feeType && $resolved->feeType->is_one_time) {
+                        $alreadyCharged = \App\Models\InvoiceItem::whereHas('invoice', function ($q) use ($student) {
+                            $q->where('user_id', $student->user_id);
+                        })->where('fee_type_id', $resolved->fee_type_id)->exists();
+
+                        if ($alreadyCharged) {
+                            continue;
+                        }
+                    }
+                    $resolvedConfigs->push($resolved);
+                }
+            }
+
+            $academicTotal = $resolvedConfigs->sum('amount');
+            
+            $tuition = 0;
+            foreach ($resolvedConfigs as $config) {
+                if (!$config->feeType || !$config->feeType->is_one_time) {
+                    if ($config->feeType && stripos($config->feeType->name, 'tuition') !== false) {
+                        $tuition += $config->amount;
+                    }
+                }
+            }
+
+            $discount = 0;
+            if ($student->scholarship_id && $student->scholarship) {
+                $discountPercent = (float) $student->scholarship->percentage;
+                $discount = ($tuition * $discountPercent) / 100;
+            }
+
+            $amount = max(0, $academicTotal - $discount);
+            $description = "School Fees / Tuition for " . $session->name;
+
+             return response()->json([
+                'amount' => $amount,
+                'description' => $description,
+                'breakdown' => [
+                    'items' => $resolvedConfigs->map(fn($c) => [
+                        'name' => $c->feeType ? $c->feeType->name : 'Fee Item',
+                        'amount' => (float)$c->amount,
+                    ])->toArray(),
+                    'academic_total' => (float)$academicTotal,
+                    'scholarship' => $student->scholarship ? [
+                        'name' => $student->scholarship->name,
+                        'percentage' => (float)$student->scholarship->percentage,
+                        'discount' => (float)$discount,
+                    ] : null,
+                    'total' => $amount,
+                ]
+            ]);
+        }
+
+        if ($validated['type'] === 'hostel') {
+            $hostelFee = \App\Models\HostelFee::where('session_id', $session->id)->first();
+            $amount = $hostelFee ? (float)$hostelFee->amount : 0.0;
+            $description = "Hostel Accommodation Fee for " . $session->name;
+
+            return response()->json([
+                'amount' => $amount,
+                'description' => $description,
+                'breakdown' => [
+                    'items' => [
+                        [
+                            'name' => $hostelFee ? 'Hostel Accommodation Charge' : 'Hostel Fee (Not Configured)',
+                            'amount' => $amount,
+                        ]
+                    ],
+                    'academic_total' => $amount,
+                    'scholarship' => null,
+                    'total' => $amount,
+                ]
+            ]);
+        }
+
+        return response()->json([
+            'amount' => 0,
+            'description' => '',
+            'breakdown' => null,
+        ]);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
-            'amount' => 'required|numeric|min:0',
+             'amount' => 'required|numeric|min:0',
             'type' => 'required|string',
             'description' => 'required|string|max:255',
             'due_date' => 'required|date',
-            'session_id' => 'required|exists:sessions,id',
+            'session_id' => 'required|exists:academic_sessions,id',
         ]);
 
         // Generate reference
         $reference = 'INV-' . strtoupper(uniqid());
 
-        $invoice = Invoice::create([
-            'user_id' => $validated['user_id'],
-            'session_id' => $validated['session_id'],
-            'reference' => $reference,
-            'type' => $validated['type'],
-            'description' => $validated['description'],
-            'amount' => $validated['amount'],
-            'due_date' => $validated['due_date'],
-            'status' => 'pending',
-            'paid_amount' => 0,
-            'currency' => 'NGN', // Default
-            'created_by' => Auth::id(),
-        ]);
+        $invoice = DB::transaction(function () use ($validated, $reference) {
+            $invoice = Invoice::create([
+                'user_id' => $validated['user_id'],
+                'session_id' => $validated['session_id'],
+                'reference' => $reference,
+                'type' => $validated['type'],
+                'amount' => $validated['amount'],
+                'due_date' => $validated['due_date'],
+                'status' => 'pending',
+                'paid_amount' => 0,
+                'created_by' => Auth::id(),
+            ]);
+
+            if ($validated['type'] === 'school_fee') {
+                $user = \App\Models\User::findOrFail($validated['user_id']);
+                $student = $user->student;
+                $session = \App\Models\Session::findOrFail($validated['session_id']);
+
+                if ($student) {
+                    $targetSessionId = ($student->fee_policy === 'admission_session' && $student->admitted_session_id) 
+                        ? $student->admitted_session_id 
+                        : $session->id;
+
+                    $allConfigs = \App\Models\FeeConfiguration::where('session_id', $targetSessionId)
+                        ->where(function ($q) use ($student) {
+                            $q->where('level', $student->current_level)
+                                ->orWhereNull('level');
+                        })
+                        ->where(function ($q) use ($student) {
+                            $q->where('entry_mode', $student->entry_mode)
+                                ->orWhereNull('entry_mode');
+                        })
+                        ->where('is_compulsory', true)
+                        ->with('feeType')
+                        ->get();
+
+                    $resolvedConfigs = collect();
+                    $groupedConfigs = $allConfigs->groupBy('fee_type_id');
+
+                    foreach ($groupedConfigs as $feeTypeId => $configs) {
+                        $resolved = null;
+                        if ($student->program_id) {
+                            $resolved = $configs->where('program_id', $student->program_id)->first();
+                        }
+                        if (!$resolved && $student->department_id) {
+                            $resolved = $configs->where('department_id', $student->department_id)
+                                ->whereNull('program_id')
+                                ->first();
+                        }
+                        if (!$resolved && $student->faculty_id) {
+                            $resolved = $configs->where('faculty_id', $student->faculty_id)
+                                ->whereNull('department_id')
+                                ->whereNull('program_id')
+                                ->first();
+                        }
+                        if (!$resolved) {
+                            $resolved = $configs->whereNull('faculty_id')
+                                ->whereNull('department_id')
+                                ->whereNull('program_id')
+                                ->first();
+                        }
+                        if ($resolved) {
+                            if ($resolved->feeType && $resolved->feeType->is_one_time) {
+                                $alreadyCharged = \App\Models\InvoiceItem::whereHas('invoice', function ($q) use ($student) {
+                                    $q->where('user_id', $student->user_id);
+                                })->where('fee_type_id', $resolved->fee_type_id)->exists();
+
+                                if ($alreadyCharged) {
+                                    continue;
+                                }
+                            }
+                            $resolvedConfigs->push($resolved);
+                        }
+                    }
+
+                    $tuition = 0;
+                    foreach ($resolvedConfigs as $config) {
+                        if (!$config->feeType || !$config->feeType->is_one_time) {
+                            if ($config->feeType && stripos($config->feeType->name, 'tuition') !== false) {
+                                $tuition += $config->amount;
+                            }
+                        }
+                    }
+
+                    $discount = 0;
+                    if ($student->scholarship_id && $student->scholarship) {
+                        $discountPercent = (float) $student->scholarship->percentage;
+                        $discount = ($tuition * $discountPercent) / 100;
+                    }
+
+                    // Create items
+                    foreach ($resolvedConfigs as $config) {
+                        \App\Models\InvoiceItem::create([
+                            'invoice_id' => $invoice->id,
+                            'fee_type_id' => $config->fee_type_id,
+                            'description' => $config->feeType ? $config->feeType->name : 'Fee Item',
+                            'amount' => (float)$config->amount,
+                        ]);
+                    }
+
+                    if ($discount > 0) {
+                        \App\Models\InvoiceItem::create([
+                            'invoice_id' => $invoice->id,
+                            'description' => "Scholarship Discount (" . $student->scholarship->name . " - " . $student->scholarship->percentage . "%)",
+                            'amount' => -$discount,
+                        ]);
+                    }
+                } else {
+                    \App\Models\InvoiceItem::create([
+                        'invoice_id' => $invoice->id,
+                        'description' => $validated['description'],
+                        'amount' => $validated['amount'],
+                    ]);
+                }
+            } else {
+                \App\Models\InvoiceItem::create([
+                    'invoice_id' => $invoice->id,
+                    'description' => $validated['description'],
+                    'amount' => $validated['amount'],
+                ]);
+            }
+
+            return $invoice;
+        });
 
         return redirect()->route('admin.invoices.show', $invoice)->with('success', 'Invoice generated successfully.');
     }
