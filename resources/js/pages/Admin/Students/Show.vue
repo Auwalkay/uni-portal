@@ -502,13 +502,53 @@ const submitStudentSession = () => {
                                                 <Download class="w-4 h-4" />
                                             </a>
                                         </div>
+
+                                        <!-- O-Level Scanned Copies -->
+                                        <div v-for="(sitting, idx) in (student.o_level_results || student.oLevelResults || [])" :key="sitting.id" class="flex items-center p-3 border rounded-lg hover:bg-muted/50 transition">
+                                             <FileIcon class="w-8 h-8 text-purple-500 mr-3" />
+                                             <div class="flex-1 min-w-0">
+                                                 <p class="text-sm font-medium truncate">O-Level Sitting {{ idx + 1 }} Result</p>
+                                                 <p class="text-xs text-muted-foreground">{{ sitting.exam_type }} ({{ sitting.exam_year }})</p>
+                                             </div>
+                                              <a v-if="sitting.scanned_copy_path" :href="`/storage/${sitting.scanned_copy_path}`" target="_blank" class="p-2 text-muted-foreground hover:text-primary">
+                                                 <Download class="w-4 h-4" />
+                                             </a>
+                                         </div>
                                         
-                                        <div v-if="!student.passport_photo_path && !student.indigene_letter_path" class="col-span-full py-4 text-center text-muted-foreground text-sm">
+                                        <div v-if="!student.passport_photo_path && !student.indigene_letter_path && (!student.o_level_results || (student.o_level_results || student.oLevelResults || []).length === 0)" class="col-span-full py-4 text-center text-muted-foreground text-sm">
                                             No documents uploaded.
                                         </div>
                                     </div>
                                  </CardContent>
                             </Card>
+
+                            <!-- O-Level Examination Results Card -->
+                            <Card v-if="(student.o_level_results || student.oLevelResults || []).length > 0" class="md:col-span-2">
+                                 <CardHeader class="pb-3 border-b">
+                                     <CardTitle class="text-lg flex items-center gap-2">
+                                         <GraduationCap class="w-5 h-5 text-muted-foreground" /> O-Level Examination Results
+                                     </CardTitle>
+                                 </CardHeader>
+                                 <CardContent class="p-6 space-y-6">
+                                     <div v-for="(sitting, idx) in (student.o_level_results || student.oLevelResults || [])" :key="sitting.id" class="border rounded-lg p-4 space-y-4">
+                                         <div class="flex flex-wrap items-center justify-between border-b pb-2 gap-4">
+                                             <div>
+                                                 <h3 class="font-bold text-sm text-foreground">Sitting {{ idx + 1 }}: {{ sitting.exam_type }}</h3>
+                                                 <p class="text-xs text-muted-foreground">Year: {{ sitting.exam_year }} | Reg No: {{ sitting.exam_number }}</p>
+                                             </div>
+                                             <a v-if="sitting.scanned_copy_path" :href="`/storage/${sitting.scanned_copy_path}`" target="_blank" class="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline">
+                                                 <Download class="w-3.5 h-3.5" /> View Scanned Document
+                                             </a>
+                                         </div>
+                                         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                             <div v-for="subj in sitting.subjects" :key="subj.subject" class="bg-muted/30 p-2.5 rounded-md flex justify-between items-center text-xs">
+                                                 <span class="font-medium text-foreground truncate pr-2">{{ subj.subject }}</span>
+                                                 <Badge variant="outline" class="bg-background shrink-0 font-mono font-bold">{{ subj.grade }}</Badge>
+                                             </div>
+                                         </div>
+                                     </div>
+                                 </CardContent>
+                             </Card>
                         </div>
                     </TabsContent>
 
