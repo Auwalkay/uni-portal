@@ -301,7 +301,8 @@ const breadcrumbs = [
                                     <span class="font-semibold text-slate-900 dark:text-slate-100">{{ formatCurrency(item.amount) }}</span>
                                 </div>
                                 <div v-if="feeBreakdown.scholarship" class="flex justify-between py-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                                    <span>Scholarship: {{ feeBreakdown.scholarship.name }} ({{ feeBreakdown.scholarship.percentage }}%)</span>
+                                    <span v-if="feeBreakdown.scholarship.type === 'fixed'">Scholarship: {{ feeBreakdown.scholarship.name }} (Fixed ₦{{ new Intl.NumberFormat('en-NG', { maximumFractionDigits: 0 }).format(feeBreakdown.scholarship.amount) }})</span>
+                                    <span v-else>Scholarship: {{ feeBreakdown.scholarship.name }} ({{ feeBreakdown.scholarship.percentage }}%)</span>
                                     <span class="font-bold">-{{ formatCurrency(feeBreakdown.scholarship.discount) }}</span>
                                 </div>
                                 <div class="flex justify-between pt-2.5 text-sm font-bold border-t">
