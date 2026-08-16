@@ -259,8 +259,13 @@ class InvoiceController extends Controller
 
             $discount = 0;
             if ($student->scholarship_id && $student->scholarship) {
-                $discountPercent = (float) $student->scholarship->percentage;
-                $discount = ($tuition * $discountPercent) / 100;
+                $scholarship = $student->scholarship;
+                if ($scholarship->type === 'fixed') {
+                    $discount = max(0, $tuition - (float)$scholarship->amount);
+                } else {
+                    $discountPercent = (float)$scholarship->percentage;
+                    $discount = ($tuition * $discountPercent) / 100;
+                }
             }
 
             $amount = max(0, $academicTotal - $discount);
@@ -277,7 +282,9 @@ class InvoiceController extends Controller
                     'academic_total' => (float)$academicTotal,
                     'scholarship' => $student->scholarship ? [
                         'name' => $student->scholarship->name,
+                        'type' => $student->scholarship->type,
                         'percentage' => (float)$student->scholarship->percentage,
+                        'amount' => (float)$student->scholarship->amount,
                         'discount' => (float)$discount,
                     ] : null,
                     'total' => $amount,
@@ -413,9 +420,17 @@ class InvoiceController extends Controller
                     }
 
                     $discount = 0;
+                    $discountDescription = '';
                     if ($student->scholarship_id && $student->scholarship) {
-                        $discountPercent = (float) $student->scholarship->percentage;
-                        $discount = ($tuition * $discountPercent) / 100;
+                        $scholarship = $student->scholarship;
+                        if ($scholarship->type === 'fixed') {
+                            $discount = max(0, $tuition - (float)$scholarship->amount);
+                            $discountDescription = "Scholarship Discount (" . $scholarship->name . " - Fixed ₦" . number_format($scholarship->amount, 0) . ")";
+                        } else {
+                            $discountPercent = (float)$scholarship->percentage;
+                            $discount = ($tuition * $discountPercent) / 100;
+                            $discountDescription = "Scholarship Discount (" . $scholarship->name . " - " . $scholarship->percentage . "%)";
+                        }
                     }
 
                     // Create items
@@ -431,7 +446,7 @@ class InvoiceController extends Controller
                     if ($discount > 0) {
                         \App\Models\InvoiceItem::create([
                             'invoice_id' => $invoice->id,
-                            'description' => "Scholarship Discount (" . $student->scholarship->name . " - " . $student->scholarship->percentage . "%)",
+                            'description' => $discountDescription,
                             'amount' => -$discount,
                         ]);
                     }
