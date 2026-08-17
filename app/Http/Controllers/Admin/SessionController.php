@@ -180,6 +180,9 @@ class SessionController extends Controller
             'registration_enabled' => 'boolean',
             'applications_enabled' => 'boolean',
             'admissions_enabled' => 'boolean',
+            'school_fee_payment_enabled' => 'boolean',
+            'late_payment_deadline' => 'nullable|date',
+            'late_fee_amount' => 'nullable|numeric|min:0',
         ]);
 
         $session->update($validated);

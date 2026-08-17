@@ -23,16 +23,15 @@ class EnsureStudentProfileCompleted
                 $hasState = !empty($student->state_id);
                 $hasLga = !empty($student->lga_id);
                 $hasGender = !empty($student->gender);
-                $hasJamb = !empty($student->jamb_registration_number);
                 $hasPassport = !empty($student->passport_photo_path);
                 $hasIndigene = !empty($student->indigene_letter_path);
                 $hasOlevel = $student->oLevelResults()->exists();
 
-                if (!$hasState || !$hasLga || !$hasGender || !$hasJamb || !$hasPassport || !$hasIndigene || !$hasOlevel) {
+                if (!$hasState || !$hasLga || !$hasGender || !$hasPassport || !$hasIndigene || !$hasOlevel) {
                     $currentRoute = $request->route()->getName();
                     if ($currentRoute !== 'student.profile.edit' && $currentRoute !== 'student.profile.update') {
                         return redirect()->route('student.profile.edit')
-                            ->with('warning', 'You must complete your profile details (Gender, State of Origin, LGA, JAMB Registration Number, Passport Photo, Indigene Letter, and O-Level sittings) to proceed.');
+                            ->with('warning', 'You must complete your profile details (Gender, State of Origin, LGA, Passport Photo, Indigene Letter, and O-Level sittings) to proceed.');
                     }
                 }
             }

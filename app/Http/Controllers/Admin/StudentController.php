@@ -408,6 +408,7 @@ class StudentController extends Controller
 
         $student->update([
             'admitted_session_id' => $validated['admitted_session_id'],
+            'updated_by' => auth()->id(),
         ]);
 
         return back()->with('success', 'Admission session updated successfully.');

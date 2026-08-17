@@ -19,6 +19,19 @@ class Student extends Model
 
     protected static function booted()
     {
+        static::creating(function ($model) {
+            if (auth()->check()) {
+                $model->created_by = auth()->id();
+                $model->updated_by = auth()->id();
+            }
+        });
+
+        static::updating(function ($model) {
+            if (auth()->check()) {
+                $model->updated_by = auth()->id();
+            }
+        });
+
         static::saved(function ($student) {
             static::clearStatsCache();
         });
@@ -65,6 +78,8 @@ class Student extends Model
         'scholarship_id',
         'fee_policy',
         'pending_promotion_session_id',
+        'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
@@ -144,6 +159,16 @@ class Student extends Model
     public function invoices()
     {
         return $this->hasMany(Invoice::class, 'user_id', 'user_id');
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updater(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\Applicant;
 use App\Models\Bulletin;
 use App\Models\CourseRegistration;
 use App\Models\Invoice;
@@ -10,8 +11,14 @@ use App\Models\Semester;
 use App\Models\Session;
 use App\Models\Student;
 use App\Models\StudentSession;
+use App\Models\Subject;
+use App\Models\SystemSetting;
 use App\Models\Timetable;
+use App\Services\AcademicCacheService;
+use App\Services\GradingService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class ProfileController extends Controller
@@ -37,7 +44,7 @@ class ProfileController extends Controller
 
         // Fallback to active global session if student has no specific active student session record
         $resolvedSession = $currentStudentSession?->session ?? $currentSession;
-        $resolvedSemester = $currentStudentSession?->semester 
+        $resolvedSemester = $currentStudentSession?->semester
             ? Semester::where('session_id', $resolvedSession?->id)->where('name', $currentStudentSession->semester)->first()
             : $currentSemester;
 
@@ -50,8 +57,8 @@ class ProfileController extends Controller
         // Stats Calculations
         $cgpa = '0.00';
         if ($student) {
-            $enforceSchoolFee = filter_var(\App\Models\SystemSetting::get('enforce_school_fee_for_results', false), FILTER_VALIDATE_BOOLEAN);
-            $enforceHostelFee = filter_var(\App\Models\SystemSetting::get('enforce_hostel_fee_for_results', false), FILTER_VALIDATE_BOOLEAN);
+            $enforceSchoolFee = filter_var(SystemSetting::get('enforce_school_fee_for_results', false), FILTER_VALIDATE_BOOLEAN);
+            $enforceHostelFee = filter_var(SystemSetting::get('enforce_hostel_fee_for_results', false), FILTER_VALIDATE_BOOLEAN);
 
             $allRegs = CourseRegistration::where('student_id', $student->id)
                 ->where('is_published', true)
@@ -61,8 +68,8 @@ class ProfileController extends Controller
             $cgpaRegs = $allRegs->filter(function ($reg) use ($enforceSchoolFee, $enforceHostelFee, $student) {
                 $semesterName = $reg->semester?->name ?? '';
                 $isSecondSem = stripos($semesterName, 'Second') !== false || strpos($semesterName, '2') !== false;
-                
-                if (!$isSecondSem) {
+
+                if (! $isSecondSem) {
                     return true; // First Sem is never blocked
                 }
 
@@ -90,11 +97,11 @@ class ProfileController extends Controller
                 return $schoolFeeCleared && $hostelFeeCleared;
             });
 
-            $cgpa = number_format($cgpaRegs->isEmpty() ? 0 : app(\App\Services\GradingService::class)->calculateGPA($cgpaRegs), 2);
+            $cgpa = number_format($cgpaRegs->isEmpty() ? 0 : app(GradingService::class)->calculateGPA($cgpaRegs), 2);
         }
         $totalUnits = 0;
         // Ensure level doesn't 'go down' when viewing historical sessions
-        $level = max((int)($student->current_level ?? 0), (int)($currentStudentSession->level ?? 0));
+        $level = max((int) ($student->current_level ?? 0), (int) ($currentStudentSession->level ?? 0));
         $academicStatus = 'Good Standing';
         $showRegistrationNotification = false;
         $registrationMessage = '';
@@ -143,9 +150,9 @@ class ProfileController extends Controller
                     $showRegistrationNotification = true;
                     $isRegistrationActive = false;
                     if ($end && $now->gt($end)) {
-                        $registrationMessage = "Course registration for {$resolvedSemester->name} is currently closed. The deadline was " . $end->format('M d, Y') . ".";
+                        $registrationMessage = "Course registration for {$resolvedSemester->name} is currently closed. The deadline was ".$end->format('M d, Y').'.';
                     } elseif ($start && $now->lt($start)) {
-                        $registrationMessage = "Course registration for {$resolvedSemester->name} is not active yet. It is scheduled to open on " . $start->format('M d, Y') . ".";
+                        $registrationMessage = "Course registration for {$resolvedSemester->name} is not active yet. It is scheduled to open on ".$start->format('M d, Y').'.';
                     } else {
                         $registrationMessage = "Course registration for {$resolvedSemester->name} is currently closed.";
                     }
@@ -155,40 +162,40 @@ class ProfileController extends Controller
 
         $showHostelNotification = false;
         $hostelNotificationMessage = '';
-        $bookingEnabled = filter_var(\App\Models\SystemSetting::get('enable_hostel_booking', true), FILTER_VALIDATE_BOOLEAN);
+        $bookingEnabled = filter_var(SystemSetting::get('enable_hostel_booking', true), FILTER_VALIDATE_BOOLEAN);
 
         if ($bookingEnabled && $student && $resolvedSession) {
             $hasBooked = \App\Models\HostelBooking::where('student_id', $student->id)
                 ->where('session_id', $resolvedSession->id)
                 ->exists();
 
-            if (!$hasBooked) {
+            if (! $hasBooked) {
                 $showHostelNotification = true;
-                $hostelNotificationMessage = "Hostel booking is now open for the current session. Select your room to reserve your accommodation.";
+                $hostelNotificationMessage = 'Hostel booking is now open for the current session. Select your room to reserve your accommodation.';
             }
         }
 
         // Fetch Timetable for Registered Courses
         $timetable = [];
         if ($student && $resolvedSession && $currentStudentSession) {
-            $timetable = \App\Services\AcademicCacheService::getStudentTimetable($student->id, $currentStudentSession->session_id);
+            $timetable = AcademicCacheService::getStudentTimetable($student->id, $currentStudentSession->session_id);
         }
 
         // Check School Fee status for CURRENT session
         $schoolFeeStatus = 'unpaid';
-        if ($resolvedSession && $currentStudentSession) {
+        if ($resolvedSession) {
             $schoolFeeInvoice = Invoice::where('user_id', auth()->id())
                 ->where('type', 'school_fee')
-                ->where('student_session_id', $currentStudentSession->id)
+                ->where('session_id', $resolvedSession->id)
                 ->first();
-            
+
             if ($schoolFeeInvoice) {
                 $schoolFeeStatus = $schoolFeeInvoice->status;
             }
         }
 
         // Fetch latest bulletins/announcements for student dashboard
-        $announcements = \Illuminate\Support\Facades\Cache::remember('student_dashboard_bulletins', 60 * 10, function () {
+        $announcements = Cache::remember('student_dashboard_bulletins', 60 * 10, function () {
             return Bulletin::with('author')
                 ->whereIn('target_audience', ['all', 'students'])
                 ->orderBy('is_pinned', 'desc')
@@ -218,6 +225,13 @@ class ProfileController extends Controller
                 'semester' => $currentStudentSession?->semester ?? $resolvedSemester->name ?? 'N/A',
             ],
             'timetable' => $timetable,
+            'activeSession' => $resolvedSession ? [
+                'id' => $resolvedSession->id,
+                'name' => $resolvedSession->name,
+                'school_fee_payment_enabled' => (bool)$resolvedSession->school_fee_payment_enabled,
+                'late_payment_deadline' => $resolvedSession->late_payment_deadline ? $resolvedSession->late_payment_deadline->toIso8601String() : null,
+                'late_fee_amount' => (float)$resolvedSession->late_fee_amount,
+            ] : null,
         ]);
     }
 
@@ -227,10 +241,10 @@ class ProfileController extends Controller
             ->with(['user', 'state', 'lga', 'oLevelResults'])
             ->firstOrFail();
 
-        $states = \App\Services\AcademicCacheService::getStates();
+        $states = AcademicCacheService::getStates();
 
-        $allSubjects = \Illuminate\Support\Facades\Cache::remember('all_subjects', 60 * 60 * 24, function () {
-            return \App\Models\Subject::orderBy('name')->get();
+        $allSubjects = Cache::remember('all_subjects', 60 * 60 * 24, function () {
+            return Subject::orderBy('name')->get();
         });
 
         // Determine which fields are editable (can only set them if they are null/empty)
@@ -238,10 +252,10 @@ class ProfileController extends Controller
         $canEditState = is_null($student->state_id);
         $canEditLga = is_null($student->lga_id);
         $canEditJamb = is_null($student->jamb_registration_number) || $student->jamb_registration_number === '';
-        $canEditOlevel = !$student->oLevelResults()->exists();
+        $canEditOlevel = ! $student->oLevelResults()->exists();
         $canEditIndigene = is_null($student->indigene_letter_path);
 
-        return \Inertia\Inertia::render('Student/Profile/Edit', [
+        return Inertia::render('Student/Profile/Edit', [
             'student' => $student,
             'user' => $request->user(),
             'states' => $states,
@@ -266,7 +280,7 @@ class ProfileController extends Controller
         $canEditState = is_null($student->state_id);
         $canEditLga = is_null($student->lga_id);
         $canEditJamb = is_null($student->jamb_registration_number) || $student->jamb_registration_number === '';
-        $canEditOlevel = !$student->oLevelResults()->exists();
+        $canEditOlevel = ! $student->oLevelResults()->exists();
         $canEditIndigene = is_null($student->indigene_letter_path);
 
         // Base rules (always editable)
@@ -290,10 +304,12 @@ class ProfileController extends Controller
             $rules['lga_id'] = 'required|exists:lgas,id';
         }
         if ($canEditJamb) {
-            $rules['jamb_registration_number'] = 'required|string|max:255|unique:students,jamb_registration_number,' . $student->id;
+            // $rules['jamb_registration_number'] = 'required|string|max:255|unique:students,jamb_registration_number,' . $student->id;
+            $rules['jamb_registration_number'] = 'nullable|string|max:255';
+
         }
         if ($canEditIndigene) {
-            $rules['indigene_letter'] = 'required|file|mimes:jpg,jpeg,png,pdf|max:500';
+            $rules['indigene_letter'] = 'nullable|file|mimes:jpg,jpeg,png,pdf|max:500';
         }
         if ($canEditOlevel) {
             $rules['o_level_sittings'] = 'required|array|min:1|max:2';
@@ -368,8 +384,8 @@ class ProfileController extends Controller
     public function downloadAdmissionLetter()
     {
         $user = auth()->user();
-        $applicant = \App\Models\Applicant::where('user_id', $user->id)->with(['scholarship'])->first();
-        $student = \App\Models\Student::where('user_id', $user->id)->with(['user', 'state', 'lga', 'program.department.faculty', 'admittedSession', 'scholarship'])->first();
+        $applicant = Applicant::where('user_id', $user->id)->with(['scholarship'])->first();
+        $student = Student::where('user_id', $user->id)->with(['user', 'state', 'lga', 'program.department.faculty', 'admittedSession', 'scholarship'])->first();
 
         if (! $applicant && ! $student) {
             return back()->with('error', 'Admission record not found.');
@@ -402,7 +418,7 @@ class ProfileController extends Controller
         if ($student) {
             // Calculate Fees for the Letter
             $feesData = $this->calculateEstimatedFees($student);
-            
+
             // Calculate student's entry level (their first session level or fallback)
             $entryLevel = (int) ($student->sessions()->orderBy('created_at', 'asc')->value('level')
                 ?? $student->sessions()->orderBy('level', 'asc')->value('level')
@@ -432,7 +448,7 @@ class ProfileController extends Controller
             ];
         } else {
             $applicant->load(['user', 'programme.department.faculty', 'state', 'lga', 'scholarship']);
-            
+
             // For applicants, we use their first program choice and current session fees
             $currentSession = \App\Models\Session::current();
             $feesData = $this->calculateEstimatedFeesForApplicant($applicant, $currentSession);
@@ -454,7 +470,7 @@ class ProfileController extends Controller
                 'isFontSubsettingEnabled' => true,
             ]);
 
-        \Illuminate\Support\Facades\Storage::disk('local')->put($filePath, $pdf->output());
+        Storage::disk('local')->put($filePath, $pdf->output());
 
         return $pdf->download($fileName);
     }
@@ -462,7 +478,9 @@ class ProfileController extends Controller
     private function calculateEstimatedFees($student)
     {
         $sessionId = $student->admitted_session_id ?? \App\Models\Session::current()?->id;
-        if (!$sessionId) return null;
+        if (! $sessionId) {
+            return null;
+        }
 
         $allConfigs = \App\Models\FeeConfiguration::where('session_id', $sessionId)
             ->where(function ($q) use ($student) {
@@ -486,35 +504,35 @@ class ProfileController extends Controller
                 ?? $configs->where('department_id', $student->department_id)->whereNull('program_id')->first()
                 ?? $configs->where('faculty_id', $student->faculty_id)->whereNull('department_id')->whereNull('program_id')->first()
                 ?? $configs->whereNull('faculty_id')->whereNull('department_id')->whereNull('program_id')->first();
-            
+
             if ($resolved) {
                 if ($resolved->feeType && $resolved->feeType->is_one_time) {
                     $oneTimeFeesTotal += $resolved->amount;
                     $oneTimeFeesList[] = [
                         'name' => $resolved->feeType->name,
-                        'amount' => $resolved->amount
+                        'amount' => $resolved->amount,
                     ];
                 } else {
                     $tuition += $resolved->amount;
                     $feeName = $resolved->feeType ? strtolower($resolved->feeType->name) : '';
                     $feeSlug = $resolved->feeType ? $resolved->feeType->slug : '';
-                    $isExcluded = str_contains($feeName, 'drug test') || 
+                    $isExcluded = str_contains($feeName, 'drug test') ||
                                   str_contains($feeSlug, 'drug-test') ||
-                                  str_contains($feeName, 'acceptance') || 
+                                  str_contains($feeName, 'acceptance') ||
                                   str_contains($feeSlug, 'acceptance') ||
-                                  str_contains($feeName, 'matriculation') || 
+                                  str_contains($feeName, 'matriculation') ||
                                   str_contains($feeSlug, 'matriculation');
-                    
-                    if (!$isExcluded) {
+
+                    if (! $isExcluded) {
                         $discountTuitionBase += $resolved->amount;
                     }
                 }
             }
         }
 
-        $adminCharge = \App\Models\SystemSetting::get('admin_charge_enabled', true) 
-            ? \App\Models\SystemSetting::get('admin_charge_amount', 250000) : 0;
-            
+        $adminCharge = SystemSetting::get('admin_charge_enabled', true)
+            ? SystemSetting::get('admin_charge_amount', 250000) : 0;
+
         // Calculate Discount based on Scholarship Coverage
         $discount = 0;
         $scholarship = $student->scholarship;
@@ -539,14 +557,16 @@ class ProfileController extends Controller
             'one_time_fees_list' => $oneTimeFeesList,
             'discount' => $discount,
             'total' => $total - $discount,
-            'scholarship_name' => $scholarship?->name
+            'scholarship_name' => $scholarship?->name,
         ];
     }
 
     private function calculateEstimatedFeesForApplicant($applicant, $session)
     {
-        if (!$session) return null;
-        
+        if (! $session) {
+            return null;
+        }
+
         $program = $applicant->programme;
         $deptId = $program?->department_id;
         $facultyId = $program?->department?->faculty_id;
@@ -563,7 +583,7 @@ class ProfileController extends Controller
                 $q->where(function ($sub) {
                     $sub->where('level', '100')->orWhereNull('level');
                 })
-                ->orWhere('entry_mode', $entryMode);
+                    ->orWhere('entry_mode', $entryMode);
             })
             ->where(function ($q) use ($entryMode) {
                 $q->where('entry_mode', $entryMode)->orWhereNull('entry_mode');
@@ -583,35 +603,35 @@ class ProfileController extends Controller
                 ?? $configs->where('department_id', $deptId)->whereNull('program_id')->first()
                 ?? $configs->where('faculty_id', $facultyId)->whereNull('department_id')->whereNull('program_id')->first()
                 ?? $configs->whereNull('faculty_id')->whereNull('department_id')->whereNull('program_id')->first();
-            
+
             if ($resolved) {
                 if ($resolved->feeType && $resolved->feeType->is_one_time) {
                     $oneTimeFeesTotal += $resolved->amount;
                     $oneTimeFeesList[] = [
                         'name' => $resolved->feeType->name,
-                        'amount' => $resolved->amount
+                        'amount' => $resolved->amount,
                     ];
                 } else {
                     $tuition += $resolved->amount;
                     $feeName = $resolved->feeType ? strtolower($resolved->feeType->name) : '';
                     $feeSlug = $resolved->feeType ? $resolved->feeType->slug : '';
-                    $isExcluded = str_contains($feeName, 'drug test') || 
+                    $isExcluded = str_contains($feeName, 'drug test') ||
                                   str_contains($feeSlug, 'drug-test') ||
-                                  str_contains($feeName, 'acceptance') || 
+                                  str_contains($feeName, 'acceptance') ||
                                   str_contains($feeSlug, 'acceptance') ||
-                                  str_contains($feeName, 'matriculation') || 
+                                  str_contains($feeName, 'matriculation') ||
                                   str_contains($feeSlug, 'matriculation');
-                    
-                    if (!$isExcluded) {
+
+                    if (! $isExcluded) {
                         $discountTuitionBase += $resolved->amount;
                     }
                 }
             }
         }
 
-        $adminCharge = \App\Models\SystemSetting::get('admin_charge_enabled', true) 
-            ? \App\Models\SystemSetting::get('admin_charge_amount', 250000) : 0;
-            
+        $adminCharge = SystemSetting::get('admin_charge_enabled', true)
+            ? SystemSetting::get('admin_charge_amount', 250000) : 0;
+
         // Calculate Discount based on Scholarship Coverage
         $discount = 0;
         $scholarship = $applicant->scholarship;
@@ -636,7 +656,7 @@ class ProfileController extends Controller
             'one_time_fees_list' => $oneTimeFeesList,
             'discount' => $discount,
             'total' => $total - $discount,
-            'scholarship_name' => $scholarship?->name
+            'scholarship_name' => $scholarship?->name,
         ];
     }
 

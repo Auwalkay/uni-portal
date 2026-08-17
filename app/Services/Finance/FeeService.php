@@ -138,6 +138,7 @@ class FeeService
                 if ($adminChargeEnabled && $scholarship->covers_admin_charges) {
                     $baseForDiscount += $adminChargeAmount;
                 }
+
                 if ($scholarship->type === 'fixed') {
                     $discountAmount = max(0, $baseForDiscount - $scholarship->amount);
                 } else {
@@ -145,7 +146,18 @@ class FeeService
                 }
             }
 
-            $finalAmount = $totalAmountBeforeDiscount - $discountAmount;
+            // Check if late payment fine should be applied immediately
+            $lateFineAmount = 0;
+            $applyLateFine = false;
+            if ($session->late_payment_deadline && $session->late_payment_deadline->isPast() && $session->late_fee_amount > 0) {
+                $isEnabled = filter_var(\App\Models\SystemSetting::get('late_fee_enabled', true), FILTER_VALIDATE_BOOLEAN);
+                if ($isEnabled) {
+                    $lateFineAmount = (float) $session->late_fee_amount;
+                    $applyLateFine = true;
+                }
+            }
+
+            $finalAmount = $totalAmountBeforeDiscount - $discountAmount + $lateFineAmount;
 
             $studentSession = StudentSession::firstOrCreate(
                 ['student_id' => $student->id, 'session_id' => $session->id],
@@ -162,6 +174,7 @@ class FeeService
                 'amount' => $finalAmount,
                 'status' => 'pending',
                 'due_date' => now()->addWeeks(4),
+                'late_fine_applied' => $applyLateFine,
             ]);
 
             foreach ($resolvedConfigs as $config) {
@@ -189,6 +202,14 @@ class FeeService
                     'invoice_id' => $invoice->id,
                     'description' => $discountDesc,
                     'amount' => -$discountAmount,
+                ]);
+            }
+
+            if ($applyLateFine) {
+                InvoiceItem::create([
+                    'invoice_id' => $invoice->id,
+                    'description' => 'Late Payment Fine (' . $session->name . ')',
+                    'amount' => $lateFineAmount,
                 ]);
             }
 

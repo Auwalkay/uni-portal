@@ -22,6 +22,7 @@ class Invoice extends Model
     protected $casts = [
         'amount' => 'double',
         'paid_amount' => 'double',
+        'late_fine_applied' => 'boolean',
         'due_date' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',

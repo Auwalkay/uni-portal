@@ -38,6 +38,13 @@ const props = defineProps<{
     timetable?: Array<any>;
     pendingSession?: string;
     announcements?: Array<any>;
+    activeSession?: {
+        id: string;
+        name: string;
+        school_fee_payment_enabled: boolean;
+        late_payment_deadline: string | null;
+        late_fee_amount: number;
+    };
 }>();
 
 const pinnedAnnouncements = computed(() => {
@@ -55,6 +62,26 @@ const paymentStatusText = computed(() => {
         case 'pending': return 'Unpaid (Pending)';
         case 'cancelled': return 'Cancelled';
         default: return 'Unpaid';
+    }
+});
+
+const isLateFeeOverdue = computed(() => {
+    if (!props.activeSession?.late_payment_deadline) return false;
+    return new Date(props.activeSession.late_payment_deadline) < new Date();
+});
+
+const formattedLateDeadline = computed(() => {
+    if (!props.activeSession?.late_payment_deadline) return '';
+    try {
+        return new Date(props.activeSession.late_payment_deadline).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch (e) {
+        return '';
     }
 });
 
@@ -95,24 +122,24 @@ const greeting = () => {
     <StudentLayout :breadcrumbs="breadcrumbs">
         <div class="flex-1 space-y-6 p-6">
             <!-- Welcome Banner -->
-            <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 p-8 shadow-lg">
-                <div class="relative z-10 flex items-center gap-6 text-white">
+            <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 p-6 sm:p-8 shadow-lg">
+                <div class="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-6 text-white text-center sm:text-left">
                     <img 
                         :src="student?.passport_photo_path ? `/storage/${student.passport_photo_path}` : `https://ui-avatars.com/api/?name=${user?.name}&background=random`" 
                         alt="Profile Photo" 
-                        class="h-20 w-20 rounded-full border-4 border-white/30 object-cover shadow-md"
+                        class="h-24 w-24 sm:h-20 sm:w-20 rounded-full border-4 border-white/30 object-cover shadow-md flex-shrink-0"
                     />
-                    <div>
-                        <h1 class="text-3xl font-bold tracking-tight">{{ greeting() }}, {{ user?.name.split(' ')[0] }}!</h1>
-                        <p class="mt-2 text-blue-100">
+                    <div class="flex-1 min-w-0 w-full">
+                        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white leading-tight break-words">{{ greeting() }}, {{ user?.name.split(' ')[0] }}!</h1>
+                        <p class="mt-2 text-sm sm:text-base text-blue-100 break-words">
                             {{ student?.matriculation_number || 'Matriculation Pending' }} &bull; {{ student?.program?.name || 'Program N/A' }}
                         </p>
-                        <div class="mt-4 flex flex-wrap gap-2">
-                            <div class="inline-flex items-center rounded-full bg-white/20 px-3 py-1 text-sm backdrop-blur-sm">
+                        <div class="mt-4 flex flex-wrap justify-center sm:justify-start gap-2">
+                            <div class="inline-flex items-center rounded-full bg-white/20 px-3 py-1 text-xs sm:text-sm backdrop-blur-sm">
                                 <CalendarDays class="mr-2 h-4 w-4" />
                                 {{ stats?.session }} Session &bull; {{ stats?.semester }}
                             </div>
-                            <div v-if="pendingSession" class="inline-flex items-center rounded-full bg-amber-500/30 border border-amber-400/40 text-amber-100 px-3 py-1 text-sm backdrop-blur-sm font-medium">
+                            <div v-if="pendingSession" class="inline-flex items-center rounded-full bg-amber-500/30 border border-amber-400/40 text-amber-100 px-3 py-1 text-xs sm:text-sm backdrop-blur-sm font-medium">
                                 <Clock class="mr-2 h-4 w-4 text-amber-300" />
                                 Promotion Pending to {{ pendingSession }}
                             </div>
@@ -132,6 +159,60 @@ const greeting = () => {
                     <h3 class="font-semibold text-amber-800">Academic Promotion Pending</h3>
                     <p class="mt-1 text-sm text-amber-700">
                         Your academic promotion to the **{{ pendingSession }}** session is currently pending. Please resolve any outstanding school fees for the previous session ({{ stats?.session }}) to automatically complete your promotion and register courses.
+                    </p>
+                </div>
+            </div>
+
+            <!-- School Fee Payments Closed Notification -->
+            <div v-if="activeSession && !activeSession.school_fee_payment_enabled && schoolFeeStatus !== 'paid'" class="rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm flex items-start gap-4 text-red-900">
+                <div class="rounded-full bg-red-100 p-2">
+                    <AlertCircle class="h-6 w-6 text-red-600" />
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-semibold text-red-800">School Fee Payments Suspended</h3>
+                    <p class="mt-1 text-sm text-red-700">
+                        School fee payment for the <strong>{{ activeSession.name }}</strong> session is currently disabled. Please contact the Bursary department for assistance.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Unpaid School Fees Notification -->
+            <div v-if="activeSession && activeSession.school_fee_payment_enabled && schoolFeeStatus !== 'paid' && schoolFeeStatus !== 'partial'" class="rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm flex items-start gap-4 text-red-900">
+                <div class="rounded-full bg-red-100 p-2">
+                    <CreditCard class="h-6 w-6 text-red-600" />
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-semibold text-red-800">Outstanding School Fees</h3>
+                    <p class="mt-1 text-sm text-red-700">
+                        You have not paid your school fees for the <strong>{{ activeSession.name }}</strong> session. Please generate your invoice and make a payment to secure your student registration.
+                    </p>
+                    <Link :href="route('student.payments.index')" class="mt-3 inline-flex items-center text-sm font-medium text-red-800 hover:text-red-900 underline underline-offset-4">
+                        Pay Fees Now &rarr;
+                    </Link>
+                </div>
+            </div>
+
+            <!-- Late Payment Fine Notification -->
+            <div v-if="activeSession?.late_payment_deadline && schoolFeeStatus !== 'paid' && schoolFeeStatus !== 'partial'" 
+                :class="[
+                    'rounded-xl border p-4 shadow-sm flex items-start gap-4',
+                    isLateFeeOverdue 
+                        ? 'border-red-200 bg-red-50 text-red-900' 
+                        : 'border-orange-200 bg-orange-50 text-orange-900'
+                ]"
+            >
+                <div :class="['rounded-full p-2', isLateFeeOverdue ? 'bg-red-100' : 'bg-orange-100']">
+                    <CalendarClock :class="['h-6 w-6', isLateFeeOverdue ? 'text-red-600' : 'text-orange-600']" />
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-semibold">{{ isLateFeeOverdue ? 'Late Registration Fine Applied' : 'Late Payment Deadline Warning' }}</h3>
+                    <p :class="['mt-1 text-sm', isLateFeeOverdue ? 'text-red-700' : 'text-orange-700']">
+                        <span v-if="isLateFeeOverdue">
+                            The late registration deadline of <strong>{{ formattedLateDeadline }}</strong> has passed. A late fine of <strong>₦{{ new Intl.NumberFormat().format(activeSession.late_fee_amount) }}</strong> has been added to your unpaid school fee invoice.
+                        </span>
+                        <span v-else>
+                            Please note that the deadline to pay school fees without penalty is <strong>{{ formattedLateDeadline }}</strong>. A late registration fine of <strong>₦{{ new Intl.NumberFormat().format(activeSession.late_fee_amount) }}</strong> will be applied after this date.
+                        </span>
                     </p>
                 </div>
             </div>
