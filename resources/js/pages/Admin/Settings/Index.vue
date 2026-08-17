@@ -53,9 +53,11 @@ const props = defineProps<{
         enable_exam_card_download: boolean;
         enable_hostel_booking: boolean;
         promote_pending_payments: boolean;
+        late_fee_enabled: boolean;
     }
 }>();
 
+// Breadcrumbs
 const breadcrumbs = [
     { title: 'System Settings', href: '/admin/settings' }
 ];
@@ -95,6 +97,30 @@ const hostelBookingForm = useForm({
 const promotionForm = useForm({
     promotePendingPayments: props.settings.promote_pending_payments
 });
+
+const lateFeeForm = useForm({
+    enabled: props.settings.late_fee_enabled
+});
+
+const submitLateFeeSetting = () => {
+    router.post(route('admin.settings.update'), { 
+        key: 'late_fee_enabled', 
+        value: lateFeeForm.enabled ? 'true' : 'false' 
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            Swal.fire({
+                icon: 'success',
+                title: 'Updated',
+                text: 'Late payment fine override settings updated successfully',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
+            });
+        }
+    });
+};
 
 const submitResultVisibility = () => {
     router.post(route('admin.settings.update'), { 
@@ -562,6 +588,33 @@ const settingsModules = [
                         </div>
                         <Button @click="submitPromotionSetting" class="w-full bg-purple-600 hover:bg-purple-700 text-white">
                             Update Promotion Settings
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                <!-- Late Payment Policy Card -->
+                <Card class="border-orange-200 bg-orange-50/30">
+                    <CardHeader class="flex flex-row items-center gap-4">
+                        <div class="bg-orange-100 p-3 rounded-xl text-orange-600">
+                            <ShieldAlert class="w-6 h-6" />
+                        </div>
+                        <div>
+                            <CardTitle>Late Payment Fine Policy</CardTitle>
+                            <CardDescription>Enable or disable late payment fine system globally.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent class="space-y-6">
+                        <div class="grid gap-4">
+                            <div class="flex items-center justify-between">
+                                <Label for="enable_late_fees">Enable Late Payment Fines (Global Override)</Label>
+                                <Switch 
+                                    id="enable_late_fees" 
+                                    v-model:checked="lateFeeForm.enabled" 
+                                />
+                            </div>
+                        </div>
+                        <Button @click="submitLateFeeSetting" class="w-full bg-orange-600 hover:bg-orange-700 text-white">
+                            Update Fine Policy
                         </Button>
                     </CardContent>
                 </Card>

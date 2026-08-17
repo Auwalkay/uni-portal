@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Student;
 
+use App\Contracts\PaymentGatewayInterface;
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\StudentSession;
-use App\Contracts\PaymentGatewayInterface;
+use App\Models\Session;
+use App\Services\Finance\FeeService;
+use App\Services\Payment\PaymentHandler;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,7 +18,7 @@ use Inertia\Inertia;
 class PaymentController extends Controller
 {
     protected $gateway;
-    
+
     public function __construct(PaymentGatewayInterface $gateway)
     {
         $this->gateway = $gateway;
@@ -25,9 +27,10 @@ class PaymentController extends Controller
     private function getGatewayByName($name)
     {
         if ($name === 'squadco') {
-            return new \App\Services\SquadcoService();
+            return new \App\Services\SquadcoService;
         }
-        return new \App\Services\PaystackService();
+
+        return new \App\Services\PaystackService;
     }
 
     public function downloadReceipt(Payment $payment)
@@ -41,7 +44,7 @@ class PaymentController extends Controller
         }
 
         $payment->load(['invoice.session', 'user.student']);
-        
+
         $pdf = Pdf::loadView('documents.payment_receipt', [
             'payment' => $payment,
             'student' => $payment->user->student,
@@ -58,12 +61,12 @@ class PaymentController extends Controller
 
     public function index()
     {
-        $feeService = app(\App\Services\Finance\FeeService::class);
+        $feeService = app(FeeService::class);
         $rawInvoices = Invoice::where('user_id', Auth::id())
             ->where('status', '!=', 'paid')
             ->where('type', 'school_fee')
             ->get();
-        
+
         foreach ($rawInvoices as $invoice) {
             $feeService->refreshInvoiceIfUnpaid($invoice);
         }
@@ -79,16 +82,17 @@ class PaymentController extends Controller
             ->latest()
             ->get();
 
-        $currentSession = \App\Models\Session::current();
+        $currentSession = Session::current();
         $canGenerateInvoice = false;
         $optionalFees = [];
 
         $student = Auth::user()->student;
         if ($currentSession && $student) {
-            $canGenerateInvoice = !Invoice::where('user_id', Auth::id())
-                ->where('type', 'school_fee')
-                ->where('session_id', $currentSession->id)
-                ->exists();
+            $canGenerateInvoice = $currentSession->school_fee_payment_enabled && 
+                ! Invoice::where('user_id', Auth::id())
+                    ->where('type', 'school_fee')
+                    ->where('session_id', $currentSession->id)
+                    ->exists();
 
             $optionalFees = $feeService->getAvailableOptionalFees($student, $currentSession);
         }
@@ -104,12 +108,12 @@ class PaymentController extends Controller
     public function getOptionalFees()
     {
         $student = Auth::user()->student;
-        $currentSession = \App\Models\Session::current();
-        if (!$student || !$currentSession) {
+        $currentSession = Session::current();
+        if (! $student || ! $currentSession) {
             return response()->json([]);
         }
 
-        $feeService = app(\App\Services\Finance\FeeService::class);
+        $feeService = app(FeeService::class);
         $optionalFees = $feeService->getAvailableOptionalFees($student, $currentSession);
 
         return response()->json($optionalFees);
@@ -118,9 +122,9 @@ class PaymentController extends Controller
     public function initiateOptionalFee(\App\Models\FeeConfiguration $config)
     {
         $student = Auth::user()->student;
-        $currentSession = \App\Models\Session::current();
+        $currentSession = Session::current();
 
-        if (!$student || !$currentSession) {
+        if (! $student || ! $currentSession) {
             return back()->with('error', 'Student profile or active session not found.');
         }
 
@@ -128,10 +132,10 @@ class PaymentController extends Controller
             return back()->with('error', 'Invalid session fee configuration.');
         }
 
-        $feeService = app(\App\Services\Finance\FeeService::class);
+        $feeService = app(FeeService::class);
         $invoice = $feeService->generateOptionalFeeInvoice($student, $currentSession, $config);
 
-        if (!$invoice) {
+        if (! $invoice) {
             return back()->with('error', 'Failed to generate invoice. It may have already been generated or paid.');
         }
 
@@ -141,11 +145,18 @@ class PaymentController extends Controller
     public function pay(Request $request, Invoice $invoice)
     {
         // Auto-refresh invoice if unpaid before proceeding
-        $feeService = app(\App\Services\Finance\FeeService::class);
+        $feeService = app(FeeService::class);
         $invoice = $feeService->refreshInvoiceIfUnpaid($invoice);
 
         if ($invoice->status === 'paid') {
             return back()->with('error', 'Invoice already paid.');
+        }
+
+        if ($invoice->type === 'school_fee') {
+            $session = $invoice->session;
+            if ($session && !$session->school_fee_payment_enabled) {
+                return back()->with('error', 'School fee payments are currently disabled for the ' . $session->name . ' session.');
+            }
         }
 
         $balance = (float) $invoice->amount - (float) $invoice->paid_amount;
@@ -154,14 +165,14 @@ class PaymentController extends Controller
             $payment = Payment::create([
                 'invoice_id' => $invoice->id,
                 'user_id' => Auth::id(),
-                'transaction_id' => 'SCHOLARSHIP' . date('Y') . strtoupper(Str::random(8)),
+                'transaction_id' => 'SCHOLARSHIP'.date('Y').strtoupper(Str::random(8)),
                 'gateway' => 'scholarship',
-                'gateway_reference' => 'SCH-' . strtoupper(uniqid()),
+                'gateway_reference' => 'SCH-'.strtoupper(uniqid()),
                 'amount' => 0,
                 'status' => 'pending',
             ]);
 
-            app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($payment->gateway_reference, [
+            app(PaymentHandler::class)->handleSuccessfulPayment($payment->gateway_reference, [
                 'channel' => 'scholarship',
                 'id' => $payment->transaction_id,
             ]);
@@ -180,8 +191,8 @@ class PaymentController extends Controller
 
         // Disallow split payments for non-school and non-hostel fees (e.g. acceptance_fee, other_fee, application_fee)
         if ($invoice->type !== 'school_fee' && $invoice->type !== 'hostel_fee') {
-            if (!$isFullPayment) {
-                return back()->with('error', 'Split payments are not supported for this type of fee. The full remaining balance of ' . number_format($balance, 2) . ' NGN must be paid.');
+            if (! $isFullPayment) {
+                return back()->with('error', 'Split payments are not supported for this type of fee. The full remaining balance of '.number_format($balance, 2).' NGN must be paid.');
             }
         }
 
@@ -189,11 +200,11 @@ class PaymentController extends Controller
         $adminChargeSplittable = \App\Models\SystemSetting::get('admin_charge_splittable', true);
         $adminChargeItemAmount = (float) $invoice->items()->where('description', 'Administrative Charges')->sum('amount');
         $netAcademicPortion = (float) $invoice->amount - $adminChargeItemAmount;
-        
+
         $minUpfront = (float) $invoice->amount / 2; // Default 50%
         if ($invoice->type === 'hostel_fee') {
             $minUpfront = (float) $invoice->amount * 0.75;
-        } elseif (!$adminChargeSplittable && $adminChargeItemAmount > 0) {
+        } elseif (! $adminChargeSplittable && $adminChargeItemAmount > 0) {
             // Admin must be paid full, academic can be split
             $minUpfront = ($netAcademicPortion / 2) + $adminChargeItemAmount;
         }
@@ -207,11 +218,11 @@ class PaymentController extends Controller
         $isFullPayment = abs($amountToPay - $balance) < 0.01;
         $totalPaidIfSuccessful = (float) $invoice->paid_amount + $amountToPay;
 
-        if (!$isFullPayment) {
+        if (! $isFullPayment) {
             if ($totalPaidIfSuccessful < $minUpfront) {
-                return back()->with('error', 'Minimum required upfront payment is ' . number_format($minUpfront) . '. You have only paid ' . number_format($invoice->paid_amount) . '.');
+                return back()->with('error', 'Minimum required upfront payment is '.number_format($minUpfront).'. You have only paid '.number_format($invoice->paid_amount).'.');
             }
-            
+
             // Optional: Prevent extremely small payments (e.g. less than 1000)
             if ($amountToPay < 1000) {
                 return back()->with('error', 'The minimum payment amount allowed is 1,000 NGN.');
@@ -219,7 +230,7 @@ class PaymentController extends Controller
         }
 
         if ($amountToPay > ($balance + 0.01)) {
-            return back()->with('error', 'Amount exceeds remaining balance of ' . number_format($balance, 2));
+            return back()->with('error', 'Amount exceeds remaining balance of '.number_format($balance, 2));
         }
 
         // Check for the last pending payment and verify its status before proceeding
@@ -229,13 +240,14 @@ class PaymentController extends Controller
             ->latest()
             ->first();
 
-        if ($lastPending && !str_starts_with($lastPending->gateway_reference, 'TEMP-')) {
+        if ($lastPending && ! str_starts_with($lastPending->gateway_reference, 'TEMP-')) {
             // Verify using the gateway that was actually used for this payment
             $checkGateway = $this->getGatewayByName($lastPending->gateway ?? 'squadco');
             $verification = $checkGateway->verifyTransaction($lastPending->gateway_reference);
-            
+
             if ($verification && $verification['status'] === 'success') {
-                app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($lastPending->gateway_reference, $verification);
+                app(PaymentHandler::class)->handleSuccessfulPayment($lastPending->gateway_reference, $verification);
+
                 return Inertia::render('Student/Finance/Success', [
                     'payment' => $lastPending->fresh(),
                     'invoice' => $invoice,
@@ -250,9 +262,9 @@ class PaymentController extends Controller
         $payment = Payment::create([
             'invoice_id' => $invoice->id,
             'user_id' => Auth::id(),
-            'transaction_id' => 'MIUPAY' . date('Y') . strtoupper(Str::random(8)),
+            'transaction_id' => 'MIUPAY'.date('Y').strtoupper(Str::random(8)),
             'gateway' => $activeGateway,
-            'gateway_reference' => 'TEMP-' . uniqid(), // Temporary ref
+            'gateway_reference' => 'TEMP-'.uniqid(), // Temporary ref
             'amount' => $amountToPay,
             'status' => 'pending',
         ]);
@@ -260,7 +272,7 @@ class PaymentController extends Controller
         // We actually use the Paystack Reference as gateway_reference if initializing.
         // Paystack generates one or acts on ours.
         // Let's generate ours: "PAY-" . uniqid()
-        $reference = 'PAY-' . strtoupper(uniqid());
+        $reference = 'PAY-'.strtoupper(uniqid());
         $payment->update(['gateway_reference' => $reference]);
 
         $data = $this->gateway->initializeTransaction(
@@ -285,9 +297,9 @@ class PaymentController extends Controller
     public function callback(Request $request)
     {
         $reference = $request->query('reference') ?? $request->query('transaction_ref');
-        if (!$reference) {
+        if (! $reference) {
             return Inertia::render('Student/Finance/Failure', [
-                'error' => 'No transaction reference was provided by the payment gateway.'
+                'error' => 'No transaction reference was provided by the payment gateway.',
             ]);
         }
 
@@ -297,8 +309,9 @@ class PaymentController extends Controller
         if ($data && $data['status'] === 'success') {
             if ($payment) {
                 if ($payment->status !== 'success') {
-                    app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($reference, $data);
+                    app(PaymentHandler::class)->handleSuccessfulPayment($reference, $data);
                 }
+
                 return Inertia::render('Student/Finance/Success', [
                     'payment' => $payment,
                     'invoice' => $payment->invoice,
@@ -314,7 +327,7 @@ class PaymentController extends Controller
 
         return Inertia::render('Student/Finance/Failure', [
             'error' => $data['message'] ?? 'The payment gateway could not verify this transaction.',
-            'reference' => $reference
+            'reference' => $reference,
         ]);
     }
 
@@ -322,16 +335,16 @@ class PaymentController extends Controller
     {
         $user = Auth::user();
         $student = \App\Models\Student::where('user_id', $user->id)->firstOrFail();
-        $currentSession = \App\Models\Session::current();
+        $currentSession = Session::current();
 
-        if (!$currentSession) {
+        if (! $currentSession) {
             return back()->with('error', 'No active academic session found.');
         }
 
-        $feeService = app(\App\Services\Finance\FeeService::class);
+        $feeService = app(FeeService::class);
         $invoice = $feeService->generateSchoolFeeInvoice($student, $currentSession);
 
-        if (!$invoice) {
+        if (! $invoice) {
             return back()->with('error', 'No fee configuration found for your profile. Please contact support.');
         }
 

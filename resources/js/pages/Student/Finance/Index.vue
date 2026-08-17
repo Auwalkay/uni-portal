@@ -277,15 +277,20 @@ const getPaymentDate = (invoice: any) => {
                                         </Badge>
                                     </TableCell>
                                     <TableCell class="text-right">
-                                        <Button 
-                                            v-if="invoice.status !== 'paid'" 
-                                            @click.stop="openPaymentModal(invoice)"
-                                            size="sm"
-                                        >
-                                            <CreditCard class="mr-2 h-4 w-4" />
-                                            Pay Now
-                                        </Button>
-                                        <span v-else class="text-muted-foreground text-sm font-medium">Paid</span>
+                                         <div v-if="invoice.status !== 'paid'">
+                                             <Button 
+                                                 v-if="invoice.type !== 'school_fee' || invoice.session?.school_fee_payment_enabled" 
+                                                 @click.stop="openPaymentModal(invoice)"
+                                                 size="sm"
+                                             >
+                                                 <CreditCard class="mr-2 h-4 w-4" />
+                                                 Pay Now
+                                             </Button>
+                                             <span v-else class="text-amber-600 dark:text-amber-400 text-xs font-semibold flex items-center justify-end gap-1 px-2.5 py-1">
+                                                 Suspended
+                                             </span>
+                                         </div>
+                                         <span v-else class="text-muted-foreground text-sm font-medium">Paid</span>
                                     </TableCell>
                                 </TableRow>
                                 <!-- Expanded Details Row -->

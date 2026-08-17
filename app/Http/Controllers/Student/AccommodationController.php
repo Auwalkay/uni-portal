@@ -3,20 +3,20 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
-use App\Models\CourseRegistration;
 use App\Models\Hostel;
 use App\Models\HostelBooking;
 use App\Models\HostelFee;
+use App\Models\HostelRoom;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Session;
 use App\Models\Student;
-use App\Models\HostelRoom;
+use App\Models\SystemSetting;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
-use Barryvdh\DomPDF\Facade\Pdf;
 
 class AccommodationController extends Controller
 {
@@ -26,11 +26,11 @@ class AccommodationController extends Controller
         $student = Student::where('user_id', $user->id)->firstOrFail();
         $currentSession = Session::current();
 
-        if (!$currentSession) {
+        if (! $currentSession) {
             return redirect()->route('student.dashboard')->with('error', 'No active academic session found.');
         }
 
-        $isBookingActive = filter_var(\App\Models\SystemSetting::get('enable_hostel_booking', true), FILTER_VALIDATE_BOOLEAN);
+        $isBookingActive = filter_var(SystemSetting::get('enable_hostel_booking', true), FILTER_VALIDATE_BOOLEAN);
 
         // 1. School Fee Check
         $hasPaidFees = Invoice::where('user_id', $user->id)
@@ -49,7 +49,7 @@ class AccommodationController extends Controller
             ->first();
 
         // If they haven't met requirements or booking is disabled, pass correct statuses to the view
-        if (!$hasPaidFees || !$isBookingActive) {
+        if (! $hasPaidFees || ! $isBookingActive) {
             return Inertia::render('Student/Accommodation/Index', [
                 'hasPaidFees' => $hasPaidFees,
                 'hasRegisteredCourses' => $hasRegisteredCourses,
@@ -95,8 +95,8 @@ class AccommodationController extends Controller
 
     public function store(Request $request)
     {
-        $bookingEnabled = filter_var(\App\Models\SystemSetting::get('enable_hostel_booking', true), FILTER_VALIDATE_BOOLEAN);
-        if (!$bookingEnabled) {
+        $bookingEnabled = filter_var(SystemSetting::get('enable_hostel_booking', true), FILTER_VALIDATE_BOOLEAN);
+        if (! $bookingEnabled) {
             return back()->with('error', 'Hostel bookings are currently closed by the administration.');
         }
 
@@ -108,7 +108,7 @@ class AccommodationController extends Controller
         $student = Student::where('user_id', $user->id)->firstOrFail();
         $currentSession = Session::current();
 
-        if (!$currentSession) {
+        if (! $currentSession) {
             return back()->with('error', 'No active academic session found.');
         }
 
@@ -119,8 +119,7 @@ class AccommodationController extends Controller
             ->where('session_id', $currentSession->id)
             ->exists();
 
-
-        if (!$hasPaidFees) {
+        if (! $hasPaidFees) {
             return back()->with('error', 'You must pay school fees before booking.');
         }
 
@@ -152,7 +151,7 @@ class AccommodationController extends Controller
                 ->orderBy('hostel_id', 'desc') // specific hostel fee first (null comes last)
                 ->first();
 
-            if (!$fee) {
+            if (! $fee) {
                 throw new \Exception('Accommodation fees have not been configured for this session.');
             }
 
@@ -170,7 +169,7 @@ class AccommodationController extends Controller
             $finalAmount = $fee->amount - $discountAmount;
 
             // Generate Invoice
-            $reference = 'HST-' . strtoupper(uniqid());
+            $reference = 'HST-'.strtoupper(uniqid());
 
             $invoice = Invoice::create([
                 'user_id' => $user->id,
@@ -184,14 +183,14 @@ class AccommodationController extends Controller
 
             InvoiceItem::create([
                 'invoice_id' => $invoice->id,
-                'description' => 'Hostel Accommodation Fee (' . $room->floor->block->hostel->name . ' - Block: ' . $room->floor->block->name . ', Room: ' . $room->room_number . ')',
+                'description' => 'Hostel Accommodation Fee ('.$room->floor->block->hostel->name.' - Block: '.$room->floor->block->name.', Room: '.$room->room_number.')',
                 'amount' => $fee->amount,
             ]);
 
             if ($discountAmount > 0) {
                 $discountDesc = $student->scholarship->type === 'fixed'
-                    ? 'Scholarship Discount (' . $student->scholarship->name . ' - Fixed ₦' . number_format($student->scholarship->amount, 2) . ')'
-                    : 'Scholarship Discount (' . $student->scholarship->name . ' - ' . floatval($student->scholarship->percentage) . '%)';
+                    ? 'Scholarship Discount ('.$student->scholarship->name.' - Fixed ₦'.number_format($student->scholarship->amount, 2).')'
+                    : 'Scholarship Discount ('.$student->scholarship->name.' - '.floatval($student->scholarship->percentage).'%)';
                 InvoiceItem::create([
                     'invoice_id' => $invoice->id,
                     'description' => $discountDesc,
@@ -215,7 +214,8 @@ class AccommodationController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Failed to process booking. Please try again: ' . $e->getMessage());
+
+            return back()->with('error', 'Failed to process booking. Please try again: '.$e->getMessage());
         }
     }
 
@@ -234,7 +234,7 @@ class AccommodationController extends Controller
             ->where('status', 'confirmed')
             ->first();
 
-        if (!$booking) {
+        if (! $booking) {
             return back()->with('error', 'No confirmed accommodation booking found for the current session.');
         }
 
@@ -244,7 +244,7 @@ class AccommodationController extends Controller
             'session' => $currentSession,
         ]);
 
-        return $pdf->download("Accommodation_Slip_slip.pdf");
+        return $pdf->download('Accommodation_Slip_slip.pdf');
     }
 
     public function downloadPaymentSlip()
@@ -255,7 +255,7 @@ class AccommodationController extends Controller
         $booking = HostelBooking::with([
             'invoice.payments' => function ($q) {
                 $q->where('status', 'success');
-            }
+            },
         ])
             ->where('student_id', function ($q) use ($user) {
                 $q->select('id')->from('students')->where('user_id', $user->id);
@@ -263,13 +263,13 @@ class AccommodationController extends Controller
             ->where('session_id', $currentSession->id)
             ->first();
 
-        if (!$booking || !$booking->invoice) {
+        if (! $booking || ! $booking->invoice) {
             return back()->with('error', 'No booking or invoice found.');
         }
 
         $payment = $booking->invoice->payments->first();
 
-        if (!$payment) {
+        if (! $payment) {
             return back()->with('error', 'No successful payment found for this booking.');
         }
 

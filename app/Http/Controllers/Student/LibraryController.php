@@ -10,8 +10,8 @@ use App\Models\User;
 use App\Notifications\NewBookRequestNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
@@ -27,8 +27,8 @@ class LibraryController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('author', 'like', "%{$search}%")
-                  ->orWhere('isbn', 'like', "%{$search}%");
+                    ->orWhere('author', 'like', "%{$search}%")
+                    ->orWhere('isbn', 'like', "%{$search}%");
             });
         }
 
@@ -106,7 +106,7 @@ class LibraryController extends Controller
     {
         Gate::authorize('view_library');
 
-        if (!$book->is_ebook) {
+        if (! $book->is_ebook) {
             abort(404, 'E-Book not found');
         }
 
@@ -118,7 +118,7 @@ class LibraryController extends Controller
 
         if ($book->ebook_file_path) {
             if (Storage::disk('local')->exists($book->ebook_file_path)) {
-                return Storage::disk('local')->download($book->ebook_file_path, Str::slug($book->title) . '.pdf');
+                return Storage::disk('local')->download($book->ebook_file_path, Str::slug($book->title).'.pdf');
             }
             abort(404, 'File not found on storage disk.');
         }

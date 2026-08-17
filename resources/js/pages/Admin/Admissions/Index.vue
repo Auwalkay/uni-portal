@@ -228,8 +228,8 @@ const clearFilters = () => {
                         <TableRow v-for="applicant in applicants.data" :key="applicant.id">
                             <TableCell>
                                 <div class="flex flex-col">
-                                    <span class="font-medium text-foreground">{{ applicant.user.name }}</span>
-                                    <span class="text-xs text-muted-foreground">{{ applicant.user.email }}</span>
+                                    <span class="font-medium text-foreground">{{ applicant.user?.name || 'N/A' }}</span>
+                                    <span class="text-xs text-muted-foreground">{{ applicant.user?.email || 'N/A' }}</span>
                                 </div>
                             </TableCell>
                             <TableCell>
