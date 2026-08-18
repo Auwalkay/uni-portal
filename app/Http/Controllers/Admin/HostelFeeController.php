@@ -11,6 +11,10 @@ class HostelFeeController extends Controller
 {
     public function store(Request $request)
     {
+        if ($request->has('hostel_id') && ($request->input('hostel_id') === '' || $request->input('hostel_id') === 'null' || $request->input('hostel_id') === null)) {
+            $request->merge(['hostel_id' => null]);
+        }
+
         $validated = $request->validate([
             'session_id' => 'required|exists:academic_sessions,id',
             'hostel_id' => 'nullable|exists:hostels,id',

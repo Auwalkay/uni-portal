@@ -74,6 +74,11 @@ class CourseRegistrationController extends Controller
         return Inertia::render('Student/Courses/Index', [
             'history' => $formattedHistory,
             'student' => $student,
+            'schoolFeeStatus' => Invoice::where('user_id', Auth::id())
+                ->where('type', 'school_fee')
+                ->where('session_id', Session::current()?->id)
+                ->first()?->status ?? 'unpaid',
+            'isSecondSemester' => Semester::current() ? (bool)(stripos(Semester::current()->name, 'Second') !== false || Semester::current()->name == '2') : false,
         ]);
     }
 
@@ -95,15 +100,22 @@ class CourseRegistrationController extends Controller
         }
 
         // Fee Enforcement
+        $currentSemester = Semester::current();
+        $isSecondSemActive = $currentSemester && (stripos($currentSemester->name, 'Second') !== false || $currentSemester->name == '2');
+        $allowedStatuses = $isSecondSemActive ? ['paid'] : ['paid', 'partial'];
+
         $hasPaid = Invoice::where('user_id', Auth::id())
             ->where('type', 'school_fee')
-            ->whereIn('status', ['paid', 'partial'])
+            ->whereIn('status', $allowedStatuses)
             ->where('session_id', $currentSession->id)
             ->exists();
 
         if (! $hasPaid) {
+            $errorMessage = $isSecondSemActive
+                ? 'You must fully clear your School Fees before registering or editing courses for the Second Semester.'
+                : 'You must pay the School Fees for the current session before registering courses.';
             return redirect()->route('student.payments.index')
-                ->with('error', 'You must pay the School Fees for the current session before registering courses.');
+                ->with('error', $errorMessage);
         }
 
         // Get Semesters
@@ -241,6 +253,25 @@ class CourseRegistrationController extends Controller
         $currentSession = Session::current();
         if (! $currentSession) {
             abort(404, 'No active session.');
+        }
+
+        // Fee Enforcement
+        $currentSemester = Semester::current();
+        $isSecondSemActive = $currentSemester && (stripos($currentSemester->name, 'Second') !== false || $currentSemester->name == '2');
+        $allowedStatuses = $isSecondSemActive ? ['paid'] : ['paid', 'partial'];
+
+        $hasPaid = Invoice::where('user_id', Auth::id())
+            ->where('type', 'school_fee')
+            ->whereIn('status', $allowedStatuses)
+            ->where('session_id', $currentSession->id)
+            ->exists();
+
+        if (! $hasPaid) {
+            $errorMessage = $isSecondSemActive
+                ? 'You must fully clear your School Fees before registering or editing courses for the Second Semester.'
+                : 'You must pay the School Fees for the current session before registering courses.';
+            return redirect()->route('student.payments.index')
+                ->with('error', $errorMessage);
         }
 
         // Resolve Semesters
@@ -454,7 +485,11 @@ class CourseRegistrationController extends Controller
         }
 
         // REQUIREMENT: 2nd Semester Exam Card requires FULL payment
-        if (str_contains(strtolower($semester->name), 'second')) {
+        $currentSemester = Semester::current();
+        $isSecondSemActive = $currentSemester && (stripos($currentSemester->name, 'Second') !== false || $currentSemester->name == '2');
+        $isSecondSemRequested = str_contains(strtolower($semester->name), 'second') || $semester->name == '2';
+
+        if ($isSecondSemActive || $isSecondSemRequested) {
             $isFullyPaid = Invoice::where('user_id', Auth::id())
                 ->where('type', 'school_fee')
                 ->where('session_id', $session->id)

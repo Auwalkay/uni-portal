@@ -27,7 +27,9 @@ import {
     XCircle,
     Plus,
     X,
-    Loader2
+    Loader2,
+    ArrowUpDown,
+    FileText
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
 import { debounce } from 'lodash';
@@ -36,13 +38,27 @@ import axios from 'axios';
 const props = defineProps<{
     bookings: any[];
     sessions: any[];
+    hostels: any[];
     filters: {
-        session_id: string;
+        session_id?: string;
+        level?: string;
+        hostel_id?: string;
+        status?: string;
+        date?: string;
+        sort_by?: string;
+        sort_direction?: string;
     };
 }>();
 
 const searchTerm = ref('');
-const selectedSessionId = ref(props.filters.session_id);
+const filterSessionId = ref(props.filters.session_id || '');
+const filterLevel = ref(props.filters.level || 'all');
+const filterHostelId = ref(props.filters.hostel_id || 'all');
+const filterStatus = ref(props.filters.status || 'all');
+const filterDate = ref(props.filters.date || '');
+
+const filterSortBy = ref(props.filters.sort_by || 'created_at');
+const filterSortDirection = ref(props.filters.sort_direction || 'desc');
 
 // --- Admin Booking Modal State ---
 const isBookModalOpen = ref(false);
@@ -175,12 +191,54 @@ const submitBooking = () => {
     });
 };
 
-const handleSessionChange = (val: string) => {
-    selectedSessionId.value = val;
-    router.get(route('admin.hostels.bookings.index'), { session_id: val }, {
+const applyFilters = () => {
+    router.get(route('admin.hostels.bookings.index'), {
+        session_id: filterSessionId.value,
+        level: filterLevel.value === 'all' ? '' : filterLevel.value,
+        hostel_id: filterHostelId.value === 'all' ? '' : filterHostelId.value,
+        status: filterStatus.value === 'all' ? '' : filterStatus.value,
+        date: filterDate.value,
+        sort_by: filterSortBy.value,
+        sort_direction: filterSortDirection.value,
+    }, {
         preserveState: true,
         replace: true
     });
+};
+
+const handleSessionChange = (val: string) => {
+    filterSessionId.value = val;
+    applyFilters();
+};
+
+const handleLevelChange = (val: string) => {
+    filterLevel.value = val;
+    applyFilters();
+};
+
+const handleHostelChange = (val: string) => {
+    filterHostelId.value = val;
+    applyFilters();
+};
+
+const handleStatusChange = (val: string) => {
+    filterStatus.value = val;
+    applyFilters();
+};
+
+const handleDateChange = (event: any) => {
+    filterDate.value = event.target.value;
+    applyFilters();
+};
+
+const toggleSort = (field: string) => {
+    if (filterSortBy.value === field) {
+        filterSortDirection.value = filterSortDirection.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        filterSortBy.value = field;
+        filterSortDirection.value = 'asc';
+    }
+    applyFilters();
 };
 
 const getStatusBadgeClass = (status: string) => {
@@ -212,6 +270,22 @@ watch([searchTerm, () => props.bookings], () => {
         b.room?.floor?.block?.hostel?.name?.toLowerCase().includes(term)
     );
 }, { immediate: true });
+
+const unbookStudent = (bookingId: string) => {
+    if (confirm('Are you sure you want to unbook this student? The allocated room slot will be released.')) {
+        router.post(route('admin.hostels.bookings.unbook', bookingId), {}, {
+            preserveScroll: true
+        });
+    }
+};
+
+const reallocateStudent = (bookingId: string) => {
+    if (confirm('Are you sure you want to re-allocate/reactivate this room allocation for the student?')) {
+        router.post(route('admin.hostels.bookings.reallocate', bookingId), {}, {
+            preserveScroll: true
+        });
+    }
+};
 
 const formatCurrency = (amount: any) => {
     return new Intl.NumberFormat('en-NG', {
@@ -245,37 +319,107 @@ const formatCurrency = (amount: any) => {
             </div>
 
             <!-- Filters Area -->
-            <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 bg-card border rounded-xl p-5 shadow-sm">
-                <div class="lg:col-span-2 relative">
-                    <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                        v-model="searchTerm"
-                        placeholder="Search student, matric no, or hostel..." 
-                        class="pl-10 h-11 bg-muted/30 focus-visible:ring-primary/30"
-                    />
-                </div>
-                
-                <div class="space-y-1">
-                    <Select v-model="selectedSessionId" @update:modelValue="handleSessionChange">
-                        <SelectTrigger class="h-11 bg-muted/30 w-full text-left">
-                            <div class="flex items-center gap-2">
-                                <Calendar class="h-4 w-4 text-muted-foreground" />
-                                <SelectValue placeholder="Academic Session" />
-                            </div>
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem v-for="session in sessions" :key="session.id" :value="session.id">
-                                {{ session.name }}
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
+            <div class="bg-card border rounded-xl p-5 shadow-sm space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- Search Input -->
+                    <div class="relative">
+                        <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            v-model="searchTerm"
+                            placeholder="Quick search student, matric no, or room..." 
+                            class="pl-10 h-10 bg-muted/30 focus-visible:ring-primary/30"
+                        />
+                    </div>
+
+                    <!-- Session Selector -->
+                    <div>
+                        <Select v-model="filterSessionId" @update:modelValue="handleSessionChange">
+                            <SelectTrigger class="h-10 bg-muted/30 w-full text-left">
+                                <div class="flex items-center gap-2">
+                                    <Calendar class="h-4 w-4 text-muted-foreground" />
+                                    <SelectValue placeholder="Academic Session" />
+                                </div>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem v-for="session in sessions" :key="session.id" :value="session.id">
+                                    {{ session.name }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <!-- Hostel Selector -->
+                    <div>
+                        <Select v-model="filterHostelId" @update:modelValue="handleHostelChange">
+                            <SelectTrigger class="h-10 bg-muted/30 w-full text-left">
+                                <div class="flex items-center gap-2">
+                                    <Hotel class="h-4 w-4 text-muted-foreground" />
+                                    <SelectValue placeholder="All Hostels" />
+                                </div>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">-- All Hostels --</SelectItem>
+                                <SelectItem v-for="hostel in hostels" :key="hostel.id" :value="hostel.id">
+                                    {{ hostel.name }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <!-- Level Selector -->
+                    <div>
+                        <Select v-model="filterLevel" @update:modelValue="handleLevelChange">
+                            <SelectTrigger class="h-10 bg-muted/30 w-full text-left">
+                                <SelectValue placeholder="All Levels" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">-- All Levels --</SelectItem>
+                                <SelectItem value="100">100 Level</SelectItem>
+                                <SelectItem value="200">200 Level</SelectItem>
+                                <SelectItem value="300">300 Level</SelectItem>
+                                <SelectItem value="400">400 Level</SelectItem>
+                                <SelectItem value="500">500 Level</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <!-- Status Selector -->
+                    <div>
+                        <Select v-model="filterStatus" @update:modelValue="handleStatusChange">
+                            <SelectTrigger class="h-10 bg-muted/30 w-full text-left">
+                                <SelectValue placeholder="All Statuses" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">-- All Statuses --</SelectItem>
+                                <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="confirmed">Confirmed</SelectItem>
+                                <SelectItem value="cancelled">Cancelled</SelectItem>
+                                <SelectItem value="expired">Expired</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <!-- Date Selector -->
+                    <div>
+                        <input 
+                            type="date" 
+                            :value="filterDate" 
+                            @input="handleDateChange"
+                            class="flex h-10 w-full rounded-md border border-input bg-muted/30 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-muted-foreground"
+                        />
+                    </div>
                 </div>
 
-                <div class="flex items-center gap-2 px-3 py-2 bg-primary/5 rounded-lg border border-primary/10">
-                    <div class="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
-                    <span class="text-xs font-bold text-primary uppercase tracking-wider">
-                        {{ filteredBookings.length }} Total Bookings
-                    </span>
+                <div class="flex items-center justify-between border-t pt-3 mt-1">
+                    <div class="flex items-center gap-2 px-3 py-1.5 bg-primary/5 rounded-lg border border-primary/10">
+                        <div class="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
+                        <span class="text-xs font-bold text-primary uppercase tracking-wider">
+                            {{ filteredBookings.length }} Bookings Found
+                        </span>
+                    </div>
+                    <Button variant="ghost" size="sm" class="text-xs text-muted-foreground hover:text-foreground" @click="() => { filterLevel='all'; filterHostelId='all'; filterStatus='all'; filterDate=''; applyFilters(); }">
+                        Reset Filters
+                    </Button>
                 </div>
             </div>
 
@@ -285,11 +429,31 @@ const formatCurrency = (amount: any) => {
                     <table class="w-full text-sm text-left">
                         <thead class="bg-muted/50 border-b text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
                             <tr>
-                                <th class="px-6 py-4">Student</th>
-                                <th class="px-6 py-4">Placement</th>
+                                <th class="px-6 py-4 cursor-pointer select-none hover:text-foreground hover:bg-muted/30 transition-colors" @click="toggleSort('student_name')">
+                                    <div class="flex items-center gap-1">
+                                        Student
+                                        <ArrowUpDown class="h-3 w-3" :class="{'text-primary': filterSortBy === 'student_name'}" />
+                                    </div>
+                                </th>
+                                <th class="px-6 py-4 cursor-pointer select-none hover:text-foreground hover:bg-muted/30 transition-colors" @click="toggleSort('hostel_name')">
+                                    <div class="flex items-center gap-1">
+                                        Placement
+                                        <ArrowUpDown class="h-3 w-3" :class="{'text-primary': filterSortBy === 'hostel_name'}" />
+                                    </div>
+                                </th>
                                 <th class="px-6 py-4">Payment Info</th>
-                                <th class="px-6 py-4">Status</th>
-                                <th class="px-6 py-4">Date</th>
+                                <th class="px-6 py-4 cursor-pointer select-none hover:text-foreground hover:bg-muted/30 transition-colors" @click="toggleSort('status')">
+                                    <div class="flex items-center gap-1">
+                                        Status
+                                        <ArrowUpDown class="h-3 w-3" :class="{'text-primary': filterSortBy === 'status'}" />
+                                    </div>
+                                </th>
+                                <th class="px-6 py-4 cursor-pointer select-none hover:text-foreground hover:bg-muted/30 transition-colors" @click="toggleSort('created_at')">
+                                    <div class="flex items-center gap-1">
+                                        Date
+                                        <ArrowUpDown class="h-3 w-3" :class="{'text-primary': filterSortBy === 'created_at'}" />
+                                    </div>
+                                </th>
                                 <th class="px-6 py-4 text-right">Action</th>
                             </tr>
                         </thead>
@@ -334,12 +498,43 @@ const formatCurrency = (amount: any) => {
                                     </span>
                                 </td>
                                 <td class="px-6 py-4">
-                                    <p class="text-xs text-muted-foreground font-medium">{{ new Date(booking.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }}</p>
+                                    <p class="text-xs text-muted-foreground font-semibold">{{ new Date(booking.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }}</p>
+                                    <p v-if="booking.updater" class="text-[9px] text-muted-foreground mt-0.5" :title="`Created by: ${booking.creator?.name || 'System'}`">
+                                        Updated by: <span class="font-semibold text-foreground">{{ booking.updater.name }}</span>
+                                    </p>
+                                    <p v-else-if="booking.creator" class="text-[9px] text-muted-foreground mt-0.5">
+                                        Created by: <span class="font-semibold text-foreground">{{ booking.creator.name }}</span>
+                                    </p>
                                 </td>
                                 <td class="px-6 py-4 text-right">
-                                    <Button variant="ghost" size="icon" class="h-8 w-8 rounded-full hover:bg-primary/10 hover:text-primary" @click="$inertia.visit(route('admin.students.show', booking.student.id))">
-                                        <ChevronRight class="h-4 w-4" />
-                                    </Button>
+                                    <div class="flex items-center justify-end gap-2">
+                                        <Button 
+                                            v-if="booking.status !== 'cancelled'"
+                                            variant="outline" 
+                                            size="sm" 
+                                            class="text-xs text-destructive border-destructive/20 hover:bg-destructive/10 hover:border-destructive h-8 rounded-lg font-semibold"
+                                            @click="unbookStudent(booking.id)"
+                                        >
+                                            Unbook
+                                        </Button>
+                                        <Button 
+                                            v-else
+                                            variant="outline" 
+                                            size="sm" 
+                                            class="text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-500 h-8 rounded-lg font-semibold"
+                                            @click="reallocateStudent(booking.id)"
+                                        >
+                                            Re-allocate
+                                        </Button>
+                                        <a :href="route('admin.hostels.bookings.download-slip', booking.id)" target="_blank">
+                                            <Button variant="ghost" size="icon" class="h-8 w-8 rounded-full hover:bg-primary/10 hover:text-primary text-muted-foreground" title="Download Booking Slip">
+                                                <FileText class="h-4 w-4" />
+                                            </Button>
+                                        </a>
+                                        <Button variant="ghost" size="icon" class="h-8 w-8 rounded-full hover:bg-primary/10 hover:text-primary" @click="$inertia.visit(route('admin.students.show', booking.student.id))" title="View Student Profile">
+                                            <ChevronRight class="h-4 w-4" />
+                                        </Button>
+                                    </div>
                                 </td>
                             </tr>
 
@@ -512,18 +707,7 @@ const formatCurrency = (amount: any) => {
                         </div>
                     </div>
 
-                    <!-- Direct Confirmation Toggle -->
-                    <div v-if="selectedRoomId" class="flex items-start space-x-3 p-3 bg-primary/5 rounded-lg border border-primary/10">
-                        <Checkbox id="mark_as_paid" v-model:checked="form.mark_as_paid" class="mt-1" />
-                        <div class="space-y-0.5">
-                            <Label for="mark_as_paid" class="text-sm font-bold text-foreground cursor-pointer select-none">
-                                Confirm & Mark as Paid Immediately
-                            </Label>
-                            <p class="text-[11px] text-muted-foreground leading-normal">
-                                Direct allocation bypasses online payment. A manual invoice/payment record will be generated and set to confirmed.
-                            </p>
-                        </div>
-                    </div>
+
 
                     <!-- Action buttons -->
                     <DialogFooter class="border-t pt-4">

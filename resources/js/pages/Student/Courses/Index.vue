@@ -8,11 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
 import { route } from 'ziggy-js';
-import { FileText, PlusCircle, BookOpen, Printer, ChevronRight, GraduationCap, CalendarDays, History } from 'lucide-vue-next';
+import { FileText, PlusCircle, BookOpen, Printer, ChevronRight, GraduationCap, CalendarDays, History, Lock, ShieldAlert } from 'lucide-vue-next';
 
 const props = defineProps<{
     student: any;
     history: any[];
+    schoolFeeStatus?: string;
+    isSecondSemester?: boolean;
 }>();
 
 const hasCurrentRegistration = computed(() => {
@@ -64,12 +66,17 @@ const selectSession = (sessionId: number) => {
                             </p>
                         </div>
                          <div class="mb-1 hidden md:block">
-                            <Link :href="route('student.courses.create')">
-                                <Button size="lg" class="bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 border-0 font-semibold shadow-xl shadow-black/10 transition-all hover:scale-105 active:scale-95 px-6">
-                                    <PlusCircle v-if="!hasCurrentRegistration" class="mr-2 h-5 w-5" /> 
-                                    {{ hasCurrentRegistration ? 'Review Registration' : 'Register Courses' }}
-                                </Button>
+                            <Link v-slot="{ href, navigate }" v-if="!(isSecondSemester && schoolFeeStatus === 'partial')" :href="route('student.courses.create')" custom>
+                                <a :href="href" @click="navigate">
+                                    <Button size="lg" class="bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 border-0 font-semibold shadow-xl shadow-black/10 transition-all hover:scale-105 active:scale-95 px-6">
+                                        <PlusCircle v-if="!hasCurrentRegistration" class="mr-2 h-5 w-5" /> 
+                                        {{ hasCurrentRegistration ? 'Review Registration' : 'Register Courses' }}
+                                    </Button>
+                                </a>
                             </Link>
+                            <Button v-else disabled size="lg" class="bg-white/55 text-emerald-900/60 border-0 font-semibold cursor-not-allowed px-6">
+                                <Lock class="mr-2 h-4 w-4" /> Locked
+                            </Button>
                         </div>
                     </div>
                  </div>
@@ -77,15 +84,36 @@ const selectSession = (sessionId: number) => {
             
             <!-- Mobile Action Button -->
             <div class="px-4 md:hidden -mt-6 relative z-20">
-                 <Link :href="route('student.courses.create')" class="block w-full">
-                    <Button size="lg" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg border border-emerald-500/50">
-                        <PlusCircle v-if="!hasCurrentRegistration" class="mr-2 h-5 w-5" /> 
-                        {{ hasCurrentRegistration ? 'Modify Registration' : 'Register Courses' }}
-                    </Button>
+                 <Link v-slot="{ href, navigate }" v-if="!(isSecondSemester && schoolFeeStatus === 'partial')" :href="route('student.courses.create')" custom>
+                    <a :href="href" @click="navigate" class="block w-full">
+                        <Button size="lg" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg border border-emerald-500/50">
+                            <PlusCircle v-if="!hasCurrentRegistration" class="mr-2 h-5 w-5" /> 
+                            {{ hasCurrentRegistration ? 'Modify Registration' : 'Register Courses' }}
+                        </Button>
+                    </a>
                 </Link>
+                <Button v-else disabled size="lg" class="w-full bg-gray-200 text-gray-400 border-0 font-semibold cursor-not-allowed shadow-none">
+                    <Lock class="mr-2 h-4 w-4" /> Locked
+                </Button>
             </div>
 
             <div class="px-4 md:px-12 max-w-7xl mx-auto">
+                <!-- Second Semester Partial Payment Notice -->
+                <div v-if="isSecondSemester && schoolFeeStatus === 'partial'" class="rounded-xl border border-amber-200 bg-amber-55 p-4 shadow-sm flex items-start gap-4 text-amber-900 mb-6 mt-4">
+                    <div class="rounded-full bg-amber-100 p-2">
+                        <ShieldAlert class="h-6 w-6 text-amber-600" />
+                    </div>
+                    <div class="flex-1">
+                        <h3 class="font-semibold text-amber-800 text-base">Second Semester Services Locked</h3>
+                        <p class="mt-1 text-sm text-amber-700">
+                            Course registration/editing and exam card downloads for the Second Semester are locked because you have a remaining outstanding balance on your school fees. Please clear your payment to unlock these services.
+                        </p>
+                        <Link :href="route('student.payments.index')" class="mt-3 inline-flex items-center text-sm font-medium text-amber-800 hover:text-amber-900 underline underline-offset-4">
+                            Clear Fees &rarr;
+                        </Link>
+                    </div>
+                </div>
+
                  <div v-if="history.length === 0" class="text-center py-24 border-2 border-dashed border-gray-200 rounded-2xl bg-white/50 mt-8">
                     <div class="bg-emerald-50 p-6 rounded-full inline-flex mb-6 ring-8 ring-emerald-50/50">
                         <BookOpen class="w-10 h-10 text-emerald-600" />
@@ -196,7 +224,7 @@ const selectSession = (sessionId: number) => {
                                         </div>
                                         <div class="flex-shrink-0 relative z-10 flex gap-2">
                                              <a 
-                                                v-if="selectedSessionRecord.id && $page.props.settings?.enable_exam_card_download"
+                                                v-if="selectedSessionRecord.id && $page.props.settings?.enable_exam_card_download && !(isSecondSemester && schoolFeeStatus === 'partial')"
                                                 :href="route('student.courses.exam_card', { session_id: selectedSessionRecord.id })" 
                                                 target="_blank"
                                              > 
@@ -205,6 +233,10 @@ const selectSession = (sessionId: number) => {
                                                     Exam Card
                                                 </Button>
                                              </a>
+                                             <Button v-else-if="selectedSessionRecord.id && $page.props.settings?.enable_exam_card_download" disabled variant="default" class="gap-2 bg-gray-150 text-gray-400 border border-gray-200 shadow-none cursor-not-allowed h-10 px-4">
+                                                 <Lock class="w-4 h-4" />
+                                                 Exam Card
+                                             </Button>
                                              <a 
                                                 v-if="selectedSessionRecord.id"
                                                 :href="route('student.courses.form', { session_id: selectedSessionRecord.id })" 

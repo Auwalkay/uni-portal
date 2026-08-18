@@ -14,6 +14,13 @@ class HostelRoom extends Model
         'hostel_floor_id',
         'room_number',
         'capacity',
+        'is_visible',
+        'is_suspended',
+    ];
+
+    protected $casts = [
+        'is_visible' => 'boolean',
+        'is_suspended' => 'boolean',
     ];
 
     public function floor()

@@ -301,6 +301,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware(['permission:manage_hostels'])->group(function () {
             Route::get('hostels/bookings', [HostelBookingController::class, 'index'])->name('hostels.bookings.index');
             Route::post('hostels/bookings', [HostelBookingController::class, 'store'])->name('hostels.bookings.store');
+            Route::post('hostels/bookings/{booking}/unbook', [HostelBookingController::class, 'unbook'])->name('hostels.bookings.unbook');
+            Route::post('hostels/bookings/{booking}/reallocate', [HostelBookingController::class, 'reallocate'])->name('hostels.bookings.reallocate');
+            Route::get('hostels/bookings/{booking}/download-slip', [HostelBookingController::class, 'downloadSlip'])->name('hostels.bookings.download-slip');
             Route::get('hostels/search-students', [HostelBookingController::class, 'searchStudents'])->name('hostels.search-students');
             Route::get('hostels/rooms/available', [HostelBookingController::class, 'getAvailableRooms'])->name('hostels.rooms.available');
             Route::resource('hostels', HostelController::class);
@@ -314,6 +317,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms', [HostelRoomController::class, 'store'])->name('hostels.rooms.store');
             Route::put('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [HostelRoomController::class, 'update'])->name('hostels.rooms.update');
             Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [HostelRoomController::class, 'destroy'])->name('hostels.rooms.destroy');
+            Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}/toggle-visibility', [HostelRoomController::class, 'toggleVisibility'])->name('hostels.rooms.toggle-visibility');
+            Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}/toggle-suspension', [HostelRoomController::class, 'toggleSuspension'])->name('hostels.rooms.toggle-suspension');
 
             // Fees
             Route::post('hostels/fees', [HostelFeeController::class, 'store'])->name('hostels.fees.store');

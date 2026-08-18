@@ -42,10 +42,11 @@ class AccommodationController extends Controller
         // 2. Course Registration Check (Optional for hostel booking)
         $hasRegisteredCourses = true; // Set to true as it is no longer a blocker
 
-        // Check for existing booking
+        // Check for existing active booking
         $existingBooking = HostelBooking::with(['room.floor.block.hostel', 'invoice'])
             ->where('student_id', $student->id)
             ->where('session_id', $currentSession->id)
+            ->whereIn('status', ['pending', 'confirmed'])
             ->first();
 
         // If they haven't met requirements or booking is disabled, pass correct statuses to the view
@@ -62,7 +63,11 @@ class AccommodationController extends Controller
         // Get Available Hostels based on gender
         $studentGender = strtolower($student->gender ?? '');
 
-        $hostels = Hostel::with(['blocks.floors.rooms.bookings'])
+        $hostels = Hostel::with(['blocks.floors.rooms' => function ($q) use ($currentSession) {
+            $q->where('is_visible', true)->with(['bookings' => function ($bq) use ($currentSession) {
+                $bq->where('session_id', $currentSession->id);
+            }]);
+        }])
             ->when($studentGender, function ($q) use ($studentGender) {
                 $q->whereIn('gender_type', [$studentGender, 'mixed']);
             }, function ($q) {
@@ -123,19 +128,31 @@ class AccommodationController extends Controller
             return back()->with('error', 'You must pay school fees before booking.');
         }
 
-        // Check for existing booking
+        // Check for existing active booking
         $existingBooking = HostelBooking::where('student_id', $student->id)
             ->where('session_id', $currentSession->id)
+            ->whereIn('status', ['pending', 'confirmed'])
             ->first();
 
         if ($existingBooking) {
-            return back()->with('error', 'You already have an accommodation booking for this session.');
+            return back()->with('error', 'You already have an active accommodation booking for this session.');
         }
 
         $room = HostelRoom::with('floor.block.hostel')->findOrFail($request->hostel_room_id);
 
-        // Check capacity
-        $bookedCount = $room->bookings()->whereIn('status', ['pending', 'confirmed'])->count();
+        if ($room->is_suspended) {
+            return back()->with('error', 'This room is currently suspended and cannot be booked.');
+        }
+
+        if (!$room->is_visible) {
+            return back()->with('error', 'This room is not currently open for bookings.');
+        }
+
+        // Check capacity for current session
+        $bookedCount = $room->bookings()
+            ->where('session_id', $currentSession->id)
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->count();
         if ($bookedCount >= $room->capacity) {
             return back()->with('error', 'This room is already fully booked.');
         }
@@ -168,34 +185,73 @@ class AccommodationController extends Controller
 
             $finalAmount = $fee->amount - $discountAmount;
 
-            // Generate Invoice
-            $reference = 'HST-'.strtoupper(uniqid());
+            // Check if there is an existing hostel fee invoice for this session
+            $invoice = Invoice::where('user_id', $user->id)
+                ->where('session_id', $currentSession->id)
+                ->where('type', 'hostel_fee')
+                ->first();
 
-            $invoice = Invoice::create([
-                'user_id' => $user->id,
-                'session_id' => $currentSession->id,
-                'reference' => $reference,
-                'type' => 'hostel_fee',
-                'amount' => $finalAmount,
-                'status' => 'pending',
-                'due_date' => now()->addDays(7),
-            ]);
-
-            InvoiceItem::create([
-                'invoice_id' => $invoice->id,
-                'description' => 'Hostel Accommodation Fee ('.$room->floor->block->hostel->name.' - Block: '.$room->floor->block->name.', Room: '.$room->room_number.')',
-                'amount' => $fee->amount,
-            ]);
-
-            if ($discountAmount > 0) {
-                $discountDesc = $student->scholarship->type === 'fixed'
-                    ? 'Scholarship Discount ('.$student->scholarship->name.' - Fixed ₦'.number_format($student->scholarship->amount, 2).')'
-                    : 'Scholarship Discount ('.$student->scholarship->name.' - '.floatval($student->scholarship->percentage).'%)';
+            if ($invoice) {
+                // If invoice already exists, check if it is paid or partially paid
+                $isPaid = in_array($invoice->status, ['paid', 'partial']);
+                $bookingStatus = $isPaid ? 'confirmed' : 'pending';
+                
+                // Clear old items and recreate with new room details
+                $invoice->items()->delete();
+                
                 InvoiceItem::create([
                     'invoice_id' => $invoice->id,
-                    'description' => $discountDesc,
-                    'amount' => -$discountAmount,
+                    'description' => 'Hostel Accommodation Fee ('.$room->floor->block->hostel->name.' - Block: '.$room->floor->block->name.', Room: '.$room->room_number.')',
+                    'amount' => $fee->amount,
                 ]);
+
+                if ($discountAmount > 0) {
+                    $discountDesc = $student->scholarship->type === 'fixed'
+                        ? 'Scholarship Discount ('.$student->scholarship->name.' - Fixed ₦'.number_format($student->scholarship->amount, 2).')'
+                        : 'Scholarship Discount ('.$student->scholarship->name.' - '.floatval($student->scholarship->percentage).'%)';
+                    InvoiceItem::create([
+                        'invoice_id' => $invoice->id,
+                        'description' => $discountDesc,
+                        'amount' => -$discountAmount,
+                    ]);
+                }
+                
+                // If the new room has a different fee, we update the invoice amount if unpaid
+                if (!$isPaid) {
+                    $invoice->update(['amount' => $finalAmount]);
+                }
+            } else {
+                // Generate Invoice
+                $reference = 'HST-'.strtoupper(uniqid());
+
+                $invoice = Invoice::create([
+                    'user_id' => $user->id,
+                    'session_id' => $currentSession->id,
+                    'reference' => $reference,
+                    'type' => 'hostel_fee',
+                    'amount' => $finalAmount,
+                    'status' => 'pending',
+                    'due_date' => now()->addDays(7),
+                ]);
+
+                InvoiceItem::create([
+                    'invoice_id' => $invoice->id,
+                    'description' => 'Hostel Accommodation Fee ('.$room->floor->block->hostel->name.' - Block: '.$room->floor->block->name.', Room: '.$room->room_number.')',
+                    'amount' => $fee->amount,
+                ]);
+
+                if ($discountAmount > 0) {
+                    $discountDesc = $student->scholarship->type === 'fixed'
+                        ? 'Scholarship Discount ('.$student->scholarship->name.' - Fixed ₦'.number_format($student->scholarship->amount, 2).')'
+                        : 'Scholarship Discount ('.$student->scholarship->name.' - '.floatval($student->scholarship->percentage).'%)';
+                    InvoiceItem::create([
+                        'invoice_id' => $invoice->id,
+                        'description' => $discountDesc,
+                        'amount' => -$discountAmount,
+                    ]);
+                }
+                
+                $bookingStatus = 'pending';
             }
 
             // Create Booking
@@ -204,7 +260,7 @@ class AccommodationController extends Controller
                 'session_id' => $currentSession->id,
                 'hostel_room_id' => $room->id,
                 'invoice_id' => $invoice->id,
-                'status' => 'pending',
+                'status' => $bookingStatus,
             ]);
 
             DB::commit();

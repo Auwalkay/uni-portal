@@ -23,6 +23,15 @@ class HostelBlockController extends Controller
 
     public function destroy(Hostel $hostel, HostelBlock $block)
     {
+        $activeBookings = \App\Models\HostelBooking::whereIn('status', ['pending', 'confirmed'])
+            ->whereHas('room.floor', function($q) use ($block) {
+                $q->where('hostel_block_id', $block->id);
+            })->exists();
+
+        if ($activeBookings) {
+            return back()->with('error', 'Cannot delete block. There are active bookings in rooms on this block.');
+        }
+
         // Delete block and conventionally all nested floors/rooms due to cascading migrations
         $block->delete();
 

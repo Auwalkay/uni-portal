@@ -4,7 +4,7 @@ import { Head, Link } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import StudentLayout from '@/layouts/StudentLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard, Calendar, CalendarClock, MapPin, FileText, Home, Megaphone, Download, Pin } from 'lucide-vue-next';
+import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard, Calendar, CalendarClock, MapPin, FileText, Home, Megaphone, Download, Pin, Lock, ShieldAlert } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -53,6 +53,10 @@ const pinnedAnnouncements = computed(() => {
 
 const hasPaidEnough = computed(() => {
     return props.schoolFeeStatus === 'paid' || props.schoolFeeStatus === 'partial';
+});
+
+const isSecondSemester = computed(() => {
+    return props.stats?.semester && (props.stats.semester.toLowerCase().includes('second') || props.stats.semester === '2');
 });
 
 const paymentStatusText = computed(() => {
@@ -217,6 +221,22 @@ const greeting = () => {
                 </div>
             </div>
 
+            <!-- Outstanding Second Semester School Fees (Partial Payment) -->
+            <div v-if="activeSession && isSecondSemester && schoolFeeStatus === 'partial'" class="rounded-xl border border-amber-200 bg-amber-50/80 p-4 shadow-sm flex items-start gap-4 text-amber-950 mb-4">
+                <div class="rounded-full bg-amber-100 p-2">
+                    <ShieldAlert class="h-6 w-6 text-amber-600" />
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-semibold text-amber-900">Second Semester Registration Locked</h3>
+                    <p class="mt-1 text-sm text-amber-800">
+                        You have only made a partial payment of your school fees for the current session. Course registration/editing and exam card downloads for the Second Semester are locked until your payment is fully cleared.
+                    </p>
+                    <Link :href="route('student.payments.index')" class="mt-3 inline-flex items-center text-sm font-medium text-amber-850 hover:text-amber-900 underline underline-offset-4">
+                        Clear Outstanding Balance Now &rarr;
+                    </Link>
+                </div>
+            </div>
+
             <!-- Registration Notification -->
             <div v-if="showRegistrationNotification" 
                 :class="[
@@ -234,7 +254,7 @@ const greeting = () => {
                     <p :class="['mt-1 text-sm', isRegistrationActive ? 'text-blue-700' : 'text-amber-700']">
                         {{ registrationMessage }}
                     </p>
-                    <Link v-if="isRegistrationActive" :href="route('student.courses.create')" class="mt-3 inline-flex items-center text-sm font-medium text-blue-800 hover:text-blue-900 underline underline-offset-4">
+                    <Link v-if="isRegistrationActive && !(isSecondSemester && schoolFeeStatus === 'partial')" :href="route('student.courses.create')" class="mt-3 inline-flex items-center text-sm font-medium text-blue-800 hover:text-blue-900 underline underline-offset-4">
                         Register Courses Now &rarr;
                     </Link>
                 </div>
