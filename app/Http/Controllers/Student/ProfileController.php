@@ -44,9 +44,14 @@ class ProfileController extends Controller
 
         // Fallback to active global session if student has no specific active student session record
         $resolvedSession = $currentStudentSession?->session ?? $currentSession;
-        $resolvedSemester = $currentStudentSession?->semester
-            ? Semester::where('session_id', $resolvedSession?->id)->where('name', $currentStudentSession->semester)->first()
-            : $currentSemester;
+        
+        if ($currentStudentSession && $currentSession && $resolvedSession->id === $currentSession->id) {
+            $resolvedSemester = $currentSemester;
+        } else {
+            $resolvedSemester = $currentStudentSession?->semester
+                ? Semester::where('session_id', $resolvedSession?->id)->where('name', $currentStudentSession->semester)->first()
+                : $currentSemester;
+        }
 
         // Check for pending promotion
         $pendingSessionName = null;
@@ -222,7 +227,7 @@ class ProfileController extends Controller
                 'level' => $level,
                 'status' => $academicStatus,
                 'session' => $resolvedSession->name ?? $student->admittedSession?->name ?? 'N/A',
-                'semester' => $currentStudentSession?->semester ?? $resolvedSemester->name ?? 'N/A',
+                'semester' => $resolvedSemester->name ?? 'N/A',
             ],
             'timetable' => $timetable,
             'activeSession' => $resolvedSession ? [

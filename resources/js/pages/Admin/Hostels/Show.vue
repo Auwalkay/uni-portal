@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, computed, watch, onMounted } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Edit, Trash2, ArrowLeft, Layers, DoorOpen, Bed, Building, MapPin, Grid } from 'lucide-vue-next';
+import { Plus, Edit, Trash2, ArrowLeft, Layers, DoorOpen, Bed, Building, MapPin, Grid, Eye, EyeOff, Ban } from 'lucide-vue-next';
 import {
     Dialog,
     DialogContent,
@@ -15,6 +15,8 @@ import {
     DialogDescription,
     DialogFooter,
 } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { route } from 'ziggy-js';
 
 const props = defineProps<{
@@ -33,6 +35,8 @@ const props = defineProps<{
                     id: string;
                     room_number: string;
                     capacity: number;
+                    is_visible: boolean;
+                    is_suspended: boolean;
                 }>;
             }>;
         }>;
@@ -182,6 +186,43 @@ const deleteRoom = (floorId: string, roomId: string) => {
     }
 };
 
+const toggleRoomVisibility = (floorId: string, roomId: string) => {
+    if (!activeBlockId.value) return;
+    router.post(route('admin.hostels.rooms.toggle-visibility', [props.hostel.id, activeBlockId.value, floorId, roomId]), {}, {
+        preserveScroll: true
+    });
+};
+
+const toggleRoomSuspension = (floorId: string, roomId: string) => {
+    if (!activeBlockId.value) return;
+    router.post(route('admin.hostels.rooms.toggle-suspension', [props.hostel.id, activeBlockId.value, floorId, roomId]), {}, {
+        preserveScroll: true
+    });
+};
+
+const isEditHostelModalOpen = ref(false);
+const hostelForm = useForm({
+    name: props.hostel.name,
+    gender_type: props.hostel.gender_type,
+    description: props.hostel.description || '',
+});
+
+const openEditHostelModal = () => {
+    hostelForm.name = props.hostel.name;
+    hostelForm.gender_type = props.hostel.gender_type;
+    hostelForm.description = props.hostel.description || '';
+    hostelForm.clearErrors();
+    isEditHostelModalOpen.value = true;
+};
+
+const submitEditHostel = () => {
+    hostelForm.put(route('admin.hostels.update', props.hostel.id), {
+        onSuccess: () => {
+            isEditHostelModalOpen.value = false;
+        },
+    });
+};
+
 const getGenderDisplay = (gender: string) => {
     if (gender === 'male') return { label: 'Male Hostel', class: 'bg-blue-50 text-blue-700 border-blue-200' };
     if (gender === 'female') return { label: 'Female Hostel', class: 'bg-pink-50 text-pink-700 border-pink-200' };
@@ -230,7 +271,10 @@ const getGenderDisplay = (gender: string) => {
                         </div>
                     </div>
 
-                    <div class="flex shrink-0">
+                    <div class="flex shrink-0 gap-3">
+                        <Button @click="openEditHostelModal" variant="outline" size="lg" class="shadow-sm rounded-full px-6 border-slate-300 hover:bg-slate-50">
+                            <Edit class="mr-2 h-4 w-4" /> Edit Hostel
+                        </Button>
                         <Button @click="openBlockModal" size="lg" class="shadow-md rounded-full px-6">
                             <Plus class="mr-2 h-5 w-5" /> Add New Block
                         </Button>
@@ -394,26 +438,49 @@ const getGenderDisplay = (gender: string) => {
                        <!-- Rooms Matrix -->
                        <div class="p-8 bg-slate-50/50">
                             <div v-if="floor.rooms.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                                <div v-for="room in floor.rooms" :key="room.id" class="relative group/room flex flex-col items-center justify-center p-6 rounded-2xl border border-slate-200 bg-white shadow-sm hover:border-primary/30 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
+                                <div v-for="room in floor.rooms" :key="room.id" 
+                                    :class="[
+                                        'relative group/room flex flex-col items-center justify-center p-6 rounded-2xl border transition-all duration-300 transform hover:-translate-y-1',
+                                        room.is_suspended 
+                                            ? 'bg-red-50/30 border-red-200 hover:border-red-400' 
+                                            : !room.is_visible 
+                                                ? 'bg-slate-100/50 border-slate-200 hover:border-slate-400'
+                                                : 'bg-white border-slate-200 hover:border-primary/30 hover:shadow-lg'
+                                    ]"
+                                >
                                     
                                     <div class="flex flex-col items-center text-center space-y-3 w-full transition-opacity duration-300 group-hover/room:opacity-5">
-                                        <div class="h-12 w-12 rounded-xl bg-slate-50 flex items-center justify-center mb-1 text-slate-400 ring-1 ring-slate-100">
+                                        <div :class="['h-12 w-12 rounded-xl flex items-center justify-center mb-1 ring-1', room.is_suspended ? 'bg-red-100/50 text-red-500 ring-red-100' : !room.is_visible ? 'bg-slate-200/50 text-slate-500 ring-slate-200' : 'bg-slate-50 text-slate-400 ring-slate-100']">
                                             <DoorOpen class="h-6 w-6" :stroke-width="1.5" />
                                         </div>
                                         <span class="text-2xl font-extrabold tracking-tight text-slate-800">{{ room.room_number }}</span>
-                                        <span class="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 tracking-wide uppercase">
-                                            {{ room.capacity }} Beds
-                                        </span>
+                                        <div class="flex flex-col gap-1 items-center">
+                                            <span class="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 tracking-wide uppercase">
+                                                {{ room.capacity }} Beds
+                                            </span>
+                                            <span v-if="room.is_suspended" class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800 uppercase tracking-wider">
+                                                Suspended
+                                            </span>
+                                            <span v-if="!room.is_visible" class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 uppercase tracking-wider">
+                                                Hidden
+                                            </span>
+                                        </div>
                                     </div>
                                     
                                     <!-- Hover Actions -->
-                                    <div class="absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl flex flex-col justify-center items-center space-y-4 opacity-0 scale-95 group-hover/room:opacity-100 group-hover/room:scale-100 transition-all duration-200 border border-primary/20">
+                                    <div class="absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl flex flex-col justify-center items-center space-y-3 opacity-0 scale-95 group-hover/room:opacity-100 group-hover/room:scale-100 transition-all duration-200 border border-primary/20 p-2">
                                         <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Room {{ room.room_number }} Actions</p>
-                                        <div class="flex space-x-3">
-                                            <Button variant="secondary" size="icon" class="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 shadow-sm" @click="openEditRoomModal(floor.id, room)" title="Modify Capacity">
+                                        <div class="flex flex-wrap justify-center gap-2">
+                                            <Button variant="secondary" size="icon" :class="['h-9 w-9 rounded-xl shadow-sm border', !room.is_visible ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-50 hover:bg-slate-100 text-slate-600']" @click="toggleRoomVisibility(floor.id, room.id)" :title="room.is_visible ? 'Hide Room' : 'Show Room'">
+                                                <component :is="room.is_visible ? EyeOff : Eye" class="h-4 w-4" />
+                                            </Button>
+                                            <Button variant="secondary" size="icon" :class="['h-9 w-9 rounded-xl shadow-sm border', room.is_suspended ? 'bg-red-50 hover:bg-red-100 text-red-700 border-red-200' : 'bg-slate-50 hover:bg-slate-100 text-slate-600']" @click="toggleRoomSuspension(floor.id, room.id)" :title="room.is_suspended ? 'Unsuspend Room' : 'Suspend Room'">
+                                                <Ban class="h-4 w-4" />
+                                            </Button>
+                                            <Button variant="secondary" size="icon" class="h-9 w-9 rounded-xl bg-slate-50 hover:bg-slate-100 border text-slate-600 shadow-sm" @click="openEditRoomModal(floor.id, room)" title="Modify Capacity">
                                                 <Edit class="h-4 w-4" />
                                             </Button>
-                                            <Button variant="destructive" size="icon" class="h-10 w-10 rounded-xl shadow-sm" @click="deleteRoom(floor.id, room.id)" title="Decommission Room">
+                                            <Button variant="destructive" size="icon" class="h-9 w-9 rounded-xl shadow-sm" @click="deleteRoom(floor.id, room.id)" title="Decommission Room">
                                                 <Trash2 class="h-4 w-4" />
                                             </Button>
                                         </div>
@@ -515,6 +582,48 @@ const getGenderDisplay = (gender: string) => {
                     <DialogFooter>
                         <Button type="button" variant="ghost" @click="isRoomModalOpen = false; isEditRoomModalOpen = false;" class="rounded-full">Discard</Button>
                         <Button type="submit" :disabled="roomForm.processing" class="rounded-full px-8 shadow-sm">{{ isEditRoomModalOpen ? 'Save Changes' : 'Confirm Allocation' }}</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+
+        <!-- Edit Hostel Modal -->
+        <Dialog :open="isEditHostelModalOpen" @update:open="isEditHostelModalOpen = $event">
+            <DialogContent class="sm:max-w-[425px] rounded-2xl">
+                <DialogHeader>
+                    <DialogTitle class="text-xl">Edit Hostel Specifications</DialogTitle>
+                    <DialogDescription>Modify structural settings or description of this building.</DialogDescription>
+                </DialogHeader>
+                <form @submit.prevent="submitEditHostel">
+                    <div class="grid gap-6 py-6">
+                        <div class="space-y-3">
+                            <Label for="edit_hostel_name" class="font-semibold text-slate-700">Hostel Name</Label>
+                            <Input id="edit_hostel_name" v-model="hostelForm.name" class="h-12" />
+                            <p v-if="hostelForm.errors.name" class="text-sm text-destructive font-medium">{{ hostelForm.errors.name }}</p>
+                        </div>
+                        <div class="space-y-3">
+                            <Label for="edit_hostel_gender" class="font-semibold text-slate-700">Gender Allocation</Label>
+                            <Select v-model="hostelForm.gender_type">
+                                <SelectTrigger class="h-12">
+                                    <SelectValue placeholder="Select type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="mixed">Mixed</SelectItem>
+                                    <SelectItem value="male">Male Only</SelectItem>
+                                    <SelectItem value="female">Female Only</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p v-if="hostelForm.errors.gender_type" class="text-sm text-destructive font-medium">{{ hostelForm.errors.gender_type }}</p>
+                        </div>
+                        <div class="space-y-3">
+                            <Label for="edit_hostel_desc" class="font-semibold text-slate-700">Description</Label>
+                            <Textarea id="edit_hostel_desc" v-model="hostelForm.description" rows="3" />
+                            <p v-if="hostelForm.errors.description" class="text-sm text-destructive font-medium">{{ hostelForm.errors.description }}</p>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="ghost" @click="isEditHostelModalOpen = false" class="rounded-full">Discard</Button>
+                        <Button type="submit" :disabled="hostelForm.processing" class="rounded-full px-8 shadow-sm">Save Changes</Button>
                     </DialogFooter>
                 </form>
             </DialogContent>

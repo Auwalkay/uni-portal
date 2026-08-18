@@ -15,10 +15,12 @@ class HostelController extends Controller
     {
         $hostels = Hostel::withCount('floors', 'fees')->latest()->get();
         $sessions = Session::latest()->get();
+        $fees = \App\Models\HostelFee::with(['session', 'hostel'])->latest()->get();
 
         return Inertia::render('Admin/Hostels/Index', [
             'hostels' => $hostels,
             'sessions' => $sessions,
+            'fees' => $fees,
         ]);
     }
 
@@ -59,6 +61,15 @@ class HostelController extends Controller
 
     public function destroy(Hostel $hostel)
     {
+        $activeBookings = \App\Models\HostelBooking::whereIn('status', ['pending', 'confirmed'])
+            ->whereHas('room.floor.block', function($q) use ($hostel) {
+                $q->where('hostel_id', $hostel->id);
+            })->exists();
+
+        if ($activeBookings) {
+            return back()->with('error', 'Cannot delete hostel. There are active bookings in this hostel.');
+        }
+
         $hostel->delete();
 
         return redirect()->route('admin.hostels.index')->with('success', 'Hostel deleted successfully.');

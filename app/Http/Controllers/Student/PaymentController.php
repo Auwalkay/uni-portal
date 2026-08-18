@@ -196,6 +196,22 @@ class PaymentController extends Controller
             }
         }
 
+        // Enforce specific installment split rules for hostel fee (first payment >= 75%, second payment clears balance)
+        if ($invoice->type === 'hostel_fee') {
+            if ($invoice->paid_amount <= 0.01) {
+                // First payment: must be >= 75% of total amount
+                $minFirstPayment = (float) $invoice->amount * 0.75;
+                if ($amountToPay < $minFirstPayment) {
+                    return back()->with('error', 'Your first payment for the hostel fee must be at least 75% of the total amount (Minimum: '.number_format($minFirstPayment, 2).' NGN).');
+                }
+            } else {
+                // Subsequent payment: must clear the remaining balance in full
+                if (! $isFullPayment) {
+                    return back()->with('error', 'The remaining balance of '.number_format($balance, 2).' NGN for the hostel fee must be paid in full.');
+                }
+            }
+        }
+
         // Calculate Minimum Required Upfront Payment based on Splittability Rules
         $adminChargeSplittable = \App\Models\SystemSetting::get('admin_charge_splittable', true);
         $adminChargeItemAmount = (float) $invoice->items()->where('description', 'Administrative Charges')->sum('amount');

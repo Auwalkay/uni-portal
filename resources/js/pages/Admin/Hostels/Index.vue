@@ -33,6 +33,14 @@ const props = defineProps<{
         id: string;
         name: string;
     }>;
+    fees: Array<{
+        id: string;
+        session_id: string;
+        hostel_id: string | null;
+        amount: number;
+        session?: { name: string };
+        hostel?: { name: string };
+    }>;
 }>();
 
 const isCreateModalOpen = ref(false);
@@ -89,21 +97,27 @@ const deleteHostel = (id: string) => {
 const isFeeModalOpen = ref(false);
 const feeForm = useForm({
     session_id: '',
-    hostel_id: '', // Empty means global default for that session
+    hostel_id: 'all', // 'all' means default/global rate
     amount: '',
 });
 
 const openFeeModal = () => {
     feeForm.reset();
     feeForm.clearErrors();
+    feeForm.hostel_id = 'all';
     // Default to latest session if available
     if (props.sessions && props.sessions.length > 0) {
-        feeForm.session_id = props.sessions[0].id;
+        feeForm.session_id = props.sessions[0].id.toString();
     }
     isFeeModalOpen.value = true;
 };
 
 const submitFee = () => {
+    // If 'all' is selected, send empty string to backend representing default global rate
+    if (feeForm.hostel_id === 'all') {
+        feeForm.hostel_id = '';
+    }
+    
     feeForm.post(route('admin.hostels.fees.store'), {
         onSuccess: () => {
             isFeeModalOpen.value = false;
@@ -115,6 +129,21 @@ const getGenderBadgeClass = (gender: string) => {
     if (gender === 'male') return 'bg-blue-100 text-blue-800 border-blue-200';
     if (gender === 'female') return 'bg-pink-100 text-pink-800 border-pink-200';
     return 'bg-purple-100 text-purple-800 border-purple-200';
+};
+
+const formatCurrency = (amount: any) => {
+    return new Intl.NumberFormat('en-NG', {
+        style: 'currency',
+        currency: 'NGN',
+    }).format(amount);
+};
+
+const deleteFee = (id: string) => {
+    if (confirm('Are you sure you want to remove this fee configuration?')) {
+        useForm({}).delete(route('admin.hostels.fees.destroy', id), {
+            preserveScroll: true
+        });
+    }
 };
 </script>
 
@@ -186,6 +215,50 @@ const getGenderBadgeClass = (gender: string) => {
                     <Home class="h-12 w-12 text-muted-foreground/50 mb-4" />
                     <h3 class="text-lg font-semibold text-foreground">No hostels found</h3>
                     <p class="text-sm text-muted-foreground mt-1 max-w-sm">You haven't added any campus hostels yet. Click the button above to create one.</p>
+                </div>
+            </div>
+
+            <!-- Configured Hostel Fees Table -->
+            <div class="bg-card border rounded-lg shadow-sm p-6 mt-8">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="font-bold text-lg text-foreground">Configured Hostel Fees</h3>
+                        <p class="text-xs text-muted-foreground mt-0.5">Manage session and hostel-specific accommodation rates.</p>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-muted/50 border-b text-muted-foreground font-semibold uppercase text-xs">
+                            <tr>
+                                <th class="px-6 py-3">Academic Session</th>
+                                <th class="px-6 py-3">Hostel</th>
+                                <th class="px-6 py-3">Amount</th>
+                                <th class="px-6 py-3 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-border">
+                            <tr v-for="fee in fees" :key="fee.id" class="hover:bg-muted/30">
+                                <td class="px-6 py-4 font-semibold text-foreground">{{ fee.session?.name }}</td>
+                                <td class="px-6 py-4">
+                                    <span v-if="fee.hostel" class="font-medium text-foreground">{{ fee.hostel.name }}</span>
+                                    <span v-else class="text-muted-foreground italic">Default (All Hostels)</span>
+                                </td>
+                                <td class="px-6 py-4 font-bold text-foreground">
+                                    {{ formatCurrency(fee.amount) }}
+                                </td>
+                                <td class="px-6 py-4 text-right">
+                                    <Button variant="ghost" size="sm" class="text-destructive hover:bg-destructive/10 hover:text-destructive rounded-lg" @click="deleteFee(fee.id)">
+                                        <Trash2 class="h-4 w-4 mr-1.5" /> Remove Rate
+                                    </Button>
+                                </td>
+                            </tr>
+                            <tr v-if="fees.length === 0">
+                                <td colspan="4" class="px-6 py-8 text-center text-muted-foreground italic">
+                                    No hostel fees have been configured yet. Click "Configure Fees" above to add one.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -310,7 +383,7 @@ const getGenderBadgeClass = (gender: string) => {
                                     <SelectValue placeholder="Default for All Hostels" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="">-- Default for All Hostels --</SelectItem>
+                                    <SelectItem value="all">-- Default for All Hostels --</SelectItem>
                                     <SelectItem v-for="hostel in hostels" :key="hostel.id" :value="hostel.id.toString()">
                                         {{ hostel.name }}
                                     </SelectItem>
