@@ -14,32 +14,39 @@
         }
 
         .header {
-            text-align: center;
             border-bottom: 2px solid #3b82f6;
-            padding-bottom: 20px;
+            padding-bottom: 15px;
             margin-bottom: 30px;
         }
 
-        .logo {
-            font-size: 24px;
-            font-weight: bold;
-            color: #1e3a8a;
-            text-transform: uppercase;
-            margin-bottom: 5px;
+        .header-logo {
+            width: 60px;
+            height: auto;
         }
 
         .university-name {
             font-size: 18px;
-            color: #475569;
-            margin-bottom: 5px;
+            font-weight: bold;
+            color: #1e3a8a;
+            text-transform: uppercase;
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        .university-sub {
+            font-size: 9px;
+            color: #64748b;
+            text-transform: uppercase;
+            margin-top: 3px;
+            line-height: 1.3;
         }
 
         .document-title {
-            font-size: 14px;
+            font-size: 12px;
             font-weight: bold;
             color: #3b82f6;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
         }
 
         .info-section {
@@ -157,9 +164,33 @@
 
 <body>
     <div class="header">
-        <div class="logo">Uniwize Portal</div>
-        <div class="university-name">Apex State University</div>
-        <div class="document-title">Official Staff Payslip</div>
+        @php
+            $logoPath = public_path('miu-logo.png');
+            if (!file_exists($logoPath)) {
+                $logoPath = public_path('miu-logo.jpeg');
+            }
+            $logoData = '';
+            if (file_exists($logoPath)) {
+                $logoData = 'data:image/' . pathinfo($logoPath, PATHINFO_EXTENSION) . ';base64,' . base64_encode(file_get_contents($logoPath));
+            }
+        @endphp
+
+        <table style="width: 100%; border-collapse: collapse; border: none; margin: 0; padding: 0;">
+            <tr style="border: none;">
+                <td style="width: 70px; vertical-align: middle; border: none; padding: 0;">
+                    @if($logoData)
+                        <img src="{{ $logoData }}" class="header-logo" alt="Logo" />
+                    @endif
+                </td>
+                <td style="vertical-align: middle; padding-left: 10px; border: none;">
+                    <div class="university-name">Mewar International University</div>
+                    <div class="university-sub">KM 20, Abuja-Keffi Expressway, Masaka, Nasarawa State, Nigeria</div>
+                </td>
+                <td style="text-align: right; vertical-align: middle; border: none; padding: 0;">
+                    <div class="document-title">Official Staff Payslip</div>
+                </td>
+            </tr>
+        </table>
     </div>
 
     <table class="info-section">
@@ -250,7 +281,7 @@
 
     <div class="footer">
         This is a computer-generated payslip and does not require a physical signature.<br>
-        Apex State University &copy; {{ date('Y') }} - Human Resources Department
+        Mewar International University &copy; {{ date('Y') }} - Human Resources Department
     </div>
 </body>
 

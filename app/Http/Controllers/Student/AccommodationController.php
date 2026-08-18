@@ -63,11 +63,12 @@ class AccommodationController extends Controller
         // Get Available Hostels based on gender
         $studentGender = strtolower($student->gender ?? '');
 
-        $hostels = Hostel::with(['blocks.floors.rooms' => function ($q) use ($currentSession) {
-            $q->where('is_visible', true)->with(['bookings' => function ($bq) use ($currentSession) {
-                $bq->where('session_id', $currentSession->id);
-            }]);
-        }])
+        $hostels = Hostel::where('is_visible', true)
+            ->with(['blocks.floors.rooms' => function ($q) use ($currentSession) {
+                $q->where('is_visible', true)->with(['bookings' => function ($bq) use ($currentSession) {
+                    $bq->where('session_id', $currentSession->id);
+                }]);
+            }])
             ->when($studentGender, function ($q) use ($studentGender) {
                 $q->whereIn('gender_type', [$studentGender, 'mixed']);
             }, function ($q) {
@@ -146,6 +147,10 @@ class AccommodationController extends Controller
 
         if (!$room->is_visible) {
             return back()->with('error', 'This room is not currently open for bookings.');
+        }
+
+        if (!$room->floor->block->hostel->is_visible) {
+            return back()->with('error', 'This hostel is not currently open for bookings.');
         }
 
         // Check capacity for current session

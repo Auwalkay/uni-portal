@@ -328,4 +328,99 @@ class HostelBookingTest extends TestCase
         $hostelInvoice->refresh();
         $this->assertEquals('paid', $hostelInvoice->status);
     }
+
+    public function test_admin_can_toggle_hostel_visibility()
+    {
+        $this->actingAs($this->admin);
+
+        $hostel = Hostel::create([
+            'name' => 'Visibility Test Hall',
+            'gender_type' => 'mixed',
+        ]);
+
+        $this->assertTrue($hostel->is_visible);
+
+        $response = $this->post(route('admin.hostels.toggle-visibility', $hostel->id));
+        $response->assertStatus(302);
+        
+        $hostel->refresh();
+        $this->assertFalse($hostel->is_visible);
+
+        $response = $this->post(route('admin.hostels.toggle-visibility', $hostel->id));
+        $response->assertStatus(302);
+
+        $hostel->refresh();
+        $this->assertTrue($hostel->is_visible);
+    }
+
+    public function test_hidden_hostels_are_filtered_out_from_student_accommodation_list()
+    {
+        // 1. Simulate school fees payment so student is allowed to view hostels list
+        Invoice::create([
+            'user_id' => $this->studentUser->id,
+            'session_id' => $this->session->id,
+            'reference' => 'SCH-FEES-1',
+            'type' => 'school_fee',
+            'amount' => 100000.00,
+            'status' => 'paid',
+            'due_date' => now()->addDays(7),
+        ]);
+
+        $this->actingAs($this->studentUser);
+
+        // Initially both hostels are visible
+        $this->maleHostel->update(['is_visible' => true]);
+
+        $response = $this->get(route('student.accommodation.index'));
+        $response->assertStatus(200);
+        
+        $hostelsInProp = $response->original->getData()['page']['props']['hostels'];
+        $this->assertTrue(collect($hostelsInProp)->contains('id', $this->maleHostel->id));
+
+        // Hide male hostel
+        $this->maleHostel->update(['is_visible' => false]);
+
+        $response = $this->get(route('student.accommodation.index'));
+        $response->assertStatus(200);
+
+        $hostelsInProp = $response->original->getData()['page']['props']['hostels'];
+        $this->assertFalse(collect($hostelsInProp)->contains('id', $this->maleHostel->id));
+    }
+
+    public function test_student_cannot_book_room_in_hidden_hostel()
+    {
+        // 1. Simulate school fees payment so student is allowed to book
+        Invoice::create([
+            'user_id' => $this->studentUser->id,
+            'session_id' => $this->session->id,
+            'reference' => 'SCH-FEES-1',
+            'type' => 'school_fee',
+            'amount' => 100000.00,
+            'status' => 'paid',
+            'due_date' => now()->addDays(7),
+        ]);
+
+        // Configure hostel fee
+        HostelFee::create([
+            'session_id' => $this->session->id,
+            'amount' => 50000.00,
+        ]);
+
+        $this->actingAs($this->studentUser);
+
+        // Hide male hostel
+        $this->maleHostel->update(['is_visible' => false]);
+
+        $response = $this->post(route('student.accommodation.store'), [
+            'hostel_room_id' => $this->maleRoom->id,
+        ]);
+
+        $response->assertStatus(302);
+        $response->assertSessionHas('error', 'This hostel is not currently open for bookings.');
+        
+        $this->assertDatabaseMissing('hostel_bookings', [
+            'student_id' => $this->student->id,
+            'hostel_room_id' => $this->maleRoom->id,
+        ]);
+    }
 }

@@ -74,4 +74,13 @@ class HostelController extends Controller
 
         return redirect()->route('admin.hostels.index')->with('success', 'Hostel deleted successfully.');
     }
+
+    public function toggleVisibility(Hostel $hostel)
+    {
+        $hostel->update([
+            'is_visible' => !$hostel->is_visible
+        ]);
+
+        return back()->with('success', 'Hostel visibility updated.');
+    }
 }

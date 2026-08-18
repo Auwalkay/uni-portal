@@ -25,6 +25,7 @@ const props = defineProps<{
         name: string;
         gender_type: string;
         description: string;
+        is_visible: boolean;
         blocks: Array<{
             id: string;
             name: string;
@@ -223,6 +224,12 @@ const submitEditHostel = () => {
     });
 };
 
+const toggleHostelVisibility = () => {
+    router.post(route('admin.hostels.toggle-visibility', props.hostel.id), {}, {
+        preserveScroll: true
+    });
+};
+
 const getGenderDisplay = (gender: string) => {
     if (gender === 'male') return { label: 'Male Hostel', class: 'bg-blue-50 text-blue-700 border-blue-200' };
     if (gender === 'female') return { label: 'Female Hostel', class: 'bg-pink-50 text-pink-700 border-pink-200' };
@@ -260,6 +267,9 @@ const getGenderDisplay = (gender: string) => {
                                 <span :class="['text-xs font-semibold px-2.5 py-0.5 rounded-full border', getGenderDisplay(hostel.gender_type).class]">
                                     {{ getGenderDisplay(hostel.gender_type).label }}
                                 </span>
+                                <span v-if="!hostel.is_visible" class="text-xs font-bold px-2.5 py-0.5 rounded-full border bg-amber-100 text-amber-800 border-amber-200 uppercase tracking-wider">
+                                    Hidden
+                                </span>
                             </div>
                             <div class="flex items-center text-muted-foreground text-sm">
                                 <MapPin class="h-4 w-4 mr-1.5 opacity-70" />
@@ -272,6 +282,10 @@ const getGenderDisplay = (gender: string) => {
                     </div>
 
                     <div class="flex shrink-0 gap-3">
+                        <Button @click="toggleHostelVisibility" variant="outline" size="lg" class="shadow-sm rounded-full px-6 border-slate-300 hover:bg-slate-50">
+                            <component :is="hostel.is_visible ? EyeOff : Eye" class="mr-2 h-4 w-4" /> 
+                            {{ hostel.is_visible ? 'Hide Hostel' : 'Show Hostel' }}
+                        </Button>
                         <Button @click="openEditHostelModal" variant="outline" size="lg" class="shadow-sm rounded-full px-6 border-slate-300 hover:bg-slate-50">
                             <Edit class="mr-2 h-4 w-4" /> Edit Hostel
                         </Button>
