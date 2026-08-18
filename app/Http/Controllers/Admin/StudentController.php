@@ -518,6 +518,7 @@ class StudentController extends Controller
         
         return Inertia::render('Admin/Students/Edit', [
             'student' => $student,
+            'can_edit_name_email' => auth()->user()->can('edit_student_name_email'),
             'sessions' => AcademicCacheService::getSessions(),
             'faculties' => AcademicCacheService::getFaculties(),
             'programmes' => AcademicCacheService::getProgrammes(),
@@ -558,6 +559,20 @@ class StudentController extends Controller
             'fee_policy' => 'required|in:admission_session,current_session',
             'scholarship_id' => 'nullable|exists:scholarships,id',
         ]);
+
+        $canEditNameEmail = $request->user()->can('edit_student_name_email');
+        
+        $nameParts = explode(' ', $student->user->name, 2);
+        $oldFirstName = $nameParts[0] ?? '';
+        $oldLastName = $nameParts[1] ?? '';
+        $oldEmail = $student->user->email;
+
+        $hasNameChanged = ($request->first_name !== $oldFirstName) || ($request->last_name !== $oldLastName);
+        $hasEmailChanged = $request->email !== $oldEmail;
+
+        if (($hasNameChanged || $hasEmailChanged) && !$canEditNameEmail) {
+            abort(403, 'You do not have permission to edit the student name or email.');
+        }
 
         DB::transaction(function () use ($validated, $student, $request) {
             $student->user->update([

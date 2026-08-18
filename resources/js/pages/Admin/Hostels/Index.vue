@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Edit, Trash2, Home, Settings } from 'lucide-vue-next';
+import { Plus, Edit, Trash2, Home, Settings, Eye, EyeOff } from 'lucide-vue-next';
 import {
     Dialog,
     DialogContent,
@@ -25,6 +25,7 @@ const props = defineProps<{
         name: string;
         gender_type: string;
         description: string;
+        is_visible: boolean;
         floors_count: number;
         fees_count: number;
         created_at: string;
@@ -91,6 +92,12 @@ const deleteHostel = (id: string) => {
             },
         });
     }
+};
+
+const toggleHostelVisibility = (id: string) => {
+    router.post(route('admin.hostels.toggle-visibility', id), {}, {
+        preserveScroll: true,
+    });
 };
 
 // --- Fee Configuration Logic ---
@@ -179,9 +186,14 @@ const deleteFee = (id: string) => {
                             </div>
                             <div>
                                 <h3 class="font-semibold text-lg hover:underline">{{ hostel.name }}</h3>
-                                <span :class="['text-xs px-2 py-0.5 rounded-full border', getGenderBadgeClass(hostel.gender_type)]">
-                                    {{ hostel.gender_type.charAt(0).toUpperCase() + hostel.gender_type.slice(1) }}
-                                </span>
+                                <div class="flex items-center gap-1.5 mt-1">
+                                    <span :class="['text-xs px-2 py-0.5 rounded-full border', getGenderBadgeClass(hostel.gender_type)]">
+                                        {{ hostel.gender_type.charAt(0).toUpperCase() + hostel.gender_type.slice(1) }}
+                                    </span>
+                                    <span v-if="!hostel.is_visible" class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                                        Hidden
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -202,6 +214,10 @@ const deleteFee = (id: string) => {
                     </div>
 
                     <div class="p-4 bg-muted/50 border-t flex justify-end space-x-2">
+                        <Button variant="ghost" size="sm" @click="toggleHostelVisibility(hostel.id)" :title="hostel.is_visible ? 'Hide Hostel' : 'Show Hostel'">
+                            <component :is="hostel.is_visible ? EyeOff : Eye" class="h-4 w-4 mr-1" />
+                            {{ hostel.is_visible ? 'Hide' : 'Show' }}
+                        </Button>
                         <Button variant="ghost" size="sm" @click="openEditModal(hostel)">
                             <Edit class="h-4 w-4 mr-1" /> Edit
                         </Button>

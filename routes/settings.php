@@ -81,6 +81,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Profile routes (exempt from completion enforcement so they can complete it)
         Route::get('/profile', [\App\Http\Controllers\Student\ProfileController::class, 'edit'])->name('profile.edit');
         Route::patch('/profile', [\App\Http\Controllers\Student\ProfileController::class, 'update'])->name('profile.update');
+        Route::get('/manual', [\App\Http\Controllers\Student\ProfileController::class, 'manual'])->name('manual');
 
         // Enforced routes
         Route::middleware(['student_profile_completed'])->group(function () {
@@ -130,7 +131,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/announcements', [\App\Http\Controllers\Student\StudentAnnouncementController::class, 'index'])->name('announcements.index');
 
             // User Manual route
-            Route::get('/manual', [\App\Http\Controllers\Student\ProfileController::class, 'manual'])->name('manual');
         });
     });
 
@@ -307,6 +307,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('hostels/search-students', [HostelBookingController::class, 'searchStudents'])->name('hostels.search-students');
             Route::get('hostels/rooms/available', [HostelBookingController::class, 'getAvailableRooms'])->name('hostels.rooms.available');
             Route::resource('hostels', HostelController::class);
+            Route::post('hostels/{hostel}/toggle-visibility', [HostelController::class, 'toggleVisibility'])->name('hostels.toggle-visibility');
 
             Route::post('hostels/{hostel}/blocks', [HostelBlockController::class, 'store'])->name('hostels.blocks.store');
             Route::delete('hostels/{hostel}/blocks/{block}', [HostelBlockController::class, 'destroy'])->name('hostels.blocks.destroy');

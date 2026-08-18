@@ -14,6 +14,11 @@ class Hostel extends Model
         'name',
         'gender_type',
         'description',
+        'is_visible',
+    ];
+
+    protected $casts = [
+        'is_visible' => 'boolean',
     ];
 
     public function blocks()

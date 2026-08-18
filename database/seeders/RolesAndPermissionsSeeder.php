@@ -45,6 +45,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_students',
             'create_students',
             'edit_students',
+            'edit_student_name_email',
             'delete_students',
             'import_students',
             'manage_users', // Global student search/access
@@ -227,6 +228,15 @@ class RolesAndPermissionsSeeder extends Seeder
 
         $financeClerk = Role::firstOrCreate(['name' => 'finance_clerk']);
         $financeClerk->syncPermissions(['access_admin_dashboard', 'view_payments']);
+
+        // --- HOSTEL ROLES ---
+        $warden = Role::firstOrCreate(['name' => 'hostel_warden']);
+        $warden->syncPermissions([
+            'access_admin_dashboard',
+            'view_students',
+            'manage_hostels',
+            'manage_hostel_bookings',
+        ]);
 
         // --- FRONT DESK ---
         $receptionist = Role::firstOrCreate(['name' => 'receptionist']);
