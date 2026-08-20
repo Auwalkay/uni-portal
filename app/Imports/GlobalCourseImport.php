@@ -95,15 +95,23 @@ class GlobalCourseImport implements ToCollection, WithChunkReading, WithHeadingR
                     $isCompulsory = true;
                 }
 
-                DB::transaction(function () use ($code, $title, $units, $level, $semester, $dept, $progNameRaw, $isCompulsory) {
+                $cleaned = str_replace(' ', '', $code);
+                $cleaned = strtoupper($cleaned);
+                if (preg_match('/^([A-Z]+)(\d+.*)$/', $cleaned, $matches)) {
+                    $normalizedCode = $matches[1] . ' ' . $matches[2];
+                } else {
+                    $normalizedCode = $cleaned;
+                }
+                
+                DB::transaction(function () use ($normalizedCode, $title, $units, $level, $semester, $dept, $progNameRaw, $isCompulsory) {
                     // Find or create global course record
-                    $course = Course::where('code', $code)->first();
+                    $course = Course::where('code', $normalizedCode)->first();
                     $createdNew = false;
                     
                     if (!$course) {
                         $course = Course::create([
                             'id' => Str::uuid()->toString(),
-                            'code' => $code,
+                            'code' => $normalizedCode,
                             'title' => $title,
                             'units' => $units,
                             'level' => $level,

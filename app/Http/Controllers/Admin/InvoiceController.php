@@ -14,7 +14,7 @@ class InvoiceController extends Controller
 {
     public function index(Request $request)
     {
-        $filters = $request->only(['search', 'status', 'type', 'session_id']);
+        $filters = $request->only(['search', 'status', 'type', 'session_id', 'sort_field', 'sort_order', 'order']);
 
         $query = Invoice::query()
             ->with(['user.student', 'session', 'creator']);
@@ -50,8 +50,17 @@ class InvoiceController extends Controller
             $query->where('session_id', $request->session_id);
         }
 
-        $sort = $request->input('order', $request->input('sort', 'desc'));
-        $query->orderBy('created_at', $sort);
+        $sortField = $request->input('sort_field', 'created_at');
+        $sortOrder = $request->input('sort_order', $request->input('order', 'desc'));
+
+        if (!in_array($sortField, ['created_at', 'due_date', 'amount', 'paid_amount', 'reference', 'status', 'type'])) {
+            $sortField = 'created_at';
+        }
+        if (!in_array($sortOrder, ['asc', 'desc'])) {
+            $sortOrder = 'desc';
+        }
+
+        $query->orderBy($sortField, $sortOrder);
 
         // Clone query for global analytics (respecting filters)
         $statsQuery = clone $query;

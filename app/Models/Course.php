@@ -11,6 +11,18 @@ class Course extends Model
 
     protected static function booted()
     {
+        static::saving(function ($course) {
+            if ($course->code) {
+                $cleaned = str_replace(' ', '', $course->code);
+                $cleaned = strtoupper($cleaned);
+                if (preg_match('/^([A-Z]+)(\d+.*)$/', $cleaned, $matches)) {
+                    $course->code = $matches[1] . ' ' . $matches[2];
+                } else {
+                    $course->code = $cleaned;
+                }
+            }
+        });
+
         static::saved(fn() => \App\Services\AcademicCacheService::clearAll());
         static::deleted(fn() => \App\Services\AcademicCacheService::clearAll());
     }

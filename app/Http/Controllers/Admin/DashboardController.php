@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CourseRegistration;
 use App\Models\Expense;
 use App\Models\Invoice;
+use App\Models\Payment;
 use App\Models\Payroll;
 use App\Models\Session;
 use App\Models\Student;
@@ -195,22 +196,47 @@ class DashboardController extends Controller
 
             // Recent Activity (Aggregated conditionally)
             $payments = collect();
+            $generatedInvoices = collect();
             if ($canViewFinance) {
-                $payments = Invoice::where('session_id', $sessionId)
-                    ->where('status', 'paid')
+                $payments = Payment::where('status', 'success')
+                    ->whereHas('invoice', function ($q) use ($sessionId) {
+                        $q->where(function($sq) use ($sessionId) {
+                            $sq->where('session_id', $sessionId)
+                              ->orWhereNull('session_id');
+                        });
+                    })
+                    ->with(['user', 'invoice'])
+                    ->latest('paid_at')
+                    ->take(5)
+                    ->get()
+                    ->map(fn ($pay) => [
+                        'id' => $pay->id,
+                        'type' => 'payment',
+                        'title' => 'Payment Received',
+                        'description' => ($pay->user?->name ?? 'Student') . " paid " . number_format($pay->amount) . ($pay->invoice ? " for " . str_replace('_', ' ', $pay->invoice->type) : ''),
+                        'amount' => $pay->amount,
+                        'time_ago' => ($pay->paid_at ?? $pay->created_at)->diffForHumans(),
+                        'timestamp' => $pay->paid_at ?? $pay->created_at,
+                        'icon' => 'CreditCard',
+                    ]);
+
+                $generatedInvoices = Invoice::where(function($q) use ($sessionId) {
+                        $q->where('session_id', $sessionId)
+                          ->orWhereNull('session_id');
+                    })
                     ->with(['user'])
-                    ->latest('updated_at')
+                    ->latest('created_at')
                     ->take(5)
                     ->get()
                     ->map(fn ($inv) => [
                         'id' => $inv->id,
-                        'type' => 'payment',
-                        'title' => 'Payment Received',
-                        'description' => "{$inv->user->name} paid ".number_format($inv->amount),
+                        'type' => 'invoice_generated',
+                        'title' => 'Invoice Generated',
+                        'description' => "Invoice generated for " . ($inv->user?->name ?? 'Student') . " - " . str_replace('_', ' ', $inv->type) . " (" . number_format($inv->amount) . ")",
                         'amount' => $inv->amount,
-                        'time_ago' => $inv->updated_at->diffForHumans(),
-                        'timestamp' => $inv->updated_at,
-                        'icon' => 'CreditCard',
+                        'time_ago' => $inv->created_at->diffForHumans(),
+                        'timestamp' => $inv->created_at,
+                        'icon' => 'FileText',
                     ]);
             }
 
@@ -253,7 +279,7 @@ class DashboardController extends Controller
                     ]);
             }
 
-            $recentActivity = $payments->concat($registrations)->concat($results)
+            $recentActivity = $payments->concat($generatedInvoices)->concat($registrations)->concat($results)
                 ->sortByDesc('timestamp')
                 ->take(8)
                 ->values()
@@ -436,7 +462,7 @@ class DashboardController extends Controller
         // Filter Recent Activity
         $recentActivity = $canViewActivity ? $recentActivity->filter(function ($item) use ($user, $canViewFinance, $canViewAdmissions, $canViewResults) {
             // Finance Filter
-            if ($item['type'] === 'payment') {
+            if ($item['type'] === 'payment' || $item['type'] === 'invoice_generated') {
                 return $canViewFinance;
             }
 

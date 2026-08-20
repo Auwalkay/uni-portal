@@ -84,14 +84,22 @@ class ProgrammeCourseImport implements ToCollection, WithChunkReading, WithHeadi
                     $isCompulsory = true;
                 }
 
-                DB::transaction(function () use ($code, $title, $units, $level, $semester, $isCompulsory) {
+                $cleaned = str_replace(' ', '', $code);
+                $cleaned = strtoupper($cleaned);
+                if (preg_match('/^([A-Z]+)(\d+.*)$/', $cleaned, $matches)) {
+                    $normalizedCode = $matches[1] . ' ' . $matches[2];
+                } else {
+                    $normalizedCode = $cleaned;
+                }
+                
+                DB::transaction(function () use ($normalizedCode, $title, $units, $level, $semester, $isCompulsory) {
                     // Find or create global course record
-                    $course = Course::where('code', $code)->first();
+                    $course = Course::where('code', $normalizedCode)->first();
                     
                     if (!$course) {
                         $course = Course::create([
                             'id' => Str::uuid()->toString(),
-                            'code' => $code,
+                            'code' => $normalizedCode,
                             'title' => $title,
                             'units' => $units,
                             'level' => $level,

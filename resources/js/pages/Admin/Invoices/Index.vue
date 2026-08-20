@@ -4,7 +4,8 @@ import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import { route } from 'ziggy-js';
 import { 
-    Filter, Search, CheckCircle, FileText, TrendingUp, TrendingDown, DollarSign, PieChart, Plus, Trash2, CreditCard
+    Filter, Search, CheckCircle, FileText, TrendingUp, TrendingDown, DollarSign, PieChart, Plus, Trash2, CreditCard,
+    ArrowUpDown, ArrowUp, ArrowDown
 } from 'lucide-vue-next';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -73,7 +74,8 @@ const filterForm = ref({
     status: props.filters.status || '',
     type: props.filters.type || '',
     session_id: props.filters.session_id || '',
-    order: props.filters.order || 'desc',
+    sort_field: props.filters.sort_field || 'created_at',
+    sort_order: props.filters.sort_order || 'desc',
 });
 
 const manualPaymentForm = ref({
@@ -125,8 +127,23 @@ const applyFilters = () => {
     });
 };
 
+const sortBy = (field: string) => {
+    let order = 'asc';
+    if (filterForm.value.sort_field === field) {
+        order = filterForm.value.sort_order === 'asc' ? 'desc' : 'asc';
+    }
+    filterForm.value.sort_field = field;
+    filterForm.value.sort_order = order;
+    applyFilters();
+};
+
 const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+};
+
+const formatInvoiceType = (type: string) => {
+    if (!type) return 'N/A';
+    return type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 };
 
 const getStatusColor = (status: string) => {
@@ -308,12 +325,17 @@ const breadcrumbs = [
                     </Select>
                 </div>
                 <div class="space-y-1">
-                    <Label>Sort By Date</Label>
-                    <Select v-model="filterForm.order">
-                         <SelectTrigger><SelectValue placeholder="Latest First" /></SelectTrigger>
+                    <Label>Type</Label>
+                    <Select v-model="filterForm.type">
+                         <SelectTrigger><SelectValue placeholder="All Types" /></SelectTrigger>
                          <SelectContent>
-                             <SelectItem value="desc">Latest First</SelectItem>
-                             <SelectItem value="asc">Oldest First</SelectItem>
+                             <SelectItem value="all">All Types</SelectItem>
+                             <SelectItem value="application_fee">Application Fee</SelectItem>
+                             <SelectItem value="acceptance_fee">Acceptance Fee</SelectItem>
+                             <SelectItem value="school_fee">School Fees</SelectItem>
+                             <SelectItem value="hostel_fee">Hostel Fee</SelectItem>
+                             <SelectItem value="late_payment_fine">Late Payment Fine</SelectItem>
+                             <SelectItem value="other_fee">Other Fee</SelectItem>
                          </SelectContent>
                     </Select>
                 </div>
@@ -327,19 +349,85 @@ const breadcrumbs = [
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Reference</TableHead>
+                            <TableHead class="cursor-pointer select-none hover:bg-slate-50 transition-colors" @click="sortBy('reference')">
+                                <div class="flex items-center gap-1">
+                                    Reference
+                                    <template v-if="filterForm.sort_field === 'reference'">
+                                        <ArrowUp v-if="filterForm.sort_order === 'asc'" class="w-3.5 h-3.5" />
+                                        <ArrowDown v-else class="w-3.5 h-3.5" />
+                                    </template>
+                                    <ArrowUpDown v-else class="w-3 h-3 opacity-40" />
+                                </div>
+                            </TableHead>
                             <TableHead>Student</TableHead>
+                            <TableHead class="cursor-pointer select-none hover:bg-slate-50 transition-colors" @click="sortBy('type')">
+                                <div class="flex items-center gap-1">
+                                    Type
+                                    <template v-if="filterForm.sort_field === 'type'">
+                                        <ArrowUp v-if="filterForm.sort_order === 'asc'" class="w-3.5 h-3.5" />
+                                        <ArrowDown v-else class="w-3.5 h-3.5" />
+                                    </template>
+                                    <ArrowUpDown v-else class="w-3 h-3 opacity-40" />
+                                </div>
+                            </TableHead>
+                            <TableHead class="cursor-pointer select-none hover:bg-slate-50 transition-colors" @click="sortBy('created_at')">
+                                <div class="flex items-center gap-1">
+                                    Generated
+                                    <template v-if="filterForm.sort_field === 'created_at'">
+                                        <ArrowUp v-if="filterForm.sort_order === 'asc'" class="w-3.5 h-3.5" />
+                                        <ArrowDown v-else class="w-3.5 h-3.5" />
+                                    </template>
+                                    <ArrowUpDown v-else class="w-3 h-3 opacity-40" />
+                                </div>
+                            </TableHead>
+                            <TableHead class="cursor-pointer select-none hover:bg-slate-50 transition-colors" @click="sortBy('due_date')">
+                                <div class="flex items-center gap-1">
+                                    Due Date
+                                    <template v-if="filterForm.sort_field === 'due_date'">
+                                        <ArrowUp v-if="filterForm.sort_order === 'asc'" class="w-3.5 h-3.5" />
+                                        <ArrowDown v-else class="w-3.5 h-3.5" />
+                                    </template>
+                                    <ArrowUpDown v-else class="w-3 h-3 opacity-40" />
+                                </div>
+                            </TableHead>
                             <TableHead>Session</TableHead>
-                            <TableHead>Amount</TableHead>
-                            <TableHead>Paid</TableHead>
+                            <TableHead class="cursor-pointer select-none hover:bg-slate-50 transition-colors" @click="sortBy('amount')">
+                                <div class="flex items-center gap-1">
+                                    Amount
+                                    <template v-if="filterForm.sort_field === 'amount'">
+                                        <ArrowUp v-if="filterForm.sort_order === 'asc'" class="w-3.5 h-3.5" />
+                                        <ArrowDown v-else class="w-3.5 h-3.5" />
+                                    </template>
+                                    <ArrowUpDown v-else class="w-3 h-3 opacity-40" />
+                                </div>
+                            </TableHead>
+                            <TableHead class="cursor-pointer select-none hover:bg-slate-50 transition-colors" @click="sortBy('paid_amount')">
+                                <div class="flex items-center gap-1">
+                                    Paid
+                                    <template v-if="filterForm.sort_field === 'paid_amount'">
+                                        <ArrowUp v-if="filterForm.sort_order === 'asc'" class="w-3.5 h-3.5" />
+                                        <ArrowDown v-else class="w-3.5 h-3.5" />
+                                    </template>
+                                    <ArrowUpDown v-else class="w-3 h-3 opacity-40" />
+                                </div>
+                            </TableHead>
                             <TableHead>Balance</TableHead>
-                            <TableHead>Status</TableHead>
+                            <TableHead class="cursor-pointer select-none hover:bg-slate-50 transition-colors" @click="sortBy('status')">
+                                <div class="flex items-center gap-1">
+                                    Status
+                                    <template v-if="filterForm.sort_field === 'status'">
+                                        <ArrowUp v-if="filterForm.sort_order === 'asc'" class="w-3.5 h-3.5" />
+                                        <ArrowDown v-else class="w-3.5 h-3.5" />
+                                    </template>
+                                    <ArrowUpDown v-else class="w-3 h-3 opacity-40" />
+                                </div>
+                            </TableHead>
                             <TableHead class="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                          <TableRow v-for="invoice in invoices.data" :key="invoice.id">
-                            <TableCell class="font-mono font-medium">{{ invoice.reference }}</TableCell>
+                            <TableCell class="font-mono font-medium text-xs">{{ invoice.reference }}</TableCell>
                             <TableCell>
                                 <div class="flex items-center gap-3">
                                     <Link :href="invoice.user?.student ? route('admin.students.show', invoice.user.student.id) : '#'" class="block shrink-0">
@@ -350,16 +438,23 @@ const breadcrumbs = [
                                     </Link>
                                     <div>
                                         <Link :href="invoice.user?.student ? route('admin.students.show', invoice.user.student.id) : '#'" class="hover:underline hover:text-indigo-600 transition-colors block">
-                                            <div class="font-medium text-slate-900 dark:text-slate-100">{{ invoice.user?.name }}</div>
+                                            <div class="font-medium text-slate-900 dark:text-slate-100 text-sm">{{ invoice.user?.name }}</div>
                                         </Link>
-                                        <div class="text-xs text-muted-foreground uppercase">{{ invoice.user?.student?.matriculation_number || invoice.user?.email }}</div>
+                                        <div class="text-[10px] text-muted-foreground uppercase">{{ invoice.user?.student?.matriculation_number || invoice.user?.email }}</div>
                                     </div>
                                 </div>
                             </TableCell>
-                            <TableCell>{{ invoice.session?.name }}</TableCell>
-                            <TableCell class="font-bold">{{ formatCurrency(invoice.amount) }}</TableCell>
-                            <TableCell class="text-green-600">{{ formatCurrency(invoice.paid_amount || 0) }}</TableCell>
-                            <TableCell class="text-red-600">{{ formatCurrency(invoice.amount - (invoice.paid_amount || 0)) }}</TableCell>
+                            <TableCell class="text-xs">
+                                <Badge variant="secondary" class="bg-slate-100 hover:bg-slate-100/80 text-slate-800 border-slate-200">
+                                    {{ formatInvoiceType(invoice.type) }}
+                                </Badge>
+                            </TableCell>
+                            <TableCell class="text-xs">{{ formatDate(new Date(invoice.created_at), 'MMM dd, yyyy') }}</TableCell>
+                            <TableCell class="text-xs">{{ invoice.due_date ? formatDate(new Date(invoice.due_date), 'MMM dd, yyyy') : 'N/A' }}</TableCell>
+                            <TableCell class="text-xs">{{ invoice.session?.name }}</TableCell>
+                            <TableCell class="font-bold text-sm">{{ formatCurrency(invoice.amount) }}</TableCell>
+                            <TableCell class="text-green-600 text-sm">{{ formatCurrency(invoice.paid_amount || 0) }}</TableCell>
+                            <TableCell class="text-red-600 text-sm">{{ formatCurrency(invoice.amount - (invoice.paid_amount || 0)) }}</TableCell>
                             <TableCell>
                                 <Badge variant="outline" :class="getStatusColor(invoice.status)">
                                     {{ invoice.status.toUpperCase() }}
@@ -371,12 +466,12 @@ const breadcrumbs = [
                                         v-if="invoice.status !== 'paid'" 
                                         size="sm" 
                                         variant="outline"
-                                        class="text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700" 
+                                        class="text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700 h-8" 
                                         @click="openPaymentDialog(invoice)"
                                     >
                                         <CreditCard class="w-4 h-4 mr-1" /> Pay
                                     </Button>
-                                    <Button size="sm" variant="secondary" as-child title="View Details">
+                                    <Button size="sm" variant="secondary" as-child title="View Details" class="h-8">
                                         <Link :href="route('admin.invoices.show', invoice.id)">
                                             View
                                         </Link>
@@ -385,7 +480,7 @@ const breadcrumbs = [
                                         v-if="invoice.paid_amount == 0" 
                                         size="sm" 
                                         variant="ghost" 
-                                        class="text-red-500 hover:text-red-600 hover:bg-red-50"
+                                        class="text-red-500 hover:text-red-600 hover:bg-red-50 h-8 w-8 p-0"
                                         @click="deleteInvoice(invoice.id, invoice.reference)"
                                         title="Delete Invoice"
                                     >
@@ -395,7 +490,7 @@ const breadcrumbs = [
                             </TableCell>
                         </TableRow>
                         <TableRow v-if="invoices.data.length === 0">
-                            <TableCell colspan="8" class="h-24 text-center text-muted-foreground">
+                            <TableCell colspan="11" class="h-24 text-center text-muted-foreground">
                                 No invoices found.
                             </TableCell>
                         </TableRow>
