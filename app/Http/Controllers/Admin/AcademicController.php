@@ -205,6 +205,18 @@ class AcademicController extends Controller
                 'scholarship_eligible' => $data['scholarship_eligible'],
             ]);
         } elseif ($request->type === 'course') {
+            if ($request->has('code')) {
+                $cleaned = str_replace(' ', '', $request->code);
+                $cleaned = strtoupper($cleaned);
+                if (preg_match('/^([A-Z]+)(\d+.*)$/', $cleaned, $matches)) {
+                    $formattedCode = $matches[1] . ' ' . $matches[2];
+                } else {
+                    $formattedCode = $cleaned;
+                }
+                $request->merge([
+                    'code' => $formattedCode
+                ]);
+            }
             $data = $request->validate([
                 'title' => 'required|string|max:255',
                 'code' => 'required|string|max:20|unique:courses,code',
@@ -281,6 +293,18 @@ class AcademicController extends Controller
             ]);
         } elseif ($request->type === 'course') {
             $course = Course::findOrFail($request->id);
+            if ($request->has('code')) {
+                $cleaned = str_replace(' ', '', $request->code);
+                $cleaned = strtoupper($cleaned);
+                if (preg_match('/^([A-Z]+)(\d+.*)$/', $cleaned, $matches)) {
+                    $formattedCode = $matches[1] . ' ' . $matches[2];
+                } else {
+                    $formattedCode = $cleaned;
+                }
+                $request->merge([
+                    'code' => $formattedCode
+                ]);
+            }
             $data = $request->validate([
                 'title' => 'required|string|max:255',
                 'code' => 'required|string|max:20|unique:courses,code,'.$course->id,

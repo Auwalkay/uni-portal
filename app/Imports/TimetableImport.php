@@ -34,7 +34,14 @@ class TimetableImport implements ToCollection, WithChunkReading, WithHeadingRow
                 continue; // Skip invalid rows
             }
 
-            $course = Course::where('code', trim($row['course_code']))->first();
+            $cleaned = str_replace(' ', '', trim($row['course_code']));
+            $cleaned = strtoupper($cleaned);
+            if (preg_match('/^([A-Z]+)(\d+.*)$/', $cleaned, $matches)) {
+                $courseCode = $matches[1] . ' ' . $matches[2];
+            } else {
+                $courseCode = $cleaned;
+            }
+            $course = Course::where('code', $courseCode)->first();
 
             if ($course) {
                 Timetable::updateOrCreate(
