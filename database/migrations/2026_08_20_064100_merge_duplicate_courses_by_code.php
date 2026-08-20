@@ -53,18 +53,18 @@ return new class extends Migration {
      */
     private function mergeCourses(string $masterId, string $duplicateId): void
     {
-        // Merge course_programme_configs
-        $configs = DB::table('course_programme_configs')->where('course_id', $duplicateId)->get();
+        // Merge course_programme (pivot overrides)
+        $configs = DB::table('course_programme')->where('course_id', $duplicateId)->get();
         foreach ($configs as $config) {
-            $exists = DB::table('course_programme_configs')
+            $exists = DB::table('course_programme')
                 ->where('course_id', $masterId)
                 ->where('programme_id', $config->programme_id)
                 ->exists();
 
             if ($exists) {
-                DB::table('course_programme_configs')->where('id', $config->id)->delete();
+                DB::table('course_programme')->where('id', $config->id)->delete();
             } else {
-                DB::table('course_programme_configs')->where('id', $config->id)->update([
+                DB::table('course_programme')->where('id', $config->id)->update([
                     'course_id' => $masterId
                 ]);
             }
