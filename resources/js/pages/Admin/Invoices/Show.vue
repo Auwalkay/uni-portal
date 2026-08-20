@@ -107,6 +107,14 @@ const verifyPayment = (paymentId: string) => {
 const downloadReceipt = (paymentId: string) => {
     window.open(route('admin.payments.download_receipt', paymentId), '_blank');
 };
+
+const selectedStatus = ref('all');
+const filteredPayments = computed(() => {
+    if (selectedStatus.value === 'all') {
+        return props.payments;
+    }
+    return props.payments.filter(payment => payment.status === selectedStatus.value);
+});
 </script>
 
 <template>
@@ -402,14 +410,27 @@ const downloadReceipt = (paymentId: string) => {
                 <div class="lg:col-span-4 space-y-6 no-print">
                     
                     <Card class="border-slate-200 shadow-sm overflow-hidden">
-                        <CardHeader class="bg-slate-50/80 dark:bg-slate-900/80 border-b py-4">
+                        <CardHeader class="bg-slate-50/80 dark:bg-slate-900/80 border-b py-3 px-4 flex flex-row items-center justify-between gap-4">
                             <CardTitle class="text-sm font-bold flex items-center gap-2">
                                 <History class="w-4 h-4 text-slate-400" /> Transaction History
                             </CardTitle>
+                            
+                            <!-- Mini Status Selector -->
+                            <Select v-model="selectedStatus">
+                                <SelectTrigger class="w-[110px] h-7 text-xs font-semibold px-2">
+                                    <SelectValue placeholder="All" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all" class="text-xs">All Attempts</SelectItem>
+                                    <SelectItem value="success" class="text-xs">Success</SelectItem>
+                                    <SelectItem value="pending" class="text-xs">Pending</SelectItem>
+                                    <SelectItem value="failed" class="text-xs">Failed</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </CardHeader>
-                        <CardContent class="p-0">
-                            <div class="p-5 relative pl-8 border-l border-slate-100 dark:border-slate-800 space-y-8 ml-6 my-4">
-                                <div v-for="payment in payments" :key="payment.id" class="relative space-y-3">
+                        <CardContent class="p-0 max-h-[550px] overflow-y-auto">
+                            <div class="p-5 pr-6 relative pl-8 border-l border-slate-100 dark:border-slate-800 space-y-8 ml-6 my-4">
+                                <div v-for="payment in filteredPayments" :key="payment.id" class="relative space-y-3">
                                     <!-- Timeline Node Indicator -->
                                     <div class="absolute -left-[37px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full border bg-white dark:bg-slate-950 transition-colors shadow-sm"
                                          :class="payment.status === 'success' ? 'border-emerald-500 text-emerald-500' : 'border-amber-500 text-amber-500'">
@@ -461,11 +482,11 @@ const downloadReceipt = (paymentId: string) => {
                                         </Button>
                                     </div>
                                 </div>
-                                <div v-if="payments.length === 0" class="p-10 text-center space-y-2">
+                                <div v-if="filteredPayments.length === 0" class="p-10 text-center space-y-2">
                                     <div class="mx-auto w-10 h-10 bg-slate-50 dark:bg-slate-900 rounded-full flex items-center justify-center text-slate-300">
                                         <Clock class="w-5 h-5" />
                                     </div>
-                                    <p class="text-sm text-slate-400">No payments detected.</p>
+                                    <p class="text-sm text-slate-400">No matching payments detected.</p>
                                 </div>
                             </div>
                         </CardContent>
