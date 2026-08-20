@@ -208,7 +208,7 @@ class AcademicController extends Controller
             if ($request->has('code')) {
                 $cleaned = str_replace(' ', '', $request->code);
                 $cleaned = strtoupper($cleaned);
-                if (preg_match('/^([A-Z]+)(\d+.*)$/', $cleaned, $matches)) {
+                if (preg_match('/^([A-Z\-]+)(\d+.*)$/', $cleaned, $matches)) {
                     $formattedCode = $matches[1] . ' ' . $matches[2];
                 } else {
                     $formattedCode = $cleaned;
@@ -296,7 +296,7 @@ class AcademicController extends Controller
             if ($request->has('code')) {
                 $cleaned = str_replace(' ', '', $request->code);
                 $cleaned = strtoupper($cleaned);
-                if (preg_match('/^([A-Z]+)(\d+.*)$/', $cleaned, $matches)) {
+                if (preg_match('/^([A-Z\-]+)(\d+.*)$/', $cleaned, $matches)) {
                     $formattedCode = $matches[1] . ' ' . $matches[2];
                 } else {
                     $formattedCode = $cleaned;

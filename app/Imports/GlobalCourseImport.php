@@ -97,7 +97,7 @@ class GlobalCourseImport implements ToCollection, WithChunkReading, WithHeadingR
 
                 $cleaned = str_replace(' ', '', $code);
                 $cleaned = strtoupper($cleaned);
-                if (preg_match('/^([A-Z]+)(\d+.*)$/', $cleaned, $matches)) {
+                if (preg_match('/^([A-Z\-]+)(\d+.*)$/', $cleaned, $matches)) {
                     $normalizedCode = $matches[1] . ' ' . $matches[2];
                 } else {
                     $normalizedCode = $cleaned;

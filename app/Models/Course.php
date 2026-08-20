@@ -15,7 +15,7 @@ class Course extends Model
             if ($course->code) {
                 $cleaned = str_replace(' ', '', $course->code);
                 $cleaned = strtoupper($cleaned);
-                if (preg_match('/^([A-Z]+)(\d+.*)$/', $cleaned, $matches)) {
+                if (preg_match('/^([A-Z\-]+)(\d+.*)$/', $cleaned, $matches)) {
                     $course->code = $matches[1] . ' ' . $matches[2];
                 } else {
                     $course->code = $cleaned;
