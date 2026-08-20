@@ -39,7 +39,7 @@ class CourseAllocationImport implements ToCollection, WithChunkReading, WithHead
 
                 $cleaned = str_replace(' ', '', trim($row['course_code']));
                 $cleaned = strtoupper($cleaned);
-                if (preg_match('/^([A-Z]+)(\d+.*)$/', $cleaned, $matches)) {
+                if (preg_match('/^([A-Z\-]+)(\d+.*)$/', $cleaned, $matches)) {
                     $courseCode = $matches[1] . ' ' . $matches[2];
                 } else {
                     $courseCode = $cleaned;
