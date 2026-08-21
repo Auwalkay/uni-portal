@@ -95,9 +95,21 @@ class TimetableController extends Controller
         ]);
 
         try {
-            \Maatwebsite\Excel\Facades\Excel::import(new \App\Imports\TimetableImport, $request->file('file'));
+            $import = new \App\Imports\TimetableImport;
+            \Maatwebsite\Excel\Facades\Excel::import($import, $request->file('file'));
             \App\Services\AcademicCacheService::clearTimetableCache();
-            return back()->with('success', 'Timetable imported successfully.');
+
+            $stats = $import->getStats();
+            $msg = "Timetable import processed: {$stats['created']} created, {$stats['updated']} updated.";
+            if ($stats['skipped'] > 0) {
+                $msg .= " ({$stats['skipped']} skipped)";
+            }
+
+            if (count($stats['errors']) > 0) {
+                return back()->with('warning', $msg . ' Issues found: ' . implode(' • ', array_slice($stats['errors'], 0, 5)));
+            }
+
+            return back()->with('success', $msg);
         } catch (\Exception $e) {
             return back()->with('error', 'Import failed: ' . $e->getMessage());
         }
