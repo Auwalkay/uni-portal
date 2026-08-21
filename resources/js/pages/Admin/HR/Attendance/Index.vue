@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import AdminLayout from '@/layouts/AdminLayout.vue';
+import SearchableSelect from '@/components/SearchableSelect.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { 
     Search, 
     Filter, 
@@ -22,7 +23,9 @@ import {
     LayoutGrid,
     Umbrella,
     Gift,
-    PartyPopper
+    PartyPopper,
+    Check,
+    ChevronsUpDown
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
 import {
@@ -60,6 +63,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Command, CommandInput, CommandList, CommandEmpty, CommandItem } from '@/components/ui/command'
 
 const props = defineProps<{
     attendances: {
@@ -70,7 +75,7 @@ const props = defineProps<{
         total: number;
     };
     departments: Array<{ id: string; name: string }>;
-    allStaff: Array<{ id: string; name: string }>;
+    allStaff: Array<{ id: string; name: string; staff_number?: string }>;
     holiday: any;
     filters: {
         date?: string;
@@ -80,8 +85,8 @@ const props = defineProps<{
 }>();
 
 const selectedDate = ref(props.filters.date || new Date().toISOString().split('T')[0]);
-const selectedDept = ref(props.filters.department_id || 'ALL');
-const selectedStatus = ref(props.filters.status || 'ALL');
+const selectedDept = ref(props.filters.department_id ? String(props.filters.department_id) : 'ALL');
+const selectedStatus = ref(props.filters.status ? String(props.filters.status) : 'ALL');
 
 // Watchers for filtering
 watch([selectedDate, selectedDept, selectedStatus], () => {
@@ -420,15 +425,13 @@ const formatTime = (time: string | null) => {
                         </div>
                         <div class="grid gap-2">
                             <Label>Staff Member</Label>
-                            <Select v-model="manualForm.staff_id">
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Staff" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem v-for="staff in allStaff" :key="staff.id" :value="staff.id">{{ staff.name }}</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <p class="text-[10px] text-slate-400 font-medium">Tip: Use the search in the dropdown to find staff quickly.</p>
+                            <SearchableSelect
+                                v-model="manualForm.staff_id"
+                                :items="allStaff.map(s => ({ value: String(s.id), label: `${s.name} (${s.staff_number || 'N/A'})` }))"
+                                placeholder="Search and select staff..."
+                                searchPlaceholder="Search staff by name or ID..."
+                                emptyText="No staff found."
+                            />
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div class="grid gap-2">

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import {
   Select,
@@ -77,7 +78,7 @@ const form = useForm({
     department_id: '',
     unit_id: '',
     is_academic: true,
-    role_id: '',
+    role_ids: [] as string[],
     date_joined: '',
     highest_qualification: '',
     phone_number: '',
@@ -593,18 +594,26 @@ const submit = () => {
                         </CardHeader>
                         <CardContent class="space-y-6">
                             <div class="space-y-3">
-                                <Label class="text-sm font-bold text-gray-700">Primary System Role</Label>
-                                <Select v-model="form.role_id">
-                                    <SelectTrigger class="bg-white border-primary/20 h-11">
-                                        <SelectValue placeholder="Select access level" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem v-for="role in roles" :key="role.id" :value="role.id" class="py-2">
+                                <Label class="text-sm font-bold text-gray-700">System Roles</Label>
+                                <div class="space-y-2 mt-1 max-h-[220px] overflow-y-auto pr-1">
+                                    <div v-for="role in roles" :key="role.id" class="flex items-center space-x-3 bg-white p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
+                                        <Checkbox 
+                                            :id="'role-' + role.id"
+                                            :checked="form.role_ids.includes(role.id)"
+                                            @update:checked="(checked) => {
+                                                if (checked) {
+                                                    form.role_ids.push(role.id);
+                                                } else {
+                                                    form.role_ids = form.role_ids.filter(id => id !== role.id);
+                                                }
+                                            }"
+                                        />
+                                        <label :for="'role-' + role.id" class="text-xs font-semibold cursor-pointer text-slate-800 flex-1 select-none">
                                             {{ formatRoleName(role.name) }}
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <p v-if="form.errors.role_id" class="text-xs text-destructive font-medium">{{ form.errors.role_id }}</p>
+                                        </label>
+                                    </div>
+                                </div>
+                                <p v-if="form.errors.role_ids" class="text-xs text-destructive font-medium">{{ form.errors.role_ids }}</p>
                             </div>
 
                             <div class="space-y-3 pt-4 border-t border-primary/10">

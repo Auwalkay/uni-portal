@@ -54,6 +54,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_staff',
             'create_staff',
             'edit_staff',
+            'edit_staff_profile',
+            'assign_staff_roles',
             'delete_staff',
             'manage_staff', // Global staff management
             'view_salaries',
@@ -61,6 +63,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'run_payroll',
             'view_attendance',
             'manage_attendance',
+            'reset_student_password',
+            'fix_course_registration',
             
             // Finance & Payments
             'view_payments',
@@ -242,9 +246,45 @@ class RolesAndPermissionsSeeder extends Seeder
             'toggle_hostels',
         ]);
 
-        // --- FRONT DESK ---
+        // --- FRONT DESK & ICT & EXECUTIVE ---
         $receptionist = Role::firstOrCreate(['name' => 'receptionist']);
         $receptionist->syncPermissions(['access_admin_dashboard', 'manage_visitors']);
+
+        $ictStaff = Role::firstOrCreate(['name' => 'ict_staff']);
+        $ictStaff->syncPermissions([
+            'access_admin_dashboard',
+            'view_staff',
+            'edit_staff_profile',
+            'assign_staff_roles',
+            'view_students',
+            'reset_student_password',
+            'fix_course_registration',
+            'manage_users',
+            'manage_system_settings',
+            'view_system_status',
+            'view_audit_logs',
+            'view_recent_activities',
+            'impersonate_users',
+            'manage_bulk_communications',
+        ]);
+
+        $vc = Role::firstOrCreate(['name' => 'vice_chancellor']);
+        $vc->syncPermissions([
+            'access_admin_dashboard',
+            'view_staff',
+            'view_students',
+            'view_system_status',
+            'view_audit_logs',
+            'view_recent_activities',
+            'view_global_analytics',
+            'view_revenue_stats',
+            'view_academic_stats',
+            'view_admission_stats',
+            'view_payments',
+            'view_bursary_reports',
+            'view_salaries',
+            'manage_hostels',
+        ]);
 
         // --- CORE ROLES ---
         $staff = Role::firstOrCreate(['name' => 'staff']);

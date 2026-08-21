@@ -207,7 +207,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/students/export', [StudentController::class, 'export'])->name('students.export');
         Route::get('/students/{student}', [StudentController::class, 'show'])->name('students.show');
 
-        Route::middleware(['permission:manage_student_registrations'])->group(function () {
+        Route::middleware(['permission:manage_student_registrations|fix_course_registration'])->group(function () {
             Route::get('/course-registration', [CourseRegistrationController::class, 'index'])->name('course_registration.index');
             Route::get('/course-registration/{student}', [CourseRegistrationController::class, 'manage'])->name('course_registration.manage');
             Route::get('/course-registration/{student}/form', [CourseRegistrationController::class, 'downloadForm'])->name('course_registration.form');
@@ -216,6 +216,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::put('/students/{student}/admission-session', [StudentController::class, 'updateAdmissionSession'])->name('students.update_admission_session');
         Route::post('/students/{student}/promote', [StudentController::class, 'promote'])->name('students.promote');
+        Route::post('/students/{student}/reset-password', [StudentController::class, 'resetPassword'])->name('students.reset_password')->middleware('permission:reset_student_password|edit_students');
 
         // Course Registrations & Academic Management
         Route::middleware(['permission:manage_courses|manage_academic_sessions'])->group(function () {

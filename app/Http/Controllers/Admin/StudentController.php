@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
-use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Facades\Hash;
 use App\Mail\StudentAccountCreated;
 use App\Services\AcademicCacheService;
 use App\Exports\StudentsExport;
@@ -388,7 +388,8 @@ class StudentController extends Controller
                 'can_edit_admission' => $user->hasRole('admission_director') || $user->hasRole('admin'),
                 'can_edit_students' => $user->can('edit_students'),
                 'can_perform_registration' => $user->can('perform_student_registration'),
-                'manage_student_registrations' => $user->can('manage_student_registrations'),
+                'manage_student_registrations' => $user->can('manage_student_registrations') || $user->can('fix_course_registration'),
+                'can_reset_password' => $user->can('reset_student_password') || $user->can('edit_students'),
             ],
             'sessions' => ($user->hasRole('admission_director') || $user->hasRole('admin') || $user->can('edit_students')) 
                 ? AcademicCacheService::getSessions() 
@@ -746,5 +747,25 @@ class StudentController extends Controller
             });
 
         return response()->json($students);
+    }
+
+    public function resetPassword(Student $student)
+    {
+        if (!auth()->user()->can('reset_student_password') && !auth()->user()->can('edit_students')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $newPassword = Str::random(10);
+        $student->user->update([
+            'password' => Hash::make($newPassword),
+        ]);
+
+        try {
+            Mail::to($student->user->email)->send(new StudentAccountCreated($student->user, $newPassword, $student->matriculation_number));
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to send reset password email to student: ' . $e->getMessage());
+        }
+
+        return back()->with('success', "Password reset successfully for {$student->user->name}. New password: {$newPassword}");
     }
 }

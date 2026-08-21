@@ -57,13 +57,14 @@ const props = defineProps<{
 
 const formatCurrency = (val: any) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(val || 0);
 
-const search = ref(props.filters.search || '');
-const department_id = ref(props.filters.department_id || '');
-const sortBy = ref(props.filters.sort_by || 'staff_number');
-const sortOrder = ref(props.filters.sort_order || 'asc');
-const per_page = ref(props.filters.per_page || 15);
+const search = ref(String(props.filters.search || ''));
+const department_id = ref(props.filters.department_id ? String(props.filters.department_id) : 'all');
+const sortBy = ref(String(props.filters.sort_by || 'staff_number'));
+const sortOrder = ref(String(props.filters.sort_order || 'asc'));
+const per_page = ref(String(props.filters.per_page || '15'));
 
 const handleSort = (column: string) => {
+    if (typeof column !== 'string') return;
     if (sortBy.value === column) {
         sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
     } else {
@@ -247,7 +248,7 @@ const handleImport = () => {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Departments</SelectItem>
-                                <SelectItem v-for="dept in departments" :key="dept.id" :value="dept.id">{{ dept.name }}</SelectItem>
+                                <SelectItem v-for="dept in departments" :key="dept.id" :value="String(dept.id)">{{ dept.name }}</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

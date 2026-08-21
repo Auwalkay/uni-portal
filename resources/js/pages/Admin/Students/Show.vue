@@ -84,6 +84,10 @@ const props = defineProps<{
         can_view_finance: boolean;
         can_view_academics: boolean;
         can_edit_admission: boolean;
+        can_edit_students?: boolean;
+        can_perform_registration?: boolean;
+        manage_student_registrations?: boolean;
+        can_reset_password?: boolean;
     };
     sessions: Array<any>;
 }>();
@@ -101,6 +105,12 @@ const handlePrint = () => {
     setTimeout(() => {
         window.print();
     }, 300);
+};
+
+const handleResetPassword = () => {
+    if (confirm(`Are you sure you want to reset the password for ${props.student.user.name}? A new password will be generated and emailed to them.`)) {
+        router.post(route('admin.students.reset_password', props.student.id));
+    }
 };
 
 const formatDate = (dateString: string) => {
@@ -305,6 +315,10 @@ const submitStudentSession = () => {
                                     <a :href="route('admin.course_registration.form', student.id)" target="_blank">
                                         <FileText class="w-4 h-4 mr-2" /> Preview Form
                                     </a>
+                                </Button>
+
+                                 <Button v-if="permissions.can_reset_password" variant="outline" size="sm" class="border-amber-200 text-amber-700 hover:bg-amber-50" @click="handleResetPassword">
+                                    <Lock class="w-4 h-4 mr-2" /> Reset Password
                                 </Button>
 
                                 <Button v-if="student.status !== 'graduated'" variant="outline" size="sm" class="border-blue-200 text-blue-600 hover:bg-blue-50" @click="promoteStudent">

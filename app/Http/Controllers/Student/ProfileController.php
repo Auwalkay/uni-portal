@@ -252,13 +252,13 @@ class ProfileController extends Controller
             return Subject::orderBy('name')->get();
         });
 
-        // Determine which fields are editable (can only set them if they are null/empty)
+        // Determine which fields are editable (can only set them if they are null/empty, except credentials which can be re-uploaded)
         $canEditGender = is_null($student->gender) || $student->gender === '';
         $canEditState = is_null($student->state_id);
         $canEditLga = is_null($student->lga_id);
         $canEditJamb = is_null($student->jamb_registration_number) || $student->jamb_registration_number === '';
-        $canEditOlevel = ! $student->oLevelResults()->exists();
-        $canEditIndigene = is_null($student->indigene_letter_path);
+        $canEditOlevel = true;
+        $canEditIndigene = true;
 
         return Inertia::render('Student/Profile/Edit', [
             'student' => $student,
@@ -280,13 +280,13 @@ class ProfileController extends Controller
     {
         $student = Student::where('user_id', $request->user()->id)->firstOrFail();
 
-        // Determine which fields are editable (can only set them if they are null/empty)
+        // Determine which fields are editable (can only set them if they are null/empty, except credentials)
         $canEditGender = is_null($student->gender) || $student->gender === '';
         $canEditState = is_null($student->state_id);
         $canEditLga = is_null($student->lga_id);
         $canEditJamb = is_null($student->jamb_registration_number) || $student->jamb_registration_number === '';
-        $canEditOlevel = ! $student->oLevelResults()->exists();
-        $canEditIndigene = is_null($student->indigene_letter_path);
+        $canEditOlevel = true;
+        $canEditIndigene = true;
 
         // Base rules (always editable)
         $rules = [
@@ -309,20 +309,18 @@ class ProfileController extends Controller
             $rules['lga_id'] = 'required|exists:lgas,id';
         }
         if ($canEditJamb) {
-            // $rules['jamb_registration_number'] = 'required|string|max:255|unique:students,jamb_registration_number,' . $student->id;
             $rules['jamb_registration_number'] = 'nullable|string|max:255';
-
         }
         if ($canEditIndigene) {
             $rules['indigene_letter'] = 'nullable|file|mimes:jpg,jpeg,png,pdf|max:500';
         }
         if ($canEditOlevel) {
-            $rules['o_level_sittings'] = 'required|array|min:1|max:2';
-            $rules['o_level_sittings.*.exam_type'] = 'required|string';
-            $rules['o_level_sittings.*.exam_year'] = 'required|string';
-            $rules['o_level_sittings.*.exam_number'] = 'required|string';
-            $rules['o_level_sittings.*.subjects'] = 'required|array|min:1';
-            $rules['o_level_sittings.*.scanned_copy'] = 'required|file|mimes:jpg,jpeg,png,pdf|max:500';
+            $rules['o_level_sittings'] = 'nullable|array|min:1|max:2';
+            $rules['o_level_sittings.*.exam_type'] = 'required_with:o_level_sittings|string';
+            $rules['o_level_sittings.*.exam_year'] = 'required_with:o_level_sittings|string';
+            $rules['o_level_sittings.*.exam_number'] = 'required_with:o_level_sittings|string';
+            $rules['o_level_sittings.*.subjects'] = 'required_with:o_level_sittings|array|min:1';
+            $rules['o_level_sittings.*.scanned_copy'] = 'nullable|file|mimes:jpg,jpeg,png,pdf|max:500';
         }
 
         $validated = $request->validate($rules);
@@ -349,19 +347,28 @@ class ProfileController extends Controller
         }
 
         if ($request->hasFile('passport_photograph')) {
+            if ($student->passport_photo_path && Storage::disk('public')->exists($student->passport_photo_path)) {
+                Storage::disk('public')->delete($student->passport_photo_path);
+            }
             $path = $request->file('passport_photograph')->store('profile-photos', 'public');
             $data['passport_photo_path'] = $path;
         }
 
         if ($canEditIndigene && $request->hasFile('indigene_letter')) {
+            if ($student->indigene_letter_path && Storage::disk('public')->exists($student->indigene_letter_path)) {
+                Storage::disk('public')->delete($student->indigene_letter_path);
+            }
             $path = $request->file('indigene_letter')->store('documents/indigene', 'public');
             $data['indigene_letter_path'] = $path;
         }
 
         $student->update($data);
 
-        // Sync O-Level Results (Only if not already set)
+        // Sync/Update O-Level Results
         if ($canEditOlevel && $request->filled('o_level_sittings')) {
+            $existingSittings = $student->oLevelResults->keyBy('id');
+            $processedIds = [];
+
             foreach ($request->o_level_sittings as $index => $sitting) {
                 if (empty($sitting['exam_type'])) {
                     continue;
@@ -374,12 +381,37 @@ class ProfileController extends Controller
                     'subjects' => $sitting['subjects'] ?? [],
                 ];
 
+                $sittingId = $sitting['id'] ?? null;
+                $existing = $sittingId ? $existingSittings->get($sittingId) : null;
+
                 if ($request->hasFile("o_level_sittings.{$index}.scanned_copy")) {
+                    if ($existing && $existing->scanned_copy_path && Storage::disk('public')->exists($existing->scanned_copy_path)) {
+                        Storage::disk('public')->delete($existing->scanned_copy_path);
+                    }
                     $path = $request->file("o_level_sittings.{$index}.scanned_copy")->store('documents/olevel', 'public');
                     $oLevelData['scanned_copy_path'] = $path;
+                } elseif ($existing) {
+                    $oLevelData['scanned_copy_path'] = $existing->scanned_copy_path;
                 }
 
-                $student->oLevelResults()->create($oLevelData);
+                if ($existing) {
+                    $existing->update($oLevelData);
+                    $processedIds[] = $existing->id;
+                } else {
+                    $created = $student->oLevelResults()->create($oLevelData);
+                    $processedIds[] = $created->id;
+                }
+            }
+
+            // Remove sittings that were deleted by student during edit
+            $toDelete = $existingSittings->pluck('id')->diff($processedIds);
+            if ($toDelete->isNotEmpty()) {
+                foreach ($existingSittings->whereIn('id', $toDelete) as $sittingToDelete) {
+                    if ($sittingToDelete->scanned_copy_path && Storage::disk('public')->exists($sittingToDelete->scanned_copy_path)) {
+                        Storage::disk('public')->delete($sittingToDelete->scanned_copy_path);
+                    }
+                    $sittingToDelete->delete();
+                }
             }
         }
 

@@ -101,9 +101,12 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
         Route::get('staff/export', [StaffController::class, 'export'])->name('staff.export');
         Route::get('staff/{staff}', [StaffController::class, 'show'])->name('staff.show');
 
-        Route::middleware(['permission:manage_staff'])->group(function () {
+        Route::middleware(['permission:manage_staff|edit_staff_profile'])->group(function () {
             Route::get('staff/{staff}/edit', [StaffController::class, 'edit'])->name('staff.edit');
             Route::put('staff/{staff}', [StaffController::class, 'update'])->name('staff.update');
+        });
+
+        Route::middleware(['permission:manage_staff'])->group(function () {
             Route::put('staff/{staff}/toggle-status', [StaffController::class, 'toggleStatus'])->name('staff.toggle_status');
             Route::delete('staff/{staff}', [StaffController::class, 'destroy'])->name('staff.destroy');
 

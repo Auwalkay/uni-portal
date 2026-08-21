@@ -40,9 +40,10 @@ class AttendanceController extends Controller
 
         $attendances = $query->latest()->paginate(20)->withQueryString();
 
-        $allStaff = Staff::with('user:id,name')->get()->map(fn($s) => [
+        $allStaff = Staff::has('user')->with('user:id,name')->get()->map(fn($s) => [
             'id' => $s->id,
-            'name' => $s->user->name
+            'name' => $s->user?->name ?? 'Unknown Staff',
+            'staff_number' => $s->staff_number
         ]);
 
         $holiday = Holiday::whereDate('date', $request->date ?? now()->toDateString())->first();
@@ -162,9 +163,9 @@ class AttendanceController extends Controller
             public function __construct(protected $data) {}
             public function collection() {
                 return $this->data->map(fn($s) => [
-                    $s->staff->staff_number,
-                    $s->staff->user->name,
-                    $s->staff->department->name,
+                    $s->staff?->staff_number ?? 'N/A',
+                    $s->staff?->user?->name ?? 'Unknown',
+                    $s->staff?->department?->name ?? 'N/A',
                     $s->total_days,
                     $s->present_count,
                     $s->late_count,
