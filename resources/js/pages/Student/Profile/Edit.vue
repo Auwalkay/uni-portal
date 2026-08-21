@@ -478,20 +478,27 @@ const updateProfile = () => {
 
                                     <div class="space-y-4 md:col-span-2">
                                         <Label>Indigene Letter Upload</Label>
-                                        <div v-if="canEditIndigene" class="border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition cursor-pointer relative" :class="{'bg-green-50 border-green-200': form.indigene_letter}">
+                                        <div v-if="canEditIndigene" class="border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition cursor-pointer relative" :class="{'bg-green-50 border-green-200': form.indigene_letter || student.indigene_letter_path}">
                                             <input type="file" @input="form.indigene_letter = ($event.target as HTMLInputElement).files?.[0] || null" accept=".pdf,.jpg,.png" class="absolute inset-0 opacity-0 cursor-pointer" />
                                             <div class="bg-orange-100 p-3 rounded-full mb-3">
                                                 <FileText class="w-6 h-6 text-orange-600" />
                                             </div>
-                                            <p class="text-sm font-medium" v-if="!form.indigene_letter">
-                                                Click to upload Indigene Letter
-                                            </p>
-                                            <p class="text-sm font-medium text-green-600" v-else>
-                                                Selected: {{ form.indigene_letter.name }}
-                                            </p>
-                                            <p class="text-xs text-muted-foreground mt-1">
-                                                Supported: PDF, JPG, PNG (Max 500KB)
-                                            </p>
+                                            <div v-if="form.indigene_letter">
+                                                <p class="text-sm font-medium text-green-600">
+                                                    Selected: {{ form.indigene_letter.name }}
+                                                </p>
+                                                <p class="text-xs text-muted-foreground mt-1">Click to replace</p>
+                                            </div>
+                                            <div v-else-if="student.indigene_letter_path">
+                                                <p class="text-sm font-medium text-green-600 flex items-center justify-center gap-1">
+                                                    <CheckCircle class="w-4 h-4" /> Indigene Letter Currently Uploaded
+                                                </p>
+                                                <p class="text-xs text-muted-foreground mt-1">Click to upload a new document to replace it</p>
+                                            </div>
+                                            <div v-else>
+                                                <p class="text-sm font-medium">Click to upload Indigene Letter</p>
+                                                <p class="text-xs text-muted-foreground mt-1">Supported: PDF, JPG, PNG (Max 500KB)</p>
+                                            </div>
                                         </div>
                                         <div v-else class="p-4 bg-muted/50 rounded-lg border text-center text-muted-foreground text-sm">
                                             <span v-if="student.indigene_letter_path" class="text-green-600 flex items-center justify-center gap-2">

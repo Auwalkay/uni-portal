@@ -74,7 +74,7 @@ const selectedStatus = ref(props.filters.status || 'ALL');
 const searchQuery = ref(props.filters.search || '');
 const sortBy = ref(props.filters.sort_by || 'name');
 const sortOrder = ref(props.filters.sort_order || 'asc');
-const perPage = ref(props.filters.per_page || 20);
+const perPage = ref(String(props.filters.per_page || '20'));
 
 const levels = ['100', '200', '300', '400', '500', '600'];
 
