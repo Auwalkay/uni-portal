@@ -100,13 +100,23 @@ class TimetableController extends Controller
             \App\Services\AcademicCacheService::clearTimetableCache();
 
             $stats = $import->getStats();
-            $msg = "Timetable import processed: {$stats['created']} created, {$stats['updated']} updated.";
-            if ($stats['skipped'] > 0) {
-                $msg .= " ({$stats['skipped']} skipped)";
+            $parts = [];
+            if ($stats['created'] > 0) $parts[] = "{$stats['created']} created";
+            if ($stats['updated'] > 0) $parts[] = "{$stats['updated']} updated";
+            
+            $msg = "Timetable import processed: " . (count($parts) > 0 ? implode(', ', $parts) : '0 changes made');
+
+            $skipDetails = [];
+            if ($stats['duplicates'] > 0) $skipDetails[] = "{$stats['duplicates']} duplicates";
+            $nonDuplicateSkipped = $stats['skipped'] - $stats['duplicates'];
+            if ($nonDuplicateSkipped > 0) $skipDetails[] = "{$nonDuplicateSkipped} skipped";
+            
+            if (count($skipDetails) > 0) {
+                $msg .= " (" . implode(', ', $skipDetails) . ")";
             }
 
             if (count($stats['errors']) > 0) {
-                return back()->with('warning', $msg . ' Issues found: ' . implode(' • ', array_slice($stats['errors'], 0, 5)));
+                return back()->with('warning', $msg . '. Issues: ' . implode(' • ', array_slice($stats['errors'], 0, 5)));
             }
 
             return back()->with('success', $msg);

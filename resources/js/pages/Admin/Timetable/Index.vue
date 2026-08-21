@@ -137,23 +137,40 @@ const importForm = useForm({
 
 const submitImport = () => {
     importForm.post(route('admin.timetables.import'), {
-        onSuccess: () => {
+        onSuccess: (page) => {
             isImportOpen.value = false;
             importForm.reset();
-            Swal.fire({
-                toast: true,
-                position: 'top-end',
-                showConfirmButton: false,
-                timer: 3000,
-                icon: 'success',
-                title: 'Timetable Imported',
-            });
+            const flash = (page.props as any).flash;
+            if (flash?.warning) {
+                Swal.fire({
+                    title: 'Import Summary',
+                    html: flash.warning,
+                    icon: 'warning',
+                    confirmButtonColor: '#F59E0B',
+                });
+            } else if (flash?.success) {
+                Swal.fire({
+                    title: 'Import Successful',
+                    text: flash.success,
+                    icon: 'success',
+                    confirmButtonColor: '#10B981',
+                });
+            } else {
+                Swal.fire({
+                    title: 'Timetable Imported',
+                    text: 'Data imported successfully.',
+                    icon: 'success',
+                    confirmButtonColor: '#10B981',
+                });
+            }
         },
         onError: () => {
+            const errors = Object.values(importForm.errors).flat();
             Swal.fire({
-                icon: 'error',
                 title: 'Import Failed',
-                text: 'Please check the file and try again.',
+                html: errors.length > 0 ? errors.join('<br>') : 'Please check the file and try again.',
+                icon: 'error',
+                confirmButtonColor: '#EF4444',
             });
         }
     });
