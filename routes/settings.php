@@ -298,7 +298,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 
         // Hostel Management
-        Route::middleware(['permission:manage_hostels'])->group(function () {
+        Route::middleware(['permission:manage_hostels|manage_hostel_fees'])->group(function () {
             Route::get('hostels/bookings', [HostelBookingController::class, 'index'])->name('hostels.bookings.index');
             Route::post('hostels/bookings', [HostelBookingController::class, 'store'])->name('hostels.bookings.store');
             Route::post('hostels/bookings/{booking}/unbook', [HostelBookingController::class, 'unbook'])->name('hostels.bookings.unbook');
@@ -306,23 +306,33 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('hostels/bookings/{booking}/download-slip', [HostelBookingController::class, 'downloadSlip'])->name('hostels.bookings.download-slip');
             Route::get('hostels/search-students', [HostelBookingController::class, 'searchStudents'])->name('hostels.search-students');
             Route::get('hostels/rooms/available', [HostelBookingController::class, 'getAvailableRooms'])->name('hostels.rooms.available');
-            Route::resource('hostels', HostelController::class);
-            Route::post('hostels/{hostel}/toggle-visibility', [HostelController::class, 'toggleVisibility'])->name('hostels.toggle-visibility');
+            
+            // Hostels CRUD
+            Route::resource('hostels', HostelController::class)->only(['index', 'show']);
+            Route::post('hostels', [HostelController::class, 'store'])->name('hostels.store')->middleware('permission:create_hostels');
+            Route::put('hostels/{hostel}', [HostelController::class, 'update'])->name('hostels.update')->middleware('permission:create_hostels');
+            Route::delete('hostels/{hostel}', [HostelController::class, 'destroy'])->name('hostels.destroy')->middleware('permission:create_hostels');
+            
+            Route::post('hostels/{hostel}/toggle-visibility', [HostelController::class, 'toggleVisibility'])->name('hostels.toggle-visibility')->middleware('permission:toggle_hostels');
 
-            Route::post('hostels/{hostel}/blocks', [HostelBlockController::class, 'store'])->name('hostels.blocks.store');
-            Route::delete('hostels/{hostel}/blocks/{block}', [HostelBlockController::class, 'destroy'])->name('hostels.blocks.destroy');
+            Route::post('hostels/{hostel}/blocks', [HostelBlockController::class, 'store'])->name('hostels.blocks.store')->middleware('permission:create_hostels');
+            Route::delete('hostels/{hostel}/blocks/{block}', [HostelBlockController::class, 'destroy'])->name('hostels.blocks.destroy')->middleware('permission:create_hostels');
 
-            Route::post('hostels/{hostel}/blocks/{block}/floors', [HostelFloorController::class, 'store'])->name('hostels.floors.store');
-            Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}', [HostelFloorController::class, 'destroy'])->name('hostels.floors.destroy');
+            Route::post('hostels/{hostel}/blocks/{block}/floors', [HostelFloorController::class, 'store'])->name('hostels.floors.store')->middleware('permission:create_hostels');
+            Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}', [HostelFloorController::class, 'destroy'])->name('hostels.floors.destroy')->middleware('permission:create_hostels');
 
-            Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms', [HostelRoomController::class, 'store'])->name('hostels.rooms.store');
-            Route::put('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [HostelRoomController::class, 'update'])->name('hostels.rooms.update');
-            Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [HostelRoomController::class, 'destroy'])->name('hostels.rooms.destroy');
-            Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}/toggle-visibility', [HostelRoomController::class, 'toggleVisibility'])->name('hostels.rooms.toggle-visibility');
-            Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}/toggle-suspension', [HostelRoomController::class, 'toggleSuspension'])->name('hostels.rooms.toggle-suspension');
+            Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms', [HostelRoomController::class, 'store'])->name('hostels.rooms.store')->middleware('permission:create_hostels');
+            Route::put('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [HostelRoomController::class, 'update'])->name('hostels.rooms.update')->middleware('permission:create_hostels');
+            Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [HostelRoomController::class, 'destroy'])->name('hostels.rooms.destroy')->middleware('permission:create_hostels');
+            
+            Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}/toggle-visibility', [HostelRoomController::class, 'toggleVisibility'])->name('hostels.rooms.toggle-visibility')->middleware('permission:toggle_hostels');
+            Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}/toggle-suspension', [HostelRoomController::class, 'toggleSuspension'])->name('hostels.rooms.toggle-suspension')->middleware('permission:toggle_hostels');
+        });
 
-            // Fees
+        // Hostel Fees Management
+        Route::middleware(['permission:manage_hostel_fees'])->group(function () {
             Route::post('hostels/fees', [HostelFeeController::class, 'store'])->name('hostels.fees.store');
+            Route::put('hostels/fees/{fee}', [HostelFeeController::class, 'update'])->name('hostels.fees.update');
             Route::delete('hostels/fees/{fee}', [HostelFeeController::class, 'destroy'])->name('hostels.fees.destroy');
         });
 

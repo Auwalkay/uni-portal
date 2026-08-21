@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Edit, Trash2, Home, Settings, Eye, EyeOff } from 'lucide-vue-next';
+import { Plus, Edit, Trash2, Home, Eye, EyeOff } from 'lucide-vue-next';
 import {
     Dialog,
     DialogContent,
@@ -34,15 +34,18 @@ const props = defineProps<{
         id: string;
         name: string;
     }>;
-    fees: Array<{
-        id: string;
-        session_id: string;
-        hostel_id: string | null;
-        amount: number;
-        session?: { name: string };
-        hostel?: { name: string };
-    }>;
 }>();
+
+const page = usePage();
+const hasPermission = (permission: string) => {
+    const user = page.props.auth?.user;
+    if (!user) return false;
+    
+    // Admins have all permissions
+    if (user.roles?.includes('admin')) return true;
+    
+    return user.permissions?.includes(permission);
+};
 
 const isCreateModalOpen = ref(false);
 const isEditModalOpen = ref(false);
@@ -100,57 +103,10 @@ const toggleHostelVisibility = (id: string) => {
     });
 };
 
-// --- Fee Configuration Logic ---
-const isFeeModalOpen = ref(false);
-const feeForm = useForm({
-    session_id: '',
-    hostel_id: 'all', // 'all' means default/global rate
-    amount: '',
-});
-
-const openFeeModal = () => {
-    feeForm.reset();
-    feeForm.clearErrors();
-    feeForm.hostel_id = 'all';
-    // Default to latest session if available
-    if (props.sessions && props.sessions.length > 0) {
-        feeForm.session_id = props.sessions[0].id.toString();
-    }
-    isFeeModalOpen.value = true;
-};
-
-const submitFee = () => {
-    // If 'all' is selected, send empty string to backend representing default global rate
-    if (feeForm.hostel_id === 'all') {
-        feeForm.hostel_id = '';
-    }
-    
-    feeForm.post(route('admin.hostels.fees.store'), {
-        onSuccess: () => {
-            isFeeModalOpen.value = false;
-        },
-    });
-};
-
 const getGenderBadgeClass = (gender: string) => {
     if (gender === 'male') return 'bg-blue-100 text-blue-800 border-blue-200';
     if (gender === 'female') return 'bg-pink-100 text-pink-800 border-pink-200';
     return 'bg-purple-100 text-purple-800 border-purple-200';
-};
-
-const formatCurrency = (amount: any) => {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-};
-
-const deleteFee = (id: string) => {
-    if (confirm('Are you sure you want to remove this fee configuration?')) {
-        useForm({}).delete(route('admin.hostels.fees.destroy', id), {
-            preserveScroll: true
-        });
-    }
 };
 </script>
 
@@ -162,14 +118,10 @@ const deleteFee = (id: string) => {
             <div class="flex items-center justify-between">
                 <div>
                     <h2 class="text-2xl font-bold tracking-tight">Hostels Management</h2>
-                    <p class="text-sm text-muted-foreground">Manage campus hostels, floors, rooms, and accommodation fees.</p>
+                    <p class="text-sm text-muted-foreground">Manage campus hostels, floors, and rooms.</p>
                 </div>
                 <div class="flex space-x-2">
-                    <Button @click="openFeeModal" variant="outline">
-                        <Settings class="mr-2 h-4 w-4" />
-                        Configure Fees
-                    </Button>
-                    <Button @click="openCreateModal">
+                    <Button v-if="hasPermission('create_hostels')" @click="openCreateModal">
                         <Plus class="mr-2 h-4 w-4" />
                         Add Hostel
                     </Button>
@@ -214,14 +166,14 @@ const deleteFee = (id: string) => {
                     </div>
 
                     <div class="p-4 bg-muted/50 border-t flex justify-end space-x-2">
-                        <Button variant="ghost" size="sm" @click="toggleHostelVisibility(hostel.id)" :title="hostel.is_visible ? 'Hide Hostel' : 'Show Hostel'">
+                        <Button v-if="hasPermission('toggle_hostels')" variant="ghost" size="sm" @click="toggleHostelVisibility(hostel.id)" :title="hostel.is_visible ? 'Hide Hostel' : 'Show Hostel'">
                             <component :is="hostel.is_visible ? EyeOff : Eye" class="h-4 w-4 mr-1" />
                             {{ hostel.is_visible ? 'Hide' : 'Show' }}
                         </Button>
-                        <Button variant="ghost" size="sm" @click="openEditModal(hostel)">
+                        <Button v-if="hasPermission('create_hostels')" variant="ghost" size="sm" @click="openEditModal(hostel)">
                             <Edit class="h-4 w-4 mr-1" /> Edit
                         </Button>
-                        <Button variant="ghost" size="sm" class="text-destructive hover:bg-destructive/10 hover:text-destructive" @click="deleteHostel(hostel.id)">
+                        <Button v-if="hasPermission('create_hostels')" variant="ghost" size="sm" class="text-destructive hover:bg-destructive/10 hover:text-destructive" @click="deleteHostel(hostel.id)">
                             <Trash2 class="h-4 w-4 mr-1" /> Delete
                         </Button>
                     </div>
@@ -231,50 +183,6 @@ const deleteFee = (id: string) => {
                     <Home class="h-12 w-12 text-muted-foreground/50 mb-4" />
                     <h3 class="text-lg font-semibold text-foreground">No hostels found</h3>
                     <p class="text-sm text-muted-foreground mt-1 max-w-sm">You haven't added any campus hostels yet. Click the button above to create one.</p>
-                </div>
-            </div>
-
-            <!-- Configured Hostel Fees Table -->
-            <div class="bg-card border rounded-lg shadow-sm p-6 mt-8">
-                <div class="flex items-center justify-between mb-4">
-                    <div>
-                        <h3 class="font-bold text-lg text-foreground">Configured Hostel Fees</h3>
-                        <p class="text-xs text-muted-foreground mt-0.5">Manage session and hostel-specific accommodation rates.</p>
-                    </div>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm text-left">
-                        <thead class="bg-muted/50 border-b text-muted-foreground font-semibold uppercase text-xs">
-                            <tr>
-                                <th class="px-6 py-3">Academic Session</th>
-                                <th class="px-6 py-3">Hostel</th>
-                                <th class="px-6 py-3">Amount</th>
-                                <th class="px-6 py-3 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-border">
-                            <tr v-for="fee in fees" :key="fee.id" class="hover:bg-muted/30">
-                                <td class="px-6 py-4 font-semibold text-foreground">{{ fee.session?.name }}</td>
-                                <td class="px-6 py-4">
-                                    <span v-if="fee.hostel" class="font-medium text-foreground">{{ fee.hostel.name }}</span>
-                                    <span v-else class="text-muted-foreground italic">Default (All Hostels)</span>
-                                </td>
-                                <td class="px-6 py-4 font-bold text-foreground">
-                                    {{ formatCurrency(fee.amount) }}
-                                </td>
-                                <td class="px-6 py-4 text-right">
-                                    <Button variant="ghost" size="sm" class="text-destructive hover:bg-destructive/10 hover:text-destructive rounded-lg" @click="deleteFee(fee.id)">
-                                        <Trash2 class="h-4 w-4 mr-1.5" /> Remove Rate
-                                    </Button>
-                                </td>
-                            </tr>
-                            <tr v-if="fees.length === 0">
-                                <td colspan="4" class="px-6 py-8 text-center text-muted-foreground italic">
-                                    No hostel fees have been configured yet. Click "Configure Fees" above to add one.
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
                 </div>
             </div>
         </div>
@@ -362,61 +270,6 @@ const deleteFee = (id: string) => {
                     <DialogFooter>
                         <Button type="button" variant="outline" @click="isEditModalOpen = false">Cancel</Button>
                         <Button type="submit" :disabled="form.processing">Update</Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-
-        <!-- Configure Fees Modal -->
-        <Dialog :open="isFeeModalOpen" @update:open="isFeeModalOpen = $event">
-            <DialogContent class="sm:max-w-[425px]">
-                <DialogHeader>
-                    <DialogTitle>Configure Hostel Fees</DialogTitle>
-                    <DialogDescription>
-                        Set default fees for an academic session or custom fees per hostel.
-                    </DialogDescription>
-                </DialogHeader>
-                <form @submit.prevent="submitFee">
-                    <div class="grid gap-4 py-4">
-                        <div class="space-y-2">
-                            <Label for="fee_session">Academic Session</Label>
-                            <Select v-model="feeForm.session_id">
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Session" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem v-for="session in sessions" :key="session.id" :value="session.id.toString()">
-                                        {{ session.name }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <p v-if="feeForm.errors.session_id" class="text-sm text-destructive">{{ feeForm.errors.session_id }}</p>
-                        </div>
-                        <div class="space-y-2">
-                            <Label for="fee_hostel">Target Hostel (Optional)</Label>
-                            <Select v-model="feeForm.hostel_id">
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Default for All Hostels" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">-- Default for All Hostels --</SelectItem>
-                                    <SelectItem v-for="hostel in hostels" :key="hostel.id" :value="hostel.id.toString()">
-                                        {{ hostel.name }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <p class="text-xs text-muted-foreground mt-1">If left empty, this becomes the default fee for the session.</p>
-                            <p v-if="feeForm.errors.hostel_id" class="text-sm text-destructive">{{ feeForm.errors.hostel_id }}</p>
-                        </div>
-                        <div class="space-y-2">
-                            <Label for="fee_amount">Fee Amount (₦)</Label>
-                            <Input id="fee_amount" type="number" step="0.01" min="0" v-model="feeForm.amount" placeholder="e.g. 150000" />
-                            <p v-if="feeForm.errors.amount" class="text-sm text-destructive">{{ feeForm.errors.amount }}</p>
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button type="button" variant="outline" @click="isFeeModalOpen = false">Cancel</Button>
-                        <Button type="submit" :disabled="feeForm.processing">Save Configuration</Button>
                     </DialogFooter>
                 </form>
             </DialogContent>

@@ -238,7 +238,7 @@ const administrationItems = computed(() => {
             title: 'Hostels',
             href: route('admin.hostels.index'),
             icon: Building,
-            show: hasRole('admin') || hasPermission('manage_hostels'),
+            show: hasRole('admin') || hasPermission('manage_hostels') || hasPermission('manage_hostel_fees'),
         },
         {
             title: 'Hostel Bookings',
@@ -285,13 +285,13 @@ const frontDeskItems = computed(() => {
             title: 'Complaints',
             href: route().has('admin.front-desk.complaints.index') ? route('admin.front-desk.complaints.index') : '#',
             icon: FileText,
-            show: hasPermission('manage_complaints'),
+            show: hasPermission('manage_visitors'),
         },
         {
             title: 'Enquiries',
             href: route().has('admin.front-desk.enquiries.index') ? route('admin.front-desk.enquiries.index') : '#',
             icon: BookOpen,
-            show: hasPermission('manage_enquiries'),
+            show: hasPermission('manage_visitors'),
         },
     ].filter(i => i.show);
 });
