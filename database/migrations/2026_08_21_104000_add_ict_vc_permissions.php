@@ -15,13 +15,31 @@ return new class extends Migration
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
         // 1. Create new permissions
-        $newPermissions = [
+        $allPermissions = [
             'edit_staff_profile',
             'assign_staff_roles',
             'reset_student_password',
+            'access_admin_dashboard',
+            'view_staff',
+            'view_students',
+            'manage_users',
+            'manage_system_settings',
+            'view_system_status',
+            'view_audit_logs',
+            'view_recent_activities',
+            'impersonate_users',
+            'manage_bulk_communications',
+            'view_global_analytics',
+            'view_revenue_stats',
+            'view_academic_stats',
+            'view_admission_stats',
+            'view_payments',
+            'view_bursary_reports',
+            'view_salaries',
+            'manage_hostels',
         ];
 
-        foreach ($newPermissions as $perm) {
+        foreach ($allPermissions as $perm) {
             Permission::firstOrCreate(['name' => $perm]);
         }
 

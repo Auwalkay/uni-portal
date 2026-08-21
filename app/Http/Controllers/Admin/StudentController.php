@@ -354,10 +354,13 @@ class StudentController extends Controller
             'scholarship',
             'sessions.session',
             'oLevelResults',
+            'hostelBookings.session',
+            'hostelBookings.invoice',
+            'hostelBookings.room.floor.block.hostel',
         ]);
 
         if ($canViewFinance) {
-            $student->load(['user.invoices.session', 'user.payments']);
+            $student->load(['user.invoices.session', 'user.invoices.payments', 'user.invoices.items', 'user.payments']);
         }
 
         if ($canViewAcademics) {

@@ -180,18 +180,7 @@ const bookRoom = () => {
                                     </div>
                                 </div>
                             </CardContent>
-                            <CardFooter v-if="existingBooking.status === 'pending'" class="bg-muted/10 border-t p-6">
-                                <div class="flex flex-col sm:flex-row items-center justify-between w-full gap-4">
-                                    <div class="flex items-center gap-3 text-sm text-muted-foreground font-medium italic">
-                                        <AlertCircle class="h-4 w-4 text-orange-500" />
-                                        Please complete payment to finalize your room reservation.
-                                    </div>
-                                    <Button size="lg" class="w-full sm:w-auto shadow-lg" @click="router.visit(route('student.payments.index'))">
-                                        Pay Hostel Fee &nbsp; <History class="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            </CardFooter>
-                            <CardFooter v-else class="bg-muted/10 border-t p-6">
+                            <CardFooter v-if="existingBooking.status === 'confirmed' && (existingBooking.invoice?.status === 'paid' || existingBooking.invoice?.status === 'partial')" class="bg-muted/10 border-t p-6">
                                 <div class="flex flex-col sm:flex-row items-center justify-end w-full gap-4">
                                     <a 
                                         :href="route('student.accommodation.download-slip')" 
@@ -220,6 +209,17 @@ const bookRoom = () => {
                                             Payment Receipt
                                         </Button>
                                     </a>
+                                </div>
+                            </CardFooter>
+                            <CardFooter v-else class="bg-muted/10 border-t p-6">
+                                <div class="flex flex-col sm:flex-row items-center justify-between w-full gap-4">
+                                    <div class="flex items-center gap-3 text-sm text-muted-foreground font-medium italic">
+                                        <AlertCircle class="h-4 w-4 text-orange-500" />
+                                        Please complete payment to confirm your room reservation and access your allocation slip.
+                                    </div>
+                                    <Button size="lg" class="w-full sm:w-auto shadow-lg" @click="router.visit(route('student.payments.index'))">
+                                        Pay Hostel Fee &nbsp; <History class="h-4 w-4" />
+                                    </Button>
                                 </div>
                             </CardFooter>
                         </Card>

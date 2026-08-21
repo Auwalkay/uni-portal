@@ -12,6 +12,7 @@ use App\Models\HostelFee;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Payment;
+use App\Models\SystemSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -316,6 +317,8 @@ class HostelBookingController extends Controller
                 $reference = 'HST-' . strtoupper(uniqid());
                 $isPaid = $isPaidInput;
 
+                $expiryDays = intval(SystemSetting::get('hostel_booking_expiry_days', 2));
+
                 $invoice = Invoice::create([
                     'user_id' => $student->user_id,
                     'session_id' => $currentSession->id,
@@ -324,7 +327,7 @@ class HostelBookingController extends Controller
                     'amount' => $finalAmount,
                     'status' => $isPaid ? 'paid' : 'pending',
                     'paid_amount' => $isPaid ? $finalAmount : 0,
-                    'due_date' => now()->addDays(7),
+                    'due_date' => now()->addDays($expiryDays),
                 ]);
 
                 InvoiceItem::create([
@@ -433,6 +436,10 @@ class HostelBookingController extends Controller
     {
         $booking->load(['room.floor.block.hostel', 'student.user', 'student.faculty', 'student.department', 'session', 'invoice']);
         
+        if ($booking->status !== 'confirmed' || ! $booking->invoice || ! in_array($booking->invoice->status, ['paid', 'partial'])) {
+            return back()->with('error', 'Accommodation slip can only be downloaded once the accommodation payment is confirmed.');
+        }
+
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.accommodation_slip', [
             'booking' => $booking,
             'student' => $booking->student,

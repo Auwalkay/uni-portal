@@ -262,20 +262,23 @@
                 <td class="label">Allocation Date:</td>
                 <td class="value">{{ $booking->updated_at->format('d M, Y') }}</td>
             </tr>
-            <tr>
+            {{-- <tr>
                 <td class="label">Status:</td>
                 <td class="value" style="color: #16a34a; font-weight: 800;">{{ strtoupper($booking->status) }}</td>
                 <td class="label">Payment Status:</td>
                 <td class="value" style="color: #16a34a; font-weight: 800;">CONFIRMED</td>
-            </tr>
+            </tr> --}}
         </table>
 
         <div class="section-title">Important Instructions</div>
         <ul class="instructions-list">
-            <li>Students are required to occupy their allocated rooms within the first two weeks of academic resumption.</li>
+            <li>Students are required to occupy their allocated rooms within the first two weeks of academic resumption.
+            </li>
             <li>This official slip must be printed and presented to the Hall Warden for key collection.</li>
-            <li>Unauthorized exchange of rooms or transfer of bed spaces is strictly prohibited and attracts severe disciplinary actions.</li>
-            <li>Please ensure that all university property in the room is handled with care. Report any damages to the warden immediately.</li>
+            <li>Unauthorized exchange of rooms or transfer of bed spaces is strictly prohibited and attracts severe
+                disciplinary actions.</li>
+            <li>Please ensure that all university property in the room is handled with care. Report any damages to the
+                warden immediately.</li>
         </ul>
 
         <table class="signature-sections">
@@ -293,7 +296,8 @@
 
         <div class="footer">
             <p>Mewar International University — Official Accommodation Allocation Slip.</p>
-            <p>This is a computer-generated document and does not require a physical signature for initial verification.</p>
+            <p>This is a computer-generated document and does not require a physical signature for initial verification.
+            </p>
             <p style="margin-top: 5px; font-size: 8px;">Generated on {{ now()->format('d M, Y \a\t h:i A') }}</p>
         </div>
     </div>

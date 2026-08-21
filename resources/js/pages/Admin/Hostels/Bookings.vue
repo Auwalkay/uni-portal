@@ -526,11 +526,14 @@ const formatCurrency = (amount: any) => {
                                         >
                                             Re-allocate
                                         </Button>
-                                        <a :href="route('admin.hostels.bookings.download-slip', booking.id)" target="_blank">
+                                        <a v-if="booking.status === 'confirmed' && (booking.invoice?.status === 'paid' || booking.invoice?.status === 'partial')" :href="route('admin.hostels.bookings.download-slip', booking.id)" target="_blank">
                                             <Button variant="ghost" size="icon" class="h-8 w-8 rounded-full hover:bg-primary/10 hover:text-primary text-muted-foreground" title="Download Booking Slip">
                                                 <FileText class="h-4 w-4" />
                                             </Button>
                                         </a>
+                                        <Button v-else variant="ghost" size="icon" class="h-8 w-8 rounded-full text-muted-foreground/30 cursor-not-allowed" disabled title="Accommodation payment not confirmed">
+                                            <FileText class="h-4 w-4" />
+                                        </Button>
                                         <Button variant="ghost" size="icon" class="h-8 w-8 rounded-full hover:bg-primary/10 hover:text-primary" @click="$inertia.visit(route('admin.students.show', booking.student.id))" title="View Student Profile">
                                             <ChevronRight class="h-4 w-4" />
                                         </Button>

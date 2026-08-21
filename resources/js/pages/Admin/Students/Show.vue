@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { 
     User, 
     Users,
@@ -22,7 +22,13 @@ import {
     Check,
     Trash2,
     TrendingUp,
-    Plus
+    Plus,
+    Home,
+    Bed,
+    Building,
+    Eye,
+    CreditCard,
+    ChevronRight
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
 import { router } from '@inertiajs/vue3';
@@ -118,6 +124,24 @@ const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-GB', {
         day: 'numeric', month: 'short', year: 'numeric'
     });
+};
+
+const activeAccommodationBooking = computed(() => {
+    const bookings = props.student.hostel_bookings || props.student.hostelBookings || [];
+    return bookings.find((b: any) => b.status === 'confirmed') || bookings[0] || null;
+});
+
+const isBookingPaymentConfirmed = (booking: any) => {
+    if (!booking || !booking.invoice) return false;
+    return booking.status === 'confirmed' && ['paid', 'partial'].includes(booking.invoice.status);
+};
+
+const selectedInvoice = ref<any>(null);
+const invoiceModalOpen = ref(false);
+
+const openInvoiceDetails = (invoice: any) => {
+    selectedInvoice.value = invoice;
+    invoiceModalOpen.value = true;
 };
 
 const formatCurrency = (amount: number) => {
@@ -239,35 +263,48 @@ const submitStudentSession = () => {
                 </Button>
 
                 <!-- Profile Header Card -->
-                <Card>
-                    <div class="h-32 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-t-lg opacity-90"></div>
-                    <CardContent class="relative pt-0 pb-6 px-6">
-                         <div class="flex flex-col md:flex-row items-start md:items-end -mt-12 gap-6">
-                            <Avatar class="w-32 h-32 border-4 border-background shadow-lg">
-                                <AvatarImage :src="student?.passport_photo_path ? `/storage/${student.passport_photo_path}` : ''" class="object-cover" />
-                                <AvatarFallback class="text-3xl bg-muted">{{ student.user.name.charAt(0) }}</AvatarFallback>
-                            </Avatar>
-                            
-                            <div class="flex-1 space-y-1 mt-2 md:mt-0 pb-2">
-                                <h1 class="text-3xl font-bold text-foreground">{{ student.user.name }}</h1>
-                                <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-                                    <span class="flex items-center gap-1">
-                                        <Building2 class="w-4 h-4" /> {{ student.academic_department?.name || 'No Dept' }}
-                                    </span>
-                                    <span>&bull;</span>
-                                    <span class="flex items-center gap-1">
-                                        <GraduationCap class="w-4 h-4" /> {{ student.current_level }} Level
-                                    </span>
-                                    <span>&bull;</span>
-                                    <span class="font-mono">{{ student.matriculation_number }}</span>
+                <Card class="rounded-3xl border shadow-md overflow-hidden bg-card">
+                    <!-- Top Gradient Cover -->
+                    <div class="h-36 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-700 relative">
+                        <div class="absolute inset-0 bg-black/10"></div>
+                    </div>
+                    
+                    <CardContent class="relative pt-0 pb-8 px-6 sm:px-8">
+                         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                            <!-- Avatar and Student Info -->
+                            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-5 -mt-16">
+                                <Avatar class="w-32 h-32 sm:w-36 sm:h-36 border-4 border-background shadow-xl ring-2 ring-black/5 bg-background shrink-0">
+                                    <AvatarImage :src="student?.passport_photo_path ? `/storage/${student.passport_photo_path}` : ''" class="object-cover" />
+                                    <AvatarFallback class="text-4xl font-extrabold bg-indigo-50 text-indigo-700">{{ student.user.name.charAt(0) }}</AvatarFallback>
+                                </Avatar>
+                                
+                                <div class="space-y-1.5 sm:mt-14">
+                                    <div class="flex items-center gap-2.5">
+                                        <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-foreground">{{ student.user.name }}</h1>
+                                        <Badge :variant="student.status === 'active' ? 'default' : 'secondary'" class="capitalize font-bold text-xs">
+                                            {{ student.status || 'Active' }}
+                                        </Badge>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground font-medium">
+                                        <span class="flex items-center gap-1.5 text-foreground/80 font-semibold">
+                                            <Building2 class="w-4 h-4 text-primary" /> {{ student.academic_department?.name || 'No Dept' }}
+                                        </span>
+                                        <span>&bull;</span>
+                                        <span class="flex items-center gap-1">
+                                            <GraduationCap class="w-4 h-4 text-primary" /> {{ student.current_level }} Level
+                                        </span>
+                                        <span>&bull;</span>
+                                        <span class="font-mono bg-muted px-2 py-0.5 rounded-md text-xs font-bold text-foreground">{{ student.matriculation_number }}</span>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div class="flex gap-2 self-start md:self-end mb-2">
+                            <!-- Action Buttons Bar -->
+                            <div class="flex flex-wrap items-center gap-2 self-start lg:self-center mt-2 lg:mt-12">
                                 <Dialog v-model:open="printOpen">
                                     <DialogTrigger as-child>
-                                        <Button variant="outline" size="sm">
-                                            <Printer class="w-4 h-4 mr-2" /> Print Request
+                                        <Button variant="outline" size="sm" class="rounded-xl font-bold gap-1.5">
+                                            <Printer class="w-4 h-4" /> Print Request
                                         </Button>
                                     </DialogTrigger>
                                     <DialogContent class="sm:max-w-[425px]">
@@ -292,37 +329,37 @@ const submitStudentSession = () => {
                                             </div>
                                         </div>
                                         <DialogFooter>
-                                            <Button type="button" @click="handlePrint">
+                                            <Button type="button" @click="handlePrint" class="rounded-xl font-bold">
                                                 <Printer class="w-4 h-4 mr-2" /> Print
                                             </Button>
                                         </DialogFooter>
                                     </DialogContent>
                                 </Dialog>
 
-                                <Button variant="default" size="sm" as-child>
+                                <Button variant="outline" size="sm" class="rounded-xl font-bold gap-1.5" as-child>
                                     <Link :href="route('admin.students.edit', student.id)">
-                                        <Edit class="w-4 h-4 mr-2" /> Edit Profile
+                                        <Edit class="w-4 h-4" /> Edit Profile
                                     </Link>
                                 </Button>
 
-                                <Button v-if="permissions.manage_student_registrations" variant="secondary" size="sm" as-child>
+                                <Button v-if="permissions.manage_student_registrations" size="sm" class="rounded-xl font-bold gap-1.5 bg-slate-900 text-white hover:bg-slate-800 shadow-xs" as-child>
                                     <Link :href="route('admin.course_registration.manage', student.id)">
-                                        <GraduationCap class="w-4 h-4 mr-2" /> Manage Registration
+                                        <GraduationCap class="w-4 h-4" /> Manage Registration
                                     </Link>
                                 </Button>
 
-                                <Button v-if="permissions.manage_student_registrations" variant="outline" size="sm" as-child>
+                                <Button v-if="permissions.manage_student_registrations" variant="outline" size="sm" class="rounded-xl font-bold gap-1.5" as-child>
                                     <a :href="route('admin.course_registration.form', student.id)" target="_blank">
-                                        <FileText class="w-4 h-4 mr-2" /> Preview Form
+                                        <FileText class="w-4 h-4" /> Preview Form
                                     </a>
                                 </Button>
 
-                                 <Button v-if="permissions.can_reset_password" variant="outline" size="sm" class="border-amber-200 text-amber-700 hover:bg-amber-50" @click="handleResetPassword">
-                                    <Lock class="w-4 h-4 mr-2" /> Reset Password
+                                <Button v-if="permissions.can_reset_password" variant="outline" size="sm" class="rounded-xl font-bold gap-1.5 border-amber-200 text-amber-700 hover:bg-amber-50" @click="handleResetPassword">
+                                    <Lock class="w-4 h-4" /> Reset Password
                                 </Button>
 
-                                <Button v-if="student.status !== 'graduated'" variant="outline" size="sm" class="border-blue-200 text-blue-600 hover:bg-blue-50" @click="promoteStudent">
-                                    <TrendingUp class="w-4 h-4 mr-2" /> Promote Student
+                                <Button v-if="student.status !== 'graduated'" variant="outline" size="sm" class="rounded-xl font-bold gap-1.5 border-blue-200 text-blue-600 hover:bg-blue-50" @click="promoteStudent">
+                                    <TrendingUp class="w-4 h-4" /> Promote Student
                                 </Button>
                             </div>
                          </div>
@@ -330,10 +367,11 @@ const submitStudentSession = () => {
                 </Card>
 
                 <Tabs default-value="overview" class="w-full">
-                    <TabsList class="grid w-full grid-cols-1 lg:grid-cols-4 lg:w-[520px]">
+                    <TabsList class="grid w-full grid-cols-2 lg:grid-cols-5 lg:w-[680px]">
                         <TabsTrigger value="overview">Overview</TabsTrigger>
                         <TabsTrigger v-if="permissions.can_view_academics" value="academic">Academics</TabsTrigger>
                         <TabsTrigger v-if="permissions.can_view_finance" value="finance">Financials</TabsTrigger>
+                        <TabsTrigger value="accommodation">Accommodation</TabsTrigger>
                         <TabsTrigger v-if="permissions.can_edit_students" value="sessions">Sessions</TabsTrigger>
                     </TabsList>
                     
@@ -555,9 +593,62 @@ const submitStudentSession = () => {
                                              </a>
                                          </div>
                                          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                                             <div v-for="subj in sitting.subjects" :key="subj.subject" class="bg-muted/30 p-2.5 rounded-md flex justify-between items-center text-xs">
+                                         <div v-for="subj in sitting.subjects" :key="subj.subject" class="bg-muted/30 p-2.5 rounded-md flex justify-between items-center text-xs">
                                                  <span class="font-medium text-foreground truncate pr-2">{{ subj.subject }}</span>
                                                  <Badge variant="outline" class="bg-background shrink-0 font-mono font-bold">{{ subj.grade }}</Badge>
+                                             </div>
+                                         </div>
+                                     </div>
+                                 </CardContent>
+                             </Card>
+
+                             <!-- Hostel Accommodation Summary Card -->
+                             <Card v-if="(student.hostel_bookings || student.hostelBookings || []).length > 0" class="md:col-span-2">
+                                 <CardHeader class="pb-3 border-b">
+                                     <CardTitle class="text-lg flex items-center justify-between">
+                                         <span class="flex items-center gap-2">
+                                             <Home class="w-5 h-5 text-muted-foreground" /> Hostel Accommodation
+                                         </span>
+                                         <Badge variant="outline" class="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-xs uppercase">
+                                             {{ (student.hostel_bookings || student.hostelBookings || []).length }} Booking Record(s)
+                                         </Badge>
+                                     </CardTitle>
+                                 </CardHeader>
+                                 <CardContent class="p-6">
+                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                         <div v-for="booking in (student.hostel_bookings || student.hostelBookings || [])" :key="booking.id" class="bg-muted/30 p-4 rounded-2xl border space-y-3">
+                                             <div class="flex items-start justify-between">
+                                                 <div>
+                                                     <h4 class="font-extrabold text-base text-foreground">
+                                                         {{ booking.room?.floor?.block?.hostel?.name || 'Campus Hostel' }}
+                                                     </h4>
+                                                     <p class="text-xs text-muted-foreground">
+                                                         {{ booking.room?.floor?.block?.name }} • {{ booking.room?.floor?.name }}
+                                                     </p>
+                                                 </div>
+                                                 <Badge variant="outline" class="font-mono font-bold text-xs">
+                                                     Unit {{ booking.room?.room_number || 'N/A' }}
+                                                 </Badge>
+                                             </div>
+
+                                             <div class="flex flex-wrap items-center justify-between text-xs pt-2 border-t font-medium gap-2">
+                                                 <span>Session: <strong>{{ booking.session?.name }}</strong></span>
+                                                 <Badge 
+                                                     :variant="booking.status === 'confirmed' ? 'default' : 'secondary'"
+                                                     :class="booking.status === 'confirmed' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : ''"
+                                                 >
+                                                     {{ booking.status }}
+                                                 </Badge>
+                                             </div>
+
+                                             <div v-if="booking.status === 'confirmed' && booking.invoice && (booking.invoice.status === 'paid' || booking.invoice.status === 'partial')" class="pt-1">
+                                                 <a 
+                                                     :href="route('admin.hostels.bookings.download-slip', booking.id)" 
+                                                     target="_blank"
+                                                     class="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
+                                                 >
+                                                     <Download class="w-3.5 h-3.5" /> Download Accommodation Slip
+                                                 </a>
                                              </div>
                                          </div>
                                      </div>
@@ -624,84 +715,273 @@ const submitStudentSession = () => {
                                 </AccordionItem>
                             </Accordion>
                         </div>
-                    </TabsContent>
-
-                    <!-- Financials Tab -->
+                    </TabsContent>                    <!-- Financials Tab -->
                     <TabsContent v-if="permissions.can_view_finance" value="finance" class="space-y-6 mt-6">
-                         <div class="grid gap-6 md:grid-cols-2">
-                            <!-- Invoices -->
-                             <Card class="flex flex-col h-full">
-                                <CardHeader class="flex flex-row items-center justify-between pb-2">
-                                    <CardTitle class="text-lg font-medium">Invoices</CardTitle>
-                                    <FileText class="w-4 h-4 text-muted-foreground" />
-                                </CardHeader>
-                                 <CardContent class="p-0 mb-auto">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Reference</TableHead>
-                                                <TableHead>Amount</TableHead>
-                                                <TableHead class="text-right">Status</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody v-if="financialHistory">
-                                            <TableRow v-for="invoice in (financialHistory.invoices as any[])" :key="invoice.id">
-                                                <TableCell class="font-mono text-xs">{{ invoice.reference }}</TableCell>
-                                                <TableCell class="font-medium">{{ formatCurrency(invoice.amount) }}</TableCell>
-                                                <TableCell class="text-right flex items-center justify-end gap-2">
-                                                    <Badge :class="getStatusClass(invoice.status)" variant="outline">{{ invoice.status }}</Badge>
+                        <!-- Student Financial Invoices Card -->
+                        <Card class="rounded-3xl shadow-sm border overflow-hidden">
+                            <CardHeader class="flex flex-row items-center justify-between border-b p-6">
+                                <div>
+                                    <CardTitle class="text-xl font-black flex items-center gap-2">
+                                        <FileText class="w-5 h-5 text-primary" /> Invoices & Transaction History
+                                    </CardTitle>
+                                    <CardDescription class="text-xs mt-1">
+                                        Click on any invoice row to inspect payment attempts, gateway transaction references, and statuses.
+                                    </CardDescription>
+                                </div>
+                            </CardHeader>
+
+                            <CardContent class="p-0">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow class="bg-muted/40 text-xs uppercase font-bold text-muted-foreground">
+                                            <TableHead class="py-4 px-6">Invoice Reference</TableHead>
+                                            <TableHead class="py-4 px-6">Total Amount</TableHead>
+                                            <TableHead class="py-4 px-6">Amount Paid</TableHead>
+                                            <TableHead class="py-4 px-6">Invoice Status</TableHead>
+                                            <TableHead class="py-4 px-6 text-right font-semibold">Payment Attempts</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody v-if="financialHistory" class="divide-y">
+                                        <TableRow 
+                                            v-for="invoice in (financialHistory.invoices as any[])" 
+                                            :key="invoice.id"
+                                            @click="openInvoiceDetails(invoice)"
+                                            class="cursor-pointer hover:bg-muted/30 transition-colors group"
+                                            title="Click to view payment attempts"
+                                        >
+                                            <TableCell class="py-4 px-6 font-mono text-sm font-black text-foreground">
+                                                <div class="flex items-center gap-2">
+                                                    <Eye class="w-4 h-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                    <span>{{ invoice.reference }}</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell class="py-4 px-6 font-extrabold text-foreground text-sm">
+                                                {{ formatCurrency(invoice.amount) }}
+                                            </TableCell>
+                                            <TableCell class="py-4 px-6 font-bold text-emerald-600 text-sm">
+                                                {{ formatCurrency(invoice.paid_amount || 0) }}
+                                            </TableCell>
+                                            <TableCell class="py-4 px-6">
+                                                <Badge :class="getStatusClass(invoice.status)" variant="outline" class="font-bold text-xs uppercase">
+                                                    {{ invoice.status }}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell class="py-4 px-6 text-right">
+                                                <div class="inline-flex items-center gap-2">
+                                                    <span class="text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-xl group-hover:bg-primary group-hover:text-white transition-colors">
+                                                        View {{ (invoice.payments || []).length }} Attempt(s)
+                                                    </span>
                                                     <Button 
                                                         v-if="invoice.paid_amount == 0" 
                                                         variant="ghost" 
                                                         size="icon" 
                                                         class="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
-                                                        @click="deleteInvoice(invoice.id)"
+                                                        @click.stop="deleteInvoice(invoice.id)"
                                                         title="Delete unpaid invoice"
                                                     >
                                                         <Trash2 class="w-3.5 h-3.5" />
                                                     </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                              <TableRow v-if="financialHistory?.invoices.length === 0">
-                                                <TableCell colspan="3" class="text-center py-6 text-muted-foreground">No invoices generated.</TableCell>
-                                            </TableRow>
-                                        </TableBody>
-                                    </Table>
-                                </CardContent>
-                             </Card>
-
-                            <!-- Payments -->
-                            <Card class="flex flex-col h-full">
-                                 <CardHeader class="flex flex-row items-center justify-between pb-2">
-                                    <CardTitle class="text-lg font-medium">Payment History</CardTitle>
-                                    <Banknote class="w-4 h-4 text-muted-foreground" />
-                                </CardHeader>
-                                 <CardContent class="p-0">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Date</TableHead>
-                                                <TableHead>Amount</TableHead>
-                                                <TableHead class="text-right">Status</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody v-if="financialHistory">
-                                            <TableRow v-for="payment in (financialHistory.payments as any[])" :key="payment.id">
-                                                <TableCell class="text-xs">{{ formatDate(payment.paid_at) }}</TableCell>
-                                                <TableCell class="font-medium">{{ formatCurrency(payment.amount) }}</TableCell>
-                                                <TableCell class="text-right">
-                                                    <Badge :class="getStatusClass(payment.status)" variant="outline">{{ payment.status }}</Badge>
-                                                </TableCell>
-                                            </TableRow>
-                                            <TableRow v-if="financialHistory?.payments.length === 0">
-                                                <TableCell colspan="3" class="text-center py-6 text-muted-foreground">No payments recorded.</TableCell>
-                                            </TableRow>
-                                        </TableBody>
-                                    </Table>
-                                </CardContent>
-                            </Card>
-                         </div>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                        <TableRow v-if="financialHistory?.invoices.length === 0">
+                                            <TableCell colspan="5" class="text-center py-12 text-muted-foreground">
+                                                <Banknote class="h-10 w-10 mx-auto mb-2 opacity-30" />
+                                                <p class="font-bold text-foreground">No Invoices Generated</p>
+                                                <p class="text-xs text-muted-foreground">No financial invoices found for this student profile.</p>
+                                            </TableCell>
+                                        </TableRow>
+                                    </TableBody>
+                                </Table>
+                            </CardContent>
+                        </Card>
                     </TabsContent>
+
+                     <!-- Accommodation Tab -->
+                     <TabsContent value="accommodation" class="space-y-6 mt-6">
+                         <!-- Active Accommodation Showcase Banner (Hero Card) -->
+                         <div v-if="activeAccommodationBooking" class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden border border-slate-800">
+                             <div class="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                                 <div class="space-y-3">
+                                     <div class="flex items-center space-x-2">
+                                         <Badge class="bg-emerald-500 text-white font-extrabold text-[10px] uppercase tracking-wider px-3 py-1 border-none shadow-sm">
+                                             ACTIVE ALLOCATION
+                                         </Badge>
+                                         <Badge variant="outline" class="text-white/80 border-white/20 font-bold text-xs">
+                                             Session: {{ activeAccommodationBooking.session?.name || 'Current Session' }}
+                                         </Badge>
+                                     </div>
+
+                                     <div class="flex items-center space-x-3">
+                                         <div class="p-3 bg-white/10 rounded-2xl backdrop-blur-md">
+                                             <Home class="h-8 w-8 text-emerald-400" />
+                                         </div>
+                                         <div>
+                                             <h2 class="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                                                 {{ activeAccommodationBooking.room?.floor?.block?.hostel?.name || 'Campus Residential Hall' }}
+                                             </h2>
+                                             <p class="text-sm text-slate-300 font-medium">
+                                                 {{ activeAccommodationBooking.room?.floor?.block?.name || 'Block' }} • {{ activeAccommodationBooking.room?.floor?.name || 'Floor' }}
+                                             </p>
+                                         </div>
+                                     </div>
+
+                                     <!-- Room & Bedspace Pill Badges -->
+                                     <div class="flex flex-wrap items-center gap-3 pt-1">
+                                         <div class="bg-white/10 backdrop-blur-sm border border-white/15 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2">
+                                             <DoorOpen class="h-4 w-4 text-emerald-400" />
+                                             <span>Unit Number: <strong>{{ activeAccommodationBooking.room?.room_number || 'N/A' }}</strong></span>
+                                         </div>
+
+                                         <div class="bg-white/10 backdrop-blur-sm border border-white/15 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2">
+                                             <Bed class="h-4 w-4 text-indigo-300" />
+                                             <span>Bed Space: <strong>Bed {{ activeAccommodationBooking.bed_space_number || '1' }}</strong></span>
+                                         </div>
+                                     </div>
+                                 </div>
+
+                                 <!-- Action Button in Hero Banner -->
+                                 <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+                                     <a 
+                                         v-if="isBookingPaymentConfirmed(activeAccommodationBooking)"
+                                         :href="route('admin.hostels.bookings.download-slip', activeAccommodationBooking.id)" 
+                                         target="_blank"
+                                         class="inline-flex items-center justify-center px-6 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-sm rounded-2xl shadow-lg transition-all gap-2"
+                                     >
+                                         <Download class="h-4 w-4" /> Download Official Allocation Slip
+                                     </a>
+
+                                     <Button 
+                                         v-else
+                                         variant="outline"
+                                         class="bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30 rounded-2xl font-bold"
+                                         disabled
+                                     >
+                                         Payment Unconfirmed (Slip Disabled)
+                                     </Button>
+
+                                     <Button variant="outline" class="bg-white/10 border-white/20 text-white hover:bg-white/20 rounded-2xl font-bold" as-child>
+                                         <Link :href="route('admin.hostels.bookings.index')">
+                                             Manage Allocations
+                                         </Link>
+                                     </Button>
+                                 </div>
+                             </div>
+                         </div>
+
+                         <!-- Full History Table Card -->
+                         <Card class="rounded-3xl shadow-sm border overflow-hidden">
+                             <CardHeader class="flex flex-row items-center justify-between border-b p-6">
+                                 <div>
+                                     <CardTitle class="text-xl font-black flex items-center gap-2">
+                                         <Home class="w-5 h-5 text-primary" /> All Accommodation Bookings & History
+                                     </CardTitle>
+                                     <CardDescription class="text-xs mt-1">
+                                         Comprehensive history of residential hall bookings, payment statuses, and downloadable slips.
+                                     </CardDescription>
+                                 </div>
+                                 <Button size="sm" class="rounded-xl font-bold" as-child>
+                                     <Link :href="route('admin.hostels.bookings.index')">
+                                         <Plus class="w-4 h-4 mr-2" /> Allocate Accommodation
+                                     </Link>
+                                 </Button>
+                             </CardHeader>
+
+                             <CardContent class="p-0">
+                                 <div v-if="(student.hostel_bookings || student.hostelBookings || []).length > 0" class="overflow-x-auto">
+                                     <Table>
+                                         <TableHeader>
+                                             <TableRow class="bg-muted/40 text-xs uppercase font-bold text-muted-foreground">
+                                                 <TableHead class="py-4 px-6">Academic Session</TableHead>
+                                                 <TableHead class="py-4 px-6">Hostel & Location</TableHead>
+                                                 <TableHead class="py-4 px-6">Room Unit</TableHead>
+                                                 <TableHead class="py-4 px-6">Booking Status</TableHead>
+                                                 <TableHead class="py-4 px-6">Payment Invoice</TableHead>
+                                                 <TableHead class="py-4 px-6 text-right">Allocation Slip</TableHead>
+                                             </TableRow>
+                                         </TableHeader>
+                                         <TableBody class="divide-y">
+                                             <TableRow v-for="booking in (student.hostel_bookings || student.hostelBookings || [])" :key="booking.id" class="hover:bg-muted/20 transition-colors">
+                                                 <TableCell class="py-4 px-6 font-bold text-foreground">
+                                                     <Badge variant="outline" class="font-bold text-xs">
+                                                         {{ booking.session?.name || 'N/A' }}
+                                                     </Badge>
+                                                 </TableCell>
+                                                 <TableCell class="py-4 px-6">
+                                                     <div class="space-y-0.5">
+                                                         <p class="font-extrabold text-foreground text-sm">
+                                                             {{ booking.room?.floor?.block?.hostel?.name || 'Hostel N/A' }}
+                                                         </p>
+                                                         <p class="text-xs text-muted-foreground">
+                                                             {{ booking.room?.floor?.block?.name || 'Block' }} • {{ booking.room?.floor?.name || 'Floor' }}
+                                                         </p>
+                                                     </div>
+                                                 </TableCell>
+                                                 <TableCell class="py-4 px-6">
+                                                     <Badge variant="secondary" class="font-bold text-xs font-mono">
+                                                         Unit {{ booking.room?.room_number || 'N/A' }}
+                                                     </Badge>
+                                                 </TableCell>
+                                                 <TableCell class="py-4 px-6">
+                                                     <span :class="[
+                                                         'text-xs font-black px-2.5 py-1 rounded-full uppercase border tracking-wider',
+                                                         booking.status === 'confirmed' 
+                                                             ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
+                                                             : booking.status === 'cancelled'
+                                                                 ? 'bg-slate-100 text-slate-700 border-slate-300'
+                                                                 : 'bg-amber-100 text-amber-800 border-amber-300'
+                                                     ]">
+                                                         {{ booking.status }}
+                                                     </span>
+                                                 </TableCell>
+                                                 <TableCell class="py-4 px-6">
+                                                     <div v-if="booking.invoice" class="space-y-0.5">
+                                                         <p class="text-xs font-mono font-bold text-foreground">{{ booking.invoice.reference }}</p>
+                                                         <span :class="[
+                                                             'text-[10px] font-bold uppercase px-2 py-0.5 rounded border',
+                                                             booking.invoice.status === 'paid' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-amber-100 text-amber-800 border-amber-200'
+                                                         ]">
+                                                             {{ booking.invoice.status }}
+                                                         </span>
+                                                     </div>
+                                                     <span v-else class="text-xs text-muted-foreground">No Invoice</span>
+                                                 </TableCell>
+                                                 <TableCell class="py-4 px-6 text-right">
+                                                     <Button 
+                                                         v-if="isBookingPaymentConfirmed(booking)"
+                                                         variant="outline" 
+                                                         size="sm" 
+                                                         as-child
+                                                         class="text-xs font-bold gap-1.5 rounded-xl border-primary/30 text-primary hover:bg-primary/10"
+                                                     >
+                                                         <a :href="route('admin.hostels.bookings.download-slip', booking.id)" target="_blank">
+                                                             <Download class="w-3.5 h-3.5" /> Download Slip
+                                                         </a>
+                                                     </Button>
+                                                     <span v-else class="text-xs text-amber-600 font-bold bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
+                                                         Payment Unconfirmed
+                                                     </span>
+                                                 </TableCell>
+                                             </TableRow>
+                                         </TableBody>
+                                     </Table>
+                                 </div>
+
+                                 <div v-else class="py-16 flex flex-col items-center justify-center text-center text-muted-foreground">
+                                     <div class="h-16 w-16 bg-muted rounded-full flex items-center justify-center mb-4 ring-8 ring-muted/20">
+                                         <Home class="h-8 w-8 text-muted-foreground/50" />
+                                     </div>
+                                     <p class="font-extrabold text-foreground text-lg">No Accommodation Record Found</p>
+                                     <p class="text-xs text-muted-foreground mt-1 max-w-sm">This student has not booked or been allocated any hostel room accommodation.</p>
+                                     <Button size="sm" class="mt-6 rounded-full font-bold px-6 shadow-sm" as-child>
+                                         <Link :href="route('admin.hostels.bookings.index')">
+                                             <Plus class="w-4 h-4 mr-2" /> Allocate Hostel Room
+                                         </Link>
+                                     </Button>
+                                 </div>
+                             </CardContent>
+                         </Card>
+                     </TabsContent>
 
                     <!-- Sessions Tab -->
                     <TabsContent v-slot="{ active }" v-if="permissions.can_edit_students" value="sessions" class="space-y-6 mt-6">
@@ -845,6 +1125,100 @@ const submitStudentSession = () => {
                     </Button>
                 </DialogFooter>
             </form>
+        </DialogContent>
+    </Dialog>
+
+    <!-- Invoice Breakdown & Payment Attempts Modal -->
+    <Dialog v-model:open="invoiceModalOpen">
+        <DialogContent class="sm:max-w-[650px] p-6 rounded-3xl">
+            <DialogHeader class="border-b pb-4">
+                <DialogTitle class="text-xl font-black flex items-center gap-2">
+                    <CreditCard class="w-5 h-5 text-primary" /> Invoice Details & Payment Attempts
+                </DialogTitle>
+                <DialogDescription class="text-xs">
+                    Payment attempts and transactions for Invoice Ref: <span class="font-mono font-bold text-foreground">{{ selectedInvoice?.reference }}</span>
+                </DialogDescription>
+            </DialogHeader>
+
+            <div v-if="selectedInvoice" class="space-y-6 py-2">
+                <!-- Invoice Summary Stats Bar -->
+                <div class="grid grid-cols-3 gap-3 bg-muted/30 p-4 rounded-2xl border">
+                    <div>
+                        <p class="text-[10px] font-bold text-muted-foreground uppercase">Total Amount</p>
+                        <p class="text-base font-black text-foreground">{{ formatCurrency(selectedInvoice.amount || 0) }}</p>
+                    </div>
+                    <div>
+                        <p class="text-[10px] font-bold text-muted-foreground uppercase">Amount Paid</p>
+                        <p class="text-base font-black text-emerald-600">{{ formatCurrency(selectedInvoice.paid_amount || 0) }}</p>
+                    </div>
+                    <div>
+                        <p class="text-[10px] font-bold text-muted-foreground uppercase">Invoice Status</p>
+                        <Badge :class="getStatusClass(selectedInvoice.status)" variant="outline" class="font-bold text-xs uppercase mt-0.5">
+                            {{ selectedInvoice.status }}
+                        </Badge>
+                    </div>
+                </div>
+
+                <!-- Payment Attempts List Section -->
+                <div class="space-y-3">
+                    <h4 class="text-xs font-black uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                        <span>Payment Attempts / Transactions</span>
+                        <Badge variant="outline" class="font-mono text-xs font-bold">
+                            {{ (selectedInvoice.payments || []).length }} Attempt(s)
+                        </Badge>
+                    </h4>
+
+                    <div v-if="(selectedInvoice.payments || []).length > 0" class="border rounded-2xl overflow-hidden">
+                        <Table>
+                            <TableHeader>
+                                <TableRow class="bg-muted/50 text-[11px] uppercase font-bold text-muted-foreground">
+                                    <TableHead class="py-3 px-4">Date / Time</TableHead>
+                                    <TableHead class="py-3 px-4">Gateway Reference</TableHead>
+                                    <TableHead class="py-3 px-4">Amount</TableHead>
+                                    <TableHead class="py-3 px-4 text-right">Attempt Status</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody class="divide-y">
+                                <TableRow v-for="attempt in selectedInvoice.payments" :key="attempt.id" class="text-xs">
+                                    <TableCell class="py-3 px-4 font-medium text-muted-foreground">
+                                        {{ formatDate(attempt.paid_at || attempt.created_at) }}
+                                    </TableCell>
+                                    <TableCell class="py-3 px-4 font-mono font-bold text-foreground">
+                                        {{ attempt.gateway_reference || attempt.reference || 'N/A' }}
+                                    </TableCell>
+                                    <TableCell class="py-3 px-4 font-bold text-foreground">
+                                        {{ formatCurrency(attempt.amount) }}
+                                    </TableCell>
+                                    <TableCell class="py-3 px-4 text-right">
+                                        <span :class="[
+                                            'text-[10px] font-black px-2 py-0.5 rounded-full uppercase border',
+                                            attempt.status === 'success' || attempt.status === 'paid'
+                                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                                : attempt.status === 'failed'
+                                                    ? 'bg-red-100 text-red-800 border-red-300'
+                                                    : 'bg-amber-100 text-amber-800 border-amber-300'
+                                        ]">
+                                            {{ attempt.status }}
+                                        </span>
+                                    </TableCell>
+                                </TableRow>
+                            </TableBody>
+                        </Table>
+                    </div>
+
+                    <div v-else class="py-8 text-center text-muted-foreground bg-muted/10 border rounded-2xl space-y-1">
+                        <Banknote class="w-8 h-8 mx-auto opacity-30" />
+                        <p class="text-sm font-bold text-foreground">No Payment Attempts Recorded</p>
+                        <p class="text-xs text-muted-foreground">There are no payment attempts or transactions recorded for this invoice yet.</p>
+                    </div>
+                </div>
+            </div>
+
+            <DialogFooter class="border-t pt-4">
+                <Button variant="outline" class="rounded-xl font-bold" @click="invoiceModalOpen = false">
+                    Close
+                </Button>
+            </DialogFooter>
         </DialogContent>
     </Dialog>
 
