@@ -15,12 +15,10 @@ class HostelController extends Controller
     {
         $hostels = Hostel::withCount('floors', 'fees')->latest()->get();
         $sessions = Session::latest()->get();
-        $fees = \App\Models\HostelFee::with(['session', 'hostel'])->latest()->get();
 
         return Inertia::render('Admin/Hostels/Index', [
             'hostels' => $hostels,
             'sessions' => $sessions,
-            'fees' => $fees,
         ]);
     }
 
@@ -32,7 +30,12 @@ class HostelController extends Controller
             'description' => 'nullable|string',
         ]);
 
-        Hostel::create($validated);
+        $hostel = Hostel::create($validated);
+
+        activity('hostel')
+            ->performedOn($hostel)
+            ->causedBy(auth()->user())
+            ->log("Hostel '{$hostel->name}' created");
 
         return back()->with('success', 'Hostel created successfully.');
     }
@@ -56,6 +59,11 @@ class HostelController extends Controller
 
         $hostel->update($validated);
 
+        activity('hostel')
+            ->performedOn($hostel)
+            ->causedBy(auth()->user())
+            ->log("Hostel '{$hostel->name}' details updated");
+
         return back()->with('success', 'Hostel updated successfully.');
     }
 
@@ -70,7 +78,12 @@ class HostelController extends Controller
             return back()->with('error', 'Cannot delete hostel. There are active bookings in this hostel.');
         }
 
+        $hostelName = $hostel->name;
         $hostel->delete();
+
+        activity('hostel')
+            ->causedBy(auth()->user())
+            ->log("Hostel '{$hostelName}' deleted");
 
         return redirect()->route('admin.hostels.index')->with('success', 'Hostel deleted successfully.');
     }
@@ -80,6 +93,12 @@ class HostelController extends Controller
         $hostel->update([
             'is_visible' => !$hostel->is_visible
         ]);
+
+        $statusText = $hostel->is_visible ? 'unblocked (made visible)' : 'blocked (hidden)';
+        activity('hostel')
+            ->performedOn($hostel)
+            ->causedBy(auth()->user())
+            ->log("Hostel '{$hostel->name}' {$statusText}");
 
         return back()->with('success', 'Hostel visibility updated.');
     }

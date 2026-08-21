@@ -78,6 +78,9 @@ class RolesAndPermissionsSeeder extends Seeder
             // Infrastructure & Utilities
             'manage_hostels',
             'manage_hostel_bookings',
+            'create_hostels',
+            'manage_hostel_fees',
+            'toggle_hostels',
             'manage_visitors',
             'view_audit_logs',
             'manage_system_settings',
@@ -218,10 +221,10 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // --- FINANCE ROLES ---
         $bursar = Role::firstOrCreate(['name' => 'bursar']);
-        $bursar->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments', 'manual_payment_override', 'view_bursary_reports']);
+        $bursar->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments', 'manual_payment_override', 'view_bursary_reports', 'manage_hostel_fees']);
 
         $headOfFinance = Role::firstOrCreate(['name' => 'head_of_finance']);
-        $headOfFinance->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments', 'manual_payment_override', 'view_bursary_reports']);
+        $headOfFinance->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments', 'manual_payment_override', 'view_bursary_reports', 'manage_hostel_fees']);
 
         $financeOfficer = Role::firstOrCreate(['name' => 'finance_officer']);
         $financeOfficer->syncPermissions(['access_admin_dashboard', 'verify_payments', 'view_payments']);
@@ -236,6 +239,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_students',
             'manage_hostels',
             'manage_hostel_bookings',
+            'toggle_hostels',
         ]);
 
         // --- FRONT DESK ---
