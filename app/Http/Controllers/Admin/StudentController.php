@@ -70,8 +70,8 @@ class StudentController extends Controller
             'jamb_score' => 'nullable|integer',
             'previous_institution' => 'nullable|string|max:255',
             'password' => 'nullable|string|min:8',
-            'passport_photo' => 'nullable|image|max:500',
-            'waec_result' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:500',
+            'passport_photo' => 'nullable|image|max:1024',
+            'waec_result' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:1024',
             'fee_policy' => 'required|in:admission_session,current_session',
             'scholarship_id' => 'nullable|exists:scholarships,id',
         ]);

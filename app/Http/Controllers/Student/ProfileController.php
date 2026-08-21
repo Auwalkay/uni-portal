@@ -295,7 +295,7 @@ class ProfileController extends Controller
             'next_of_kin_name' => 'required|string',
             'next_of_kin_phone' => 'required|string',
             'next_of_kin_address' => 'nullable|string',
-            'passport_photograph' => is_null($student->passport_photo_path) ? 'required|image|max:500' : 'nullable|image|max:500',
+            'passport_photograph' => is_null($student->passport_photo_path) ? 'required|image|max:1024' : 'nullable|image|max:1024',
         ];
 
         // Conditional validation rules based on whether they were null
@@ -312,7 +312,7 @@ class ProfileController extends Controller
             $rules['jamb_registration_number'] = 'nullable|string|max:255';
         }
         if ($canEditIndigene) {
-            $rules['indigene_letter'] = 'nullable|file|mimes:jpg,jpeg,png,pdf|max:500';
+            $rules['indigene_letter'] = 'nullable|file|mimes:jpg,jpeg,png,pdf|max:1024';
         }
         if ($canEditOlevel) {
             $rules['o_level_sittings'] = 'nullable|array|min:1|max:2';
@@ -320,7 +320,7 @@ class ProfileController extends Controller
             $rules['o_level_sittings.*.exam_year'] = 'required_with:o_level_sittings|string';
             $rules['o_level_sittings.*.exam_number'] = 'required_with:o_level_sittings|string';
             $rules['o_level_sittings.*.subjects'] = 'required_with:o_level_sittings|array|min:1';
-            $rules['o_level_sittings.*.scanned_copy'] = 'nullable|file|mimes:jpg,jpeg,png,pdf|max:500';
+            $rules['o_level_sittings.*.scanned_copy'] = 'nullable|file|mimes:jpg,jpeg,png,pdf|max:1024';
         }
 
         $validated = $request->validate($rules);
