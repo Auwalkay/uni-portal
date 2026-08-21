@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Hash;
 use App\Mail\StudentAccountCreated;
 use App\Services\AcademicCacheService;
 use App\Exports\StudentsExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class StudentController extends Controller
 {
