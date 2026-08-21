@@ -13,12 +13,27 @@ class HostelController extends Controller
 {
     public function index()
     {
-        $hostels = Hostel::withCount('floors', 'fees')->latest()->get();
+        $currentSession = Session::current();
+        $sessionId = $currentSession?->id;
+
+        $hostels = Hostel::withCount(['floors', 'fees'])
+            ->with(['blocks.floors.rooms' => function ($q) use ($sessionId) {
+                $q->with(['bookings' => function ($bq) use ($sessionId) {
+                    if ($sessionId) {
+                        $bq->where('session_id', $sessionId);
+                    }
+                    $bq->whereIn('status', ['pending', 'confirmed']);
+                }]);
+            }])
+            ->latest()
+            ->get();
+
         $sessions = Session::latest()->get();
 
         return Inertia::render('Admin/Hostels/Index', [
             'hostels' => $hostels,
             'sessions' => $sessions,
+            'currentSession' => $currentSession,
         ]);
     }
 
@@ -42,10 +57,24 @@ class HostelController extends Controller
 
     public function show(Hostel $hostel)
     {
-        $hostel->load(['blocks.floors.rooms']);
+        $currentSession = Session::current();
+        $sessionId = $currentSession?->id;
+
+        $hostel->load([
+            'blocks.floors.rooms' => function ($q) use ($sessionId) {
+                $q->with(['bookings' => function ($bq) use ($sessionId) {
+                    if ($sessionId) {
+                        $bq->where('session_id', $sessionId);
+                    }
+                    $bq->whereIn('status', ['pending', 'confirmed'])
+                        ->with(['student.user', 'student.department', 'invoice']);
+                }]);
+            }
+        ]);
 
         return Inertia::render('Admin/Hostels/Show', [
             'hostel' => $hostel,
+            'currentSession' => $currentSession,
         ]);
     }
 

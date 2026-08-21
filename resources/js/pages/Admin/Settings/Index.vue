@@ -15,7 +15,8 @@ import {
     ShieldAlert,
     Award,
     Hash,
-    CreditCard
+    CreditCard,
+    Home
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
 import {
@@ -52,6 +53,7 @@ const props = defineProps<{
         enforce_hostel_fee_for_results: boolean;
         enable_exam_card_download: boolean;
         enable_hostel_booking: boolean;
+        hostel_booking_expiry_days?: number;
         promote_pending_payments: boolean;
         late_fee_enabled: boolean;
     }
@@ -91,7 +93,8 @@ const examCardForm = useForm({
 });
 
 const hostelBookingForm = useForm({
-    enabled: props.settings.enable_hostel_booking
+    enabled: props.settings.enable_hostel_booking,
+    expiryDays: props.settings.hostel_booking_expiry_days ?? 2,
 });
 
 const promotionForm = useForm({
@@ -177,14 +180,22 @@ const submitHostelBookingSetting = () => {
     }, {
         preserveScroll: true,
         onSuccess: () => {
-            Swal.fire({
-                icon: 'success',
-                title: 'Updated',
-                text: 'Hostel booking settings updated successfully',
-                toast: true,
-                position: 'top-end',
-                showConfirmButton: false,
-                timer: 3000
+            router.post(route('admin.settings.update'), {
+                key: 'hostel_booking_expiry_days',
+                value: String(hostelBookingForm.expiryDays || 2)
+            }, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Updated',
+                        text: 'Hostel booking availability and reservation expiry window updated successfully',
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 3000
+                    });
+                }
             });
         }
     });
@@ -546,20 +557,39 @@ const settingsModules = [
                         </div>
                         <div>
                             <CardTitle>Hostel Booking Settings</CardTitle>
-                            <CardDescription>Control student access to book accommodation.</CardDescription>
+                            <CardDescription>Control student accommodation booking availability & reservation expiry window.</CardDescription>
                         </div>
                     </CardHeader>
                     <CardContent class="space-y-6">
-                        <div class="grid gap-4">
+                        <div class="grid gap-6">
                             <div class="flex items-center justify-between">
-                                <Label for="enable_hostel_booking">Enable Hostel Bookings</Label>
+                                <div>
+                                    <Label for="enable_hostel_booking" class="font-bold">Enable Hostel Bookings</Label>
+                                    <p class="text-xs text-muted-foreground">Allow students to select and reserve hostel rooms.</p>
+                                </div>
                                 <Switch 
                                     id="enable_hostel_booking" 
                                     v-model:checked="hostelBookingForm.enabled" 
                                 />
                             </div>
+
+                            <div class="space-y-2">
+                                <Label for="hostel_booking_expiry_days" class="font-bold">Unpaid Reservation Expiry (Days)</Label>
+                                <Input 
+                                    id="hostel_booking_expiry_days" 
+                                    type="number" 
+                                    min="1" 
+                                    max="30"
+                                    v-model="hostelBookingForm.expiryDays"
+                                    class="bg-background"
+                                    placeholder="Enter number of days (e.g. 2)"
+                                />
+                                <p class="text-xs text-muted-foreground">
+                                    Number of days an unpaid accommodation reservation remains active before automatically expiring and releasing the bedspace back to the vacant pool.
+                                </p>
+                            </div>
                         </div>
-                        <Button @click="submitHostelBookingSetting" class="w-full bg-sky-600 hover:bg-sky-700 text-white">
+                        <Button @click="submitHostelBookingSetting" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl">
                             Update Hostel Booking Settings
                         </Button>
                     </CardContent>

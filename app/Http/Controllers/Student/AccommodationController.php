@@ -229,6 +229,8 @@ class AccommodationController extends Controller
                 // Generate Invoice
                 $reference = 'HST-'.strtoupper(uniqid());
 
+                $expiryDays = intval(SystemSetting::get('hostel_booking_expiry_days', 2));
+
                 $invoice = Invoice::create([
                     'user_id' => $user->id,
                     'session_id' => $currentSession->id,
@@ -236,7 +238,7 @@ class AccommodationController extends Controller
                     'type' => 'hostel_fee',
                     'amount' => $finalAmount,
                     'status' => 'pending',
-                    'due_date' => now()->addDays(7),
+                    'due_date' => now()->addDays($expiryDays),
                 ]);
 
                 InvoiceItem::create([
@@ -295,8 +297,8 @@ class AccommodationController extends Controller
             ->where('status', 'confirmed')
             ->first();
 
-        if (! $booking) {
-            return back()->with('error', 'No confirmed accommodation booking found for the current session.');
+        if (! $booking || ! $booking->invoice || ! in_array($booking->invoice->status, ['paid', 'partial'])) {
+            return back()->with('error', 'Accommodation slip can only be downloaded once the accommodation payment is confirmed.');
         }
 
         $pdf = Pdf::loadView('documents.accommodation_slip', [

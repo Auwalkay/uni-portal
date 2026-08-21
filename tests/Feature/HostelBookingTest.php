@@ -423,4 +423,62 @@ class HostelBookingTest extends TestCase
             'hostel_room_id' => $this->maleRoom->id,
         ]);
     }
+
+    public function test_student_cannot_download_accommodation_slip_if_payment_unconfirmed()
+    {
+        $this->actingAs($this->studentUser);
+
+        // Create booking with unpaid invoice
+        $invoice = Invoice::create([
+            'user_id' => $this->studentUser->id,
+            'session_id' => $this->session->id,
+            'reference' => 'HST-FEES-UNPAID',
+            'type' => 'hostel_fee',
+            'amount' => 50000.00,
+            'status' => 'pending',
+            'due_date' => now()->addDays(7),
+        ]);
+
+        $booking = \App\Models\HostelBooking::create([
+            'student_id' => $this->student->id,
+            'session_id' => $this->session->id,
+            'hostel_room_id' => $this->maleRoom->id,
+            'invoice_id' => $invoice->id,
+            'status' => 'pending',
+        ]);
+
+        $response = $this->get(route('student.accommodation.download-slip'));
+
+        $response->assertStatus(302);
+        $response->assertSessionHas('error', 'Accommodation slip can only be downloaded once the accommodation payment is confirmed.');
+    }
+
+    public function test_student_can_download_accommodation_slip_when_payment_confirmed()
+    {
+        $this->actingAs($this->studentUser);
+
+        $invoice = Invoice::create([
+            'user_id' => $this->studentUser->id,
+            'session_id' => $this->session->id,
+            'reference' => 'HST-FEES-PAID',
+            'type' => 'hostel_fee',
+            'amount' => 50000.00,
+            'paid_amount' => 50000.00,
+            'status' => 'paid',
+            'due_date' => now()->addDays(7),
+        ]);
+
+        $booking = \App\Models\HostelBooking::create([
+            'student_id' => $this->student->id,
+            'session_id' => $this->session->id,
+            'hostel_room_id' => $this->maleRoom->id,
+            'invoice_id' => $invoice->id,
+            'status' => 'confirmed',
+        ]);
+
+        $response = $this->get(route('student.accommodation.download-slip'));
+
+        $response->assertStatus(200);
+        $response->assertHeader('content-type', 'application/pdf');
+    }
 }
