@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { debounce } from 'lodash';
+import Swal from 'sweetalert2';
 import {
   Search, Plus, Trash2, User, Upload, Download, FileSpreadsheet, X
 } from 'lucide-vue-next';
@@ -112,10 +113,42 @@ const submitAssign = () => {
 
 const submitImport = () => {
   importForm.post(route('admin.course-allocations.import'), {
-    onSuccess: () => {
+    onSuccess: (page) => {
       isImportOpen.value = false;
       importForm.reset();
+      const flash = (page.props as any).flash;
+      if (flash?.warning) {
+        Swal.fire({
+          title: 'Import Summary',
+          html: flash.warning,
+          icon: 'warning',
+          confirmButtonColor: '#F59E0B',
+        });
+      } else if (flash?.success) {
+        Swal.fire({
+          title: 'Import Successful',
+          text: flash.success,
+          icon: 'success',
+          confirmButtonColor: '#10B981',
+        });
+      } else {
+        Swal.fire({
+          title: 'Course Allocations Imported',
+          text: 'Data imported successfully.',
+          icon: 'success',
+          confirmButtonColor: '#10B981',
+        });
+      }
     },
+    onError: () => {
+      const errors = Object.values(importForm.errors).flat();
+      Swal.fire({
+        title: 'Import Failed',
+        html: errors.length > 0 ? errors.join('<br>') : 'Please check the file and try again.',
+        icon: 'error',
+        confirmButtonColor: '#EF4444',
+      });
+    }
   });
 };
 
