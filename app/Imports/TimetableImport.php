@@ -17,6 +17,7 @@ class TimetableImport implements ToCollection, WithChunkReading, WithHeadingRow
     private $stats = [
         'created' => 0,
         'updated' => 0,
+        'duplicates' => 0,
         'skipped' => 0,
         'errors' => []
     ];
@@ -61,6 +62,7 @@ class TimetableImport implements ToCollection, WithChunkReading, WithHeadingRow
                 $day = ucfirst(strtolower(trim((string)$rawDay)));
                 $startTime = $this->formatTime($rawStartTime);
                 $endTime = $this->formatTime($rawEndTime);
+                $venue = trim((string)$rawVenue) ?: 'TBA';
 
                 if (!$startTime || !$endTime) {
                     $this->stats['errors'][] = "Row " . ($index + 2) . ": Invalid time format ($rawStartTime - $rawEndTime) for course '$rawCourseCode'.";
@@ -77,27 +79,41 @@ class TimetableImport implements ToCollection, WithChunkReading, WithHeadingRow
                     continue;
                 }
 
-                // Update or Create Timetable entry
-                $record = Timetable::updateOrCreate(
-                    [
+                // Check for existing slot
+                $existing = Timetable::where([
+                    'session_id' => $currentSession->id,
+                    'semester_id' => $currentSemester->id,
+                    'course_id' => $course->id,
+                    'day' => $day,
+                    'start_time' => $startTime,
+                ])->first();
+
+                if ($existing) {
+                    if ($existing->end_time === $endTime && $existing->venue === $venue && $existing->department_id == $course->department_id && $existing->level == $course->level) {
+                        $this->stats['duplicates']++;
+                        $this->stats['skipped']++;
+                    } else {
+                        $existing->update([
+                            'end_time' => $endTime,
+                            'venue' => $venue,
+                            'department_id' => $course->department_id,
+                            'level' => $course->level,
+                        ]);
+                        $this->stats['updated']++;
+                    }
+                } else {
+                    Timetable::create([
                         'session_id' => $currentSession->id,
                         'semester_id' => $currentSemester->id,
                         'course_id' => $course->id,
                         'day' => $day,
                         'start_time' => $startTime,
-                    ],
-                    [
                         'end_time' => $endTime,
-                        'venue' => trim((string)$rawVenue) ?: 'TBA',
+                        'venue' => $venue,
                         'department_id' => $course->department_id,
                         'level' => $course->level,
-                    ]
-                );
-
-                if ($record->wasRecentlyCreated) {
+                    ]);
                     $this->stats['created']++;
-                } else {
-                    $this->stats['updated']++;
                 }
 
             } catch (\Exception $e) {
