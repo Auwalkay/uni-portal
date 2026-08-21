@@ -537,15 +537,15 @@ const updateProfile = () => {
                                             </div>
                                             
                                             <Button 
-                                                v-if="form.o_level_sittings.length < 2 && canEditProfile" 
+                                                v-if="form.o_level_sittings.length < 2 && canEditOlevel" 
                                                 type="button" 
                                                 variant="outline" 
                                                 size="sm" 
                                                 @click="addSitting"
-                                                class="h-9 px-3"
+                                                class="h-9 px-3 border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 font-bold"
                                                 title="Add another sitting"
                                             >
-                                                + Add Sitting
+                                                + Add 2nd Sitting
                                             </Button>
                                         </div>
                                     </div>
@@ -649,7 +649,7 @@ const updateProfile = () => {
                                             </div>
                                             <div v-else>
                                                 <p class="text-sm font-medium">Upload Scanned Result</p>
-                                                <p class="text-xs text-muted-foreground">PDF, JPG, PNG (Max 500KB)</p>
+                                                <p class="text-xs text-muted-foreground">PDF, JPG, PNG (Max 1MB)</p>
                                             </div>
                                         </div>
                                         <div v-else class="p-4 bg-muted/50 rounded-lg border text-center text-muted-foreground text-sm">
