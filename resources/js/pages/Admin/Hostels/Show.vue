@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { 
     Plus, Edit, Trash2, Home, Eye, EyeOff, Building, DoorOpen, Bed, 
     Layers, Users, UserCheck, ShieldCheck, Sparkles, Ban, ArrowLeft, 
-    Filter, CheckCircle2, Grid, ChevronDown, ChevronUp, UserPlus, AlertCircle
+    Filter, CheckCircle2, Grid, ChevronDown, ChevronUp, UserPlus, AlertCircle,
+    FileSpreadsheet, Upload, Download
 } from 'lucide-vue-next';
 import {
     Dialog,
@@ -291,6 +292,56 @@ const toggleHostelVisibility = () => {
     });
 };
 
+const roomImportModalOpen = ref(false);
+const roomImportForm = useForm({
+    block_id: 'all',
+    floor_id: 'all',
+    file: null as File | null,
+});
+
+const availableBlocksForImport = computed(() => {
+    return props.hostel.blocks || [];
+});
+
+const availableFloorsForImport = computed(() => {
+    if (!roomImportForm.block_id || roomImportForm.block_id === 'all') return [];
+    const selectedBlock = availableBlocksForImport.value.find(b => b.id === roomImportForm.block_id);
+    return selectedBlock?.floors || [];
+});
+
+watch(() => roomImportForm.block_id, () => {
+    roomImportForm.floor_id = 'all';
+});
+
+const openRoomImportModal = () => {
+    roomImportForm.reset();
+    roomImportForm.clearErrors();
+    roomImportForm.block_id = 'all';
+    roomImportForm.floor_id = 'all';
+    roomImportModalOpen.value = true;
+};
+
+const handleRoomImportFileChange = (e: Event) => {
+    const target = e.target as HTMLInputElement;
+    if (target.files && target.files[0]) {
+        roomImportForm.file = target.files[0];
+    }
+};
+
+const submitRoomImport = () => {
+    if (!roomImportForm.file) return;
+    router.post(route('admin.hostels.specific-rooms.import', props.hostel.id), {
+        block_id: roomImportForm.block_id === 'all' ? '' : roomImportForm.block_id,
+        floor_id: roomImportForm.floor_id === 'all' ? '' : roomImportForm.floor_id,
+        file: roomImportForm.file,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            roomImportModalOpen.value = false;
+        },
+    });
+};
+
 const getGenderBadgeClass = (gender: string) => {
     if (gender === 'male') return 'bg-blue-100 text-blue-800 border-blue-200';
     if (gender === 'female') return 'bg-pink-100 text-pink-800 border-pink-200';
@@ -329,7 +380,10 @@ const getGenderBadgeClass = (gender: string) => {
                         </p>
                     </div>
 
-                    <div class="flex items-center space-x-3">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <Button @click="openRoomImportModal" variant="outline" class="rounded-xl px-5 h-11 border-emerald-300 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 font-bold">
+                            <FileSpreadsheet class="mr-2 h-4 w-4 text-emerald-600" /> Import Rooms (Excel)
+                        </Button>
                         <Button @click="toggleHostelVisibility" variant="outline" class="rounded-xl px-5 h-11 border-border font-bold">
                             <component :is="hostel.is_visible ? EyeOff : Eye" class="mr-2 h-4 w-4" /> 
                             {{ hostel.is_visible ? 'Hide Hostel' : 'Show Hostel' }}
@@ -926,6 +980,114 @@ const getGenderBadgeClass = (gender: string) => {
                         <Button type="submit" :disabled="hostelForm.processing" class="rounded-full font-bold px-8 shadow-md">Save Changes</Button>
                     </DialogFooter>
                 </form>
+            </DialogContent>
+        </Dialog>
+
+        <!-- Room Excel Import Modal -->
+        <Dialog v-model:open="roomImportModalOpen">
+            <DialogContent class="sm:max-w-[520px] rounded-3xl p-6 shadow-2xl">
+                <DialogHeader class="border-b pb-4">
+                    <DialogTitle class="text-xl font-black flex items-center gap-2 text-foreground">
+                        <FileSpreadsheet class="h-6 w-6 text-emerald-600" /> Import Rooms via Excel / CSV
+                    </DialogTitle>
+                    <DialogDescription class="text-xs">
+                        Upload an Excel (.xlsx, .xls, .csv) file to automatically create blocks, floors, and hostel rooms for <strong>{{ hostel.name }}</strong>.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div class="space-y-5 py-4">
+                    <!-- Mode Indicator Banner -->
+                    <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex items-start gap-3">
+                        <Sparkles class="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                        <div class="text-xs text-emerald-900">
+                            <span class="font-bold block text-emerald-950">Update & Create Mode Active</span>
+                            If a room number already exists under the selected structure, its capacity and visibility will be updated. New rooms will be automatically created.
+                        </div>
+                    </div>
+
+                    <!-- Step 1: Download Template -->
+                    <div class="bg-muted/40 p-4 rounded-2xl border flex items-center justify-between gap-4">
+                        <div>
+                            <h4 class="text-sm font-bold text-foreground">Need the Excel template?</h4>
+                            <p class="text-xs text-muted-foreground">Download pre-formatted template with headers and example room rows.</p>
+                        </div>
+                        <a 
+                            :href="route('admin.hostels.rooms.import-template')" 
+                            target="_blank"
+                            class="inline-flex items-center gap-1.5 text-xs font-bold px-4 py-2 bg-background border rounded-xl shadow-xs hover:bg-muted text-primary shrink-0 transition-colors"
+                        >
+                            <Download class="h-3.5 w-3.5" /> Download
+                        </a>
+                    </div>
+
+                    <!-- Step 2: Structure Selection (Block & Floor) -->
+                    <div class="space-y-4 bg-muted/20 p-4 rounded-2xl border">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Target Structure Selection (Optional)</h4>
+
+                        <!-- Select Block -->
+                        <div class="space-y-1.5">
+                            <Label class="font-bold text-xs">Target Block</Label>
+                            <Select v-model="roomImportForm.block_id">
+                                <SelectTrigger class="rounded-xl bg-background">
+                                    <SelectValue placeholder="All Blocks (Specified in Excel)" />
+                                </SelectTrigger>
+                                <SelectContent class="rounded-xl">
+                                    <SelectItem value="all">All Blocks (Use Excel 'block_name' column)</SelectItem>
+                                    <SelectItem v-for="block in availableBlocksForImport" :key="block.id" :value="block.id">
+                                        {{ block.name }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <!-- Select Floor (only if Block selected) -->
+                        <div v-if="roomImportForm.block_id && roomImportForm.block_id !== 'all'" class="space-y-1.5">
+                            <Label class="font-bold text-xs">Target Floor</Label>
+                            <Select v-model="roomImportForm.floor_id">
+                                <SelectTrigger class="rounded-xl bg-background">
+                                    <SelectValue placeholder="All Floors (Specified in Excel)" />
+                                </SelectTrigger>
+                                <SelectContent class="rounded-xl">
+                                    <SelectItem value="all">All Floors (Use Excel 'floor_name' column)</SelectItem>
+                                    <SelectItem v-for="floor in availableFloorsForImport" :key="floor.id" :value="floor.id">
+                                        {{ floor.name }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Upload File -->
+                    <div class="space-y-2">
+                        <Label class="font-bold text-sm">Select Excel / CSV File</Label>
+                        <Input 
+                            type="file" 
+                            accept=".xlsx,.xls,.csv" 
+                            @change="handleRoomImportFileChange"
+                            class="bg-background rounded-xl text-xs py-2 cursor-pointer border"
+                        />
+                        <p class="text-[11px] text-muted-foreground">
+                            Expected headers: <code>block_name</code>, <code>floor_name</code>, <code>room_number</code>, <code>capacity</code>, <code>is_visible</code>.
+                        </p>
+                        <span v-if="roomImportForm.errors.file" class="text-xs font-bold text-red-500">
+                            {{ roomImportForm.errors.file }}
+                        </span>
+                    </div>
+                </div>
+
+                <DialogFooter class="border-t pt-4">
+                    <Button variant="outline" @click="roomImportModalOpen = false" class="rounded-xl font-bold">
+                        Cancel
+                    </Button>
+                    <Button 
+                        @click="submitRoomImport" 
+                        :disabled="!roomImportForm.file || roomImportForm.processing"
+                        class="rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                        <Upload class="mr-2 h-4 w-4" /> 
+                        {{ roomImportForm.processing ? 'Importing Rooms...' : 'Upload & Process Rooms' }}
+                    </Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     </AdminLayout>

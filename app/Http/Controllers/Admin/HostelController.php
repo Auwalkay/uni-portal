@@ -131,4 +131,66 @@ class HostelController extends Controller
 
         return back()->with('success', 'Hostel visibility updated.');
     }
+
+    public function downloadRoomImportTemplate()
+    {
+        $export = new class implements \Maatwebsite\Excel\Concerns\FromArray, \Maatwebsite\Excel\Concerns\WithHeadings {
+            public function headings(): array
+            {
+                return [
+                    'hostel_name',
+                    'block_name',
+                    'floor_name',
+                    'room_number',
+                    'capacity',
+                    'is_visible',
+                ];
+            }
+
+            public function array(): array
+            {
+                return [
+                    ['Mandela Hall', 'Block A', 'Ground Floor', '101', 4, 1],
+                    ['Mandela Hall', 'Block A', 'Ground Floor', '102', 4, 1],
+                    ['Mandela Hall', 'Block A', 'First Floor', '201', 2, 1],
+                    ['Mandela Hall', 'Block B', 'Ground Floor', '103', 4, 1],
+                ];
+            }
+        };
+
+        return \Maatwebsite\Excel\Facades\Excel::download($export, 'hostel_rooms_import_template.xlsx');
+    }
+
+    public function importRooms(Request $request, ?Hostel $hostel = null)
+    {
+        $request->validate([
+            'file' => 'required|mimes:xlsx,csv,txt,xls|max:10240',
+            'hostel_id' => 'nullable|string',
+            'block_id' => 'nullable|string',
+            'floor_id' => 'nullable|string',
+        ]);
+
+        $targetHostel = $hostel;
+        if (!$targetHostel && $request->filled('hostel_id')) {
+            $targetHostel = Hostel::find($request->hostel_id);
+        }
+
+        $targetBlock = $request->filled('block_id') ? \App\Models\HostelBlock::find($request->block_id) : null;
+        $targetFloor = $request->filled('floor_id') ? \App\Models\HostelFloor::find($request->floor_id) : null;
+
+        $import = new \App\Imports\HostelRoomImport($targetHostel, $targetBlock, $targetFloor);
+        \Maatwebsite\Excel\Facades\Excel::import($import, $request->file('file'));
+
+        $hostelName = $targetHostel ? "'{$targetHostel->name}'" : "hostels";
+        activity()
+            ->causedBy(auth()->user())
+            ->log("Imported {$import->importedCount} rooms for {$hostelName}");
+
+        $msg = "Successfully processed Excel file: {$import->importedCount} room(s) processed ({$import->createdCount} created, {$import->updatedCount} updated).";
+        if (count($import->errors) > 0) {
+            $msg .= " Note: " . implode(" ", array_slice($import->errors, 0, 3));
+        }
+
+        return back()->with('success', $msg);
+    }
 }

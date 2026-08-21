@@ -139,31 +139,39 @@ class AccommodationController extends Controller
             return back()->with('error', 'You already have an active accommodation booking for this session.');
         }
 
-        $room = HostelRoom::with('floor.block.hostel')->findOrFail($request->hostel_room_id);
-
-        if ($room->is_suspended) {
-            return back()->with('error', 'This room is currently suspended and cannot be booked.');
-        }
-
-        if (!$room->is_visible) {
-            return back()->with('error', 'This room is not currently open for bookings.');
-        }
-
-        if (!$room->floor->block->hostel->is_visible) {
-            return back()->with('error', 'This hostel is not currently open for bookings.');
-        }
-
-        // Check capacity for current session
-        $bookedCount = $room->bookings()
-            ->where('session_id', $currentSession->id)
-            ->whereIn('status', ['pending', 'confirmed'])
-            ->count();
-        if ($bookedCount >= $room->capacity) {
-            return back()->with('error', 'This room is already fully booked.');
-        }
-
         DB::beginTransaction();
         try {
+            // Lock room row for update to prevent concurrent overbooking race conditions
+            $room = HostelRoom::where('id', $request->hostel_room_id)
+                ->with('floor.block.hostel')
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($room->is_suspended) {
+                DB::rollBack();
+                return back()->with('error', 'This room is currently suspended and cannot be booked.');
+            }
+
+            if (! $room->is_visible) {
+                DB::rollBack();
+                return back()->with('error', 'This room is not currently open for bookings.');
+            }
+
+            if (! $room->floor->block->hostel->is_visible) {
+                DB::rollBack();
+                return back()->with('error', 'This hostel is not currently open for bookings.');
+            }
+
+            // Check capacity for current session while room is locked
+            $bookedCount = $room->bookings()
+                ->where('session_id', $currentSession->id)
+                ->whereIn('status', ['pending', 'confirmed'])
+                ->count();
+
+            if ($bookedCount >= $room->capacity) {
+                DB::rollBack();
+                return back()->with('error', 'This room was just reserved by another student. Please select another available unit.');
+            }
             // Find Hostel Fee. Fall back to global if no specific fee for this hostel
             $hostelId = $room->floor->block->hostel->id;
             $fee = HostelFee::where('session_id', $currentSession->id)

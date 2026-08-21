@@ -308,6 +308,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('hostels/search-students', [HostelBookingController::class, 'searchStudents'])->name('hostels.search-students');
             Route::get('hostels/rooms/available', [HostelBookingController::class, 'getAvailableRooms'])->name('hostels.rooms.available');
             
+            // Hostel Room Excel Import
+            Route::get('hostels/rooms/import-template', [HostelController::class, 'downloadRoomImportTemplate'])->name('hostels.rooms.import-template');
+            Route::post('hostels/rooms/import', [HostelController::class, 'importRooms'])->name('hostels.rooms.import');
+            Route::post('hostels/{hostel}/rooms/import', [HostelController::class, 'importRooms'])->name('hostels.specific-rooms.import');
+
             // Hostels CRUD
             Route::resource('hostels', HostelController::class)->only(['index', 'show']);
             Route::post('hostels', [HostelController::class, 'store'])->name('hostels.store')->middleware('permission:create_hostels');
