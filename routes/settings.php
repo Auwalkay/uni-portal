@@ -242,20 +242,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             // Restricted Finance Actions
             Route::middleware(['permission:verify_payments'])->group(function () {
-                Route::post('/finance/fee-types', [\App\Http\Controllers\Admin\FinanceController::class, 'storeFeeType'])->name('finance.fee_types.store');
-                Route::put('/finance/fee-types/{feeType}', [\App\Http\Controllers\Admin\FinanceController::class, 'updateFeeType'])->name('finance.fee_types.update');
-                Route::post('/finance/configurations', [\App\Http\Controllers\Admin\FinanceController::class, 'storeFeeConfiguration'])->name('finance.configurations.store');
-                Route::put('/finance/configurations/{config}', [\App\Http\Controllers\Admin\FinanceController::class, 'updateFeeConfiguration'])->name('finance.configurations.update');
-                Route::get('/finance/sessions/{session}/fees', [\App\Http\Controllers\Admin\FinanceController::class, 'manageSessionFees'])->name('finance.session.fees');
-
                 Route::resource('/scholarships', ScholarshipController::class)
                     ->except(['create', 'edit', 'show'])
                     ->names('scholarships');
-            });
-
-            Route::middleware(['permission:manage_payments'])->group(function () {
-                Route::delete('/finance/fee-types/{feeType}', [\App\Http\Controllers\Admin\FinanceController::class, 'destroyFeeType'])->name('finance.fee_types.destroy');
-                Route::delete('/finance/configurations/{config}', [\App\Http\Controllers\Admin\FinanceController::class, 'destroyFeeConfiguration'])->name('finance.configurations.destroy');
             });
         });
 
