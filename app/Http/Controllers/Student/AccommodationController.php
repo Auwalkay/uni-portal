@@ -77,8 +77,30 @@ class AccommodationController extends Controller
             })
             ->get();
 
-        // Calculate availability for each room
-        $hostels->each(function ($hostel) {
+        // Calculate fee & availability for each hostel and room
+        $hostelFees = HostelFee::where('session_id', $currentSession->id)->get();
+        $globalFee = $hostelFees->firstWhere('hostel_id', null);
+
+        $student->load('scholarship');
+        $hasHostelScholarship = $student->scholarship && $student->scholarship->covers_hostel_fees;
+
+        $hostels->each(function ($hostel) use ($globalFee, $hostelFees, $student, $hasHostelScholarship) {
+            $specificFee = $hostelFees->firstWhere('hostel_id', $hostel->id);
+            $baseFee = (float) ($specificFee ? $specificFee->amount : ($globalFee ? $globalFee->amount : 0));
+
+            $discountAmount = 0;
+            if ($hasHostelScholarship && $baseFee > 0) {
+                if ($student->scholarship->type === 'fixed') {
+                    $discountAmount = min($student->scholarship->amount, $baseFee);
+                } else {
+                    $discountAmount = $baseFee * ($student->scholarship->percentage / 100);
+                }
+            }
+
+            $hostel->fee = $baseFee;
+            $hostel->discount_amount = $discountAmount;
+            $hostel->final_fee = max(0, $baseFee - $discountAmount);
+
             $hostel->blocks->each(function ($block) {
                 $block->floors->each(function ($floor) {
                     $floor->rooms->each(function ($room) {

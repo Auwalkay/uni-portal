@@ -481,4 +481,37 @@ class HostelBookingTest extends TestCase
         $response->assertStatus(200);
         $response->assertHeader('content-type', 'application/pdf');
     }
+
+    public function test_student_accommodation_page_includes_fee_for_each_hostel()
+    {
+        // 1. Simulate school fees payment
+        Invoice::create([
+            'user_id' => $this->studentUser->id,
+            'session_id' => $this->session->id,
+            'reference' => 'SCH-FEES-1',
+            'type' => 'school_fee',
+            'amount' => 100000.00,
+            'status' => 'paid',
+            'due_date' => now()->addDays(7),
+        ]);
+
+        // Specific fee for male hostel
+        HostelFee::create([
+            'session_id' => $this->session->id,
+            'hostel_id' => $this->maleHostel->id,
+            'amount' => 75000.00,
+        ]);
+
+        $this->actingAs($this->studentUser);
+
+        $response = $this->get(route('student.accommodation.index'));
+        $response->assertStatus(200);
+
+        $hostels = $response->original->getData()['page']['props']['hostels'];
+        $maleHostelProp = collect($hostels)->firstWhere('id', $this->maleHostel->id);
+
+        $this->assertNotNull($maleHostelProp);
+        $this->assertEquals(75000.00, $maleHostelProp['fee']);
+        $this->assertEquals(75000.00, $maleHostelProp['final_fee']);
+    }
 }
