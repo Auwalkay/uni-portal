@@ -107,6 +107,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             Route::get('/accommodation', [AccommodationController::class, 'index'])->name('accommodation.index');
             Route::post('/accommodation', [AccommodationController::class, 'store'])->name('accommodation.store');
+            Route::post('/accommodation/cancel-expired', [AccommodationController::class, 'cancelExpired'])->name('accommodation.cancel-expired');
             Route::get('/accommodation/download-slip', [AccommodationController::class, 'downloadAccommodationSlip'])->name('accommodation.download-slip');
             Route::get('/accommodation/download-payment', [AccommodationController::class, 'downloadPaymentSlip'])->name('accommodation.download-payment');
 

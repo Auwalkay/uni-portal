@@ -51,31 +51,42 @@ class InvoiceController extends Controller
         }
 
         $sortField = $request->input('sort_field', 'created_at');
-        $sortOrder = $request->input('sort_order', $request->input('order', 'desc'));
+        $sortOrder = strtolower($request->input('sort_order', $request->input('order', 'desc')));
 
-        if (!in_array($sortField, ['created_at', 'due_date', 'amount', 'paid_amount', 'reference', 'status', 'type'])) {
+        $allowedSortFields = ['created_at', 'due_date', 'amount', 'paid_amount', 'reference', 'status', 'type', 'student', 'session', 'balance'];
+        if (!in_array($sortField, $allowedSortFields)) {
             $sortField = 'created_at';
         }
         if (!in_array($sortOrder, ['asc', 'desc'])) {
             $sortOrder = 'desc';
         }
 
-        $query->orderBy($sortField, $sortOrder);
-
-        // Clone query for global analytics (respecting filters)
+        // Clone query for global analytics (respecting filters, without list sorting or joins)
         $statsQuery = clone $query;
-        // Reset pagination for aggregation
-        $statsQuery->getQuery()->orders = null;
-        $statsQuery->getQuery()->limit = null;
-        $statsQuery->getQuery()->offset = null;
+
+        // Apply sorting to the list query
+        if ($sortField === 'balance') {
+            $query->orderByRaw('(invoices.amount - COALESCE(invoices.paid_amount, 0)) ' . $sortOrder);
+        } elseif ($sortField === 'student') {
+            $query->leftJoin('users', 'invoices.user_id', '=', 'users.id')
+                ->select('invoices.*')
+                ->orderBy('users.name', $sortOrder);
+        } elseif ($sortField === 'session') {
+            $query->leftJoin('academic_sessions', 'invoices.session_id', '=', 'academic_sessions.id')
+                ->select('invoices.*')
+                ->orderBy('academic_sessions.name', $sortOrder);
+        } else {
+            $query->orderBy("invoices.{$sortField}", $sortOrder);
+        }
 
         // Stats
-        $totalExpected = $statsQuery->sum('amount');
-        $totalCollected = $statsQuery->sum('paid_amount');
+        $totalExpected = (clone $statsQuery)->sum('invoices.amount');
+        $totalCollected = (clone $statsQuery)->sum('invoices.paid_amount');
         $totalOutstanding = $totalExpected - $totalCollected;
 
         // Chart Data: Status Distribution
         $statusDistribution = (clone $statsQuery)
+            ->reorder()
             ->selectRaw('status, count(*) as count')
             ->groupBy('status')
             ->pluck('count', 'status');
@@ -138,7 +149,14 @@ class InvoiceController extends Controller
 
         return Inertia::render('Admin/Invoices/Index', [
             'invoices' => $invoices,
-            'filters' => $filters,
+            'filters' => [
+                'search' => $request->input('search', ''),
+                'status' => $request->input('status', ''),
+                'type' => $request->input('type', ''),
+                'session_id' => $request->input('session_id', ''),
+                'sort_field' => $sortField,
+                'sort_order' => $sortOrder,
+            ],
             'sessions' => fn() => \App\Models\Session::latest()->get(['id', 'name']),
             'analytics' => fn() => $analytics,
         ]);

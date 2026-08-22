@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { 
     Home, 
     CheckCircle2, 
@@ -24,7 +24,9 @@ import {
     VolumeX,
     ShieldAlert,
     Sparkles,
-    BookOpen
+    BookOpen,
+    CreditCard,
+    Trash2
 } from 'lucide-vue-next';
 
 import StudentLayout from '@/layouts/StudentLayout.vue';
@@ -32,6 +34,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { format as formatDate } from 'date-fns';
 import {
     Dialog,
     DialogContent,
@@ -48,6 +52,7 @@ const props = defineProps<{
     hostels: any[];
     existingBooking: any | null;
     isBookingActive: boolean;
+    bookingHistory?: any[];
 }>();
 
 const canBook = computed(() => props.hasPaidFees && props.isBookingActive);
@@ -137,6 +142,55 @@ const formatMoney = (amount: number | string | null | undefined) => {
     const val = Number(amount) || 0;
     return '₦' + new Intl.NumberFormat('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
 };
+
+// Real-time Countdown Timer State for Pending Payments
+const currentTime = ref(Date.now());
+let timerInterval: any = null;
+
+onMounted(() => {
+    timerInterval = setInterval(() => {
+        currentTime.value = Date.now();
+    }, 1000);
+});
+
+onUnmounted(() => {
+    if (timerInterval) clearInterval(timerInterval);
+});
+
+const getInvoiceCountdown = (dueDateStr: string | null | undefined) => {
+    if (!dueDateStr) return null;
+    const _tick = currentTime.value;
+    const dueTime = new Date(dueDateStr).getTime();
+    const diff = dueTime - _tick;
+
+    if (diff <= 0) {
+        return { expired: true, text: 'Expired' };
+    }
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+    let parts = [];
+    if (days > 0) parts.push(`${days}d`);
+    parts.push(`${String(hours).padStart(2, '0')}h`);
+    parts.push(`${String(minutes).padStart(2, '0')}m`);
+    parts.push(`${String(seconds).padStart(2, '0')}s`);
+
+    return {
+        expired: false,
+        text: parts.join(' '),
+        days,
+        hours,
+        minutes,
+        seconds
+    };
+};
+
+const cancelExpiredBooking = () => {
+    router.post(route('student.accommodation.cancel-expired'));
+};
 </script>
 
 <template>
@@ -190,6 +244,42 @@ const formatMoney = (amount: number | string | null | undefined) => {
                                     Block: {{ existingBooking.room?.floor?.block?.name || 'N/A' }} • Floor: {{ existingBooking.room?.floor?.name || 'N/A' }} • Room: {{ existingBooking.room?.room_number || 'N/A' }}
                                 </p>
                             </div>
+
+                            <!-- Live Countdown Banner for Pending Payment -->
+                            <div v-if="existingBooking.status === 'pending' && existingBooking.invoice?.due_date" class="bg-amber-500/10 border border-amber-400/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <div class="flex items-center gap-3">
+                                    <div :class="getInvoiceCountdown(existingBooking.invoice.due_date)?.expired ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'" class="h-10 w-10 rounded-xl border flex items-center justify-center shrink-0">
+                                        <Clock class="h-5 w-5 animate-pulse" />
+                                    </div>
+                                    <div>
+                                        <span :class="getInvoiceCountdown(existingBooking.invoice.due_date)?.expired ? 'text-red-300' : 'text-amber-300'" class="text-[10px] font-black uppercase tracking-wider block">
+                                            {{ getInvoiceCountdown(existingBooking.invoice.due_date)?.expired ? 'Reservation Payment Expired' : 'Payment Deadline Countdown' }}
+                                        </span>
+                                        <div v-if="getInvoiceCountdown(existingBooking.invoice.due_date)" class="flex items-center gap-2 mt-0.5">
+                                            <span :class="getInvoiceCountdown(existingBooking.invoice.due_date)?.expired ? 'text-red-400 font-bold text-base' : 'text-amber-200 font-mono font-black text-lg'">
+                                                {{ getInvoiceCountdown(existingBooking.invoice.due_date)?.text }}
+                                            </span>
+                                            <span v-if="!getInvoiceCountdown(existingBooking.invoice.due_date)?.expired" class="text-xs text-white/70 font-medium">remaining to pay</span>
+                                            <span v-else class="text-xs text-white/70 font-medium">— clear this reservation to choose another room</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <Button 
+                                        v-if="getInvoiceCountdown(existingBooking.invoice.due_date)?.expired"
+                                        @click="cancelExpiredBooking"
+                                        class="w-full sm:w-auto font-extrabold bg-red-500 hover:bg-red-600 text-white shadow-lg border-0 gap-2"
+                                    >
+                                        <Trash2 class="h-4 w-4" /> Clear & Book Another Room
+                                    </Button>
+                                    <Link v-else :href="route('student.payments.index')" class="shrink-0 w-full sm:w-auto">
+                                        <Button class="w-full sm:w-auto font-extrabold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-lg border-0 gap-2">
+                                            <CreditCard class="h-4 w-4" /> Pay Accommodation Fee Now
+                                        </Button>
+                                    </Link>
+                                </div>
+                            </div>
+
                             <div class="flex flex-wrap items-center gap-6 pt-4 border-t border-white/10 text-xs">
                                 <div>
                                     <span class="text-white/60 block uppercase font-bold">Bed Space</span>
@@ -197,9 +287,14 @@ const formatMoney = (amount: number | string | null | undefined) => {
                                 </div>
                                 <div>
                                     <span class="text-white/60 block uppercase font-bold">Status</span>
-                                    <Badge :class="existingBooking.status === 'confirmed' ? 'bg-emerald-500' : 'bg-amber-500'" class="text-white font-bold uppercase mt-1">
-                                        {{ existingBooking.status }}
-                                    </Badge>
+                                    <div class="flex items-center gap-2 mt-1">
+                                        <Badge :class="existingBooking.status === 'confirmed' ? 'bg-emerald-500' : 'bg-amber-500'" class="text-white font-bold uppercase">
+                                            {{ existingBooking.status }}
+                                        </Badge>
+                                        <Badge v-if="existingBooking.status === 'pending' && existingBooking.invoice?.due_date" variant="outline" class="border-amber-400/40 text-amber-300 bg-amber-500/10 font-mono font-bold text-[11px] px-2 py-0.5">
+                                            ⏱️ {{ getInvoiceCountdown(existingBooking.invoice.due_date)?.text }}
+                                        </Badge>
+                                    </div>
                                 </div>
                                 <div v-if="existingBooking.invoice">
                                     <span class="text-white/60 block uppercase font-bold">Invoice Ref</span>
@@ -520,6 +615,50 @@ const formatMoney = (amount: number | string | null | undefined) => {
                         </div>
                     </div>
                 </template>
+
+                <!-- Successful Accommodation History -->
+                <div v-if="bookingHistory && bookingHistory.length > 0" class="mt-16 space-y-4 max-w-4xl mx-auto">
+                    <div class="flex items-center gap-3">
+                        <History class="h-5 w-5 text-muted-foreground" />
+                        <h3 class="text-xl font-bold tracking-tight">Accommodation History</h3>
+                    </div>
+                    <Card class="rounded-3xl border shadow-sm overflow-hidden">
+                        <CardContent class="p-0">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Hostel & Room</TableHead>
+                                        <TableHead>Reference</TableHead>
+                                        <TableHead>Session</TableHead>
+                                        <TableHead>Date</TableHead>
+                                        <TableHead>Status</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    <TableRow v-for="b in bookingHistory" :key="b.id">
+                                        <TableCell class="font-bold">
+                                            {{ b.room?.floor?.block?.hostel?.name || 'Hostel Room' }}
+                                            <span class="block text-xs font-normal text-muted-foreground">
+                                                Block: {{ b.room?.floor?.block?.name || 'N/A' }} • Room: {{ b.room?.room_number || 'N/A' }}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell class="font-mono text-xs">{{ b.invoice?.reference || 'N/A' }}</TableCell>
+                                        <TableCell class="text-xs">{{ b.session?.name || 'Current' }}</TableCell>
+                                        <TableCell class="text-xs text-muted-foreground">{{ b.created_at ? formatDate(new Date(b.created_at), 'MMM d, yyyy') : 'N/A' }}</TableCell>
+                                        <TableCell>
+                                            <Badge 
+                                                variant="outline"
+                                                class="bg-emerald-100 text-emerald-800 border-emerald-200 font-bold uppercase text-[10px]"
+                                            >
+                                                CONFIRMED
+                                            </Badge>
+                                        </TableCell>
+                                    </TableRow>
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </div>
             </main>
 
             <!-- Sticky Footer / Branding -->

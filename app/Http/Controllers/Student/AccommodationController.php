@@ -42,6 +42,25 @@ class AccommodationController extends Controller
         // 2. Course Registration Check (Optional for hostel booking)
         $hasRegisteredCourses = true; // Set to true as it is no longer a blocker
 
+        // Auto-cleanup any expired pending booking for this student
+        $expiredBooking = HostelBooking::where('student_id', $student->id)
+            ->where('session_id', $currentSession->id)
+            ->where('status', 'pending')
+            ->whereHas('invoice', function ($q) {
+                $q->where('status', 'pending')
+                    ->where('due_date', '<', now());
+            })
+            ->first();
+
+        if ($expiredBooking) {
+            DB::transaction(function () use ($expiredBooking) {
+                if ($expiredBooking->invoice && $expiredBooking->invoice->status === 'pending') {
+                    $expiredBooking->invoice->update(['status' => 'cancelled']);
+                }
+                $expiredBooking->update(['status' => 'cancelled']);
+            });
+        }
+
         // Check for existing active booking
         $existingBooking = HostelBooking::with(['room.floor.block.hostel', 'invoice'])
             ->where('student_id', $student->id)
@@ -112,12 +131,19 @@ class AccommodationController extends Controller
             });
         });
 
+        $bookingHistory = HostelBooking::with(['room.floor.block.hostel', 'invoice'])
+            ->where('student_id', $student->id)
+            ->where('status', 'confirmed')
+            ->latest()
+            ->get();
+
         return Inertia::render('Student/Accommodation/Index', [
             'hasPaidFees' => $hasPaidFees,
             'hasRegisteredCourses' => $hasRegisteredCourses,
             'isBookingActive' => $isBookingActive,
             'hostels' => $hostels,
             'existingBooking' => $existingBooking,
+            'bookingHistory' => $bookingHistory,
         ]);
     }
 
@@ -149,6 +175,25 @@ class AccommodationController extends Controller
 
         if (! $hasPaidFees) {
             return back()->with('error', 'You must pay school fees before booking.');
+        }
+
+        // Auto-cleanup any expired pending booking for this student before checking active booking limit
+        $expiredBooking = HostelBooking::where('student_id', $student->id)
+            ->where('session_id', $currentSession->id)
+            ->where('status', 'pending')
+            ->whereHas('invoice', function ($q) {
+                $q->where('status', 'pending')
+                    ->where('due_date', '<', now());
+            })
+            ->first();
+
+        if ($expiredBooking) {
+            DB::transaction(function () use ($expiredBooking) {
+                if ($expiredBooking->invoice && $expiredBooking->invoice->status === 'pending') {
+                    $expiredBooking->invoice->update(['status' => 'cancelled']);
+                }
+                $expiredBooking->update(['status' => 'cancelled']);
+            });
         }
 
         // Check for existing active booking
@@ -220,10 +265,11 @@ class AccommodationController extends Controller
 
             $finalAmount = $fee->amount - $discountAmount;
 
-            // Check if there is an existing hostel fee invoice for this session
+            // Check if there is an existing ACTIVE hostel fee invoice for this session
             $invoice = Invoice::where('user_id', $user->id)
                 ->where('session_id', $currentSession->id)
                 ->where('type', 'hostel_fee')
+                ->whereIn('status', ['pending', 'partial', 'paid'])
                 ->first();
 
             if ($invoice) {
@@ -373,5 +419,39 @@ class AccommodationController extends Controller
         ]);
 
         return $pdf->download("Hostel_Payment_Receipt_{$booking->invoice->reference}.pdf");
+    }
+
+    public function cancelExpired()
+    {
+        $user = Auth::user();
+        $student = Student::where('user_id', $user->id)->firstOrFail();
+        $currentSession = Session::current();
+
+        if (! $currentSession) {
+            return back()->with('error', 'No active academic session found.');
+        }
+
+        $expiredBooking = HostelBooking::where('student_id', $student->id)
+            ->where('session_id', $currentSession->id)
+            ->where('status', 'pending')
+            ->whereHas('invoice', function ($q) {
+                $q->where('status', 'pending')
+                    ->where('due_date', '<', now());
+            })
+            ->first();
+
+        if ($expiredBooking) {
+            DB::transaction(function () use ($expiredBooking) {
+                if ($expiredBooking->invoice && $expiredBooking->invoice->status === 'pending') {
+                    $expiredBooking->invoice->update(['status' => 'cancelled']);
+                }
+                $expiredBooking->update(['status' => 'cancelled']);
+            });
+
+            return redirect()->route('student.accommodation.index')
+                ->with('success', 'Your expired room reservation has been cancelled. You can now select any available room.');
+        }
+
+        return redirect()->route('student.accommodation.index');
     }
 }

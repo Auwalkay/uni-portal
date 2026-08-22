@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format as formatDate } from 'date-fns';
-import { CreditCard, ChevronDown, ChevronUp, FileText, Download } from 'lucide-vue-next';
-import { ref, computed, watch } from 'vue';
+import { CreditCard, ChevronDown, ChevronUp, FileText, Download, Clock } from 'lucide-vue-next';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
@@ -201,6 +201,51 @@ const getPaymentDate = (invoice: any) => {
     }
     return formatDate(new Date(invoice.updated_at), 'MMM d, yyyy');
 };
+
+// Real-time Countdown Timer State for Pending Invoices
+const currentTime = ref(Date.now());
+let timerInterval: any = null;
+
+onMounted(() => {
+    timerInterval = setInterval(() => {
+        currentTime.value = Date.now();
+    }, 1000);
+});
+
+onUnmounted(() => {
+    if (timerInterval) clearInterval(timerInterval);
+});
+
+const getInvoiceCountdown = (dueDateStr: string | null | undefined) => {
+    if (!dueDateStr) return null;
+    const _tick = currentTime.value;
+    const dueTime = new Date(dueDateStr).getTime();
+    const diff = dueTime - _tick;
+
+    if (diff <= 0) {
+        return { expired: true, text: 'Expired' };
+    }
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+    let parts = [];
+    if (days > 0) parts.push(`${days}d`);
+    parts.push(`${String(hours).padStart(2, '0')}h`);
+    parts.push(`${String(minutes).padStart(2, '0')}m`);
+    parts.push(`${String(seconds).padStart(2, '0')}s`);
+
+    return {
+        expired: false,
+        text: parts.join(' '),
+        days,
+        hours,
+        minutes,
+        seconds
+    };
+};
 </script>
 
 <template>
@@ -269,7 +314,28 @@ const getPaymentDate = (invoice: any) => {
                                     <TableCell class="font-bold">{{ formatCurrency(invoice.amount) }}</TableCell>
                                     <TableCell class="text-green-600">{{ formatCurrency(Number(invoice.paid_amount || 0)) }}</TableCell>
                                     <TableCell class="text-red-600 font-medium">{{ formatCurrency(invoice.amount - Number(invoice.paid_amount || 0)) }}</TableCell>
-                                    <TableCell>{{ invoice.due_date ? formatDate(new Date(invoice.due_date), 'MMM d, yyyy') : 'N/A' }}</TableCell>
+                                    <TableCell>
+                                        <div>
+                                            <div class="text-xs">{{ invoice.due_date ? formatDate(new Date(invoice.due_date), 'MMM d, yyyy') : 'N/A' }}</div>
+                                            <div v-if="invoice.status !== 'paid' && invoice.due_date" class="mt-1">
+                                                <Badge 
+                                                    v-if="getInvoiceCountdown(invoice.due_date)?.expired" 
+                                                    variant="destructive" 
+                                                    class="font-mono text-[9px] px-1.5 py-0.2 uppercase"
+                                                >
+                                                    Expired
+                                                </Badge>
+                                                <Badge 
+                                                    v-else 
+                                                    variant="outline" 
+                                                    class="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 font-mono font-bold text-[10px] px-2 py-0.5 inline-flex items-center gap-1"
+                                                >
+                                                    <Clock class="w-3 h-3 animate-pulse text-amber-600" />
+                                                    {{ getInvoiceCountdown(invoice.due_date)?.text }}
+                                                </Badge>
+                                            </div>
+                                        </div>
+                                    </TableCell>
                                     <TableCell>{{ getPaymentDate(invoice) }}</TableCell>
                                     <TableCell>
                                         <Badge variant="outline" :class="getStatusColor(invoice.status)">

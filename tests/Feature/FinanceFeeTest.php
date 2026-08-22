@@ -392,6 +392,49 @@ class FinanceFeeTest extends TestCase
         $response->assertStatus(200);
         $this->assertNotEmpty($response->streamedContent());
     }
+
+    public function test_admin_can_sort_invoices_page()
+    {
+        $this->actingAs($this->admin);
+
+        Invoice::create([
+            'user_id' => $this->studentUser->id,
+            'session_id' => $this->session->id,
+            'reference' => 'INV-SORT-1',
+            'type' => 'school_fee',
+            'amount' => 50000.00,
+            'paid_amount' => 10000.00,
+            'status' => 'partial',
+            'due_date' => now()->addDays(5),
+        ]);
+
+        Invoice::create([
+            'user_id' => $this->studentUser->id,
+            'session_id' => $this->session->id,
+            'reference' => 'INV-SORT-2',
+            'type' => 'hostel_fee',
+            'amount' => 150000.00,
+            'paid_amount' => 150000.00,
+            'status' => 'paid',
+            'due_date' => now()->addDays(10),
+        ]);
+
+        // Test sorting by amount desc
+        $response = $this->get(route('admin.invoices.index', ['sort_field' => 'amount', 'sort_order' => 'desc']));
+        $response->assertStatus(200);
+
+        // Test sorting by balance asc
+        $response = $this->get(route('admin.invoices.index', ['sort_field' => 'balance', 'sort_order' => 'asc']));
+        $response->assertStatus(200);
+
+        // Test sorting by student asc
+        $response = $this->get(route('admin.invoices.index', ['sort_field' => 'student', 'sort_order' => 'asc']));
+        $response->assertStatus(200);
+
+        // Test sorting by status desc
+        $response = $this->get(route('admin.invoices.index', ['sort_field' => 'status', 'sort_order' => 'desc']));
+        $response->assertStatus(200);
+    }
 }
 
 

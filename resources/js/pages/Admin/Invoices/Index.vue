@@ -359,7 +359,16 @@ const breadcrumbs = [
                                     <ArrowUpDown v-else class="w-3 h-3 opacity-40" />
                                 </div>
                             </TableHead>
-                            <TableHead>Student</TableHead>
+                            <TableHead class="cursor-pointer select-none hover:bg-slate-50 transition-colors" @click="sortBy('student')">
+                                <div class="flex items-center gap-1">
+                                    Student
+                                    <template v-if="filterForm.sort_field === 'student'">
+                                        <ArrowUp v-if="filterForm.sort_order === 'asc'" class="w-3.5 h-3.5" />
+                                        <ArrowDown v-else class="w-3.5 h-3.5" />
+                                    </template>
+                                    <ArrowUpDown v-else class="w-3 h-3 opacity-40" />
+                                </div>
+                            </TableHead>
                             <TableHead class="cursor-pointer select-none hover:bg-slate-50 transition-colors" @click="sortBy('type')">
                                 <div class="flex items-center gap-1">
                                     Type
@@ -390,7 +399,16 @@ const breadcrumbs = [
                                     <ArrowUpDown v-else class="w-3 h-3 opacity-40" />
                                 </div>
                             </TableHead>
-                            <TableHead>Session</TableHead>
+                            <TableHead class="cursor-pointer select-none hover:bg-slate-50 transition-colors" @click="sortBy('session')">
+                                <div class="flex items-center gap-1">
+                                    Session
+                                    <template v-if="filterForm.sort_field === 'session'">
+                                        <ArrowUp v-if="filterForm.sort_order === 'asc'" class="w-3.5 h-3.5" />
+                                        <ArrowDown v-else class="w-3.5 h-3.5" />
+                                    </template>
+                                    <ArrowUpDown v-else class="w-3 h-3 opacity-40" />
+                                </div>
+                            </TableHead>
                             <TableHead class="cursor-pointer select-none hover:bg-slate-50 transition-colors" @click="sortBy('amount')">
                                 <div class="flex items-center gap-1">
                                     Amount
@@ -411,7 +429,16 @@ const breadcrumbs = [
                                     <ArrowUpDown v-else class="w-3 h-3 opacity-40" />
                                 </div>
                             </TableHead>
-                            <TableHead>Balance</TableHead>
+                            <TableHead class="cursor-pointer select-none hover:bg-slate-50 transition-colors" @click="sortBy('balance')">
+                                <div class="flex items-center gap-1">
+                                    Balance
+                                    <template v-if="filterForm.sort_field === 'balance'">
+                                        <ArrowUp v-if="filterForm.sort_order === 'asc'" class="w-3.5 h-3.5" />
+                                        <ArrowDown v-else class="w-3.5 h-3.5" />
+                                    </template>
+                                    <ArrowUpDown v-else class="w-3 h-3 opacity-40" />
+                                </div>
+                            </TableHead>
                             <TableHead class="cursor-pointer select-none hover:bg-slate-50 transition-colors" @click="sortBy('status')">
                                 <div class="flex items-center gap-1">
                                     Status
