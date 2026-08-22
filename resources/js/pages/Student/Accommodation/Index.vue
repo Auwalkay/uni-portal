@@ -132,6 +132,11 @@ const getHostelCardGradient = (gender: string) => {
     if (gender === 'female') return 'from-pink-600 via-rose-700 to-slate-900';
     return 'from-purple-600 via-indigo-800 to-slate-900';
 };
+
+const formatMoney = (amount: number | string | null | undefined) => {
+    const val = Number(amount) || 0;
+    return '₦' + new Intl.NumberFormat('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+};
 </script>
 
 <template>
@@ -278,6 +283,24 @@ const getHostelCardGradient = (gender: string) => {
                                             {{ hostel.description || 'Modern campus living space equipped with essential amenities for students.' }}
                                         </p>
 
+                                        <!-- Session Fee Box -->
+                                        <div class="bg-muted/40 rounded-2xl p-3.5 border border-border/60 flex items-center justify-between">
+                                            <div>
+                                                <span class="text-[10px] uppercase font-extrabold tracking-wider text-muted-foreground block">Session Fee</span>
+                                                <div class="flex items-baseline gap-1.5 mt-0.5">
+                                                    <span class="text-lg font-black text-foreground">
+                                                        {{ formatMoney(hostel.final_fee ?? hostel.fee) }}
+                                                    </span>
+                                                    <span v-if="hostel.discount_amount > 0" class="text-xs text-muted-foreground line-through font-semibold">
+                                                        {{ formatMoney(hostel.fee) }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <Badge v-if="hostel.discount_amount > 0" class="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold">
+                                                Scholarship Applied
+                                            </Badge>
+                                        </div>
+
                                         <div class="pt-4 border-t flex items-center justify-between text-xs font-bold text-muted-foreground">
                                             <div class="flex items-center gap-1.5">
                                                 <Layers class="h-4 w-4 text-primary" />
@@ -307,10 +330,14 @@ const getHostelCardGradient = (gender: string) => {
                                         <ArrowLeft class="h-5 w-5" />
                                     </button>
                                     <div>
-                                        <div class="flex items-center gap-2">
+                                        <div class="flex items-center gap-2 flex-wrap">
                                             <h2 class="text-3xl font-extrabold tracking-tight text-foreground">{{ activeHostel?.name }}</h2>
                                             <Badge variant="secondary" class="font-bold text-[10px] uppercase px-2.5 py-0.5 tracking-widest bg-primary/10 text-primary border-primary/20">
                                                 {{ activeHostel?.gender_type }} Residence
+                                            </Badge>
+                                            <Badge variant="outline" class="font-extrabold text-xs px-3 py-1 bg-emerald-500/10 text-emerald-700 border-emerald-500/30">
+                                                Fee: {{ formatMoney(activeHostel?.final_fee ?? activeHostel?.fee) }}
+                                                <span v-if="activeHostel?.discount_amount > 0" class="ml-1 text-[10px] text-emerald-600 font-semibold">(Discounted)</span>
                                             </Badge>
                                         </div>
 
@@ -535,9 +562,20 @@ const getHostelCardGradient = (gender: string) => {
                             </h4>
                             <p class="text-xs text-muted-foreground font-medium">{{ activeHostel?.name }}</p>
                         </div>
-                        <Badge variant="secondary" class="font-bold text-[10px] sm:text-xs shrink-0 w-fit">
-                            {{ activeHostel?.gender_type?.toUpperCase() }} RESIDENCE
-                        </Badge>
+                        <div class="flex flex-col items-start sm:items-end shrink-0 gap-1">
+                            <Badge variant="secondary" class="font-bold text-[10px] sm:text-xs w-fit">
+                                {{ activeHostel?.gender_type?.toUpperCase() }} RESIDENCE
+                            </Badge>
+                            <div class="text-left sm:text-right mt-1">
+                                <span class="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">Session Fee</span>
+                                <span class="text-base font-extrabold text-foreground">
+                                    {{ formatMoney(activeHostel?.final_fee ?? activeHostel?.fee) }}
+                                </span>
+                                <span v-if="activeHostel?.discount_amount > 0" class="block text-[10px] text-emerald-600 font-bold">
+                                    (Scholarship Applied)
+                                </span>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Rules List -->

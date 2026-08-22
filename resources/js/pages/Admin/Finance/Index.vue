@@ -209,17 +209,27 @@ const submitClone = () => {
 const isHostelFeeModalOpen = ref(false);
 const editingHostelFee = ref<any>(null);
 
+const isAllHostelsSelected = ref(true);
+const selectedHostelIds = ref<string[]>([]);
+
 const hostelFeeForm = useForm({
     session_id: '',
     hostel_id: 'all',
     amount: '',
 });
 
+const toggleAllHostels = () => {
+    if (isAllHostelsSelected.value) {
+        selectedHostelIds.value = [];
+    }
+};
+
 const openCreateHostelFee = () => {
     editingHostelFee.value = null;
     hostelFeeForm.reset();
     hostelFeeForm.clearErrors();
-    hostelFeeForm.hostel_id = 'all';
+    isAllHostelsSelected.value = true;
+    selectedHostelIds.value = [];
     if (props.sessions && props.sessions.length > 0) {
         hostelFeeForm.session_id = props.sessions[0].id.toString();
     }
@@ -229,20 +239,30 @@ const openCreateHostelFee = () => {
 const openEditHostelFee = (fee: any) => {
     editingHostelFee.value = fee;
     hostelFeeForm.session_id = fee.session_id.toString();
-    hostelFeeForm.hostel_id = fee.hostel_id ? fee.hostel_id.toString() : 'all';
+    if (fee.hostel_id) {
+        isAllHostelsSelected.value = false;
+        // Pre-select all hostels sharing the same session and amount
+        const matchingFees = props.hostelFees.filter(
+            (f: any) => f.session_id === fee.session_id && f.amount === fee.amount && f.hostel_id
+        );
+        selectedHostelIds.value = matchingFees.map((f: any) => f.hostel_id.toString());
+    } else {
+        isAllHostelsSelected.value = true;
+        selectedHostelIds.value = [];
+    }
     hostelFeeForm.amount = fee.amount.toString();
     hostelFeeForm.clearErrors();
     isHostelFeeModalOpen.value = true;
 };
 
 const submitHostelFee = () => {
-    // If 'all' is selected, send empty string to backend representing default global rate
-    const payloadHostelId = hostelFeeForm.hostel_id === 'all' ? '' : hostelFeeForm.hostel_id;
-    
+    const payloadHostelIds = isAllHostelsSelected.value || selectedHostelIds.value.length === 0 ? ['all'] : selectedHostelIds.value;
+
     if (editingHostelFee.value) {
         router.put(route('admin.hostels.fees.update', editingHostelFee.value.id), {
             session_id: hostelFeeForm.session_id,
-            hostel_id: payloadHostelId,
+            hostel_id: payloadHostelIds[0] === 'all' ? '' : payloadHostelIds[0],
+            hostel_ids: payloadHostelIds,
             amount: hostelFeeForm.amount,
         }, {
             onSuccess: () => {
@@ -254,14 +274,14 @@ const submitHostelFee = () => {
     } else {
         router.post(route('admin.hostels.fees.store'), {
             session_id: hostelFeeForm.session_id,
-            hostel_id: payloadHostelId,
+            hostel_ids: payloadHostelIds,
             amount: hostelFeeForm.amount,
         }, {
             onSuccess: () => {
                 isHostelFeeModalOpen.value = false;
-                Swal.fire({ icon: 'success', title: 'Success', text: 'Hostel fee configured successfully', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+                Swal.fire({ icon: 'success', title: 'Success', text: 'Hostel fee configuration saved successfully', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
             },
-            onError: () => Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to save hostel fee', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 })
+            onError: () => Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to save hostel fee configuration', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 })
         });
     }
 };
@@ -577,19 +597,38 @@ const formatCurrency = (amount: any) => {
                                     <p v-if="hostelFeeForm.errors.session_id" class="text-sm text-destructive">{{ hostelFeeForm.errors.session_id }}</p>
                                 </div>
                                 <div class="space-y-2">
-                                    <Label for="fee_hostel">Target Hostel (Optional)</Label>
-                                    <Select v-model="hostelFeeForm.hostel_id">
-                                        <SelectTrigger id="fee_hostel">
-                                            <SelectValue placeholder="Default for All Hostels" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">-- Default for All Hostels --</SelectItem>
-                                            <SelectItem v-for="hostel in hostels" :key="hostel.id" :value="hostel.id.toString()">
-                                                {{ hostel.name }}
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <p class="text-xs text-muted-foreground mt-1">If left empty, this becomes the default fee for the session.</p>
+                                    <Label>Target Hostel(s)</Label>
+                                    <div class="border rounded-2xl p-3.5 bg-card space-y-3 max-h-56 overflow-y-auto">
+                                        <label class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/50 cursor-pointer font-bold text-xs border bg-slate-50 dark:bg-slate-900 text-foreground">
+                                            <input 
+                                                type="checkbox" 
+                                                v-model="isAllHostelsSelected" 
+                                                @change="toggleAllHostels"
+                                                class="h-4 w-4 rounded border-primary text-primary focus:ring-primary cursor-pointer shrink-0"
+                                            />
+                                            <span>-- Default for All Hostels (Global Rate) --</span>
+                                        </label>
+                                        
+                                        <div v-if="!isAllHostelsSelected" class="pl-1 space-y-2 pt-2 border-t">
+                                            <p class="text-[10px] font-black text-muted-foreground uppercase tracking-wider">Select specific hostels to share this fee:</p>
+                                            <div class="grid gap-1.5 sm:grid-cols-2">
+                                                <label 
+                                                    v-for="hostel in hostels" 
+                                                    :key="hostel.id" 
+                                                    class="flex items-center gap-2.5 p-2 rounded-xl border hover:bg-muted/50 cursor-pointer text-xs font-semibold bg-background"
+                                                >
+                                                    <input 
+                                                        type="checkbox" 
+                                                        :value="hostel.id.toString()" 
+                                                        v-model="selectedHostelIds" 
+                                                        class="h-4 w-4 rounded border-primary text-primary focus:ring-primary cursor-pointer shrink-0"
+                                                    />
+                                                    <span class="truncate">{{ hostel.name }}</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-muted-foreground">Check "Default for All Hostels" for a global rate, or select specific hostels to share this rate.</p>
                                     <p v-if="hostelFeeForm.errors.hostel_id" class="text-sm text-destructive">{{ hostelFeeForm.errors.hostel_id }}</p>
                                 </div>
                                 <div class="space-y-2">
