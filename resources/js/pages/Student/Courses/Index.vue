@@ -66,13 +66,11 @@ const selectSession = (sessionId: number) => {
                             </p>
                         </div>
                          <div class="mb-1 hidden md:block">
-                            <Link v-slot="{ href, navigate }" v-if="!(isSecondSemester && schoolFeeStatus === 'partial')" :href="route('student.courses.create')" custom>
-                                <a :href="href" @click="navigate">
-                                    <Button size="lg" class="bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 border-0 font-semibold shadow-xl shadow-black/10 transition-all hover:scale-105 active:scale-95 px-6">
-                                        <PlusCircle v-if="!hasCurrentRegistration" class="mr-2 h-5 w-5" /> 
-                                        {{ hasCurrentRegistration ? 'Review Registration' : 'Register Courses' }}
-                                    </Button>
-                                </a>
+                            <Link v-if="!(isSecondSemester && schoolFeeStatus === 'partial')" :href="route('student.courses.create')">
+                                <Button size="lg" class="bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 border-0 font-semibold shadow-xl shadow-black/10 transition-all hover:scale-105 active:scale-95 px-6 cursor-pointer">
+                                    <PlusCircle v-if="!hasCurrentRegistration" class="mr-2 h-5 w-5" /> 
+                                    {{ hasCurrentRegistration ? 'Review Registration' : 'Register Courses' }}
+                                </Button>
                             </Link>
                             <Button v-else disabled size="lg" class="bg-white/55 text-emerald-900/60 border-0 font-semibold cursor-not-allowed px-6">
                                 <Lock class="mr-2 h-4 w-4" /> Locked
@@ -84,13 +82,11 @@ const selectSession = (sessionId: number) => {
             
             <!-- Mobile Action Button -->
             <div class="px-4 md:hidden -mt-6 relative z-20">
-                 <Link v-slot="{ href, navigate }" v-if="!(isSecondSemester && schoolFeeStatus === 'partial')" :href="route('student.courses.create')" custom>
-                    <a :href="href" @click="navigate" class="block w-full">
-                        <Button size="lg" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg border border-emerald-500/50">
-                            <PlusCircle v-if="!hasCurrentRegistration" class="mr-2 h-5 w-5" /> 
-                            {{ hasCurrentRegistration ? 'Modify Registration' : 'Register Courses' }}
-                        </Button>
-                    </a>
+                 <Link v-if="!(isSecondSemester && schoolFeeStatus === 'partial')" :href="route('student.courses.create')" class="block w-full">
+                    <Button size="lg" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg border border-emerald-500/50 cursor-pointer">
+                        <PlusCircle v-if="!hasCurrentRegistration" class="mr-2 h-5 w-5" /> 
+                        {{ hasCurrentRegistration ? 'Modify Registration' : 'Register Courses' }}
+                    </Button>
                 </Link>
                 <Button v-else disabled size="lg" class="w-full bg-gray-200 text-gray-400 border-0 font-semibold cursor-not-allowed shadow-none">
                     <Lock class="mr-2 h-4 w-4" /> Locked

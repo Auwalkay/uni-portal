@@ -159,7 +159,7 @@ class StaffController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8', // In production, maybe send invitation link
-            'staff_number' => 'required|string|max:255|unique:staff',
+            'staff_number' => 'nullable|string|max:255|unique:staff,staff_number',
             'designation' => ['nullable', 'string', Rule::in(AcademicCacheService::getDesignations())],
             'department_id' => 'nullable|exists:departments,id',
             'unit_id' => 'nullable|exists:units,id',
@@ -204,8 +204,10 @@ class StaffController extends Controller
             }
         }
 
+        $staffNumber = $request->filled('staff_number') ? $request->staff_number : \App\Helpers\StaffNumberHelper::generate();
+
         $user->staff()->create([
-            'staff_number' => $request->staff_number,
+            'staff_number' => $staffNumber,
             'designation' => $request->designation,
             'department_id' => $request->department_id,
             'unit_id' => $request->unit_id,

@@ -370,10 +370,17 @@ class AccommodationController extends Controller
         $booking = HostelBooking::with(['room.floor.block.hostel', 'invoice'])
             ->where('student_id', $student->id)
             ->where('session_id', $currentSession->id)
-            ->where('status', 'confirmed')
+            ->where(function ($q) {
+                $q->where('status', 'confirmed')
+                    ->orWhereHas('invoice', fn ($inv) => $inv->whereIn('status', ['paid', 'partial']));
+            })
             ->first();
 
-        if (! $booking || ! $booking->invoice || ! in_array($booking->invoice->status, ['paid', 'partial'])) {
+        if (! $booking || ! $booking->invoice) {
+            return back()->with('error', 'No accommodation booking found.');
+        }
+
+        if ($booking->status !== 'confirmed' && ! in_array($booking->invoice->status, ['paid', 'partial'])) {
             return back()->with('error', 'Accommodation slip can only be downloaded once the accommodation payment is confirmed.');
         }
 
@@ -383,7 +390,7 @@ class AccommodationController extends Controller
             'session' => $currentSession,
         ]);
 
-        return $pdf->download('Accommodation_Slip_slip.pdf');
+        return $pdf->download("Accommodation_Slip_{$student->matriculation_number}.pdf");
     }
 
     public function downloadPaymentSlip()

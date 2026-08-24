@@ -255,8 +255,9 @@ const submit = () => {
                                             <Label for="staff_number" class="text-sm font-semibold">Staff ID Number</Label>
                                             <div class="relative group">
                                                 <BadgeCheck class="absolute left-3 top-3 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                                                <Input id="staff_number" v-model="form.staff_number" required class="pl-10" placeholder="STF/2024/001" />
+                                                <Input id="staff_number" v-model="form.staff_number" class="pl-10" placeholder="e.g. MIUERP20260001 (Optional)" />
                                             </div>
+                                            <p class="text-[10px] text-muted-foreground italic">Leave empty to auto-generate a staff ID (e.g. MIUERP20264821).</p>
                                         </div>
 
                                         <div class="space-y-2">

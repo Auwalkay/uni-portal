@@ -232,7 +232,7 @@
                 <td class="label">Full Name:</td>
                 <td class="value">{{ $student->user->name }}</td>
                 <td class="label">Matric Number:</td>
-                <td class="value">{{ $student->matric_no ?? 'Pending' }}</td>
+                <td class="value">{{ $student->matriculation_number ?? $student->matric_no ?? $student->matric_number ?? 'Pending' }}</td>
             </tr>
             <tr>
                 <td class="label">Gender:</td>
