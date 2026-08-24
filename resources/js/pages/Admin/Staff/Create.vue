@@ -100,9 +100,15 @@ const form = useForm({
     account_name: '',
 });
 
-const selectedFacultyId = ref<string>('');
+const page = usePage();
+const hasPermission = (permission: string) => {
+    const user = (page.props.auth?.user as any);
+    if (!user || ((!user.permissions || !Array.isArray(user.permissions)) && !user.roles)) return false;
+    if (user.roles?.includes('admin')) return true;
+    return (user.permissions && Array.isArray(user.permissions) && user.permissions.includes(permission));
+};
 
-// State & LGA Logic
+const selectedFacultyId = ref<string>('');
 const availableLgas = computed(() => {
     if (!form.state_id) return [];
     const state = props.states.find(s => s.id === form.state_id);
@@ -200,7 +206,7 @@ const submit = () => {
                 <!-- Left Column: Tabbed Information -->
                 <div class="lg:col-span-2">
                     <Tabs default-value="account" class="w-full space-y-6">
-                        <TabsList class="grid w-full grid-cols-4 h-12 p-1 bg-slate-100 rounded-xl">
+                        <TabsList :class="(hasPermission('view_salaries') || hasPermission('manage_salaries')) ? 'grid-cols-4' : 'grid-cols-3'" class="grid w-full h-12 p-1 bg-slate-100 rounded-xl">
                             <TabsTrigger value="account" class="rounded-lg font-bold text-xs uppercase tracking-widest">
                                 <User class="w-3.5 h-3.5 mr-2" /> Account
                             </TabsTrigger>
@@ -210,7 +216,7 @@ const submit = () => {
                             <TabsTrigger value="placement" class="rounded-lg font-bold text-xs uppercase tracking-widest">
                                 <Building2 class="w-3.5 h-3.5 mr-2" /> Placement
                             </TabsTrigger>
-                            <TabsTrigger value="salary" class="rounded-lg font-bold text-xs uppercase tracking-widest">
+                            <TabsTrigger v-if="hasPermission('view_salaries') || hasPermission('manage_salaries')" value="salary" class="rounded-lg font-bold text-xs uppercase tracking-widest">
                                 <Briefcase class="w-3.5 h-3.5 mr-2" /> Salary & Bank
                             </TabsTrigger>
                         </TabsList>
