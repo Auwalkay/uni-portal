@@ -579,6 +579,16 @@ class StaffController extends Controller
             'password' => Hash::make($password)
         ]);
 
+        activity('staff')
+            ->performedOn($staff)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'staff_name' => $staff->name,
+                'staff_email' => $staff->email,
+                'reset_by' => auth()->user()->name,
+            ])
+            ->log("Reset password for staff member {$staff->name}");
+
         Mail::to($staff->email)->send(new StaffAccountCreated($staff, $password));
 
         return back()->with('success', "Password reset successfully. New credentials sent to {$staff->email}");
