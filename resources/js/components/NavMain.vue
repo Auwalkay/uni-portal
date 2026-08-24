@@ -51,11 +51,9 @@ const { urlIsActive } = useActiveUrl();
                         <CollapsibleContent>
                             <SidebarMenuSub>
                                 <SidebarMenuSubItem v-for="subItem in item.items" :key="subItem.title">
-                                     <SidebarMenuSubButton as-child :is-active="subItem.href ? urlIsActive(subItem.href) : false">
-                                        <Link :href="subItem.href || '#'" class="flex items-center w-full">
-                                            <span>{{ subItem.title }}</span>
-                                            <div v-if="subItem.href && urlIsActive(subItem.href)" class="ml-auto w-1 h-3 bg-primary rounded-full" />
-                                        </Link>
+                                     <SidebarMenuSubButton :as="Link" :href="subItem.href || '#'" :is-active="subItem.href ? urlIsActive(subItem.href) : false">
+                                        <span>{{ subItem.title }}</span>
+                                        <div v-if="subItem.href && urlIsActive(subItem.href)" class="ml-auto w-1 h-3 bg-primary rounded-full" />
                                     </SidebarMenuSubButton>
                                 </SidebarMenuSubItem>
                             </SidebarMenuSub>
@@ -63,12 +61,10 @@ const { urlIsActive } = useActiveUrl();
                     </template>
                     <!-- Item without submenu -->
                     <template v-else>
-                         <SidebarMenuButton as-child :is-active="item.href ? urlIsActive(item.href) : false" :tooltip="item.title">
-                            <Link :href="item.href || '#'" class="flex items-center w-full">
-                                <component :is="item.icon" v-if="item.icon" />
-                                <span>{{ item.title }}</span>
-                                <div v-if="item.href && urlIsActive(item.href)" class="ml-auto w-1 h-3.5 bg-primary rounded-full" />
-                            </Link>
+                         <SidebarMenuButton :as="Link" :href="item.href || '#'" :is-active="item.href ? urlIsActive(item.href) : false" :tooltip="item.title">
+                            <component :is="item.icon" v-if="item.icon" />
+                            <span>{{ item.title }}</span>
+                            <div v-if="item.href && urlIsActive(item.href)" class="ml-auto w-1 h-3.5 bg-primary rounded-full" />
                         </SidebarMenuButton>
                     </template>
                 </SidebarMenuItem>

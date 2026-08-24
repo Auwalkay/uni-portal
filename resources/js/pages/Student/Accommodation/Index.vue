@@ -280,25 +280,46 @@ const cancelExpiredBooking = () => {
                                 </div>
                             </div>
 
-                            <div class="flex flex-wrap items-center gap-6 pt-4 border-t border-white/10 text-xs">
-                                <div>
-                                    <span class="text-white/60 block uppercase font-bold">Bed Space</span>
-                                    <span class="font-extrabold text-base text-white">Bed #{{ existingBooking.bed_space_number || 1 }}</span>
-                                </div>
-                                <div>
-                                    <span class="text-white/60 block uppercase font-bold">Status</span>
-                                    <div class="flex items-center gap-2 mt-1">
-                                        <Badge :class="existingBooking.status === 'confirmed' ? 'bg-emerald-500' : 'bg-amber-500'" class="text-white font-bold uppercase">
-                                            {{ existingBooking.status }}
-                                        </Badge>
-                                        <Badge v-if="existingBooking.status === 'pending' && existingBooking.invoice?.due_date" variant="outline" class="border-amber-400/40 text-amber-300 bg-amber-500/10 font-mono font-bold text-[11px] px-2 py-0.5">
-                                            ⏱️ {{ getInvoiceCountdown(existingBooking.invoice.due_date)?.text }}
-                                        </Badge>
+                            <div class="flex flex-wrap items-center justify-between gap-6 pt-4 border-t border-white/10 text-xs">
+                                <div class="flex flex-wrap items-center gap-6">
+                                    <div>
+                                        <span class="text-white/60 block uppercase font-bold">Bed Space</span>
+                                        <span class="font-extrabold text-base text-white">Bed #{{ existingBooking.bed_space_number || 1 }}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-white/60 block uppercase font-bold">Status</span>
+                                        <div class="flex items-center gap-2 mt-1">
+                                            <Badge :class="(existingBooking.status === 'confirmed' || existingBooking.invoice?.status === 'paid' || existingBooking.invoice?.status === 'partial') ? 'bg-emerald-500' : 'bg-amber-500'" class="text-white font-bold uppercase">
+                                                {{ (existingBooking.status === 'confirmed' || existingBooking.invoice?.status === 'paid') ? 'CONFIRMED' : existingBooking.status }}
+                                            </Badge>
+                                            <Badge v-if="existingBooking.status === 'pending' && existingBooking.invoice?.status !== 'paid' && existingBooking.invoice?.due_date" variant="outline" class="border-amber-400/40 text-amber-300 bg-amber-500/10 font-mono font-bold text-[11px] px-2 py-0.5">
+                                                ⏱️ {{ getInvoiceCountdown(existingBooking.invoice.due_date)?.text }}
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                    <div v-if="existingBooking.invoice">
+                                        <span class="text-white/60 block uppercase font-bold">Invoice Ref</span>
+                                        <span class="font-mono text-sm text-white font-bold">{{ existingBooking.invoice.reference }}</span>
                                     </div>
                                 </div>
-                                <div v-if="existingBooking.invoice">
-                                    <span class="text-white/60 block uppercase font-bold">Invoice Ref</span>
-                                    <span class="font-mono text-sm text-white font-bold">{{ existingBooking.invoice.reference }}</span>
+
+                                <!-- Download Slip Action Buttons for Paid/Confirmed Accommodation -->
+                                <div v-if="existingBooking.status === 'confirmed' || existingBooking.invoice?.status === 'paid' || existingBooking.invoice?.status === 'partial'" class="flex flex-wrap items-center gap-3">
+                                    <a 
+                                        :href="route('student.accommodation.download-slip')" 
+                                        target="_blank"
+                                        class="inline-flex items-center px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-extrabold text-xs transition-all shadow-lg hover:shadow-xl gap-2 cursor-pointer"
+                                    >
+                                        <Download class="w-4 h-4" /> Download Accommodation Slip
+                                    </a>
+                                    <a 
+                                        v-if="existingBooking.invoice && (existingBooking.invoice.status === 'paid' || existingBooking.invoice.status === 'partial')"
+                                        :href="route('student.accommodation.download-payment')" 
+                                        target="_blank"
+                                        class="inline-flex items-center px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-xl font-bold text-xs transition-all gap-2 cursor-pointer"
+                                    >
+                                        <FileText class="w-4 h-4" /> Receipt
+                                    </a>
                                 </div>
                             </div>
                         </div>
@@ -632,6 +653,7 @@ const cancelExpiredBooking = () => {
                                         <TableHead>Session</TableHead>
                                         <TableHead>Date</TableHead>
                                         <TableHead>Status</TableHead>
+                                        <TableHead class="text-right">Action</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -652,6 +674,15 @@ const cancelExpiredBooking = () => {
                                             >
                                                 CONFIRMED
                                             </Badge>
+                                        </TableCell>
+                                        <TableCell class="text-right">
+                                            <a 
+                                                :href="route('student.accommodation.download-slip')" 
+                                                target="_blank"
+                                                class="inline-flex items-center px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow-xs transition-colors gap-1.5 cursor-pointer"
+                                            >
+                                                <Download class="w-3.5 h-3.5" /> Download Slip
+                                            </a>
                                         </TableCell>
                                     </TableRow>
                                 </TableBody>

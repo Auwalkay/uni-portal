@@ -171,6 +171,16 @@ class Student extends Model
         return $this->belongsTo(User::class, 'updated_by');
     }
 
+    public function getMatricNoAttribute()
+    {
+        return $this->attributes['matriculation_number'] ?? $this->attributes['matric_number'] ?? null;
+    }
+
+    public function getMatricNumberAttribute()
+    {
+        return $this->attributes['matriculation_number'] ?? $this->attributes['matric_no'] ?? null;
+    }
+
     /**
      * Check if the student has cleared previous session fees and promote them.
      */
