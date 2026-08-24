@@ -764,6 +764,16 @@ class StudentController extends Controller
             'password' => Hash::make($newPassword),
         ]);
 
+        activity('student')
+            ->performedOn($student)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'student_id' => $student->id,
+                'student_name' => $student->user->name,
+                'reset_by' => auth()->user()->name,
+            ])
+            ->log("Password reset for student {$student->user->name}");
+
         try {
             Mail::to($student->user->email)->send(new StudentAccountCreated($student->user, $newPassword, $student->matriculation_number));
         } catch (\Exception $e) {
