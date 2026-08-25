@@ -343,6 +343,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/settings/roles', [RoleController::class, 'store'])->name('settings.roles.store');
             Route::get('/settings/roles/{role}/edit', [RoleController::class, 'edit'])->name('settings.roles.edit');
             Route::put('/settings/roles/{role}', [RoleController::class, 'update'])->name('settings.roles.update');
+        });
+
+        // Audit Logs Route
+        Route::middleware(['permission:manage_system_settings|view_audit_logs|view_activity_logs'])->group(function () {
             Route::get('/settings/logs', [ActivityLogController::class, 'index'])->name('settings.logs.index');
         });
 

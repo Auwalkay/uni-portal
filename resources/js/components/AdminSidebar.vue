@@ -226,7 +226,7 @@ const administrationItems = computed(() => {
             title: 'Support Tickets',
             href: '/admin/support-tickets',
             icon: LifeBuoy,
-            show: hasRole('admin') || hasPermission('manage_system_settings'),
+            show: hasRole('admin') || hasPermission('manage_system_settings') || hasPermission('manage_support'),
         },
         {
             title: 'Attendance',
@@ -250,19 +250,19 @@ const administrationItems = computed(() => {
             title: 'System Users',
             href: '/admin/users',
             icon: Shield,
-            show: hasPermission('manage_system_settings'),
+            show: hasPermission('manage_system_settings') || hasPermission('manage_users'),
         },
         {
             title: 'Audit Logs',
-            href: route('admin.activity-logs.index'),
+            href: route().has('admin.activity-logs.index') ? route('admin.activity-logs.index') : '/admin/settings/logs',
             icon: Shield,
-            show: hasPermission('view_activity_logs'),
+            show: hasPermission('manage_system_settings') || hasPermission('view_audit_logs') || hasPermission('view_activity_logs'),
         },
         {
             title: 'Designations',
             href: route().has('admin.designations.index') ? route('admin.designations.index') : '/admin/designations',
             icon: Award,
-            show: hasPermission('manage_staff'),
+            show: hasPermission('manage_staff') || hasPermission('manage_users'),
         },
     ].filter(i => i.show);
 });
