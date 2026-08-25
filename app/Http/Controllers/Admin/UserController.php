@@ -32,8 +32,14 @@ class UserController extends Controller
             });
         }
 
-        // Role Filter
-        if ($request->filled('role') && $request->role !== 'ALL') {
+        // Multi-Role / Single Role Filter
+        if ($request->filled('roles')) {
+            $roles = is_array($request->roles) ? $request->roles : explode(',', $request->roles);
+            $roles = array_filter($roles, fn($r) => !empty($r) && $r !== 'ALL');
+            if (count($roles) > 0) {
+                $query->whereHas('roles', fn($q) => $q->whereIn('name', $roles));
+            }
+        } elseif ($request->filled('role') && $request->role !== 'ALL') {
             $query->role($request->role);
         }
 
@@ -94,7 +100,7 @@ class UserController extends Controller
 
         return Inertia::render('Admin/Users/Index', [
             'users' => $users,
-            'filters' => $request->only(['search', 'role', 'status', 'sort', 'per_page']),
+            'filters' => $request->only(['search', 'role', 'roles', 'status', 'sort', 'per_page']),
             'availableRoles' => Role::all(['id', 'name']),
             'stats' => [
                 'total' => User::count(),

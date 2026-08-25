@@ -107,17 +107,41 @@ const props = defineProps<{
     };
 }>();
 
-// Filter States
+// Multi-Role Filter State
+const initialRoles = () => {
+    if (props.filters.roles) {
+        return Array.isArray(props.filters.roles) 
+            ? props.filters.roles 
+            : String(props.filters.roles).split(',').filter(Boolean);
+    }
+    if (props.filters.role && props.filters.role !== 'ALL') {
+        return [props.filters.role];
+    }
+    return [];
+};
+
 const search = ref(props.filters.search || '');
-const selectedRoleFilter = ref(props.filters.role || 'ALL');
+const selectedRolesFilter = ref<string[]>(initialRoles());
 const selectedStatusFilter = ref(props.filters.status || 'ALL');
 const selectedSort = ref(props.filters.sort || 'created_at_desc');
 const perPage = ref(String(props.filters.per_page || 15));
 
+const toggleRoleFilter = (roleName: string) => {
+    if (selectedRolesFilter.value.includes(roleName)) {
+        selectedRolesFilter.value = selectedRolesFilter.value.filter(r => r !== roleName);
+    } else {
+        selectedRolesFilter.value = [...selectedRolesFilter.value, roleName];
+    }
+};
+
+const removeRoleFilter = (roleName: string) => {
+    selectedRolesFilter.value = selectedRolesFilter.value.filter(r => r !== roleName);
+};
+
 const activeFiltersCount = computed(() => {
     let count = 0;
     if (search.value) count++;
-    if (selectedRoleFilter.value !== 'ALL') count++;
+    if (selectedRolesFilter.value.length > 0) count += selectedRolesFilter.value.length;
     if (selectedStatusFilter.value !== 'ALL') count++;
     if (selectedSort.value !== 'created_at_desc') count++;
     return count;
@@ -126,7 +150,7 @@ const activeFiltersCount = computed(() => {
 const updateFilters = debounce(() => {
     router.get(route('admin.users.index'), {
         search: search.value,
-        role: selectedRoleFilter.value === 'ALL' ? '' : selectedRoleFilter.value,
+        roles: selectedRolesFilter.value.join(','),
         status: selectedStatusFilter.value === 'ALL' ? '' : selectedStatusFilter.value,
         sort: selectedSort.value,
         per_page: perPage.value,
@@ -137,13 +161,13 @@ const updateFilters = debounce(() => {
     });
 }, 300);
 
-watch([search, selectedRoleFilter, selectedStatusFilter, selectedSort, perPage], () => {
+watch([search, selectedRolesFilter, selectedStatusFilter, selectedSort, perPage], () => {
     updateFilters();
-});
+}, { deep: true });
 
 const clearFilters = () => {
     search.value = '';
-    selectedRoleFilter.value = 'ALL';
+    selectedRolesFilter.value = [];
     selectedStatusFilter.value = 'ALL';
     selectedSort.value = 'created_at_desc';
     perPage.value = '15';
@@ -476,35 +500,60 @@ const breadcrumbs = [
             </div>
 
             <!-- Advanced Control Bar & Filters -->
-            <Card class="border shadow-sm p-4 rounded-2xl">
+            <Card class="border shadow-sm p-4 rounded-2xl space-y-3">
                 <div class="flex flex-col lg:flex-row gap-4 items-center justify-between">
                     <!-- Search input -->
                     <div class="relative flex-1 w-full">
                         <Search class="absolute left-3.5 top-3 h-4 w-4 text-muted-foreground" />
                         <Input
                             type="search"
-                            placeholder="Search by full name or email address..."
-                            class="pl-10 h-10 rounded-xl"
+                            placeholder="Search by full name, email, staff ID, or matric number..."
+                            class="pl-10 pr-8 h-10 rounded-xl"
                             v-model="search"
                         />
+                        <button v-if="search" @click="search = ''" class="absolute right-3 top-3 text-muted-foreground hover:text-foreground">
+                            <X class="w-4 h-4" />
+                        </button>
                     </div>
                     
                     <!-- Filters Grid -->
                     <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-                        <!-- Role Filter -->
-                        <div class="w-full sm:w-[170px]">
-                            <Select v-model="selectedRoleFilter">
-                                <SelectTrigger class="h-10 rounded-xl">
-                                    <SelectValue placeholder="Role: All" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="ALL">All System Roles</SelectItem>
-                                    <SelectItem v-for="role in availableRoles" :key="role.id" :value="role.name">
-                                        {{ formatRoleName(role.name) }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        <!-- Multi-Role Dropdown Filter -->
+                        <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                                <Button variant="outline" class="h-10 rounded-xl justify-between bg-background font-bold text-xs gap-2 min-w-[170px]">
+                                    <div class="flex items-center gap-1.5 truncate">
+                                        <Shield class="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                        <span>{{ selectedRolesFilter.length === 0 ? 'Roles: All' : `Roles (${selectedRolesFilter.length})` }}</span>
+                                    </div>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" class="w-56 p-2 rounded-xl">
+                                <DropdownMenuLabel class="text-[10px] font-bold text-muted-foreground uppercase">Multi-Select System Roles</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <div class="space-y-1 max-h-60 overflow-y-auto">
+                                    <div 
+                                        v-for="role in availableRoles" 
+                                        :key="role.id" 
+                                        @click="toggleRoleFilter(role.name)"
+                                        class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer text-xs font-semibold"
+                                    >
+                                        <Checkbox :checked="selectedRolesFilter.includes(role.name)" @update:checked="() => {}" />
+                                        <span>{{ formatRoleName(role.name) }}</span>
+                                    </div>
+                                </div>
+                                <template v-if="selectedRolesFilter.length > 0">
+                                    <DropdownMenuSeparator />
+                                    <button 
+                                        type="button" 
+                                        @click="selectedRolesFilter = []" 
+                                        class="w-full text-center text-xs font-bold text-red-600 py-1.5 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors"
+                                    >
+                                        Clear Role Filters
+                                    </button>
+                                </template>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
 
                         <!-- Status Filter -->
                         <div class="w-full sm:w-[150px]">
@@ -566,6 +615,23 @@ const breadcrumbs = [
                         </Button>
                     </div>
                 </div>
+
+                <!-- Active Filter Tags Bar -->
+                <div v-if="activeFiltersCount > 0" class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Active Filters:</span>
+                    <Badge v-for="r in selectedRolesFilter" :key="r" variant="secondary" class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold gap-1 rounded-lg">
+                        Role: {{ formatRoleName(r) }}
+                        <X class="w-3 h-3 cursor-pointer hover:text-indigo-950" @click="removeRoleFilter(r)" />
+                    </Badge>
+                    <Badge v-if="selectedStatusFilter !== 'ALL'" variant="secondary" class="bg-slate-100 text-slate-700 border text-[10px] font-bold gap-1 rounded-lg">
+                        Status: {{ selectedStatusFilter }}
+                        <X class="w-3 h-3 cursor-pointer hover:text-slate-950" @click="selectedStatusFilter = 'ALL'" />
+                    </Badge>
+                    <Badge v-if="search" variant="secondary" class="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold gap-1 rounded-lg">
+                        Search: "{{ search }}"
+                        <X class="w-3 h-3 cursor-pointer hover:text-amber-950" @click="search = ''" />
+                    </Badge>
+                </div>
             </Card>
 
             <!-- Users Table -->
@@ -573,8 +639,9 @@ const breadcrumbs = [
                 <Table>
                     <TableHeader class="bg-slate-50 dark:bg-slate-900/50">
                         <TableRow>
-                            <TableHead class="w-[320px]">User Account</TableHead>
+                            <TableHead class="w-[300px]">User Account</TableHead>
                             <TableHead>Assigned Roles</TableHead>
+                            <TableHead>Last Login</TableHead>
                             <TableHead>Registered</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead class="text-right">Actions</TableHead>
@@ -617,6 +684,16 @@ const breadcrumbs = [
                                          {{ formatRoleName(role.name) }}
                                      </Badge>
                                      <span v-if="!user.roles || user.roles.length === 0" class="text-xs text-muted-foreground italic">No Roles Assigned</span>
+                                 </div>
+                             </TableCell>
+
+                             <TableCell>
+                                 <div v-if="user.last_login_at" class="flex flex-col">
+                                     <span class="font-bold text-foreground text-[11px]">{{ formatDateTime(user.last_login_at) }}</span>
+                                     <span v-if="user.last_login_ip" class="text-[10px] text-muted-foreground font-mono">IP: {{ user.last_login_ip }}</span>
+                                 </div>
+                                 <div v-else class="text-[11px] text-slate-400 italic">
+                                     Never Logged In
                                  </div>
                              </TableCell>
 

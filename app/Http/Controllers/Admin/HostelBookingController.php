@@ -85,7 +85,12 @@ class HostelBookingController extends Controller
             $query->orderBy($sortBy, $sortDirection);
         }
 
-        $bookings = $query->get();
+        $perPage = $request->integer('per_page', 15);
+        if (!in_array($perPage, [10, 15, 25, 50, 100])) {
+            $perPage = 15;
+        }
+
+        $bookings = $query->paginate($perPage)->withQueryString();
 
         $sessions = Session::latest()->get(['id', 'name']);
         $hostels = Hostel::orderBy('name')->get(['id', 'name']);
@@ -102,6 +107,7 @@ class HostelBookingController extends Controller
                 'date' => $date,
                 'sort_by' => $sortBy,
                 'sort_direction' => $sortDirection,
+                'per_page' => $perPage,
             ],
         ]);
     }
