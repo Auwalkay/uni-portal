@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { ref, watch, computed } from 'vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Button } from '@/components/ui/button';
@@ -36,7 +36,13 @@ import { debounce } from 'lodash';
 import axios from 'axios';
 
 const props = defineProps<{
-    bookings: any[];
+    bookings: {
+        data: Array<any>;
+        links: Array<any>;
+        from: number;
+        to: number;
+        total: number;
+    };
     sessions: any[];
     hostels: any[];
     filters: {
@@ -47,6 +53,7 @@ const props = defineProps<{
         date?: string;
         sort_by?: string;
         sort_direction?: string;
+        per_page?: number;
     };
 }>();
 
@@ -254,22 +261,20 @@ const getStatusBadgeClass = (status: string) => {
     }
 };
 
-const filteredBookings = ref(props.bookings);
-
-watch([searchTerm, () => props.bookings], () => {
+const filteredBookings = computed(() => {
+    const list = props.bookings?.data || (Array.isArray(props.bookings) ? props.bookings : []);
     if (!searchTerm.value) {
-        filteredBookings.value = props.bookings;
-        return;
+        return list;
     }
     
     const term = searchTerm.value.toLowerCase();
-    filteredBookings.value = props.bookings.filter(b => 
+    return list.filter((b: any) => 
         b.student?.user?.name?.toLowerCase().includes(term) ||
         b.student?.matriculation_number?.toLowerCase().includes(term) ||
         b.invoice?.reference?.toLowerCase().includes(term) ||
         b.room?.floor?.block?.hostel?.name?.toLowerCase().includes(term)
     );
-}, { immediate: true });
+});
 
 const unbookStudent = (bookingId: string) => {
     if (confirm('Are you sure you want to unbook this student? The allocated room slot will be released.')) {
@@ -555,6 +560,34 @@ const formatCurrency = (amount: any) => {
                             </tr>
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Pagination Footer -->
+                <div v-if="props.bookings?.links && props.bookings.links.length > 3" class="px-6 py-4 border-t flex flex-col sm:flex-row items-center justify-between gap-4 bg-card">
+                    <div class="text-xs text-muted-foreground font-medium">
+                        Showing <span class="font-bold text-foreground">{{ props.bookings.from || 0 }}</span> to <span class="font-bold text-foreground">{{ props.bookings.to || 0 }}</span> of <span class="font-bold text-foreground">{{ props.bookings.total || 0 }}</span> hostel bookings
+                    </div>
+                    <div class="flex items-center gap-1 flex-wrap">
+                        <template v-for="(link, key) in props.bookings.links" :key="key">
+                            <div 
+                                v-if="link.url === null" 
+                                class="px-3 py-1.5 text-xs text-muted-foreground/50 rounded-lg border border-transparent cursor-not-allowed select-none"
+                                v-html="link.label"
+                            />
+                            <Link 
+                                v-else 
+                                :href="link.url" 
+                                :class="[
+                                    'px-3 py-1.5 text-xs font-bold rounded-lg transition-all',
+                                    link.active 
+                                        ? 'bg-indigo-600 text-white shadow-xs' 
+                                        : 'text-foreground hover:bg-slate-100 dark:hover:bg-slate-800'
+                                ]"
+                                v-html="link.label"
+                                preserve-scroll
+                            />
+                        </template>
+                    </div>
                 </div>
             </div>
         </div>
