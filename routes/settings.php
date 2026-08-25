@@ -344,13 +344,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/settings/roles/{role}/edit', [RoleController::class, 'edit'])->name('settings.roles.edit');
             Route::put('/settings/roles/{role}', [RoleController::class, 'update'])->name('settings.roles.update');
             Route::get('/settings/logs', [ActivityLogController::class, 'index'])->name('settings.logs.index');
+        });
 
-            Route::patch('/users/{user}/roles', [UserController::class, 'updateRoles'])->name('users.roles.update');
-            Route::patch('/users/{user}/status', [UserController::class, 'toggleStatus'])->name('users.status.toggle');
-
+        // System Users Module
+        Route::middleware(['permission:manage_system_settings|manage_users'])->group(function () {
             Route::get('/users', [UserController::class, 'index'])->name('users.index');
             Route::post('/users', [UserController::class, 'store'])->name('users.store');
+            Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
+            Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
+            Route::patch('/users/{user}/roles', [UserController::class, 'updateRoles'])->name('users.roles.update');
+            Route::patch('/users/{user}/status', [UserController::class, 'toggleStatus'])->name('users.status.toggle');
+            Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
             Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+            Route::post('/users/{id}/restore', [UserController::class, 'restore'])->name('users.restore');
         });
 
         // Library Management

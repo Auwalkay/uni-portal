@@ -11,13 +11,14 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Sanctum\HasApiTokens;
 
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, TwoFactorAuthenticatable, HasRoles, HasUuids, HasApiTokens, LogsActivity;
+    use HasFactory, Notifiable, TwoFactorAuthenticatable, HasRoles, HasUuids, HasApiTokens, LogsActivity, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -70,6 +71,18 @@ class User extends Authenticatable
             'last_login_at' => 'datetime',
         ];
     }
+
+    /**
+     * Interact with the user's name attribute to ensure ALL CAPITALS system-wide.
+     */
+    protected function name(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn (?string $value) => $value ? mb_strtoupper($value, 'UTF-8') : null,
+            set: fn (?string $value) => $value ? mb_strtoupper(trim($value), 'UTF-8') : null,
+        );
+    }
+
     public function student(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(Student::class);
@@ -78,6 +91,11 @@ class User extends Authenticatable
     public function staff(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(Staff::class);
+    }
+
+    public function applicant(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Applicant::class);
     }
 
     public function invoices(): \Illuminate\Database\Eloquent\Relations\HasMany

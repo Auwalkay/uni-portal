@@ -72,10 +72,14 @@ class FortifyServiceProvider extends ServiceProvider
             }
 
             if ($user && \Illuminate\Support\Facades\Hash::check($password, $user->password)) {
+                if (!$user->is_active) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        Fortify::username() => ['This account has been deactivated. Please contact the administrator.'],
+                    ]);
+                }
                 return $user;
             }
 
-            // Return failure (let Fortify handle the response usually, or returning null/false)
             return null;
         });
 
