@@ -178,13 +178,15 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
     });
 
     // SUPPORT TICKETS (Admin)
-    Route::get('support-tickets', [\App\Http\Controllers\Admin\SupportTicketController::class, 'index'])->name('support.index');
-    Route::get('support-tickets/{ticket}', [\App\Http\Controllers\Admin\SupportTicketController::class, 'show'])->name('support.show');
-    Route::put('support-tickets/{ticket}', [\App\Http\Controllers\Admin\SupportTicketController::class, 'update'])->name('support.update');
-    Route::post('support-tickets/{ticket}/reply', [\App\Http\Controllers\Admin\SupportTicketController::class, 'reply'])->name('support.reply');
+    Route::middleware(['permission:manage_system_settings|manage_support'])->group(function () {
+        Route::get('support-tickets', [\App\Http\Controllers\Admin\SupportTicketController::class, 'index'])->name('support.index');
+        Route::get('support-tickets/{ticket}', [\App\Http\Controllers\Admin\SupportTicketController::class, 'show'])->name('support.show');
+        Route::put('support-tickets/{ticket}', [\App\Http\Controllers\Admin\SupportTicketController::class, 'update'])->name('support.update');
+        Route::post('support-tickets/{ticket}/reply', [\App\Http\Controllers\Admin\SupportTicketController::class, 'reply'])->name('support.reply');
+    });
 
     // AUDIT LOGS
-    Route::middleware(['permission:manage_system_settings'])->group(function () {
+    Route::middleware(['permission:manage_system_settings|view_audit_logs|view_activity_logs'])->group(function () {
         Route::get('activity-logs', [\App\Http\Controllers\Admin\ActivityLogController::class, 'index'])->name('activity-logs.index');
     });
 

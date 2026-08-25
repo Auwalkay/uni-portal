@@ -88,6 +88,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage_visitors',
             'view_audit_logs',
             'manage_system_settings',
+            'manage_support',
             // Dashboard & Analytics
             'view_global_analytics',
             'view_revenue_stats',
