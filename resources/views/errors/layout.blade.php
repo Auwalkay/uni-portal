@@ -184,9 +184,21 @@
         <p class="error-message">@yield('message')</p>
         
         <div class="actions-wrap">
-            <a href="/" class="btn btn-primary">Return to Portal Home</a>
-            <button onclick="window.history.back()" class="btn btn-secondary">Go Back</button>
+            <a href="/dashboard" class="btn btn-primary">Return to Portal Home</a>
+            <button type="button" onclick="goBack()" class="btn btn-secondary">Go Back</button>
         </div>
+
+        <script>
+            function goBack() {
+                if (document.referrer && document.referrer !== window.location.href && document.referrer.includes(window.location.host)) {
+                    window.location.href = document.referrer;
+                } else if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    window.location.href = '/dashboard';
+                }
+            }
+        </script>
 
         <div class="footer-support">
             Need assistance? Please contact the Mewar ICT Support Desk at 

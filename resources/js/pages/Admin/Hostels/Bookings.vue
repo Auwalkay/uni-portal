@@ -45,6 +45,19 @@ const props = defineProps<{
     };
     sessions: any[];
     hostels: any[];
+    stats: {
+        total_bookings: number;
+        confirmed: number;
+        pending: number;
+        cancelled: number;
+        total_capacity: number;
+        occupancy_rate: number;
+        total_revenue: number;
+        gender_breakdown: {
+            male: number;
+            female: number;
+        };
+    };
     filters: {
         session_id?: string;
         level?: string;
@@ -323,6 +336,63 @@ const formatCurrency = (amount: any) => {
                 </div>
             </div>
 
+            <!-- Global Accommodation Analytics Cards (Un-affected by pagination or search filters) -->
+            <div v-if="stats" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Total System Bookings & Occupancy Rate -->
+                <div class="p-5 rounded-2xl bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 text-white shadow-lg relative overflow-hidden space-y-2">
+                    <Hotel class="absolute -right-4 -bottom-4 w-24 h-24 text-white/10 rotate-12" />
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-indigo-300 block">Total System Bookings</span>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-3xl font-black text-white">{{ stats.total_bookings }}</span>
+                        <span class="text-xs font-bold text-indigo-300">Global Record</span>
+                    </div>
+                    <div class="text-xs text-indigo-200/80 font-semibold pt-1 border-t border-indigo-800/60 flex items-center gap-1.5">
+                        <BadgeCheck class="w-3.5 h-3.5 text-indigo-400" />
+                        {{ stats.occupancy_rate }}% Overall Bed Occupancy
+                    </div>
+                </div>
+
+                <!-- Confirmed vs Pending Allocations -->
+                <div class="p-5 rounded-2xl bg-card border shadow-xs space-y-2 relative overflow-hidden">
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block">Confirmed Allocations</span>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-3xl font-black text-emerald-600 dark:text-emerald-400">{{ stats.confirmed }}</span>
+                        <span class="text-xs font-bold text-amber-600 dark:text-amber-400">({{ stats.pending }} Pending)</span>
+                    </div>
+                    <div class="text-xs text-muted-foreground font-medium pt-1 border-t flex items-center gap-1.5">
+                        <Clock class="w-3.5 h-3.5 text-amber-500" />
+                        {{ stats.cancelled }} Cancelled / Released Slots
+                    </div>
+                </div>
+
+                <!-- Total Accommodation Revenue -->
+                <div class="p-5 rounded-2xl bg-card border shadow-xs space-y-2 relative overflow-hidden">
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block">Accommodation Revenue</span>
+                    <div class="flex items-baseline gap-1">
+                        <span class="text-2xl font-black text-foreground">{{ formatCurrency(stats.total_revenue) }}</span>
+                    </div>
+                    <div class="text-xs text-muted-foreground font-medium pt-1 border-t flex items-center gap-1.5">
+                        <BadgeCheck class="w-3.5 h-3.5 text-emerald-500" />
+                        Verified paid accommodation fees
+                    </div>
+                </div>
+
+                <!-- Gender Breakdown -->
+                <div class="p-5 rounded-2xl bg-card border shadow-xs space-y-2 relative overflow-hidden">
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block">Gender Distribution</span>
+                    <div class="grid grid-cols-2 gap-2 pt-1">
+                        <div class="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900 text-center">
+                            <span class="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300 block">Male</span>
+                            <span class="text-lg font-black text-blue-800 dark:text-blue-200">{{ stats.gender_breakdown.male }}</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-pink-50 dark:bg-pink-950/40 border border-pink-100 dark:border-pink-900 text-center">
+                            <span class="text-[10px] font-bold uppercase text-pink-700 dark:text-pink-300 block">Female</span>
+                            <span class="text-lg font-black text-pink-800 dark:text-pink-200">{{ stats.gender_breakdown.female }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Filters Area -->
             <div class="bg-card border rounded-xl p-5 shadow-sm space-y-4">
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -419,7 +489,7 @@ const formatCurrency = (amount: any) => {
                     <div class="flex items-center gap-2 px-3 py-1.5 bg-primary/5 rounded-lg border border-primary/10">
                         <div class="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
                         <span class="text-xs font-bold text-primary uppercase tracking-wider">
-                            {{ filteredBookings.length }} Bookings Found
+                            {{ props.bookings?.total || filteredBookings.length }} Bookings Found
                         </span>
                     </div>
                     <Button variant="ghost" size="sm" class="text-xs text-muted-foreground hover:text-foreground" @click="() => { filterLevel='all'; filterHostelId='all'; filterStatus='all'; filterDate=''; applyFilters(); }">

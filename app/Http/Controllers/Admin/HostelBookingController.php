@@ -95,10 +95,45 @@ class HostelBookingController extends Controller
         $sessions = Session::latest()->get(['id', 'name']);
         $hostels = Hostel::orderBy('name')->get(['id', 'name']);
 
+        // Global Accommodation Analytics (Independent of pagination or filters)
+        $totalBookingsCount = HostelBooking::count();
+        $confirmedCount = HostelBooking::where('status', 'confirmed')->count();
+        $pendingCount = HostelBooking::where('status', 'pending')->count();
+        $cancelledCount = HostelBooking::where('status', 'cancelled')->count();
+        
+        $totalCapacity = (int) HostelRoom::sum('capacity');
+        $occupancyRate = $totalCapacity > 0 ? round(($confirmedCount / $totalCapacity) * 100, 1) : 0;
+        
+        $bookingInvoiceIds = HostelBooking::whereNotNull('invoice_id')->pluck('invoice_id');
+        $totalRevenue = (float) Invoice::whereIn('id', $bookingInvoiceIds)
+            ->where('status', 'paid')
+            ->sum('amount');
+
+        if ($totalRevenue == 0 && count($bookingInvoiceIds) > 0) {
+            $totalRevenue = (float) Payment::whereIn('invoice_id', $bookingInvoiceIds)
+                ->where('status', 'successful')
+                ->sum('amount');
+        }
+            
+        $genderBreakdown = [
+            'male' => HostelBooking::whereHas('student', fn($q) => $q->where('gender', 'male'))->count(),
+            'female' => HostelBooking::whereHas('student', fn($q) => $q->where('gender', 'female'))->count(),
+        ];
+
         return Inertia::render('Admin/Hostels/Bookings', [
             'bookings' => $bookings,
             'sessions' => $sessions,
             'hostels' => $hostels,
+            'stats' => [
+                'total_bookings' => $totalBookingsCount,
+                'confirmed' => $confirmedCount,
+                'pending' => $pendingCount,
+                'cancelled' => $cancelledCount,
+                'total_capacity' => $totalCapacity,
+                'occupancy_rate' => $occupancyRate,
+                'total_revenue' => $totalRevenue,
+                'gender_breakdown' => $genderBreakdown,
+            ],
             'filters' => [
                 'session_id' => $sessionId,
                 'level' => $level,
