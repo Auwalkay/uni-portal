@@ -514,10 +514,20 @@ class DashboardController extends Controller
         ];
 
         // 7. My Course Allocations & Timetable (If Staff)
-        $myAllocations = [];
-        $myTimetable = [];
+        $myAllocations = collect();
+        $myTimetable = collect();
         $courseIds = [];
-        if ($user->hasAnyRole(['lecturer', 'course_coordinator', 'dean', 'hod'])) {
+        if ($user->hasAnyRole(['staff', 'lecturer', 'course_coordinator', 'dean', 'hod', 'registrar', 'bursar', 'finance_officer', 'admissions_officer', 'admissions_manager'])) {
+            if (!$user->staff) {
+                $isAcademic = $user->hasAnyRole(['lecturer', 'dean', 'hod', 'course_coordinator']);
+                \App\Models\Staff::create([
+                    'user_id' => $user->id,
+                    'staff_number' => \App\Helpers\StaffNumberHelper::generate(),
+                    'is_academic' => $isAcademic,
+                ]);
+                $user->load('staff');
+            }
+
             $myAllocations = \App\Models\CourseAllocation::whereHas('staff', function ($q) use ($user) {
                 $q->where('user_id', $user->id);
             })
@@ -529,7 +539,8 @@ class DashboardController extends Controller
 
             // Fetch Timetable from Cache
             if ($user->staff) {
-                $myTimetable = \App\Services\AcademicCacheService::getStaffTimetable($user->staff->id, $sessionId);
+                $fetchedTimetable = \App\Services\AcademicCacheService::getStaffTimetable($user->staff->id, $sessionId);
+                $myTimetable = is_array($fetchedTimetable) ? collect($fetchedTimetable) : $fetchedTimetable;
             }
 
             // Lecturer Stats
@@ -540,7 +551,8 @@ class DashboardController extends Controller
                     ->count('student_id'),
                 'total_courses' => $myAllocations->count(),
                 'classes_today' => $myTimetable->filter(function ($t) {
-                    return strtolower($t->day) === strtolower(now()->format('l'));
+                    $day = is_object($t) ? ($t->day ?? '') : ($t['day'] ?? '');
+                    return strtolower($day) === strtolower(now()->format('l'));
                 })->count(),
             ];
         }

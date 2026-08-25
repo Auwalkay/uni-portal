@@ -21,6 +21,30 @@ class Staff extends Model
     protected $table = 'staff'; // Explicit table name because plural of staff is staff
     protected $guarded = [];
 
+    protected function firstName(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn (?string $value) => $value ? mb_strtoupper($value, 'UTF-8') : null,
+            set: fn (?string $value) => $value ? mb_strtoupper(trim($value), 'UTF-8') : null,
+        );
+    }
+
+    protected function lastName(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn (?string $value) => $value ? mb_strtoupper($value, 'UTF-8') : null,
+            set: fn (?string $value) => $value ? mb_strtoupper(trim($value), 'UTF-8') : null,
+        );
+    }
+
+    protected function otherName(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn (?string $value) => $value ? mb_strtoupper($value, 'UTF-8') : null,
+            set: fn (?string $value) => $value ? mb_strtoupper(trim($value), 'UTF-8') : null,
+        );
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

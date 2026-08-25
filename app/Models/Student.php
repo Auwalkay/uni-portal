@@ -49,6 +49,30 @@ class Student extends Model
         }
     }
 
+    protected function firstName(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn (?string $value) => $value ? mb_strtoupper($value, 'UTF-8') : null,
+            set: fn (?string $value) => $value ? mb_strtoupper(trim($value), 'UTF-8') : null,
+        );
+    }
+
+    protected function lastName(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn (?string $value) => $value ? mb_strtoupper($value, 'UTF-8') : null,
+            set: fn (?string $value) => $value ? mb_strtoupper(trim($value), 'UTF-8') : null,
+        );
+    }
+
+    protected function middleName(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn (?string $value) => $value ? mb_strtoupper($value, 'UTF-8') : null,
+            set: fn (?string $value) => $value ? mb_strtoupper(trim($value), 'UTF-8') : null,
+        );
+    }
+
     protected $fillable = [
         'user_id',
         'matriculation_number',
