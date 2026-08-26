@@ -124,7 +124,11 @@ class PaymentController extends Controller
         $student = Auth::user()->student;
         $currentSession = Session::current();
 
-        if (! $student || ! $currentSession) {
+        if (! $student || ! $student->department_id) {
+            return back()->with('error', 'You cannot generate optional fee invoices because your academic department has not been assigned.');
+        }
+
+        if (! $currentSession) {
             return back()->with('error', 'Student profile or active session not found.');
         }
 
@@ -144,6 +148,11 @@ class PaymentController extends Controller
 
     public function pay(Request $request, Invoice $invoice)
     {
+        $student = Auth::user()->student;
+        if (! $student || ! $student->department_id) {
+            return back()->with('error', 'You cannot proceed with payment because your academic department has not been assigned to your profile. Please contact the Bursary / Student Affairs office.');
+        }
+
         // Auto-refresh invoice if unpaid before proceeding
         $feeService = app(FeeService::class);
         $invoice = $feeService->refreshInvoiceIfUnpaid($invoice);
