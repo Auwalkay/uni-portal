@@ -201,14 +201,14 @@ const formatTime = (time: string | null) => {
                     <p class="text-muted-foreground mt-1 text-slate-500">Track and manage employee daily attendance logs.</p>
                 </div>
 
-                <div class="flex gap-2">
-                    <Button variant="outline" as-child class="border-slate-200 bg-white">
+                <div class="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                    <Button variant="outline" as-child class="border-slate-200 bg-white flex-1 sm:flex-none">
                         <Link :href="route('admin.attendance.reports')">
                             <BarChart3 class="w-4 h-4 mr-2" /> View Reports
                         </Link>
                     </Button>
 
-                    <Button variant="outline" as-child class="border-slate-200 bg-white">
+                    <Button variant="outline" as-child class="border-slate-200 bg-white flex-1 sm:flex-none">
                         <Link :href="route('admin.attendance.calendar')">
                             <LayoutGrid class="w-4 h-4 mr-2" /> Calendar View
                         </Link>
@@ -216,11 +216,11 @@ const formatTime = (time: string | null) => {
 
                     <Dialog v-model:open="showImportModal">
                         <DialogTrigger as-child>
-                            <Button variant="outline" class="border-slate-200 bg-white">
+                            <Button variant="outline" class="border-slate-200 bg-white flex-1 sm:flex-none">
                                 <Upload class="w-4 h-4 mr-2" /> Bulk Import
                             </Button>
                         </DialogTrigger>
-                        <DialogContent>
+                        <DialogContent class="max-w-[95vw] sm:max-w-[500px]">
                             <DialogHeader>
                                 <DialogTitle>Import Attendance Log</DialogTitle>
                                 <DialogDescription>
@@ -257,14 +257,14 @@ const formatTime = (time: string | null) => {
                         </DialogContent>
                     </Dialog>
 
-                    <Button @click="showManualModal = true" :disabled="!!holiday">
+                    <Button @click="showManualModal = true" :disabled="!!holiday" class="flex-1 sm:flex-none">
                         <Plus class="w-4 h-4 mr-2" /> Add Record
                     </Button>
                 </div>
             </div>
 
             <!-- Holiday Banner -->
-            <div v-if="holiday" class="bg-indigo-600 rounded-3xl p-8 text-white relative overflow-hidden shadow-xl shadow-indigo-200 group animate-in fade-in slide-in-from-top duration-500">
+            <div v-if="holiday" class="bg-indigo-600 rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-xl shadow-indigo-200 group animate-in fade-in slide-in-from-top duration-500">
                 <div class="absolute -right-8 -bottom-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
                     <PartyPopper class="w-48 h-48" />
                 </div>
@@ -274,11 +274,11 @@ const formatTime = (time: string | null) => {
                             <span class="p-2 bg-white/20 rounded-xl backdrop-blur-md">
                                 <Umbrella class="w-6 h-6" />
                             </span>
-                            <h2 class="text-2xl font-black uppercase tracking-tight">Public Holiday: {{ holiday.name }}</h2>
+                            <h2 class="text-xl sm:text-2xl font-black uppercase tracking-tight">Public Holiday: {{ holiday.name }}</h2>
                         </div>
-                        <p class="text-indigo-100 font-medium max-w-2xl">{{ holiday.description || 'All university operations are suspended for this date.' }}</p>
+                        <p class="text-indigo-100 font-medium max-w-2xl text-sm sm:text-base">{{ holiday.description || 'All university operations are suspended for this date.' }}</p>
                     </div>
-                    <Button variant="outline" class="bg-white/10 border-white/20 hover:bg-white/20 text-white font-bold px-6 rounded-xl" @click="removeHoliday(holiday.id)">
+                    <Button variant="outline" class="bg-white/10 border-white/20 hover:bg-white/20 text-white font-bold px-6 rounded-xl w-full md:w-auto" @click="removeHoliday(holiday.id)">
                         <Trash2 class="w-4 h-4 mr-2" /> Remove Holiday
                     </Button>
                 </div>
@@ -291,18 +291,18 @@ const formatTime = (time: string | null) => {
             </div>
 
             <!-- Dashboard Filters -->
-            <div class="grid gap-4 md:grid-cols-4 items-end">
-                <Card class="md:col-span-1 shadow-sm border-slate-200">
+            <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4 items-end">
+                <Card class="shadow-sm border-slate-200">
                     <CardHeader class="pb-2">
                         <CardTitle class="text-xs uppercase tracking-wider text-slate-500 font-bold">Attendance Date</CardTitle>
                     </CardHeader>
                     <CardContent class="flex items-center gap-2">
                         <Calendar class="w-4 h-4 text-primary" />
-                        <Input type="date" v-model="selectedDate" class="border-none p-0 focus-visible:ring-0 text-lg font-bold" />
+                        <Input type="date" v-model="selectedDate" class="border-none p-0 focus-visible:ring-0 text-base sm:text-lg font-bold" />
                     </CardContent>
                 </Card>
 
-                <div class="md:col-span-3 flex flex-col md:flex-row gap-4 items-center">
+                <div class="sm:col-span-1 md:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center w-full">
                     <div class="w-full">
                         <Label class="text-xs font-bold text-slate-500 uppercase ml-1">Department</Label>
                         <Select v-model="selectedDept">
@@ -336,79 +336,81 @@ const formatTime = (time: string | null) => {
 
             <!-- Attendance Table -->
             <Card class="border-slate-200 shadow-sm overflow-hidden bg-white">
-                <Table>
-                    <TableHeader class="bg-slate-50">
-                        <TableRow>
-                            <TableHead class="w-[300px]">Staff Member</TableHead>
-                            <TableHead>Clock In</TableHead>
-                            <TableHead>Clock Out</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Source</TableHead>
-                            <TableHead class="text-right">Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        <TableRow v-for="record in attendances.data" :key="record.id" class="group hover:bg-slate-50/50">
-                            <TableCell>
-                                <div class="flex items-center gap-3">
-                                    <Avatar class="h-10 w-10 border border-slate-200">
-                                        <AvatarFallback class="bg-slate-100 text-slate-600 font-bold uppercase">{{ record.staff?.user?.name?.charAt(0) }}</AvatarFallback>
-                                    </Avatar>
-                                    <div class="flex flex-col">
-                                        <span class="font-bold text-slate-900">{{ record.staff?.user?.name }}</span>
-                                        <span class="text-[10px] text-slate-500 font-medium uppercase tracking-wider">{{ record.staff?.department?.name }}</span>
+                <div class="overflow-x-auto min-w-full">
+                    <Table>
+                        <TableHeader class="bg-slate-50">
+                            <TableRow>
+                                <TableHead class="min-w-[200px] sm:w-[300px]">Staff Member</TableHead>
+                                <TableHead class="min-w-[100px]">Clock In</TableHead>
+                                <TableHead class="min-w-[100px]">Clock Out</TableHead>
+                                <TableHead class="min-w-[110px]">Status</TableHead>
+                                <TableHead class="min-w-[90px]">Source</TableHead>
+                                <TableHead class="text-right min-w-[90px]">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            <TableRow v-for="record in attendances.data" :key="record.id" class="group hover:bg-slate-50/50">
+                                <TableCell>
+                                    <div class="flex items-center gap-3">
+                                        <Avatar class="h-10 w-10 border border-slate-200 shrink-0">
+                                            <AvatarFallback class="bg-slate-100 text-slate-600 font-bold uppercase">{{ record.staff?.user?.name?.charAt(0) }}</AvatarFallback>
+                                        </Avatar>
+                                        <div class="flex flex-col min-w-0">
+                                            <span class="font-bold text-slate-900 truncate">{{ record.staff?.user?.name }}</span>
+                                            <span class="text-[10px] text-slate-500 font-medium uppercase tracking-wider truncate">{{ record.staff?.department?.name }}</span>
+                                        </div>
                                     </div>
-                                </div>
-                            </TableCell>
-                            <TableCell class="font-mono text-sm font-bold text-slate-700">
-                                <div class="flex items-center gap-1.5">
-                                    <Clock class="w-3 h-3 text-slate-400" />
-                                    {{ formatTime(record.clock_in) }}
-                                </div>
-                            </TableCell>
-                            <TableCell class="font-mono text-sm font-bold text-slate-700">
-                                <div class="flex items-center gap-1.5">
-                                    <Clock class="w-3 h-3 text-slate-400" />
-                                    {{ formatTime(record.clock_out) }}
-                                </div>
-                            </TableCell>
-                            <TableCell>
-                                <Badge :class="['font-bold uppercase text-[10px] py-0.5 px-2 rounded-full', getStatusBadge(record.status).color]" variant="outline">
-                                    <component :is="getStatusBadge(record.status).icon" class="w-3 h-3 mr-1" />
-                                    {{ getStatusBadge(record.status).label }}
-                                </Badge>
-                            </TableCell>
-                            <TableCell>
-                                <Badge variant="secondary" class="bg-slate-100 text-slate-600 border-none font-bold text-[10px] uppercase tracking-tighter">
-                                    {{ record.source }}
-                                </Badge>
-                            </TableCell>
-                            <TableCell class="text-right">
-                                <div class="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Button variant="ghost" size="icon" class="h-8 w-8 text-slate-400 hover:text-primary">
-                                        <Edit2 class="w-4 h-4" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" class="h-8 w-8 text-slate-400 hover:text-destructive" @click="deleteRecord(record.id)">
-                                        <Trash2 class="w-4 h-4" />
-                                    </Button>
-                                </div>
-                            </TableCell>
-                        </TableRow>
-                        <TableRow v-if="attendances.data.length === 0">
-                            <TableCell colspan="6" class="h-64 text-center">
-                                <div class="flex flex-col items-center justify-center space-y-4">
-                                    <div class="p-4 bg-slate-50 rounded-full border border-slate-100">
-                                        <Clock class="w-10 h-10 text-slate-300" />
+                                </TableCell>
+                                <TableCell class="font-mono text-sm font-bold text-slate-700 whitespace-nowrap">
+                                    <div class="flex items-center gap-1.5">
+                                        <Clock class="w-3 h-3 text-slate-400" />
+                                        {{ formatTime(record.clock_in) }}
                                     </div>
-                                    <div class="max-w-[250px]">
-                                        <p class="font-bold text-slate-900 text-lg">No Attendance Data</p>
-                                        <p class="text-sm text-slate-500">There are no records for {{ selectedDate }}. Upload a file or add entries manually.</p>
+                                </TableCell>
+                                <TableCell class="font-mono text-sm font-bold text-slate-700 whitespace-nowrap">
+                                    <div class="flex items-center gap-1.5">
+                                        <Clock class="w-3 h-3 text-slate-400" />
+                                        {{ formatTime(record.clock_out) }}
                                     </div>
-                                </div>
-                            </TableCell>
-                        </TableRow>
-                    </TableBody>
-                </Table>
+                                </TableCell>
+                                <TableCell class="whitespace-nowrap">
+                                    <Badge :class="['font-bold uppercase text-[10px] py-0.5 px-2 rounded-full', getStatusBadge(record.status).color]" variant="outline">
+                                        <component :is="getStatusBadge(record.status).icon" class="w-3 h-3 mr-1" />
+                                        {{ getStatusBadge(record.status).label }}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell class="whitespace-nowrap">
+                                    <Badge variant="secondary" class="bg-slate-100 text-slate-600 border-none font-bold text-[10px] uppercase tracking-tighter">
+                                        {{ record.source }}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell class="text-right whitespace-nowrap">
+                                    <div class="flex justify-end gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                        <Button variant="ghost" size="icon" class="h-8 w-8 text-slate-400 hover:text-primary">
+                                            <Edit2 class="w-4 h-4" />
+                                        </Button>
+                                        <Button variant="ghost" size="icon" class="h-8 w-8 text-slate-400 hover:text-destructive" @click="deleteRecord(record.id)">
+                                            <Trash2 class="w-4 h-4" />
+                                        </Button>
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                            <TableRow v-if="attendances.data.length === 0">
+                                <TableCell colspan="6" class="h-64 text-center">
+                                    <div class="flex flex-col items-center justify-center space-y-4">
+                                        <div class="p-4 bg-slate-50 rounded-full border border-slate-100">
+                                            <Clock class="w-10 h-10 text-slate-300" />
+                                        </div>
+                                        <div class="max-w-[250px]">
+                                            <p class="font-bold text-slate-900 text-lg">No Attendance Data</p>
+                                            <p class="text-sm text-slate-500">There are no records for {{ selectedDate }}. Upload a file or add entries manually.</p>
+                                        </div>
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        </TableBody>
+                    </Table>
+                </div>
             </Card>
 
             <!-- Manual Entry Dialog -->
