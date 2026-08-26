@@ -44,11 +44,27 @@ class SystemSettingsController extends Controller
     {
         $request->validate([
             'key' => 'required|string',
-            'value' => 'nullable|string',
+            'value' => 'nullable',
         ]);
 
-        SystemSetting::set($request->key, $request->value);
-        \App\Services\AcademicCacheService::clearAll();
+        $key = $request->key;
+        $newValue = is_bool($request->value) ? ($request->value ? '1' : '0') : (string) $request->value;
+        $oldValue = (string) SystemSetting::get($key, '');
+
+        if ($oldValue !== $newValue) {
+            SystemSetting::set($key, $newValue);
+            \App\Services\AcademicCacheService::clearAll();
+
+            activity('system_settings')
+                ->causedBy(auth()->user())
+                ->withProperties([
+                    'key' => $key,
+                    'old_value' => $oldValue,
+                    'new_value' => $newValue,
+                    'ip_address' => $request->ip(),
+                ])
+                ->log("Updated system setting [{$key}] from '{$oldValue}' to '{$newValue}'");
+        }
 
         return back()->with('success', 'Setting updated successfully.');
     }

@@ -645,15 +645,125 @@ class InvoiceController extends Controller
 
     public function destroy(Invoice $invoice)
     {
-        if ($invoice->paid_amount > 0 || $invoice->payments()->count() > 0) {
-            return back()->with('error', 'Cannot delete an invoice that has payments attached to it.');
+        if ($invoice->paid_amount > 0 || $invoice->payments()->where('status', 'success')->count() > 0) {
+            return back()->with('error', 'Cannot delete an invoice that has successful payments attached to it.');
         }
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($invoice) {
+            // Delete associated pending payments if any
+            $invoice->payments()->delete();
+
+            // Cleanup associated hostel booking if applicable
+            \App\Models\HostelBooking::where('invoice_id', $invoice->id)->delete();
+
             $invoice->items()->delete();
             $invoice->delete();
         });
 
-        return back()->with('success', 'Invoice deleted successfully.');
+        return redirect()->route('admin.invoices.index')->with('success', 'Invoice deleted successfully.');
+    }
+
+    public function updateItems(Request $request, Invoice $invoice)
+    {
+        if (!Auth::user()->can('manual_payment_override') && !Auth::user()->can('manage_payments')) {
+            abort(403, 'You do not have permission to edit invoice items.');
+        }
+
+        $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.description' => 'required|string|max:255',
+            'items.*.amount' => 'required|numeric',
+        ]);
+
+        DB::transaction(function () use ($request, $invoice) {
+            // Replace existing items
+            $invoice->items()->delete();
+
+            $totalAmount = 0;
+            foreach ($request->items as $itemData) {
+                $amount = (float) $itemData['amount'];
+                $totalAmount += $amount;
+
+                \App\Models\InvoiceItem::create([
+                    'invoice_id' => $invoice->id,
+                    'description' => $itemData['description'],
+                    'amount' => $amount,
+                ]);
+            }
+
+            $newTotalAmount = max(0, $totalAmount);
+            $paidAmount = (float) $invoice->paid_amount;
+
+            $newStatus = 'pending';
+            if ($paidAmount >= $newTotalAmount && $newTotalAmount > 0) {
+                $newStatus = 'paid';
+            } elseif ($paidAmount > 0) {
+                $newStatus = 'partial';
+            }
+
+            $invoice->update([
+                'amount' => $newTotalAmount,
+                'status' => $newStatus,
+            ]);
+        });
+
+        return back()->with('success', 'Invoice breakdown items and total updated successfully.');
+    }
+
+    public function recalculate(Invoice $invoice)
+    {
+        if (!Auth::user()->can('manual_payment_override') && !Auth::user()->can('manage_payments')) {
+            abort(403, 'You do not have permission to recalculate invoices.');
+        }
+
+        if ($invoice->type !== 'school_fee') {
+            return back()->with('error', 'Automated fee recalculation is currently supported for school fee invoices.');
+        }
+
+        $student = \App\Models\Student::with(['scholarship', 'program'])->where('user_id', $invoice->user_id)->first();
+        if (!$student || !$invoice->session) {
+            return back()->with('error', 'Student profile or academic session record missing for invoice.');
+        }
+
+        $feeService = app(\App\Services\Finance\FeeService::class);
+        $expectedAmount = $feeService->calculateExpectedSchoolFee($student, $invoice->session);
+
+        $currentItemsTotal = (float) $invoice->items()->sum('amount');
+        $discrepancy = $expectedAmount - $currentItemsTotal;
+
+        if (abs($discrepancy) < 0.01) {
+            return back()->with('info', 'Invoice amount is already perfectly aligned with current fee configurations.');
+        }
+
+        DB::transaction(function () use ($invoice, $discrepancy, $expectedAmount) {
+            $desc = $discrepancy > 0 
+                ? 'Fee Recalibration Adjustment (Supplementary Charge)'
+                : 'Fee Recalibration Adjustment (Credit Adjustment)';
+
+            \App\Models\InvoiceItem::create([
+                'invoice_id' => $invoice->id,
+                'description' => $desc,
+                'amount' => $discrepancy,
+            ]);
+
+            $newTotalAmount = max(0, $expectedAmount);
+            $paidAmount = (float) $invoice->paid_amount;
+
+            $newStatus = 'pending';
+            if ($paidAmount >= $newTotalAmount && $newTotalAmount > 0) {
+                $newStatus = 'paid';
+            } elseif ($paidAmount > 0) {
+                $newStatus = 'partial';
+            }
+
+            $invoice->update([
+                'amount' => $newTotalAmount,
+                'status' => $newStatus,
+            ]);
+        });
+
+        $adjustedFormatted = number_format(abs($discrepancy), 2);
+        $typeWord = $discrepancy > 0 ? 'added' : 'credited';
+        return back()->with('success', "Invoice recalculated successfully. Adjustment of ₦{$adjustedFormatted} {$typeWord}.");
     }
 }

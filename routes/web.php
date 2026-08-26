@@ -149,6 +149,8 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
 
         Route::middleware(['permission:manage_payments'])->group(function () {
             Route::post('invoices/{invoice}/mark-as-paid', [InvoiceController::class, 'markAsPaid'])->name('invoices.mark-as-paid');
+            Route::put('invoices/{invoice}/items', [InvoiceController::class, 'updateItems'])->name('invoices.items.update');
+            Route::post('invoices/{invoice}/recalculate', [InvoiceController::class, 'recalculate'])->name('invoices.recalculate');
             Route::post('payments/{payment}/verify', [InvoiceController::class, 'verifyPayment'])->name('payments.verify');
         });
     });

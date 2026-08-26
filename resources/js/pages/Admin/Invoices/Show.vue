@@ -6,11 +6,97 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
+import Swal from 'sweetalert2';
 import { 
     ArrowLeft, Printer, CreditCard, CheckCircle2, Clock, Calendar, 
     User, Mail, School, Building, RefreshCw, Download, ShieldCheck,
-    AlertCircle, Wallet, History
+    AlertCircle, Wallet, History, Trash2, Edit3, Plus, Trash
 } from 'lucide-vue-next';
+
+// Edit Items Modal State
+const isEditItemsOpen = ref(false);
+const editItemsForm = useForm({
+    items: props.invoice.items ? props.invoice.items.map((i: any) => ({
+        description: i.description,
+        amount: Number(i.amount)
+    })) : []
+});
+
+const openEditItemsModal = () => {
+    editItemsForm.items = props.invoice.items ? props.invoice.items.map((i: any) => ({
+        description: i.description,
+        amount: Number(i.amount)
+    })) : [];
+    isEditItemsOpen.value = true;
+};
+
+const addItemRow = () => {
+    editItemsForm.items.push({
+        description: '',
+        amount: 0
+    });
+};
+
+const removeItemRow = (index: number) => {
+    if (editItemsForm.items.length > 1) {
+        editItemsForm.items.splice(index, 1);
+    } else {
+        Swal.fire('Warning', 'An invoice must have at least one line item.', 'warning');
+    }
+};
+
+const previewItemsTotal = computed(() => {
+    return editItemsForm.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+});
+
+const saveInvoiceItems = () => {
+    editItemsForm.put(route('admin.invoices.items.update', props.invoice.id), {
+        onSuccess: () => {
+            isEditItemsOpen.value = false;
+            Swal.fire('Updated!', 'Invoice items and total amount updated.', 'success');
+        }
+    });
+};
+
+// Recalculate Action
+const recalculateFee = () => {
+    Swal.fire({
+        title: 'Recalculate Fee?',
+        text: 'This will evaluate current session fee rules and scholarship policy for this student, posting an adjustment line item for any discrepancy.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#3b82f6',
+        confirmButtonText: 'Yes, recalculate now'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            router.post(route('admin.invoices.recalculate', props.invoice.id), {}, {
+                onSuccess: () => {
+                    Swal.fire('Recalculated!', 'Invoice balance recalibrated.', 'success');
+                }
+            });
+        }
+    });
+};
+
+const deleteInvoice = () => {
+    Swal.fire({
+        title: 'Delete Invoice?',
+        text: `Are you sure you want to delete invoice ${props.invoice.reference}? This action cannot be undone.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#3b82f6',
+        confirmButtonText: 'Yes, delete it!'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            router.delete(route('admin.invoices.destroy', props.invoice.id), {
+                onSuccess: () => {
+                    Swal.fire('Deleted!', 'Invoice has been deleted.', 'success');
+                }
+            });
+        }
+    });
+};
 import { type BreadcrumbItem } from '@/types';
 import { route } from 'ziggy-js';
 import { useForm } from '@inertiajs/vue3';
@@ -144,6 +230,33 @@ const filteredPayments = computed(() => {
                 </div>
 
                 <div class="flex items-center gap-3 w-full md:w-auto">
+                    <Button 
+                        v-if="invoice.type === 'school_fee' && (hasPermission('manual_payment_override') || hasPermission('manage_payments'))" 
+                        variant="outline" 
+                        @click="recalculateFee" 
+                        class="flex-1 md:flex-none border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-300"
+                    >
+                        <RefreshCw class="w-4 h-4 mr-2" /> Recalculate Fee
+                    </Button>
+
+                    <Button 
+                        v-if="hasPermission('manual_payment_override') || hasPermission('manage_payments')" 
+                        variant="outline" 
+                        @click="openEditItemsModal" 
+                        class="flex-1 md:flex-none border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-900 dark:text-indigo-300"
+                    >
+                        <Edit3 class="w-4 h-4 mr-2" /> Edit Breakdown
+                    </Button>
+
+                    <Button 
+                        v-if="invoice.paid_amount == 0 && (hasPermission('cancel_invoices') || hasPermission('manage_payments'))" 
+                        variant="destructive" 
+                        @click="deleteInvoice" 
+                        class="flex-1 md:flex-none"
+                    >
+                        <Trash2 class="w-4 h-4 mr-2" /> Delete Invoice
+                    </Button>
+
                     <Button variant="outline" @click="printInvoice" class="flex-1 md:flex-none">
                         <Printer class="w-4 h-4 mr-2" /> Print
                     </Button>
@@ -217,6 +330,66 @@ const filteredPayments = computed(() => {
                                 <Button variant="ghost" @click="isDialogOpen = false">Discard</Button>
                                 <Button :disabled="manualPaymentForm.processing" @click="markAsPaid" class="bg-emerald-600 hover:bg-emerald-700 text-white">
                                     {{ manualPaymentForm.processing ? 'Recording...' : 'Confirm & Post Payment' }}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    <!-- Edit Invoice Items Breakdown Dialog -->
+                    <Dialog v-model:open="isEditItemsOpen">
+                        <DialogContent class="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+                            <DialogHeader>
+                                <DialogTitle>Edit Invoice Breakdown & Adjustment Items</DialogTitle>
+                                <DialogDescription>
+                                    Add, modify, or remove line items. Enter negative amounts (e.g. -50000) for credit adjustments or discounts.
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            <div class="space-y-4 py-3">
+                                <div v-for="(item, idx) in editItemsForm.items" :key="idx" class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border">
+                                    <div class="flex-1 space-y-1">
+                                        <Label class="text-xs font-semibold text-slate-600 dark:text-slate-400">Description</Label>
+                                        <Input v-model="item.description" placeholder="Item description / adjustment reason" class="h-9 text-sm" />
+                                    </div>
+                                    <div class="w-36 space-y-1">
+                                        <Label class="text-xs font-semibold text-slate-600 dark:text-slate-400">Amount (₦)</Label>
+                                        <Input v-model.number="item.amount" type="number" step="any" placeholder="0" class="h-9 text-sm font-mono font-bold" />
+                                    </div>
+                                    <div class="pt-5">
+                                        <Button type="button" variant="ghost" size="icon" class="h-9 w-9 text-red-500 hover:text-red-700 hover:bg-red-50" @click="removeItemRow(idx)">
+                                            <Trash class="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <Button type="button" variant="outline" size="sm" class="w-full gap-2 border-dashed" @click="addItemRow">
+                                    <Plus class="h-4 w-4" /> Add Item / Adjustment Line
+                                </Button>
+
+                                <!-- Live Calculation Preview -->
+                                <div class="p-4 rounded-xl bg-slate-100 dark:bg-slate-900 border space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-500">Items Calculated Total:</span>
+                                        <span class="font-bold font-mono">{{ formatCurrency(previewItemsTotal) }}</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-500">Payments Recorded:</span>
+                                        <span class="font-bold font-mono text-emerald-600">{{ formatCurrency(invoice.paid_amount || 0) }}</span>
+                                    </div>
+                                    <Separator />
+                                    <div class="flex justify-between text-base">
+                                        <span class="font-semibold">New Remaining Balance:</span>
+                                        <span class="font-black font-mono" :class="previewItemsTotal - (invoice.paid_amount || 0) <= 0 ? 'text-emerald-600' : 'text-slate-900 dark:text-slate-100'">
+                                            {{ formatCurrency(Math.max(0, previewItemsTotal - (invoice.paid_amount || 0))) }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <DialogFooter class="sm:justify-between">
+                                <Button variant="ghost" @click="isEditItemsOpen = false">Cancel</Button>
+                                <Button :disabled="editItemsForm.processing" @click="saveInvoiceItems" class="bg-indigo-600 hover:bg-indigo-700 text-white">
+                                    {{ editItemsForm.processing ? 'Saving Changes...' : 'Save & Update Invoice Total' }}
                                 </Button>
                             </DialogFooter>
                         </DialogContent>
