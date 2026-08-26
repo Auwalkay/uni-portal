@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { route } from 'ziggy-js';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -12,6 +14,44 @@ import {
     User, Mail, School, Building, RefreshCw, Download, ShieldCheck,
     AlertCircle, Wallet, History, Trash2, Edit3, Plus, Trash
 } from 'lucide-vue-next';
+import { type BreadcrumbItem } from '@/types';
+import { 
+    Dialog, 
+    DialogContent, 
+    DialogDescription, 
+    DialogFooter, 
+    DialogHeader, 
+    DialogTitle, 
+    DialogTrigger 
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+const props = defineProps<{
+    auth: {
+        user: {
+            permissions: string[];
+        };
+    };
+    invoice: any;
+    payments: any[];
+}>();
+
+const hasPermission = (permission: string) => {
+    return props.auth?.user?.permissions?.includes(permission) ?? false;
+};
+
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Invoices', href: '/admin/invoices' },
+    { title: props.invoice.reference, href: `/admin/invoices/${props.invoice.id}` },
+];
 
 // Edit Items Modal State
 const isEditItemsOpen = ref(false);
@@ -97,47 +137,6 @@ const deleteInvoice = () => {
         }
     });
 };
-import { type BreadcrumbItem } from '@/types';
-import { route } from 'ziggy-js';
-import { useForm } from '@inertiajs/vue3';
-import { 
-    Dialog, 
-    DialogContent, 
-    DialogDescription, 
-    DialogFooter, 
-    DialogHeader, 
-    DialogTitle, 
-    DialogTrigger 
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { ref, computed } from 'vue';
-
-const props = defineProps<{
-    auth: {
-        user: {
-            permissions: string[];
-        };
-    };
-    invoice: any;
-    payments: any[];
-}>();
-
-const hasPermission = (permission: string) => {
-    return props.auth.user.permissions.includes(permission);
-};
-
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Invoices', href: '/admin/invoices' },
-    { title: props.invoice.reference, href: `/admin/invoices/${props.invoice.id}` },
-];
 
 const formatCurrency = (value: number) => {
     return '₦' + new Intl.NumberFormat('en-NG').format(value);
