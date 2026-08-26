@@ -665,7 +665,7 @@ class InvoiceController extends Controller
 
     public function updateItems(Request $request, Invoice $invoice)
     {
-        if (!Auth::user()->can('manual_payment_override') && !Auth::user()->can('manage_payments')) {
+        if (!Auth::user()->can('manual_payment_override') && !Auth::user()->can('manage_payments') && !Auth::user()->can('edit_invoices')) {
             abort(403, 'You do not have permission to edit invoice items.');
         }
 
@@ -712,7 +712,7 @@ class InvoiceController extends Controller
 
     public function recalculate(Invoice $invoice)
     {
-        if (!Auth::user()->can('manual_payment_override') && !Auth::user()->can('manage_payments')) {
+        if (!Auth::user()->can('manual_payment_override') && !Auth::user()->can('manage_payments') && !Auth::user()->can('edit_invoices')) {
             abort(403, 'You do not have permission to recalculate invoices.');
         }
 
