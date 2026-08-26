@@ -277,7 +277,8 @@ class PaymentController extends Controller
                     'payment' => $lastPending->fresh(),
                     'invoice' => $invoice,
                 ]);
-            } elseif ($verification && in_array($verification['status'], ['failed', 'cancelled', 'error'])) {
+            } else {
+                // If abandoned, failed, cancelled, expired, or non-successful, mark as failed so student can retry cleanly
                 $lastPending->update(['status' => 'failed']);
             }
         }
