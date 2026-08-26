@@ -73,6 +73,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'manual_payment_override',
             'create_invoices',
             'cancel_invoices',
+            'edit_invoices',
             'manage_scholarships',
             'view_expenses',
             'create_expenses',

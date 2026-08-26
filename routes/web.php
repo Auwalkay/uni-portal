@@ -147,7 +147,7 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
         Route::get('invoices/calculate-fee', [InvoiceController::class, 'calculateFee'])->name('invoices.calculate-fee');
         Route::resource('invoices', InvoiceController::class)->only(['index', 'show', 'create', 'store', 'destroy']);
 
-        Route::middleware(['permission:manage_payments'])->group(function () {
+        Route::middleware(['permission:manage_payments|manual_payment_override|edit_invoices'])->group(function () {
             Route::post('invoices/{invoice}/mark-as-paid', [InvoiceController::class, 'markAsPaid'])->name('invoices.mark-as-paid');
             Route::put('invoices/{invoice}/items', [InvoiceController::class, 'updateItems'])->name('invoices.items.update');
             Route::post('invoices/{invoice}/recalculate', [InvoiceController::class, 'recalculate'])->name('invoices.recalculate');

@@ -231,7 +231,7 @@ const filteredPayments = computed(() => {
 
                 <div class="flex items-center gap-3 w-full md:w-auto">
                     <Button 
-                        v-if="invoice.type === 'school_fee' && (hasPermission('manual_payment_override') || hasPermission('manage_payments'))" 
+                        v-if="invoice.type === 'school_fee' && (hasPermission('manual_payment_override') || hasPermission('manage_payments') || hasPermission('edit_invoices'))" 
                         variant="outline" 
                         @click="recalculateFee" 
                         class="flex-1 md:flex-none border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-300"
@@ -240,7 +240,7 @@ const filteredPayments = computed(() => {
                     </Button>
 
                     <Button 
-                        v-if="hasPermission('manual_payment_override') || hasPermission('manage_payments')" 
+                        v-if="hasPermission('manual_payment_override') || hasPermission('manage_payments') || hasPermission('edit_invoices')" 
                         variant="outline" 
                         @click="openEditItemsModal" 
                         class="flex-1 md:flex-none border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-900 dark:text-indigo-300"
