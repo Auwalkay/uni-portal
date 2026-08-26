@@ -130,7 +130,12 @@ class Student extends Model
         return $this->belongsTo(Department::class, 'department_id');
     }
 
-    public function program()
+    public function program(): BelongsTo
+    {
+        return $this->belongsTo(Programme::class, 'program_id');
+    }
+
+    public function programme(): BelongsTo
     {
         return $this->belongsTo(Programme::class, 'program_id');
     }
