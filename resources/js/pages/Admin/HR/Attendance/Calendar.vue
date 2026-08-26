@@ -115,15 +115,15 @@ const getStatusLabel = (status: string) => {
                     </div>
                 </div>
 
-                <div class="flex items-center gap-4 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-                    <div class="flex items-center gap-2 px-2 border-r border-slate-100">
+                <div class="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-4 bg-white p-2 rounded-lg border border-slate-200 shadow-sm w-full sm:w-auto">
+                    <div class="flex items-center gap-2 px-2 border-r border-slate-100 flex-1 sm:flex-none">
                         <Label class="text-[10px] font-bold uppercase text-slate-400">Month</Label>
-                        <Input type="month" v-model="selectedMonth" class="border-none h-8 w-40 focus-visible:ring-0 font-bold" />
+                        <Input type="month" v-model="selectedMonth" class="border-none h-8 w-full sm:w-40 focus-visible:ring-0 font-bold" />
                     </div>
-                    <div class="flex items-center gap-2 px-2">
+                    <div class="flex items-center gap-2 px-2 flex-1 sm:flex-none">
                         <Label class="text-[10px] font-bold uppercase text-slate-400">Dept</Label>
                         <Select v-model="selectedDept">
-                            <SelectTrigger class="border-none h-8 w-48 focus:ring-0 shadow-none font-bold">
+                            <SelectTrigger class="border-none h-8 w-full sm:w-48 focus:ring-0 shadow-none font-bold">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
