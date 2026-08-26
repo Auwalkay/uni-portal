@@ -27,6 +27,15 @@ class PaymentHandler
             'paid_at' => now(),
         ]);
 
+        Log::info('[PAYMENT_SUCCESS] Payment Processed & Confirmed', [
+            'payment_id' => $payment->id,
+            'gateway_reference' => $reference,
+            'amount' => $payment->amount,
+            'invoice_id' => $payment->invoice_id,
+            'user_id' => $payment->user_id,
+            'raw_gateway_data' => $data,
+        ]);
+
         // Increment paid amount
         $payment->invoice->increment('paid_amount', $payment->amount);
         $payment->invoice->refresh();
