@@ -90,7 +90,7 @@ const previewItemsTotal = computed(() => {
 });
 
 const saveInvoiceItems = () => {
-    editItemsForm.put(route('admin.invoices.items.update', props.invoice.id), {
+    editItemsForm.put(`/admin/invoices/${props.invoice.id}/items`, {
         onSuccess: () => {
             isEditItemsOpen.value = false;
             Swal.fire('Updated!', 'Invoice items and total amount updated.', 'success');
@@ -109,7 +109,7 @@ const recalculateFee = () => {
         confirmButtonText: 'Yes, recalculate now'
     }).then((result) => {
         if (result.isConfirmed) {
-            router.post(route('admin.invoices.recalculate', props.invoice.id), {}, {
+            router.post(`/admin/invoices/${props.invoice.id}/recalculate`, {}, {
                 onSuccess: () => {
                     Swal.fire('Recalculated!', 'Invoice balance recalibrated.', 'success');
                 }
