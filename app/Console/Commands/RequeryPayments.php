@@ -63,12 +63,18 @@ class RequeryPayments extends Command
                     $handler->handleSuccessfulPayment($payment->gateway_reference, $data);
                     $this->info("✓ Payment {$payment->gateway_reference} verified as SUCCESS.");
                     $successCount++;
-                } elseif ($data && in_array($data['status'], ['failed', 'cancelled', 'error'])) {
-                    $payment->update(['status' => 'failed']);
-                    $this->warn("✗ Payment {$payment->gateway_reference} marked as FAILED.");
-                    $failedCount++;
                 } else {
-                    $this->line("- Payment {$payment->gateway_reference} is still pending on gateway.");
+                    $status = $data['status'] ?? 'unknown';
+                    // Automatically mark as failed if status is failed, abandoned, cancelled, expired, or pending for over 15 mins
+                    $isNonSuccessfulOrOld = !$data || in_array($status, ['failed', 'cancelled', 'error', 'abandoned', 'expired']) || $payment->created_at->lt(now()->subMinutes(15));
+                    
+                    if ($isNonSuccessfulOrOld) {
+                        $payment->update(['status' => 'failed']);
+                        $this->warn("✗ Payment {$payment->gateway_reference} (Status: {$status}) marked as FAILED.");
+                        $failedCount++;
+                    } else {
+                        $this->line("- Payment {$payment->gateway_reference} is still pending on gateway.");
+                    }
                 }
 
             } catch (\Exception $e) {
