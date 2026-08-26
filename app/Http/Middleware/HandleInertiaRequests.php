@@ -47,6 +47,11 @@ class HandleInertiaRequests extends Middleware
                     'profile_photo_path' => $request->user()->profile_photo_path,
                     'roles' => $request->user()->getRoleNames(),
                     'permissions' => $request->user()->getAllPermissions()->pluck('name'),
+                    'student' => $request->user()->student ? [
+                        'id' => $request->user()->student->id,
+                        'department_id' => $request->user()->student->effective_department_id,
+                        'program_id' => $request->user()->student->program_id,
+                    ] : null,
                 ] : null,
             ],
             'sidebarOpen' => !$request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
