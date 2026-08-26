@@ -175,8 +175,28 @@ watch(() => form.department_id, () => {
     form.unit_id = '';
 });
 
+import Swal from 'sweetalert2';
+
 const submit = () => {
-    form.put(route('admin.staff.update', props.staff.id));
+    form.put(route('admin.staff.update', props.staff.id), {
+        onSuccess: () => {
+            Swal.fire({
+                title: 'Updated!',
+                text: 'Staff profile updated successfully.',
+                icon: 'success',
+                confirmButtonColor: '#4f46e5',
+            });
+        },
+        onError: (errors) => {
+            const errorList = Object.values(errors).map(err => `• ${err}`).join('<br>');
+            Swal.fire({
+                title: 'Update Failed',
+                html: `<div class="text-left text-sm text-red-600 font-medium space-y-1">${errorList}</div>`,
+                icon: 'error',
+                confirmButtonColor: '#ef4444',
+            });
+        }
+    });
 };
 
 const roleSearch = ref('');
@@ -258,6 +278,20 @@ const confirmDelete = (e: Event) => {
                             Save Changes
                         </Button>
                     </div>
+                </div>
+            </div>
+
+            <!-- Validation Error Alert Banner -->
+            <div v-if="form.hasErrors" class="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 text-red-700 dark:text-red-300 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
+                <AlertTriangle class="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                <div class="space-y-1">
+                    <h4 class="font-bold text-sm">Update Cannot Be Saved</h4>
+                    <p class="text-xs text-red-600/90 dark:text-red-300/90">Please review and resolve the following errors:</p>
+                    <ul class="list-disc list-inside text-xs space-y-0.5 font-medium pt-1">
+                        <li v-for="(error, field) in form.errors" :key="field">
+                            <strong class="capitalize">{{ String(field).replace('_', ' ') }}:</strong> {{ error }}
+                        </li>
+                    </ul>
                 </div>
             </div>
 

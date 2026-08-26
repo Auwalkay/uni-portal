@@ -453,12 +453,13 @@ class StaffController extends Controller
         }
 
         $canAssignRoles = auth()->user()->can('assign_staff_roles') || auth()->user()->can('manage_staff');
+        $staffRecordId = $staff->staff ? $staff->staff->id : null;
 
         $rules = [
             'name' => 'required|string|max:255',
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($staff->id)],
-            'staff_number' => ['required', 'string', 'max:255', Rule::unique('staff')->ignore($staff->staff->id)],
-            'designation' => ['nullable', 'string', Rule::in(AcademicCacheService::getDesignations())],
+            'staff_number' => ['required', 'string', 'max:255', Rule::unique('staff')->ignore($staffRecordId)],
+            'designation' => 'nullable|string|max:255',
             'department_id' => 'nullable|exists:departments,id',
             'unit_id' => 'nullable|exists:units,id',
             'is_academic' => 'boolean',
@@ -494,7 +495,7 @@ class StaffController extends Controller
             ]);
         }
 
-        $staff->staff()->update([
+        $staffData = [
             'staff_number' => $request->staff_number,
             'designation' => $request->designation,
             'department_id' => $request->department_id,
@@ -512,7 +513,13 @@ class StaffController extends Controller
             'lga_id' => $request->lga_id,
             'specialization' => $request->specialization,
             'research_interests' => $request->research_interests,
-        ]);
+        ];
+
+        if ($staff->staff) {
+            $staff->staff->update($staffData);
+        } else {
+            $staff->staff()->create($staffData);
+        }
 
         // Update Roles if user has permission
         if ($canAssignRoles && $request->filled('role_ids')) {
