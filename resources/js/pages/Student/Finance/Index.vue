@@ -12,7 +12,8 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 const page = usePage();
 const hasDepartment = computed(() => {
-    return Boolean((page.props.auth as any)?.user?.student?.department_id);
+    const student = (page.props.auth as any)?.user?.student;
+    return Boolean(student?.department_id || student?.program?.department_id || student?.programme?.department_id);
 });
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,

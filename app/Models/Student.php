@@ -125,6 +125,30 @@ class Student extends Model
         return $this->belongsTo(Department::class, 'department_id');
     }
 
+    public function getEffectiveDepartmentIdAttribute()
+    {
+        if (!empty($this->department_id)) {
+            return $this->department_id;
+        }
+
+        if (!empty($this->program_id) && $this->program?->department_id) {
+            $deptId = $this->program->department_id;
+            try {
+                $this->quietly()->update(['department_id' => $deptId]);
+            } catch (\Throwable $e) {
+                // Ignore if in read-only transaction
+            }
+            return $deptId;
+        }
+
+        return null;
+    }
+
+    public function hasDepartment(): bool
+    {
+        return !empty($this->effective_department_id);
+    }
+
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class, 'department_id');

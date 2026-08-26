@@ -124,7 +124,7 @@ class PaymentController extends Controller
         $student = Auth::user()->student;
         $currentSession = Session::current();
 
-        if (! $student || ! $student->department_id) {
+        if (! $student || ! $student->hasDepartment()) {
             return back()->with('error', 'You cannot generate optional fee invoices because your academic department has not been assigned.');
         }
 
@@ -149,7 +149,7 @@ class PaymentController extends Controller
     public function pay(Request $request, Invoice $invoice)
     {
         $student = Auth::user()->student;
-        if (! $student || ! $student->department_id) {
+        if (! $student || ! $student->hasDepartment()) {
             return back()->with('error', 'You cannot proceed with payment because your academic department has not been assigned to your profile. Please contact the Bursary / Student Affairs office.');
         }
 
