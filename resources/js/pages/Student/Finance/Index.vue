@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import StudentLayout from '@/layouts/StudentLayout.vue';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
@@ -7,8 +7,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format as formatDate } from 'date-fns';
-import { CreditCard, ChevronDown, ChevronUp, FileText, Download, Clock } from 'lucide-vue-next';
+import { CreditCard, ChevronDown, ChevronUp, FileText, Download, Clock, AlertTriangle } from 'lucide-vue-next';
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+
+const page = usePage();
+const hasDepartment = computed(() => {
+    return Boolean((page.props.auth as any)?.user?.student?.department_id);
+});
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
@@ -253,6 +258,19 @@ const getInvoiceCountdown = (dueDateStr: string | null | undefined) => {
 
     <StudentLayout>
         <div class="space-y-6 p-6">
+            <!-- Missing Department Warning Banner -->
+            <div v-if="!hasDepartment" class="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-200 flex items-center justify-between shadow-sm">
+                <div class="flex items-center gap-3">
+                    <AlertTriangle class="h-5 w-5 text-amber-600 shrink-0" />
+                    <div>
+                        <h4 class="font-bold text-sm">Academic Department Assignment Pending</h4>
+                        <p class="text-xs text-amber-700 dark:text-amber-300">
+                            Your student profile currently has no assigned academic department. Payment processing and fee invoice generation are disabled until your department is assigned by the administration.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <div class="flex items-center justify-between">
                 <div>
                     <h2 class="text-3xl font-bold tracking-tight">Financials</h2>
@@ -260,12 +278,12 @@ const getInvoiceCountdown = (dueDateStr: string | null | undefined) => {
                 </div>
                 <div class="flex items-center gap-3">
                     <div v-if="optionalFees && optionalFees.length > 0">
-                        <Button variant="outline" @click="isOptionalFeeModalOpen = true">
+                        <Button variant="outline" :disabled="!hasDepartment" @click="isOptionalFeeModalOpen = true">
                             Initiate Optional Fee
                         </Button>
                     </div>
                     <div v-if="canGenerateInvoice">
-                         <Button @click="router.post(route('student.payments.create_school_fee'))">
+                         <Button :disabled="!hasDepartment" @click="router.post(route('student.payments.create_school_fee'))">
                             Pay School Fees
                         </Button>
                     </div>
@@ -346,6 +364,7 @@ const getInvoiceCountdown = (dueDateStr: string | null | undefined) => {
                                          <div v-if="invoice.status !== 'paid'">
                                              <Button 
                                                  v-if="invoice.type !== 'school_fee' || invoice.session?.school_fee_payment_enabled" 
+                                                 :disabled="!hasDepartment"
                                                  @click.stop="openPaymentModal(invoice)"
                                                  size="sm"
                                              >

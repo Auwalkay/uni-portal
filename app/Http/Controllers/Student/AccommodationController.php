@@ -160,6 +160,11 @@ class AccommodationController extends Controller
 
         $user = Auth::user();
         $student = Student::where('user_id', $user->id)->firstOrFail();
+
+        if (! $student->department_id) {
+            return back()->with('error', 'You cannot book hostel accommodation because your academic department has not been assigned.');
+        }
+
         $currentSession = Session::current();
 
         if (! $currentSession) {
