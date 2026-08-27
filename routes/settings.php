@@ -289,7 +289,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 
         // Hostel Management
-        Route::middleware(['permission:manage_hostels|manage_hostel_fees'])->group(function () {
+        Route::middleware(['permission:manage_hostels|manage_hostel_fees|manage_hostel_bookings|view_hostel_bookings|view_male_hostel_bookings|view_female_hostel_bookings'])->group(function () {
             Route::get('hostels/bookings', [HostelBookingController::class, 'index'])->name('hostels.bookings.index');
             Route::post('hostels/bookings', [HostelBookingController::class, 'store'])->name('hostels.bookings.store');
             Route::post('hostels/bookings/{booking}/unbook', [HostelBookingController::class, 'unbook'])->name('hostels.bookings.unbook');
