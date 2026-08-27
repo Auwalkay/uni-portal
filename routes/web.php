@@ -119,6 +119,7 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
         Route::middleware(['permission:view_attendance'])->group(function () {
             Route::get('attendance', [AttendanceController::class, 'index'])->name('attendance.index');
             Route::get('attendance/reports', [AttendanceController::class, 'reports'])->name('attendance.reports');
+            Route::get('attendance/staff/{staff}/history', [AttendanceController::class, 'staffHistory'])->name('attendance.staff.history');
             Route::get('attendance/export', [AttendanceController::class, 'exportReport'])->name('attendance.export');
             Route::get('attendance/calendar', [AttendanceController::class, 'calendar'])->name('attendance.calendar');
             Route::get('attendance/download-template', [AttendanceController::class, 'downloadTemplate'])->name('attendance.download-template');

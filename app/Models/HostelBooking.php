@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 class HostelBooking extends Model
 {
-    use HasUuids;
+    use HasUuids, LogsActivity;
 
     protected $fillable = [
         'student_id',
@@ -18,6 +20,11 @@ class HostelBooking extends Model
         'created_by',
         'updated_by',
     ];
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()->logFillable()->logOnlyDirty();
+    }
 
     public function getStatusAttribute($value)
     {

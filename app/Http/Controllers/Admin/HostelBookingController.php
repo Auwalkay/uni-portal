@@ -405,13 +405,25 @@ class HostelBookingController extends Controller
                 $bookingStatus = $isPaid ? 'confirmed' : 'pending';
             }
 
-            HostelBooking::create([
+            $newBooking = HostelBooking::create([
                 'student_id' => $student->id,
                 'session_id' => $currentSession->id,
                 'hostel_room_id' => $room->id,
                 'invoice_id' => $invoice->id,
                 'status' => $bookingStatus,
             ]);
+
+            activity('hostel')
+                ->performedOn($newBooking)
+                ->causedBy(Auth::user())
+                ->withProperties([
+                    'student_name' => $student->user?->name,
+                    'matric_number' => $student->matric_number,
+                    'hostel' => $room->floor->block->hostel->name,
+                    'room_number' => $room->room_number,
+                    'status' => $bookingStatus,
+                ])
+                ->log("Allocated room {$room->room_number} ({$room->floor->block->hostel->name}) to student {$student->user?->name}");
 
             DB::commit();
             return back()->with('success', 'Hostel room allocated successfully for the student!');
@@ -428,6 +440,16 @@ class HostelBookingController extends Controller
             'status' => 'cancelled',
             'updated_by' => Auth::id(),
         ]);
+
+        activity('hostel')
+            ->performedOn($booking)
+            ->causedBy(Auth::user())
+            ->withProperties([
+                'student_name' => $booking->student?->user?->name,
+                'hostel' => $booking->room?->floor?->block?->hostel?->name,
+                'room_number' => $booking->room?->room_number,
+            ])
+            ->log("Cancelled hostel allocation for student {$booking->student?->user?->name}");
 
         return back()->with('success', 'Student unbooked successfully. Room capacity has been released.');
     }
@@ -469,6 +491,17 @@ class HostelBookingController extends Controller
             'status' => $newStatus,
             'updated_by' => Auth::id(),
         ]);
+
+        activity('hostel')
+            ->performedOn($booking)
+            ->causedBy(Auth::user())
+            ->withProperties([
+                'student_name' => $booking->student?->user?->name,
+                'hostel' => $booking->room?->floor?->block?->hostel?->name,
+                'room_number' => $booking->room?->room_number,
+                'status' => $newStatus,
+            ])
+            ->log("Re-allocated room {$booking->room?->room_number} to student {$booking->student?->user?->name}");
 
         return back()->with('success', 'Student room allocation reactivated successfully!');
     }

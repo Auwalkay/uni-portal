@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/tooltip"
 
 const props = defineProps<{
-    staffList: Array<any>;
+    staffList: any;
     attendances: Record<string, Record<string, any>>;
     daysInMonth: number;
     currentMonth: string;
@@ -50,6 +50,14 @@ const props = defineProps<{
 
 const selectedMonth = ref(props.selectedDate);
 const selectedDept = ref(props.filters.department_id || 'ALL');
+const searchQuery = ref(props.filters.search || '');
+
+const staffArray = computed(() => {
+    if (Array.isArray(props.staffList)) {
+        return props.staffList;
+    }
+    return props.staffList?.data || [];
+});
 
 const days = computed(() => {
     const arr = [];
@@ -69,6 +77,7 @@ const updateCalendar = () => {
     router.get(route('admin.attendance.calendar'), {
         date: selectedMonth.value,
         department_id: selectedDept.value === 'ALL' ? '' : selectedDept.value,
+        search: searchQuery.value,
     }, {
         preserveState: true,
         replace: true,
@@ -164,7 +173,7 @@ const getStatusLabel = (status: string) => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
-                            <tr v-for="staff in staffList" :key="staff.id" class="hover:bg-slate-50/80 transition-colors">
+                            <tr v-for="staff in staffArray" :key="staff.id" class="hover:bg-slate-50/80 transition-colors">
                                 <td class="sticky left-0 z-10 bg-white px-6 py-4 border-r border-slate-100 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
                                     <div class="flex flex-col">
                                         <span class="font-bold text-slate-900 leading-tight">{{ staff.user?.name }}</span>
@@ -209,7 +218,7 @@ const getStatusLabel = (status: string) => {
                                     </TooltipProvider>
                                 </td>
                             </tr>
-                            <tr v-if="staffList.length === 0">
+                            <tr v-if="staffArray.length === 0">
                                 <td :colspan="days.length + 1" class="py-20 text-center">
                                     <div class="flex flex-col items-center gap-2 opacity-30">
                                         <LayoutGrid class="w-12 h-12" />
