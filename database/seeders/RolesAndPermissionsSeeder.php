@@ -83,6 +83,9 @@ class RolesAndPermissionsSeeder extends Seeder
             // Infrastructure & Utilities
             'manage_hostels',
             'manage_hostel_bookings',
+            'view_hostel_bookings',
+            'view_male_hostel_bookings',
+            'view_female_hostel_bookings',
             'create_hostels',
             'manage_hostel_fees',
             'toggle_hostels',
@@ -161,6 +164,27 @@ class RolesAndPermissionsSeeder extends Seeder
             'write_sickbay_medical_logs',
             'manage_observation_beds',
             'manage_sickbay_inventory',
+        ]);
+
+        // --- HOSTEL SUPERVISORS ---
+        $maleHostelSupervisor = Role::firstOrCreate(['name' => 'male_hostel_supervisor']);
+        $maleHostelSupervisor->syncPermissions([
+            'access_admin_dashboard',
+            'view_hostel_bookings',
+            'view_male_hostel_bookings',
+        ]);
+
+        $femaleHostelSupervisor = Role::firstOrCreate(['name' => 'female_hostel_supervisor']);
+        $femaleHostelSupervisor->syncPermissions([
+            'access_admin_dashboard',
+            'view_hostel_bookings',
+            'view_female_hostel_bookings',
+        ]);
+
+        $hostelViewer = Role::firstOrCreate(['name' => 'hostel_viewer']);
+        $hostelViewer->syncPermissions([
+            'access_admin_dashboard',
+            'view_hostel_bookings',
         ]);
 
         // --- ACADEMIC ROLES ---

@@ -51,8 +51,10 @@ const props = defineProps<{
         pending: number;
         cancelled: number;
         total_capacity: number;
+        available_rooms: number;
         occupancy_rate: number;
-        total_revenue: number;
+        total_paid: number;
+        total_balance: number;
         gender_breakdown: {
             male: number;
             female: number;
@@ -64,10 +66,14 @@ const props = defineProps<{
         hostel_id?: string;
         status?: string;
         date?: string;
+        start_date?: string;
+        end_date?: string;
+        gender?: string;
         sort_by?: string;
         sort_direction?: string;
         per_page?: number;
     };
+    canManageBookings?: boolean;
 }>();
 
 const searchTerm = ref('');
@@ -76,6 +82,9 @@ const filterLevel = ref(props.filters.level || 'all');
 const filterHostelId = ref(props.filters.hostel_id || 'all');
 const filterStatus = ref(props.filters.status || 'all');
 const filterDate = ref(props.filters.date || '');
+const filterStartDate = ref(props.filters.start_date || '');
+const filterEndDate = ref(props.filters.end_date || '');
+const filterGender = ref(props.filters.gender || 'all');
 
 const filterSortBy = ref(props.filters.sort_by || 'created_at');
 const filterSortDirection = ref(props.filters.sort_direction || 'desc');
@@ -218,6 +227,9 @@ const applyFilters = () => {
         hostel_id: filterHostelId.value === 'all' ? '' : filterHostelId.value,
         status: filterStatus.value === 'all' ? '' : filterStatus.value,
         date: filterDate.value,
+        start_date: filterStartDate.value,
+        end_date: filterEndDate.value,
+        gender: filterGender.value === 'all' ? '' : filterGender.value,
         sort_by: filterSortBy.value,
         sort_direction: filterSortDirection.value,
     }, {
@@ -241,6 +253,11 @@ const handleHostelChange = (val: string) => {
     applyFilters();
 };
 
+const handleGenderChange = (val: string) => {
+    filterGender.value = val;
+    applyFilters();
+};
+
 const handleStatusChange = (val: string) => {
     filterStatus.value = val;
     applyFilters();
@@ -248,6 +265,16 @@ const handleStatusChange = (val: string) => {
 
 const handleDateChange = (event: any) => {
     filterDate.value = event.target.value;
+    applyFilters();
+};
+
+const handleStartDateChange = (event: any) => {
+    filterStartDate.value = event.target.value;
+    applyFilters();
+};
+
+const handleEndDateChange = (event: any) => {
+    filterEndDate.value = event.target.value;
     applyFilters();
 };
 
@@ -329,51 +356,50 @@ const formatCurrency = (amount: any) => {
                         <Download class="h-4 w-4" />
                         Export CSV
                     </Button>
-                    <Button @click="openBookModal" class="gap-2 font-semibold">
+                    <Button v-if="canManageBookings" @click="openBookModal" class="gap-2 font-semibold">
                         <Plus class="h-4 w-4" />
                         Book for Student
                     </Button>
                 </div>
             </div>
 
-            <!-- Global Accommodation Analytics Cards (Un-affected by pagination or search filters) -->
+            <!-- Global Accommodation Analytics Cards -->
             <div v-if="stats" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <!-- Total System Bookings & Occupancy Rate -->
+                <!-- Available Rooms & Capacity -->
                 <div class="p-5 rounded-2xl bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 text-white shadow-lg relative overflow-hidden space-y-2">
                     <Hotel class="absolute -right-4 -bottom-4 w-24 h-24 text-white/10 rotate-12" />
-                    <span class="text-[10px] font-bold uppercase tracking-widest text-indigo-300 block">Total System Bookings</span>
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-indigo-300 block">Rooms Available / Capacity</span>
                     <div class="flex items-baseline gap-2">
-                        <span class="text-3xl font-black text-white">{{ stats.total_bookings }}</span>
-                        <span class="text-xs font-bold text-indigo-300">Global Record</span>
+                        <span class="text-3xl font-black text-emerald-400">{{ stats.available_rooms }}</span>
+                        <span class="text-xs font-bold text-indigo-200">/ {{ stats.total_capacity }} Total Beds</span>
                     </div>
                     <div class="text-xs text-indigo-200/80 font-semibold pt-1 border-t border-indigo-800/60 flex items-center gap-1.5">
                         <BadgeCheck class="w-3.5 h-3.5 text-indigo-400" />
-                        {{ stats.occupancy_rate }}% Overall Bed Occupancy
+                        {{ stats.occupancy_rate }}% Bed Occupancy Rate
                     </div>
                 </div>
 
-                <!-- Confirmed vs Pending Allocations -->
+                <!-- Total Amount Paid -->
                 <div class="p-5 rounded-2xl bg-card border shadow-xs space-y-2 relative overflow-hidden">
-                    <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block">Confirmed Allocations</span>
-                    <div class="flex items-baseline gap-2">
-                        <span class="text-3xl font-black text-emerald-600 dark:text-emerald-400">{{ stats.confirmed }}</span>
-                        <span class="text-xs font-bold text-amber-600 dark:text-amber-400">({{ stats.pending }} Pending)</span>
-                    </div>
-                    <div class="text-xs text-muted-foreground font-medium pt-1 border-t flex items-center gap-1.5">
-                        <Clock class="w-3.5 h-3.5 text-amber-500" />
-                        {{ stats.cancelled }} Cancelled / Released Slots
-                    </div>
-                </div>
-
-                <!-- Total Accommodation Revenue -->
-                <div class="p-5 rounded-2xl bg-card border shadow-xs space-y-2 relative overflow-hidden">
-                    <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block">Accommodation Revenue</span>
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block">Amount Paid</span>
                     <div class="flex items-baseline gap-1">
-                        <span class="text-2xl font-black text-foreground">{{ formatCurrency(stats.total_revenue) }}</span>
+                        <span class="text-2xl font-black text-emerald-600 dark:text-emerald-400">{{ formatCurrency(stats.total_paid) }}</span>
                     </div>
                     <div class="text-xs text-muted-foreground font-medium pt-1 border-t flex items-center gap-1.5">
                         <BadgeCheck class="w-3.5 h-3.5 text-emerald-500" />
-                        Verified paid accommodation fees
+                        Successful accommodation payments
+                    </div>
+                </div>
+
+                <!-- Outstanding Balance -->
+                <div class="p-5 rounded-2xl bg-card border shadow-xs space-y-2 relative overflow-hidden">
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block">Outstanding Balance</span>
+                    <div class="flex items-baseline gap-1">
+                        <span class="text-2xl font-black text-amber-600 dark:text-amber-400">{{ formatCurrency(stats.total_balance) }}</span>
+                    </div>
+                    <div class="text-xs text-muted-foreground font-medium pt-1 border-t flex items-center gap-1.5">
+                        <Clock class="w-3.5 h-3.5 text-amber-500" />
+                        Unpaid accommodation invoice fees
                     </div>
                 </div>
 
@@ -395,7 +421,7 @@ const formatCurrency = (amount: any) => {
 
             <!-- Filters Area -->
             <div class="bg-card border rounded-xl p-5 shadow-sm space-y-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <!-- Search Input -->
                     <div class="relative">
                         <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -441,6 +467,20 @@ const formatCurrency = (amount: any) => {
                         </Select>
                     </div>
 
+                    <!-- Gender Filter Selector -->
+                    <div>
+                        <Select v-model="filterGender" @update:modelValue="handleGenderChange">
+                            <SelectTrigger class="h-10 bg-muted/30 w-full text-left">
+                                <SelectValue placeholder="Hostel Gender" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">-- All Gender Hostels --</SelectItem>
+                                <SelectItem value="male">Male Hostels Only</SelectItem>
+                                <SelectItem value="female">Female Hostels Only</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
                     <!-- Level Selector -->
                     <div>
                         <Select v-model="filterLevel" @update:modelValue="handleLevelChange">
@@ -474,14 +514,26 @@ const formatCurrency = (amount: any) => {
                         </Select>
                     </div>
 
-                    <!-- Date Selector -->
-                    <div>
-                        <input 
-                            type="date" 
-                            :value="filterDate" 
-                            @input="handleDateChange"
-                            class="flex h-10 w-full rounded-md border border-input bg-muted/30 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-muted-foreground"
-                        />
+                    <!-- Date Range Range Selector -->
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <input 
+                                type="date" 
+                                :value="filterStartDate" 
+                                @input="handleStartDateChange"
+                                title="Booked From Date"
+                                class="flex h-10 w-full rounded-md border border-input bg-muted/30 px-2 py-1 text-xs text-muted-foreground focus-visible:outline-none"
+                            />
+                        </div>
+                        <div>
+                            <input 
+                                type="date" 
+                                :value="filterEndDate" 
+                                @input="handleEndDateChange"
+                                title="Booked To Date"
+                                class="flex h-10 w-full rounded-md border border-input bg-muted/30 px-2 py-1 text-xs text-muted-foreground focus-visible:outline-none"
+                            />
+                        </div>
                     </div>
                 </div>
 
@@ -582,7 +634,7 @@ const formatCurrency = (amount: any) => {
                                     </p>
                                 </td>
                                 <td class="px-6 py-4 text-right">
-                                    <div class="flex items-center justify-end gap-2">
+                                    <div v-if="canManageBookings" class="flex items-center justify-end gap-2">
                                         <Button 
                                             v-if="booking.status !== 'cancelled'"
                                             variant="outline" 
