@@ -129,6 +129,7 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
                 Route::post('attendance/import', [AttendanceController::class, 'import'])->name('attendance.import');
                 Route::post('attendance/mark-absent', [AttendanceController::class, 'markAbsent'])->name('attendance.mark-absent');
                 Route::post('attendance/holidays', [AttendanceController::class, 'storeHoliday'])->name('attendance.holiday.store');
+                Route::put('attendance/holidays/{holiday}', [AttendanceController::class, 'updateHoliday'])->name('attendance.holiday.update');
                 Route::delete('attendance/holidays/{holiday}', [AttendanceController::class, 'destroyHoliday'])->name('attendance.holiday.destroy');
                 Route::delete('attendance/{attendance}', [AttendanceController::class, 'destroy'])->name('attendance.destroy');
             });

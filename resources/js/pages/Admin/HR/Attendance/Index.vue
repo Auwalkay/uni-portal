@@ -81,6 +81,7 @@ const props = defineProps<{
     departments: Array<{ id: string; name: string }>;
     allStaff: Array<{ id: string; name: string; staff_number?: string }>;
     holiday: any;
+    holidays: Array<{ id: string; name: string; date: string; description?: string }>;
     filters: {
         date?: string;
         department_id?: string;
@@ -215,6 +216,33 @@ const removeHoliday = (id: string) => {
             preserveScroll: true
         });
     }
+};
+
+const showAllHolidaysModal = ref(false);
+const showEditHolidayModal = ref(false);
+const editingHolidayId = ref<string | null>(null);
+const editHolidayForm = useForm({
+    date: '',
+    name: '',
+    description: '',
+});
+
+const openEditHolidayModal = (h: any) => {
+    editingHolidayId.value = h.id;
+    editHolidayForm.date = h.date ? h.date.substring(0, 10) : '';
+    editHolidayForm.name = h.name || '';
+    editHolidayForm.description = h.description || '';
+    showEditHolidayModal.value = true;
+};
+
+const submitEditHoliday = () => {
+    if (!editingHolidayId.value) return;
+    editHolidayForm.put(route('admin.attendance.holiday.update', editingHolidayId.value), {
+        onSuccess: () => {
+            showEditHolidayModal.value = false;
+            editingHolidayId.value = null;
+        },
+    });
 };
 
 const deleteRecord = (id: string) => {
@@ -358,15 +386,24 @@ const markAbsentForUnlogged = () => {
                         </div>
                         <p class="text-indigo-100 font-medium max-w-2xl text-sm sm:text-base">{{ holiday.description || 'All university operations are suspended for this date.' }}</p>
                     </div>
-                    <Button variant="outline" class="bg-white/10 border-white/20 hover:bg-white/20 text-white font-bold px-6 rounded-xl w-full md:w-auto" @click="removeHoliday(holiday.id)">
-                        <Trash2 class="w-4 h-4 mr-2" /> Remove Holiday
-                    </Button>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <Button variant="outline" class="bg-white/20 border-white/30 hover:bg-white/30 text-white font-bold px-4 rounded-xl" @click="openEditHolidayModal(holiday)">
+                            <Edit2 class="w-4 h-4 mr-2" /> Edit Holiday
+                        </Button>
+                        <Button variant="outline" class="bg-white/10 border-white/20 hover:bg-white/20 text-white font-bold px-4 rounded-xl" @click="removeHoliday(holiday.id)">
+                            <Trash2 class="w-4 h-4 mr-2" /> Remove Holiday
+                        </Button>
+                    </div>
                 </div>
             </div>
 
-            <div v-else-if="!holiday" class="flex justify-end">
-                <Button variant="outline" size="sm" class="h-9 border-slate-200 text-slate-500 font-bold px-4 rounded-xl hover:text-indigo-600 hover:border-indigo-100 hover:bg-indigo-50" @click="showHolidayModal = true">
-                    <Umbrella class="w-4 h-4 mr-2" /> Mark as Holiday
+            <div class="flex flex-wrap justify-end gap-2">
+                <Button variant="outline" size="sm" class="h-9 border-slate-200 text-slate-700 font-bold px-4 rounded-xl hover:text-indigo-600 hover:border-indigo-100 hover:bg-indigo-50" @click="showAllHolidaysModal = true">
+                    <Calendar class="w-4 h-4 mr-2" /> All Holidays ({{ holidays?.length || 0 }})
+                </Button>
+
+                <Button v-if="!holiday" variant="outline" size="sm" class="h-9 border-slate-200 text-slate-500 font-bold px-4 rounded-xl hover:text-indigo-600 hover:border-indigo-100 hover:bg-indigo-50" @click="showHolidayModal = true">
+                    <Umbrella class="w-4 h-4 mr-2" /> Mark Date as Holiday
                 </Button>
             </div>
 
@@ -711,6 +748,93 @@ const markAbsentForUnlogged = () => {
                     <DialogFooter>
                         <Button @click="submitHoliday" :disabled="holidayForm.processing || !holidayForm.name" class="w-full bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200">
                             {{ holidayForm.processing ? 'Saving...' : 'Mark Official Holiday' }}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <!-- All Holidays Dialog -->
+            <Dialog v-model:open="showAllHolidaysModal">
+                <DialogContent class="max-w-[95vw] sm:max-w-[700px]">
+                    <DialogHeader>
+                        <DialogTitle class="flex items-center gap-2">
+                            <Umbrella class="w-5 h-5 text-indigo-600" /> Declared Public Holidays
+                        </DialogTitle>
+                        <DialogDescription>Overview of all official public holidays declared in the system.</DialogDescription>
+                    </DialogHeader>
+
+                    <div class="py-4 max-h-[60vh] overflow-y-auto">
+                        <div v-if="!holidays || holidays.length === 0" class="text-center py-8 text-slate-500">
+                            <Umbrella class="w-10 h-10 mx-auto opacity-30 mb-2" />
+                            <p class="font-bold text-sm">No holidays declared yet</p>
+                        </div>
+                        <Table v-else>
+                            <TableHeader class="bg-slate-50">
+                                <TableRow>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Holiday Name</TableHead>
+                                    <TableHead>Description</TableHead>
+                                    <TableHead class="text-right">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                <TableRow v-for="h in holidays" :key="h.id">
+                                    <TableCell class="font-mono font-bold text-xs text-indigo-600 whitespace-nowrap">
+                                        {{ h.date ? h.date.substring(0, 10) : '' }}
+                                    </TableCell>
+                                    <TableCell class="font-bold text-slate-900">{{ h.name }}</TableCell>
+                                    <TableCell class="text-xs text-slate-500 max-w-[200px] truncate">{{ h.description || '---' }}</TableCell>
+                                    <TableCell class="text-right whitespace-nowrap">
+                                        <div class="flex justify-end gap-1">
+                                            <Button variant="ghost" size="icon" class="h-8 w-8 text-slate-500 hover:text-indigo-600" @click="openEditHolidayModal(h)">
+                                                <Edit2 class="w-4 h-4" />
+                                            </Button>
+                                            <Button variant="ghost" size="icon" class="h-8 w-8 text-slate-500 hover:text-red-600" @click="removeHoliday(h.id)">
+                                                <Trash2 class="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            </TableBody>
+                        </Table>
+                    </div>
+                    <DialogFooter class="flex flex-col sm:flex-row justify-between items-center gap-2">
+                        <Button variant="outline" @click="showAllHolidaysModal = false">Close</Button>
+                        <Button @click="showAllHolidaysModal = false; showHolidayModal = true;" class="bg-indigo-600 hover:bg-indigo-700">
+                            <Plus class="w-4 h-4 mr-2" /> Mark New Holiday
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <!-- Edit Holiday Dialog -->
+            <Dialog v-model:open="showEditHolidayModal">
+                <DialogContent class="sm:max-w-[450px]">
+                    <DialogHeader>
+                        <DialogTitle class="flex items-center gap-2">
+                            <Edit2 class="w-5 h-5 text-indigo-600" /> Edit Public Holiday
+                        </DialogTitle>
+                        <DialogDescription>Update the date, name, or details of this public holiday.</DialogDescription>
+                    </DialogHeader>
+                    <div class="grid gap-6 py-4">
+                        <div class="grid gap-2">
+                            <Label class="text-xs font-black uppercase text-slate-400">Holiday Date</Label>
+                            <Input type="date" v-model="editHolidayForm.date" class="font-bold border-slate-200" />
+                            <p v-if="editHolidayForm.errors.date" class="text-xs text-red-500">{{ editHolidayForm.errors.date }}</p>
+                        </div>
+                        <div class="grid gap-2">
+                            <Label class="text-xs font-black uppercase text-slate-400">Holiday Name</Label>
+                            <Input v-model="editHolidayForm.name" placeholder="e.g. Eid-el-Kabir, Democracy Day" class="font-bold border-slate-200" />
+                            <p v-if="editHolidayForm.errors.name" class="text-xs text-red-500">{{ editHolidayForm.errors.name }}</p>
+                        </div>
+                        <div class="grid gap-2">
+                            <Label class="text-xs font-black uppercase text-slate-400">Description (Optional)</Label>
+                            <Input v-model="editHolidayForm.description" placeholder="Short note about the holiday..." class="border-slate-200 font-medium" />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button @click="submitEditHoliday" :disabled="editHolidayForm.processing || !editHolidayForm.name || !editHolidayForm.date" class="w-full bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200">
+                            {{ editHolidayForm.processing ? 'Updating...' : 'Update Holiday Details' }}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
