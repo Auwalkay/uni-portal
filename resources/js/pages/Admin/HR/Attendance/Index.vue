@@ -457,6 +457,7 @@ const markAbsentForUnlogged = () => {
                         <SelectContent>
                             <SelectItem value="clock_in">Clock In Time (Default)</SelectItem>
                             <SelectItem value="clock_out">Clock Out Time</SelectItem>
+                            <SelectItem value="created_at">Log Entry Time (Created At)</SelectItem>
                             <SelectItem value="name">Staff Name</SelectItem>
                             <SelectItem value="staff_number">Staff Number</SelectItem>
                         </SelectContent>
@@ -518,7 +519,14 @@ const markAbsentForUnlogged = () => {
                                 </TableHead>
                                 <TableHead class="min-w-[110px]">Status</TableHead>
                                 <TableHead class="min-w-[90px]">Source</TableHead>
-                                <TableHead class="min-w-[170px]">Audit Trail</TableHead>
+                                <TableHead class="min-w-[170px]">
+                                    <button @click="handleSort('created_at')" class="flex items-center gap-1 hover:text-indigo-600 font-bold transition-colors">
+                                        Audit Trail / Created At
+                                        <ArrowUpDown class="w-3 h-3 text-slate-400" v-if="sortBy !== 'created_at'" />
+                                        <ArrowUp class="w-3 h-3 text-indigo-600" v-else-if="sortDir === 'asc'" />
+                                        <ArrowDown class="w-3 h-3 text-indigo-600" v-else />
+                                    </button>
+                                </TableHead>
                                 <TableHead class="text-right min-w-[90px]">Actions</TableHead>
                             </TableRow>
                         </TableHeader>

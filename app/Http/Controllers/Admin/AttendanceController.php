@@ -53,6 +53,8 @@ class AttendanceController extends Controller
                   ->select('attendances.*');
         } elseif ($sortBy === 'clock_out') {
             $query->orderByRaw("attendances.clock_out IS NULL ASC, attendances.clock_out {$sortDir}");
+        } elseif ($sortBy === 'created_at') {
+            $query->orderBy('attendances.created_at', $sortDir);
         } else {
             // Default: clock_in of that day
             $query->orderByRaw("attendances.clock_in IS NULL ASC, attendances.clock_in {$sortDir}");
@@ -585,21 +587,24 @@ class AttendanceController extends Controller
         $startDate = $date->copy()->startOfMonth();
         $endDate = $date->copy()->endOfMonth();
 
-        $query = Staff::with('user:id,name', 'department:id,name');
+        $query = Staff::join('users', 'staff.user_id', '=', 'users.id')
+            ->select('staff.*')
+            ->with('user:id,name', 'department:id,name')
+            ->orderBy('users.name', 'asc');
 
         if ($request->filled('department_id')) {
-            $query->where('department_id', $request->department_id);
+            $query->where('staff.department_id', $request->department_id);
         }
 
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('staff_number', 'like', "%{$search}%")
-                  ->orWhereHas('user', fn($sq) => $sq->where('name', 'like', "%{$search}%"));
+                $q->where('staff.staff_number', 'like', "%{$search}%")
+                  ->orWhere('users.name', 'like', "%{$search}%");
             });
         }
 
-        $staffList = $query->paginate(30)->withQueryString();
+        $staffList = $query->get();
         $staffIds = $staffList->pluck('id');
 
         $attendances = Attendance::whereIn('staff_id', $staffIds)
