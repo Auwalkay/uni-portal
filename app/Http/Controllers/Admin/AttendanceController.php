@@ -69,11 +69,13 @@ class AttendanceController extends Controller
             ]);
 
         $holiday = Holiday::whereDate('date', $request->date ?? now()->toDateString())->first();
+        $holidays = Holiday::orderBy('date', 'desc')->get();
 
         return Inertia::render('Admin/HR/Attendance/Index', [
             'attendances' => $attendances,
             'allStaff' => $allStaff,
             'holiday' => $holiday,
+            'holidays' => $holidays,
             'faculties' => AcademicCacheService::getAllFaculties(),
             'departments' => AcademicCacheService::getAllDepartments(),
             'filters' => array_merge(
@@ -107,6 +109,30 @@ class AttendanceController extends Controller
             ->log("Marked public holiday: {$holiday->name} on {$holiday->date}");
 
         return back()->with('success', 'Holiday marked successfully.');
+    }
+
+    public function updateHoliday(Request $request, Holiday $holiday)
+    {
+        $validated = $request->validate([
+            'date' => 'required|date|unique:holidays,date,' . $holiday->id,
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+        ]);
+
+        $oldData = $holiday->only(['name', 'date', 'description']);
+        $holiday->update($validated);
+
+        activity('attendance')
+            ->performedOn($holiday)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'old' => $oldData,
+                'attributes' => $holiday->only(['name', 'date', 'description']),
+                'ip_address' => $request->ip(),
+            ])
+            ->log("Updated public holiday: {$holiday->name} to date {$holiday->date}");
+
+        return back()->with('success', 'Holiday updated successfully.');
     }
 
     public function destroyHoliday(Request $request, Holiday $holiday)
