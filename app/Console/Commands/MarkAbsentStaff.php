@@ -31,26 +31,31 @@ class MarkAbsentStaff extends Command
             return 0;
         }
 
-        $activeStaff = Staff::whereHas('user', fn($q) => $q->where('is_active', true))->get();
-        $count = 0;
+        // Get IDs of active staff who have no attendance record for target date
+        $unloggedStaffIds = Staff::whereHas('user', fn($q) => $q->where('is_active', true))
+            ->whereDoesntHave('attendances', fn($q) => $q->whereDate('date', $targetDate))
+            ->pluck('id');
 
-        foreach ($activeStaff as $staff) {
-            $exists = Attendance::where('staff_id', $staff->id)
-                ->whereDate('date', $targetDate)
-                ->exists();
-
-            if (!$exists) {
-                Attendance::create([
-                    'staff_id' => $staff->id,
-                    'date' => $targetDate,
-                    'status' => 'absent',
-                    'source' => 'system',
-                    'notes' => 'Auto-marked absent (unlogged attendance)',
-                ]);
-                $count++;
-            }
+        $now = now();
+        $records = [];
+        foreach ($unloggedStaffIds as $staffId) {
+            $records[] = [
+                'id' => (string) \Illuminate\Support\Str::uuid(),
+                'staff_id' => $staffId,
+                'date' => $targetDate,
+                'status' => 'absent',
+                'source' => 'manual',
+                'notes' => 'Auto-marked absent (unlogged attendance)',
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
         }
 
+        foreach (array_chunk($records, 500) as $chunk) {
+            Attendance::insert($chunk);
+        }
+
+        $count = count($records);
         $this->info("Successfully marked {$count} active staff members as absent for {$targetDate}.");
         return 0;
     }

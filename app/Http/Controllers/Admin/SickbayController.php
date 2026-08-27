@@ -279,7 +279,17 @@ class SickbayController extends Controller
             $checkIn['status'] = 'under_observation';
         }
 
-        SickbayVisit::create($checkIn);
+        $visit = SickbayVisit::create($checkIn);
+
+        activity('sickbay')
+            ->performedOn($visit)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'patient_name' => $visit->patient?->name,
+                'visit_type' => $visit->visit_type,
+                'symptoms' => $visit->symptoms,
+            ])
+            ->log("Registered sickbay visit for patient {$visit->patient?->name}");
 
         return redirect()->back()->with('success', 'Patient checked in successfully.');
     }
@@ -360,6 +370,17 @@ class SickbayController extends Controller
                         }
                     }
                 }
+
+                activity('sickbay')
+                    ->performedOn($visit)
+                    ->causedBy(auth()->user())
+                    ->withProperties([
+                        'patient_name' => $visit->patient?->name,
+                        'status' => $status,
+                        'findings' => $validated['findings'],
+                        'treatment' => $validated['treatment_given'],
+                    ])
+                    ->log("Recorded medical treatment and vitals for patient {$visit->patient?->name}");
             });
 
             return redirect()->back()->with('success', 'Treatment log updated successfully.');
@@ -382,6 +403,15 @@ class SickbayController extends Controller
             'status' => 'under_observation',
         ]);
 
+        activity('sickbay')
+            ->performedOn($visit)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'patient_name' => $visit->patient?->name,
+                'bed_number' => $validated['bed_number'],
+            ])
+            ->log("Assigned patient {$visit->patient?->name} to observation Bed {$validated['bed_number']}");
+
         return redirect()->back()->with('success', 'Patient assigned to Bed ' . $validated['bed_number']);
     }
 
@@ -393,6 +423,15 @@ class SickbayController extends Controller
             'status' => 'discharged',
             'check_out_at' => now(),
         ]);
+
+        activity('sickbay')
+            ->performedOn($visit)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'patient_name' => $visit->patient?->name,
+                'bed_number' => $visit->bed_number,
+            ])
+            ->log("Discharged patient {$visit->patient?->name} from observation Bed {$visit->bed_number}");
 
         return redirect()->back()->with('success', 'Patient discharged from Bed ' . $visit->bed_number);
     }
@@ -409,7 +448,17 @@ class SickbayController extends Controller
             'expiry_date' => 'nullable|date',
         ]);
 
-        SickbayItem::create($validated);
+        $item = SickbayItem::create($validated);
+
+        activity('sickbay')
+            ->performedOn($item)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'item_name' => $item->name,
+                'category' => $item->category,
+                'stock_quantity' => $item->stock_quantity,
+            ])
+            ->log("Added sickbay inventory item '{$item->name}' ({$item->stock_quantity} units)");
 
         return redirect()->back()->with('success', 'Inventory item added successfully.');
     }
@@ -436,11 +485,19 @@ class SickbayController extends Controller
             'description' => 'nullable|string|max:255',
         ]);
 
-        \App\Models\SickbayBed::create([
+        $bed = \App\Models\SickbayBed::create([
             'name' => $validated['name'],
             'description' => $validated['description'],
             'is_active' => true,
         ]);
+
+        activity('sickbay')
+            ->performedOn($bed)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'bed_name' => $bed->name,
+            ])
+            ->log("Created sickbay observation bed '{$bed->name}'");
 
         return redirect()->back()->with('success', 'Bed added successfully.');
     }
