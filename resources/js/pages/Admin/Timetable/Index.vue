@@ -115,6 +115,18 @@ const submit = () => {
 };
 
 const deleteEntry = (id: string) => {
+
+const format12Hour = (time: string | null) => {
+    if (!time) return '---';
+    const parts = time.split(':');
+    let h = parseInt(parts[0], 10);
+    if (isNaN(h)) return time;
+    const m = parts[1] || '00';
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    return `${h.toString().padStart(2, '0')}:${m} ${ampm}`;
+};
     Swal.fire({
         title: 'Delete Entry?',
         text: "This will remove this class from the schedule.",
@@ -274,7 +286,7 @@ const breadcrumbs = [
                         <TableRow v-for="entry in timetables.data" :key="entry.id">
                             <TableCell class="font-medium">{{ entry.day }}</TableCell>
                             <TableCell>
-                                <Badge variant="outline">{{ entry.start_time.substring(0,5) }} - {{ entry.end_time.substring(0,5) }}</Badge>
+                                <Badge variant="outline" class="font-mono">{{ format12Hour(entry.start_time) }} - {{ format12Hour(entry.end_time) }}</Badge>
                             </TableCell>
                             <TableCell>
                                 <div class="font-bold text-xs font-mono">{{ entry.course.code }}</div>

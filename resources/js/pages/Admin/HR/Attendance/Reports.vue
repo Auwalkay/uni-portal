@@ -129,7 +129,7 @@ const totalAbsent = computed(() => props.stats.reduce((acc, curr) => acc + Numbe
             </div>
 
             <!-- Smart Summary Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                 <Card class="border-none shadow-xl shadow-slate-200/40 bg-gradient-to-br from-indigo-600 to-violet-700 text-white overflow-hidden relative group">
                     <div class="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
                         <TrendingUp class="w-32 h-32" />
@@ -137,7 +137,7 @@ const totalAbsent = computed(() => props.stats.reduce((acc, curr) => acc + Numbe
                     <CardContent class="p-6 space-y-4">
                         <p class="text-indigo-100 font-bold text-xs uppercase tracking-widest">Average Attendance</p>
                         <div class="flex items-baseline gap-2">
-                            <span class="text-5xl font-black">{{ overallAverage }}%</span>
+                            <span class="text-4xl lg:text-5xl font-black">{{ overallAverage }}%</span>
                             <span class="text-indigo-200 text-sm font-bold">Overall</span>
                         </div>
                         <div class="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
@@ -152,7 +152,7 @@ const totalAbsent = computed(() => props.stats.reduce((acc, curr) => acc + Numbe
                             <p class="text-slate-400 font-bold text-xs uppercase tracking-widest">Total Presence</p>
                             <div class="p-2 bg-green-50 rounded-lg"><Users class="w-4 h-4 text-green-600" /></div>
                         </div>
-                        <h2 class="text-4xl font-black text-slate-900">{{ totalPresent }}</h2>
+                        <h2 class="text-3xl lg:text-4xl font-black text-slate-900">{{ totalPresent }}</h2>
                         <p class="text-[10px] text-green-600 font-bold">Confirmed Attendance Logs</p>
                     </CardContent>
                 </Card>
@@ -163,7 +163,7 @@ const totalAbsent = computed(() => props.stats.reduce((acc, curr) => acc + Numbe
                             <p class="text-slate-400 font-bold text-xs uppercase tracking-widest">Total Absences</p>
                             <div class="p-2 bg-red-50 rounded-lg"><AlertCircle class="w-4 h-4 text-red-600" /></div>
                         </div>
-                        <h2 class="text-4xl font-black text-slate-900">{{ totalAbsent }}</h2>
+                        <h2 class="text-3xl lg:text-4xl font-black text-slate-900">{{ totalAbsent }}</h2>
                         <p class="text-[10px] text-red-600 font-bold">Requires Attention</p>
                     </CardContent>
                 </Card>
@@ -174,7 +174,7 @@ const totalAbsent = computed(() => props.stats.reduce((acc, curr) => acc + Numbe
                             <p class="text-slate-400 font-bold text-xs uppercase tracking-widest">Departments</p>
                             <div class="p-2 bg-blue-50 rounded-lg"><Building2 class="w-4 h-4 text-blue-600" /></div>
                         </div>
-                        <h2 class="text-4xl font-black text-slate-900">{{ departments.length }}</h2>
+                        <h2 class="text-3xl lg:text-4xl font-black text-slate-900">{{ departments.length }}</h2>
                         <p class="text-[10px] text-blue-600 font-bold">Active Academic Units</p>
                     </CardContent>
                 </Card>

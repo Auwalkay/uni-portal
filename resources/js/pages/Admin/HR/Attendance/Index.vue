@@ -135,6 +135,36 @@ const submitManual = () => {
     });
 };
 
+const showEditModal = ref(false);
+const editingRecordId = ref<string | null>(null);
+const editingStaffName = ref('');
+const editForm = useForm({
+    clock_in: '',
+    clock_out: '',
+    status: 'present',
+    notes: '',
+});
+
+const openEditModal = (record: any) => {
+    editingRecordId.value = record.id;
+    editingStaffName.value = record.staff?.user?.name || 'Staff Member';
+    editForm.clock_in = record.clock_in ? record.clock_in.substring(0, 5) : '';
+    editForm.clock_out = record.clock_out ? record.clock_out.substring(0, 5) : '';
+    editForm.status = record.status;
+    editForm.notes = record.notes || '';
+    showEditModal.value = true;
+};
+
+const submitEdit = () => {
+    if (!editingRecordId.value) return;
+    editForm.put(route('admin.attendance.update', editingRecordId.value), {
+        onSuccess: () => {
+            showEditModal.value = false;
+            editingRecordId.value = null;
+        },
+    });
+};
+
 const showHolidayModal = ref(false);
 const holidayForm = useForm({
     date: selectedDate.value,
@@ -184,6 +214,28 @@ const getStatusBadge = (status: string) => {
 const formatTime = (time: string | null) => {
     if (!time) return '---';
     return time.substring(0, 5); // Assuming HH:mm:ss format from DB
+};
+
+const formatDateTime = (dateTimeStr: string | null) => {
+    if (!dateTimeStr) return '---';
+    const d = new Date(dateTimeStr);
+    return d.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    });
+};
+
+const markAbsentForUnlogged = () => {
+    if (confirm(`Are you sure you want to mark all unlogged active staff members as ABSENT for ${selectedDate.value}?`)) {
+        router.post(route('admin.attendance.mark-absent'), {
+            date: selectedDate.value,
+        }, {
+            preserveScroll: true,
+        });
+    }
 };
 
 </script>
@@ -256,6 +308,10 @@ const formatTime = (time: string | null) => {
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
+
+                    <Button variant="outline" @click="markAbsentForUnlogged" :disabled="!!holiday" class="border-red-200 bg-red-50 text-red-700 hover:bg-red-100 flex-1 sm:flex-none">
+                        <XCircle class="w-4 h-4 mr-2" /> Mark Absent
+                    </Button>
 
                     <Button @click="showManualModal = true" :disabled="!!holiday" class="flex-1 sm:flex-none">
                         <Plus class="w-4 h-4 mr-2" /> Add Record
@@ -345,6 +401,7 @@ const formatTime = (time: string | null) => {
                                 <TableHead class="min-w-[100px]">Clock Out</TableHead>
                                 <TableHead class="min-w-[110px]">Status</TableHead>
                                 <TableHead class="min-w-[90px]">Source</TableHead>
+                                <TableHead class="min-w-[170px]">Audit Trail</TableHead>
                                 <TableHead class="text-right min-w-[90px]">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -384,9 +441,23 @@ const formatTime = (time: string | null) => {
                                         {{ record.source }}
                                     </Badge>
                                 </TableCell>
+                                <TableCell class="whitespace-nowrap text-xs">
+                                    <div class="flex flex-col gap-0.5">
+                                        <span class="text-[11px] font-medium text-slate-700">
+                                            <span class="text-slate-400 font-normal">By:</span> {{ record.creator?.name || 'System / Auto' }}
+                                        </span>
+                                        <span class="text-[10px] text-slate-400 font-mono">
+                                            {{ formatDateTime(record.created_at) }}
+                                        </span>
+                                        <div v-if="record.updater && record.updated_at && record.updated_at !== record.created_at" class="text-[10px] text-indigo-600 font-medium border-t border-slate-100 pt-0.5 mt-0.5">
+                                            <span class="text-indigo-400 font-normal">Edit by:</span> {{ record.updater?.name }}
+                                            <div class="text-[9px] text-slate-400 font-mono">{{ formatDateTime(record.updated_at) }}</div>
+                                        </div>
+                                    </div>
+                                </TableCell>
                                 <TableCell class="text-right whitespace-nowrap">
                                     <div class="flex justify-end gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                        <Button variant="ghost" size="icon" class="h-8 w-8 text-slate-400 hover:text-primary">
+                                        <Button variant="ghost" size="icon" class="h-8 w-8 text-slate-400 hover:text-primary" @click="openEditModal(record)">
                                             <Edit2 class="w-4 h-4" />
                                         </Button>
                                         <Button variant="ghost" size="icon" class="h-8 w-8 text-slate-400 hover:text-destructive" @click="deleteRecord(record.id)">
@@ -396,7 +467,7 @@ const formatTime = (time: string | null) => {
                                 </TableCell>
                             </TableRow>
                             <TableRow v-if="attendances.data.length === 0">
-                                <TableCell colspan="6" class="h-64 text-center">
+                                <TableCell colspan="7" class="h-64 text-center">
                                     <div class="flex flex-col items-center justify-center space-y-4">
                                         <div class="p-4 bg-slate-50 rounded-full border border-slate-100">
                                             <Clock class="w-10 h-10 text-slate-300" />
@@ -462,6 +533,49 @@ const formatTime = (time: string | null) => {
                     </div>
                     <DialogFooter>
                         <Button @click="submitManual" :disabled="manualForm.processing" class="w-full">Save Attendance</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <!-- Edit Attendance Dialog -->
+            <Dialog v-model:open="showEditModal">
+                <DialogContent class="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle>Edit Attendance Record</DialogTitle>
+                        <DialogDescription>Modify attendance details for {{ editingStaffName }}.</DialogDescription>
+                    </DialogHeader>
+                    <div class="grid gap-6 py-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="grid gap-2">
+                                <Label>Clock In</Label>
+                                <Input type="time" v-model="editForm.clock_in" />
+                            </div>
+                            <div class="grid gap-2">
+                                <Label>Clock Out</Label>
+                                <Input type="time" v-model="editForm.clock_out" />
+                            </div>
+                        </div>
+                        <div class="grid gap-2">
+                            <Label>Status</Label>
+                            <Select v-model="editForm.status">
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="present">Present</SelectItem>
+                                    <SelectItem value="late">Late</SelectItem>
+                                    <SelectItem value="absent">Absent</SelectItem>
+                                    <SelectItem value="on_leave">On Leave</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div class="grid gap-2">
+                            <Label>Notes / Reason for Adjustment</Label>
+                            <Input v-model="editForm.notes" placeholder="Reason for manual adjustment..." />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button @click="submitEdit" :disabled="editForm.processing" class="w-full bg-indigo-600 hover:bg-indigo-700">Update Attendance Record</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
