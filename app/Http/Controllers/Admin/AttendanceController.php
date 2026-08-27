@@ -35,10 +35,29 @@ class AttendanceController extends Controller
         }
 
         if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            $query->where('attendances.status', $request->status);
         }
 
-        $attendances = $query->latest()->paginate(20)->withQueryString();
+        $sortBy = $request->input('sort_by', 'clock_in');
+        $sortDir = strtolower($request->input('sort_dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+        if ($sortBy === 'name') {
+            $query->join('staff', 'attendances.staff_id', '=', 'staff.id')
+                  ->join('users', 'staff.user_id', '=', 'users.id')
+                  ->orderBy('users.name', $sortDir)
+                  ->select('attendances.*');
+        } elseif ($sortBy === 'staff_number') {
+            $query->join('staff', 'attendances.staff_id', '=', 'staff.id')
+                  ->orderBy('staff.staff_number', $sortDir)
+                  ->select('attendances.*');
+        } elseif ($sortBy === 'clock_out') {
+            $query->orderByRaw("attendances.clock_out IS NULL ASC, attendances.clock_out {$sortDir}");
+        } else {
+            // Default: clock_in of that day
+            $query->orderByRaw("attendances.clock_in IS NULL ASC, attendances.clock_in {$sortDir}");
+        }
+
+        $attendances = $query->paginate(20)->withQueryString();
 
         $allStaff = Staff::whereHas('user', fn($q) => $q->where('is_active', true))
             ->with('user:id,name')
@@ -57,7 +76,13 @@ class AttendanceController extends Controller
             'holiday' => $holiday,
             'faculties' => AcademicCacheService::getAllFaculties(),
             'departments' => AcademicCacheService::getAllDepartments(),
-            'filters' => $request->only(['date', 'department_id', 'status']),
+            'filters' => array_merge(
+                $request->only(['date', 'department_id', 'status', 'sort_by', 'sort_dir']),
+                [
+                    'sort_by' => $sortBy,
+                    'sort_dir' => $sortDir,
+                ]
+            ),
         ]);
     }
 

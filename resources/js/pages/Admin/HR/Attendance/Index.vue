@@ -25,7 +25,10 @@ import {
     Gift,
     PartyPopper,
     Check,
-    ChevronsUpDown
+    ChevronsUpDown,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
 import {
@@ -46,6 +49,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from '@/components/ui/card'
 import {
   Table,
@@ -81,24 +85,44 @@ const props = defineProps<{
         date?: string;
         department_id?: string;
         status?: string;
+        sort_by?: string;
+        sort_dir?: string;
     };
 }>();
 
 const selectedDate = ref(props.filters.date || new Date().toISOString().split('T')[0]);
 const selectedDept = ref(props.filters.department_id ? String(props.filters.department_id) : 'ALL');
 const selectedStatus = ref(props.filters.status ? String(props.filters.status) : 'ALL');
+const sortBy = ref(props.filters.sort_by || 'clock_in');
+const sortDir = ref(props.filters.sort_dir || 'asc');
 
-// Watchers for filtering
-watch([selectedDate, selectedDept, selectedStatus], () => {
+const applyFilters = () => {
     router.get(route('admin.attendance.index'), {
         date: selectedDate.value,
         department_id: selectedDept.value === 'ALL' ? '' : selectedDept.value,
         status: selectedStatus.value === 'ALL' ? '' : selectedStatus.value,
+        sort_by: sortBy.value,
+        sort_dir: sortDir.value,
     }, {
         preserveState: true,
         replace: true,
         preserveScroll: true,
     });
+};
+
+const handleSort = (column: string) => {
+    if (sortBy.value === column) {
+        sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortBy.value = column;
+        sortDir.value = 'asc';
+    }
+    applyFilters();
+};
+
+// Watchers for filtering
+watch([selectedDate, selectedDept, selectedStatus, sortBy, sortDir], () => {
+    applyFilters();
 });
 
 const showImportModal = ref(false);
@@ -347,7 +371,7 @@ const markAbsentForUnlogged = () => {
             </div>
 
             <!-- Dashboard Filters -->
-            <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4 items-end">
+            <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 items-end">
                 <Card class="shadow-sm border-slate-200">
                     <CardHeader class="pb-2">
                         <CardTitle class="text-xs uppercase tracking-wider text-slate-500 font-bold">Attendance Date</CardTitle>
@@ -358,35 +382,61 @@ const markAbsentForUnlogged = () => {
                     </CardContent>
                 </Card>
 
-                <div class="sm:col-span-1 md:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center w-full">
-                    <div class="w-full">
-                        <Label class="text-xs font-bold text-slate-500 uppercase ml-1">Department</Label>
-                        <Select v-model="selectedDept">
-                            <SelectTrigger class="bg-white border-slate-200 mt-1">
-                                <SelectValue placeholder="All Departments" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="ALL">All Departments</SelectItem>
-                                <SelectItem v-for="dept in departments" :key="dept.id" :value="String(dept.id)">{{ dept.name }}</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
+                <div>
+                    <Label class="text-xs font-bold text-slate-500 uppercase ml-1">Department</Label>
+                    <Select v-model="selectedDept">
+                        <SelectTrigger class="bg-white border-slate-200 mt-1">
+                            <SelectValue placeholder="All Departments" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="ALL">All Departments</SelectItem>
+                            <SelectItem v-for="dept in departments" :key="dept.id" :value="String(dept.id)">{{ dept.name }}</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
 
-                    <div class="w-full">
-                        <Label class="text-xs font-bold text-slate-500 uppercase ml-1">Status</Label>
-                        <Select v-model="selectedStatus">
-                            <SelectTrigger class="bg-white border-slate-200 mt-1">
-                                <SelectValue placeholder="All Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="ALL">All Status</SelectItem>
-                                <SelectItem value="present">Present</SelectItem>
-                                <SelectItem value="late">Late</SelectItem>
-                                <SelectItem value="absent">Absent</SelectItem>
-                                <SelectItem value="on_leave">On Leave</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
+                <div>
+                    <Label class="text-xs font-bold text-slate-500 uppercase ml-1">Status</Label>
+                    <Select v-model="selectedStatus">
+                        <SelectTrigger class="bg-white border-slate-200 mt-1">
+                            <SelectValue placeholder="All Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="ALL">All Status</SelectItem>
+                            <SelectItem value="present">Present</SelectItem>
+                            <SelectItem value="late">Late</SelectItem>
+                            <SelectItem value="absent">Absent</SelectItem>
+                            <SelectItem value="on_leave">On Leave</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div>
+                    <Label class="text-xs font-bold text-slate-500 uppercase ml-1">Sort By</Label>
+                    <Select v-model="sortBy">
+                        <SelectTrigger class="bg-white border-slate-200 mt-1">
+                            <SelectValue placeholder="Sort By" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="clock_in">Clock In Time (Default)</SelectItem>
+                            <SelectItem value="clock_out">Clock Out Time</SelectItem>
+                            <SelectItem value="name">Staff Name</SelectItem>
+                            <SelectItem value="staff_number">Staff Number</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div>
+                    <Label class="text-xs font-bold text-slate-500 uppercase ml-1">Sort Order</Label>
+                    <Select v-model="sortDir">
+                        <SelectTrigger class="bg-white border-slate-200 mt-1">
+                            <SelectValue placeholder="Order" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="asc">Ascending (Earliest / A-Z)</SelectItem>
+                            <SelectItem value="desc">Descending (Latest / Z-A)</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
             </div>
 
@@ -396,9 +446,39 @@ const markAbsentForUnlogged = () => {
                     <Table>
                         <TableHeader class="bg-slate-50">
                             <TableRow>
-                                <TableHead class="min-w-[200px] sm:w-[300px]">Staff Member</TableHead>
-                                <TableHead class="min-w-[100px]">Clock In</TableHead>
-                                <TableHead class="min-w-[100px]">Clock Out</TableHead>
+                                <TableHead class="min-w-[220px] sm:w-[320px]">
+                                    <div class="flex items-center gap-2">
+                                        <button @click="handleSort('name')" class="flex items-center gap-1 hover:text-indigo-600 font-bold transition-colors">
+                                            Staff Name
+                                            <ArrowUpDown class="w-3 h-3 text-slate-400" v-if="sortBy !== 'name'" />
+                                            <ArrowUp class="w-3 h-3 text-indigo-600" v-else-if="sortDir === 'asc'" />
+                                            <ArrowDown class="w-3 h-3 text-indigo-600" v-else />
+                                        </button>
+                                        <span class="text-slate-300">|</span>
+                                        <button @click="handleSort('staff_number')" class="flex items-center gap-1 hover:text-indigo-600 font-bold transition-colors">
+                                            Staff No.
+                                            <ArrowUpDown class="w-3 h-3 text-slate-400" v-if="sortBy !== 'staff_number'" />
+                                            <ArrowUp class="w-3 h-3 text-indigo-600" v-else-if="sortDir === 'asc'" />
+                                            <ArrowDown class="w-3 h-3 text-indigo-600" v-else />
+                                        </button>
+                                    </div>
+                                </TableHead>
+                                <TableHead class="min-w-[120px]">
+                                    <button @click="handleSort('clock_in')" class="flex items-center gap-1 hover:text-indigo-600 font-bold transition-colors">
+                                        Clock In
+                                        <ArrowUpDown class="w-3 h-3 text-slate-400" v-if="sortBy !== 'clock_in'" />
+                                        <ArrowUp class="w-3 h-3 text-indigo-600" v-else-if="sortDir === 'asc'" />
+                                        <ArrowDown class="w-3 h-3 text-indigo-600" v-else />
+                                    </button>
+                                </TableHead>
+                                <TableHead class="min-w-[120px]">
+                                    <button @click="handleSort('clock_out')" class="flex items-center gap-1 hover:text-indigo-600 font-bold transition-colors">
+                                        Clock Out
+                                        <ArrowUpDown class="w-3 h-3 text-slate-400" v-if="sortBy !== 'clock_out'" />
+                                        <ArrowUp class="w-3 h-3 text-indigo-600" v-else-if="sortDir === 'asc'" />
+                                        <ArrowDown class="w-3 h-3 text-indigo-600" v-else />
+                                    </button>
+                                </TableHead>
                                 <TableHead class="min-w-[110px]">Status</TableHead>
                                 <TableHead class="min-w-[90px]">Source</TableHead>
                                 <TableHead class="min-w-[170px]">Audit Trail</TableHead>
@@ -414,7 +494,10 @@ const markAbsentForUnlogged = () => {
                                         </Avatar>
                                         <div class="flex flex-col min-w-0">
                                             <span class="font-bold text-slate-900 truncate">{{ record.staff?.user?.name }}</span>
-                                            <span class="text-[10px] text-slate-500 font-medium uppercase tracking-wider truncate">{{ record.staff?.department?.name }}</span>
+                                            <div class="flex items-center gap-2 text-[10px] text-slate-500 font-medium mt-0.5">
+                                                <span v-if="record.staff?.staff_number" class="font-mono font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{{ record.staff.staff_number }}</span>
+                                                <span class="uppercase tracking-wider truncate">{{ record.staff?.department?.name }}</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </TableCell>
@@ -482,6 +565,27 @@ const markAbsentForUnlogged = () => {
                         </TableBody>
                     </Table>
                 </div>
+
+                <!-- Pagination -->
+                <CardFooter class="flex flex-col sm:flex-row items-center justify-between gap-4 border-t p-4" v-if="attendances.total > 0">
+                    <div class="text-xs text-muted-foreground">
+                        Showing <strong>{{ attendances.from }}</strong>-<strong>{{ attendances.to }}</strong> of <strong>{{ attendances.total }}</strong> attendance records
+                    </div>
+                    <div class="flex flex-wrap gap-1">
+                         <Button 
+                            v-for="(link, i) in attendances.links" 
+                            :key="i"
+                            :variant="link.active ? 'default' : 'outline'"
+                            size="sm"
+                            :disabled="!link.url"
+                            as-child
+                            class="h-8 min-w-[32px] px-2 text-xs"
+                         >
+                            <Link v-if="link.url" :href="link.url" v-html="link.label" />
+                            <span v-else v-html="link.label"></span>
+                         </Button>
+                    </div>
+                </CardFooter>
             </Card>
 
             <!-- Manual Entry Dialog -->
