@@ -13,10 +13,21 @@ class HostelController extends Controller
 {
     public function index()
     {
+        $user = auth()->user();
+
+        if (!$user->can('manage_hostels') &&
+            !$user->can('manage_hostel_fees') &&
+            !$user->can('view_hostel_bookings') &&
+            !$user->can('view_male_hostel_bookings') &&
+            !$user->can('view_female_hostel_bookings') &&
+            !$user->hasRole('admin')) {
+            abort(403, 'Unauthorized access to hostel records.');
+        }
+
         $currentSession = Session::current();
         $sessionId = $currentSession?->id;
 
-        $hostels = Hostel::withCount(['floors', 'fees'])
+        $query = Hostel::withCount(['floors', 'fees'])
             ->with(['blocks.floors.rooms' => function ($q) use ($sessionId) {
                 $q->with(['bookings' => function ($bq) use ($sessionId) {
                     if ($sessionId) {
@@ -24,9 +35,15 @@ class HostelController extends Controller
                     }
                     $bq->whereIn('status', ['pending', 'confirmed']);
                 }]);
-            }])
-            ->latest()
-            ->get();
+            }]);
+
+        if ($user->can('view_male_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
+            $query->whereIn('gender_type', ['male', 'mixed']);
+        } elseif ($user->can('view_female_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
+            $query->whereIn('gender_type', ['female', 'mixed']);
+        }
+
+        $hostels = $query->latest()->get();
 
         $sessions = Session::latest()->get();
 

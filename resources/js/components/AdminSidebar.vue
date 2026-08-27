@@ -238,13 +238,13 @@ const administrationItems = computed(() => {
             title: 'Hostels',
             href: route('admin.hostels.index'),
             icon: Building,
-            show: hasRole('admin') || hasPermission('manage_hostels') || hasPermission('manage_hostel_fees'),
+            show: hasRole(['admin', 'female_hostel_supervisor', 'male_hostel_supervisor', 'hostel_viewer']) || hasPermission('manage_hostels') || hasPermission('manage_hostel_fees') || hasPermission('view_hostel_bookings') || hasPermission('view_male_hostel_bookings') || hasPermission('view_female_hostel_bookings'),
         },
         {
             title: 'Hostel Bookings',
             href: route('admin.hostels.bookings.index'),
             icon: FileText,
-            show: hasRole('admin') || hasPermission('manage_hostels'),
+            show: hasRole(['admin', 'female_hostel_supervisor', 'male_hostel_supervisor', 'hostel_viewer']) || hasPermission('manage_hostels') || hasPermission('manage_hostel_bookings') || hasPermission('view_hostel_bookings') || hasPermission('view_male_hostel_bookings') || hasPermission('view_female_hostel_bookings'),
         },
         {
             title: 'System Users',
