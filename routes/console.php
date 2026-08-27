@@ -10,4 +10,4 @@ Artisan::command('inspire', function () {
 use Illuminate\Support\Facades\Schedule;
 
 Schedule::command('fees:apply-late-payment-fines')->daily();
-Schedule::command('attendance:mark-absent')->days([1, 2, 3, 4, 5, 6])->at('18:00');
+// Schedule::command('attendance:mark-absent')->days([1, 2, 3, 4, 5, 6])->at('18:00');
