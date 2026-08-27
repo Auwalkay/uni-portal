@@ -123,7 +123,14 @@ const filterAttendance = () => {
 
 const formatTime = (time: string | null) => {
     if (!time) return '---';
-    return time.substring(0, 5);
+    const parts = time.split(':');
+    let h = parseInt(parts[0], 10);
+    if (isNaN(h)) return time;
+    const m = parts[1] || '00';
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    return `${h.toString().padStart(2, '0')}:${m} ${ampm}`;
 };
 
 const formatCurrency = (amount: number | string) => {

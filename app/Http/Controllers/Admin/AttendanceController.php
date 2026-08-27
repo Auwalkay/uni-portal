@@ -22,7 +22,7 @@ class AttendanceController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Attendance::with(['staff.user', 'staff.department.faculty']);
+        $query = Attendance::with(['staff.user', 'staff.department.faculty', 'creator:id,name', 'updater:id,name']);
 
         if ($request->filled('date')) {
             $query->whereDate('date', $request->date);
@@ -40,11 +40,14 @@ class AttendanceController extends Controller
 
         $attendances = $query->latest()->paginate(20)->withQueryString();
 
-        $allStaff = Staff::has('user')->with('user:id,name')->get()->map(fn($s) => [
-            'id' => $s->id,
-            'name' => $s->user?->name ?? 'Unknown Staff',
-            'staff_number' => $s->staff_number
-        ]);
+        $allStaff = Staff::whereHas('user', fn($q) => $q->where('is_active', true))
+            ->with('user:id,name')
+            ->get()
+            ->map(fn($s) => [
+                'id' => $s->id,
+                'name' => $s->user?->name ?? 'Unknown Staff',
+                'staff_number' => $s->staff_number
+            ]);
 
         $holiday = Holiday::whereDate('date', $request->date ?? now()->toDateString())->first();
 
@@ -66,13 +69,33 @@ class AttendanceController extends Controller
             'description' => 'nullable|string',
         ]);
 
-        Holiday::create($validated);
+        $holiday = Holiday::create($validated);
+
+        activity('attendance')
+            ->performedOn($holiday)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'name' => $holiday->name,
+                'date' => $holiday->date,
+                'ip_address' => $request->ip(),
+            ])
+            ->log("Marked public holiday: {$holiday->name} on {$holiday->date}");
 
         return back()->with('success', 'Holiday marked successfully.');
     }
 
-    public function destroyHoliday(Holiday $holiday)
+    public function destroyHoliday(Request $request, Holiday $holiday)
     {
+        activity('attendance')
+            ->performedOn($holiday)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'name' => $holiday->name,
+                'date' => $holiday->date,
+                'ip_address' => $request->ip(),
+            ])
+            ->log("Removed public holiday: {$holiday->name} on {$holiday->date}");
+
         $holiday->delete();
         return back()->with('success', 'Holiday removed.');
     }
@@ -88,12 +111,67 @@ class AttendanceController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        Attendance::updateOrCreate(
+        $attendance = Attendance::updateOrCreate(
             ['staff_id' => $validated['staff_id'], 'date' => $validated['date']],
             array_merge($validated, ['source' => 'manual'])
         );
 
+        activity('attendance')
+            ->performedOn($attendance)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'staff_name' => $attendance->staff?->user?->name ?? 'Staff',
+                'staff_number' => $attendance->staff?->staff_number,
+                'date' => $validated['date'],
+                'status' => $validated['status'],
+                'clock_in' => $validated['clock_in'] ?? null,
+                'clock_out' => $validated['clock_out'] ?? null,
+                'ip_address' => $request->ip(),
+            ])
+            ->log("Created manual attendance record for staff {$attendance->staff?->user?->name} on {$validated['date']}");
+
         return back()->with('success', 'Attendance record saved successfully.');
+    }
+
+    public function update(Request $request, Attendance $attendance)
+    {
+        $validated = $request->validate([
+            'clock_in' => 'nullable',
+            'clock_out' => 'nullable',
+            'status' => 'required|in:present,late,absent,on_leave',
+            'notes' => 'nullable|string',
+        ]);
+
+        $oldData = [
+            'clock_in' => $attendance->clock_in ? Carbon::parse($attendance->clock_in)->format('H:i') : null,
+            'clock_out' => $attendance->clock_out ? Carbon::parse($attendance->clock_out)->format('H:i') : null,
+            'status' => $attendance->status,
+            'notes' => $attendance->notes,
+        ];
+
+        $attendance->update($validated);
+
+        $newData = [
+            'clock_in' => $attendance->clock_in ? Carbon::parse($attendance->clock_in)->format('H:i') : null,
+            'clock_out' => $attendance->clock_out ? Carbon::parse($attendance->clock_out)->format('H:i') : null,
+            'status' => $attendance->status,
+            'notes' => $attendance->notes,
+        ];
+
+        activity('attendance')
+            ->performedOn($attendance)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'staff_name' => $attendance->staff?->user?->name ?? 'Staff',
+                'staff_number' => $attendance->staff?->staff_number,
+                'date' => $attendance->date?->format('Y-m-d'),
+                'old' => $oldData,
+                'attributes' => $newData,
+                'ip_address' => $request->ip(),
+            ])
+            ->log("Updated attendance record for staff {$attendance->staff?->user?->name} on {$attendance->date?->format('Y-m-d')}");
+
+        return back()->with('success', 'Attendance record updated successfully.');
     }
 
     public function import(Request $request)
@@ -105,29 +183,105 @@ class AttendanceController extends Controller
 
         Excel::import(new AttendanceImport($request->date), $request->file('file'));
 
+        activity('attendance')
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'date' => $request->date,
+                'filename' => $request->file('file')->getClientOriginalName(),
+                'ip_address' => $request->ip(),
+            ])
+            ->log("Imported bulk staff attendance log for date {$request->date}");
+
         return back()->with('success', 'Attendance imported successfully.');
     }
 
-    public function destroy(Attendance $attendance)
+    public function destroy(Request $request, Attendance $attendance)
     {
+        activity('attendance')
+            ->performedOn($attendance)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'staff_name' => $attendance->staff?->user?->name ?? 'Staff',
+                'staff_number' => $attendance->staff?->staff_number,
+                'date' => $attendance->date?->format('Y-m-d'),
+                'status' => $attendance->status,
+                'ip_address' => $request->ip(),
+            ])
+            ->log("Deleted attendance record for staff {$attendance->staff?->user?->name} on {$attendance->date?->format('Y-m-d')}");
+
         $attendance->delete();
         return back()->with('success', 'Attendance record removed.');
     }
 
+    public function markAbsent(Request $request)
+    {
+        $request->validate([
+            'date' => 'required|date',
+        ]);
+
+        $targetDate = $request->date;
+        $activeStaff = Staff::whereHas('user', fn($q) => $q->where('is_active', true))->get();
+        $count = 0;
+
+        foreach ($activeStaff as $staff) {
+            $exists = Attendance::where('staff_id', $staff->id)
+                ->whereDate('date', $targetDate)
+                ->exists();
+
+            if (!$exists) {
+                Attendance::create([
+                    'staff_id' => $staff->id,
+                    'date' => $targetDate,
+                    'status' => 'absent',
+                    'source' => 'manual',
+                    'notes' => 'Marked absent by admin',
+                ]);
+                $count++;
+            }
+        }
+
+        activity('attendance')
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'date' => $targetDate,
+                'count' => $count,
+                'ip_address' => $request->ip(),
+            ])
+            ->log("Marked {$count} unlogged active staff members as absent for date {$targetDate}");
+
+        return back()->with('success', "Marked {$count} unlogged active staff members as absent.");
+    }
+
     public function downloadTemplate()
     {
-        $headers = ['staff_id', 'staff_name', 'clock_in', 'clock_out'];
-        $data = [
-            ['STF-001', 'John Doe', '08:30', '16:30'],
-            ['STF-002', 'Jane Smith', '09:00', ''],
-        ];
+        $headers = ['staff_id', 'staff_name', 'department', 'clock_in', 'clock_out'];
+
+        $staffMembers = Staff::whereHas('user', fn($q) => $q->where('is_active', true))
+            ->with(['user', 'department'])
+            ->get();
+
+        $data = $staffMembers->map(function ($staff) {
+            return [
+                $staff->staff_number ?? $staff->id,
+                $staff->user?->name ?? 'N/A',
+                $staff->department?->name ?? 'N/A',
+                '',
+                '',
+            ];
+        })->toArray();
+
+        if (empty($data)) {
+            $data = [
+                ['STF-001', 'John Doe', 'Computer Science', '', ''],
+            ];
+        }
 
         return Excel::download(new class($headers, $data) implements \Maatwebsite\Excel\Concerns\FromCollection {
             public function __construct(protected $headers, protected $data) {}
             public function collection() {
                 return collect([$this->headers, ...$this->data]);
             }
-        }, 'attendance_import_template.xlsx');
+        }, 'attendance_import_template_' . now()->format('Y_m_d') . '.xlsx');
     }
 
     public function reports(Request $request)
