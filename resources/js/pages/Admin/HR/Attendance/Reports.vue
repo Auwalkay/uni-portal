@@ -88,6 +88,29 @@ const selectedDate = ref(props.filters.date || new Date().toISOString().split('T
 const selectedSession = ref(props.filters.session_id || '');
 const selectedSemester = ref(props.filters.semester_id || '');
 const selectedDept = ref(props.filters.department_id || 'ALL');
+const searchQuery = ref('');
+
+const filteredStats = computed(() => {
+    if (!props.stats) return [];
+    if (!searchQuery.value.trim()) return props.stats;
+    const q = searchQuery.value.toLowerCase().trim();
+    return props.stats.filter((item: any) => {
+        const name = (item.staff?.user?.name || '').toLowerCase();
+        const number = (item.staff?.staff_number || '').toLowerCase();
+        return name.includes(q) || number.includes(q);
+    });
+});
+
+const filteredAtRiskStaff = computed(() => {
+    if (!props.atRiskStaff) return [];
+    if (!searchQuery.value.trim()) return props.atRiskStaff;
+    const q = searchQuery.value.toLowerCase().trim();
+    return props.atRiskStaff.filter((item: any) => {
+        const name = (item.staff?.user?.name || '').toLowerCase();
+        const number = (item.staff?.staff_number || '').toLowerCase();
+        return name.includes(q) || number.includes(q);
+    });
+});
 
 const updateReport = () => {
     router.get(route('admin.attendance.reports'), {
@@ -333,6 +356,16 @@ const getStatusBadge = (status: string) => {
                         <SelectItem v-for="d in departments" :key="d.id" :value="String(d.id)">{{ d.name }}</SelectItem>
                     </SelectContent>
                 </Select>
+
+                <div class="relative flex-1 min-w-[240px] max-w-[320px]">
+                    <Search class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Input 
+                        type="text" 
+                        placeholder="Search staff name or number..." 
+                        v-model="searchQuery" 
+                        class="pl-10 h-10 border-slate-200 bg-white rounded-xl font-bold text-xs shadow-sm focus-visible:ring-indigo-500" 
+                    />
+                </div>
             </div>
 
             <!-- Interactive Tabbed Views -->
@@ -343,7 +376,7 @@ const getStatusBadge = (status: string) => {
                             @click="activeTab = 'staff'"
                             :class="['px-5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2', activeTab === 'staff' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200']"
                         >
-                            <Users class="w-4 h-4" /> Staff Member Performance ({{ stats?.length || 0 }})
+                            <Users class="w-4 h-4" /> Staff Member Performance ({{ filteredStats?.length || 0 }})
                         </button>
                         <button 
                             @click="activeTab = 'departments'"
@@ -355,7 +388,7 @@ const getStatusBadge = (status: string) => {
                             @click="activeTab = 'at_risk'"
                             :class="['px-5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2', activeTab === 'at_risk' ? 'bg-amber-600 text-white shadow-md shadow-amber-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200']"
                         >
-                            <ShieldAlert class="w-4 h-4" /> At-Risk Compliance Flag ({{ atRiskStaff?.length || 0 }})
+                            <ShieldAlert class="w-4 h-4" /> At-Risk Compliance Flag ({{ filteredAtRiskStaff?.length || 0 }})
                         </button>
                     </div>
                 </div>
@@ -377,7 +410,7 @@ const getStatusBadge = (status: string) => {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            <TableRow v-for="staff in stats" :key="staff.staff_id" class="border-slate-50 group hover:bg-slate-50/70 transition-all">
+                            <TableRow v-for="staff in filteredStats" :key="staff.staff_id" class="border-slate-50 group hover:bg-slate-50/70 transition-all">
                                 <TableCell class="py-4 px-6 font-mono text-xs font-black text-indigo-600 tracking-tighter">{{ staff.staff?.staff_number }}</TableCell>
                                 <TableCell class="py-4 px-6">
                                     <div class="flex flex-col">
@@ -424,7 +457,7 @@ const getStatusBadge = (status: string) => {
                                     </Button>
                                 </TableCell>
                             </TableRow>
-                            <TableRow v-if="stats?.length === 0">
+                            <TableRow v-if="filteredStats?.length === 0">
                                 <TableCell colspan="9" class="py-16 text-center text-slate-400 font-bold">
                                     No staff attendance data found for the selected filter criteria.
                                 </TableCell>
@@ -481,7 +514,7 @@ const getStatusBadge = (status: string) => {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            <TableRow v-for="staff in atRiskStaff" :key="staff.staff_id" class="border-slate-50 hover:bg-amber-50/30 transition-all">
+                            <TableRow v-for="staff in filteredAtRiskStaff" :key="staff.staff_id" class="border-slate-50 hover:bg-amber-50/30 transition-all">
                                 <TableCell class="py-4 px-6 font-mono text-xs font-black text-amber-900">{{ staff.staff?.staff_number }}</TableCell>
                                 <TableCell class="py-4 px-6">
                                     <div class="flex flex-col">

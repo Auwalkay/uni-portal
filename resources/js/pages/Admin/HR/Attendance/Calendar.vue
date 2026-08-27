@@ -126,6 +126,10 @@ const getStatusLabel = (status: string) => {
 
                 <div class="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-4 bg-white p-2 rounded-lg border border-slate-200 shadow-sm w-full sm:w-auto">
                     <div class="flex items-center gap-2 px-2 border-r border-slate-100 flex-1 sm:flex-none">
+                        <Search class="w-3.5 h-3.5 text-slate-400" />
+                        <Input type="text" placeholder="Search staff name..." v-model="searchQuery" @keyup.enter="updateCalendar" class="border-none h-8 w-full sm:w-44 focus-visible:ring-0 text-xs font-bold" />
+                    </div>
+                    <div class="flex items-center gap-2 px-2 border-r border-slate-100 flex-1 sm:flex-none">
                         <Label class="text-[10px] font-bold uppercase text-slate-400">Month</Label>
                         <Input type="month" v-model="selectedMonth" class="border-none h-8 w-full sm:w-40 focus-visible:ring-0 font-bold" />
                     </div>
@@ -177,7 +181,7 @@ const getStatusLabel = (status: string) => {
                                 <td class="sticky left-0 z-10 bg-white px-6 py-4 border-r border-slate-100 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
                                     <div class="flex flex-col">
                                         <span class="font-bold text-slate-900 leading-tight">{{ staff.user?.name }}</span>
-                                        <span class="text-[10px] text-slate-400 font-medium uppercase tracking-tight">{{ staff.department?.name }}</span>
+                                        <span v-if="staff.staff_number" class="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 w-fit mt-0.5">{{ staff.staff_number }}</span>
                                     </div>
                                 </td>
                                 <td v-for="d in days" :key="d.day" 
