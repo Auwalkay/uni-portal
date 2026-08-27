@@ -14,6 +14,7 @@ use App\Models\InvoiceItem;
 use App\Models\Payment;
 use App\Models\SystemSetting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -22,6 +23,18 @@ class HostelBookingController extends Controller
 {
     public function index(Request $request)
     {
+        $user = Auth::user();
+
+        // Authorization check
+        if (!$user->can('manage_hostel_bookings') &&
+            !$user->can('manage_hostels') &&
+            !$user->can('view_hostel_bookings') &&
+            !$user->can('view_male_hostel_bookings') &&
+            !$user->can('view_female_hostel_bookings') &&
+            !$user->hasRole('admin')) {
+            abort(403, 'Unauthorized access to hostel booking records.');
+        }
+
         $currentSession = Session::current();
         
         $sessionId = $request->input('session_id', $currentSession?->id);
@@ -29,7 +42,17 @@ class HostelBookingController extends Controller
         $hostelId = $request->input('hostel_id');
         $status = $request->input('status');
         $date = $request->input('date');
-        
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+        $gender = $request->input('gender', 'all');
+
+        // Force gender scope if user has specific male/female supervisor permissions
+        if ($user->can('view_male_hostel_bookings') && !$user->can('manage_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
+            $gender = 'male';
+        } elseif ($user->can('view_female_hostel_bookings') && !$user->can('manage_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
+            $gender = 'female';
+        }
+
         $sortBy = $request->input('sort_by', 'created_at');
         $sortDirection = $request->input('sort_direction', 'desc');
 
@@ -65,7 +88,20 @@ class HostelBookingController extends Controller
         }
         
         if ($date) {
-            $query->whereDate('created_at', $date);
+            $query->whereDate('hostel_bookings.created_at', $date);
+        }
+
+        if ($startDate && $endDate) {
+            $query->whereBetween('hostel_bookings.created_at', [
+                Carbon::parse($startDate)->startOfDay(),
+                Carbon::parse($endDate)->endOfDay()
+            ]);
+        }
+
+        if ($gender === 'male' || $gender === 'female') {
+            $query->whereHas('room.floor.block.hostel', function ($q) use ($gender) {
+                $q->where('gender_type', $gender);
+            });
         }
 
         // Sorting
@@ -82,7 +118,7 @@ class HostelBookingController extends Controller
                 ->orderBy('hostels.name', $sortDirection)
                 ->select('hostel_bookings.*');
         } else {
-            $query->orderBy($sortBy, $sortDirection);
+            $query->orderBy('hostel_bookings.' . $sortBy, $sortDirection);
         }
 
         $perPage = $request->integer('per_page', 15);
@@ -93,32 +129,63 @@ class HostelBookingController extends Controller
         $bookings = $query->paginate($perPage)->withQueryString();
 
         $sessions = Session::latest()->get(['id', 'name']);
-        $hostels = Hostel::orderBy('name')->get(['id', 'name']);
-
-        // Global Accommodation Analytics (Independent of pagination or filters)
-        $totalBookingsCount = HostelBooking::count();
-        $confirmedCount = HostelBooking::where('status', 'confirmed')->count();
-        $pendingCount = HostelBooking::where('status', 'pending')->count();
-        $cancelledCount = HostelBooking::where('status', 'cancelled')->count();
         
-        $totalCapacity = (int) HostelRoom::sum('capacity');
-        $occupancyRate = $totalCapacity > 0 ? round(($confirmedCount / $totalCapacity) * 100, 1) : 0;
-        
-        $bookingInvoiceIds = HostelBooking::whereNotNull('invoice_id')->pluck('invoice_id');
-        $totalRevenue = (float) Invoice::whereIn('id', $bookingInvoiceIds)
-            ->where('status', 'paid')
-            ->sum('amount');
-
-        if ($totalRevenue == 0 && count($bookingInvoiceIds) > 0) {
-            $totalRevenue = (float) Payment::whereIn('invoice_id', $bookingInvoiceIds)
-                ->where('status', 'successful')
-                ->sum('amount');
+        // Scope Hostel Dropdown Options based on permission
+        $hostelsQuery = Hostel::orderBy('name');
+        if ($gender === 'male' || $gender === 'female') {
+            $hostelsQuery->where('gender_type', $gender);
         }
-            
+        $hostels = $hostelsQuery->get(['id', 'name', 'gender_type']);
+
+        // Scoped Analytics Calculations
+        $statsQuery = HostelBooking::query();
+        if ($sessionId) {
+            $statsQuery->where('session_id', $sessionId);
+        }
+        if ($gender === 'male' || $gender === 'female') {
+            $statsQuery->whereHas('room.floor.block.hostel', function ($q) use ($gender) {
+                $q->where('gender_type', $gender);
+            });
+        }
+        if ($startDate && $endDate) {
+            $statsQuery->whereBetween('created_at', [
+                Carbon::parse($startDate)->startOfDay(),
+                Carbon::parse($endDate)->endOfDay()
+            ]);
+        }
+
+        $totalBookingsCount = (clone $statsQuery)->count();
+        $confirmedCount = (clone $statsQuery)->where('status', 'confirmed')->count();
+        $pendingCount = (clone $statsQuery)->where('status', 'pending')->count();
+        $cancelledCount = (clone $statsQuery)->where('status', 'cancelled')->count();
+
+        // Capacity for scoped hostels
+        $capacityQuery = HostelRoom::query();
+        if ($gender === 'male' || $gender === 'female') {
+            $capacityQuery->whereHas('floor.block.hostel', function ($q) use ($gender) {
+                $q->where('gender_type', $gender);
+            });
+        }
+        $totalCapacity = (int) $capacityQuery->sum('capacity');
+        $availableRooms = max(0, $totalCapacity - $confirmedCount);
+        $occupancyRate = $totalCapacity > 0 ? round(($confirmedCount / $totalCapacity) * 100, 1) : 0;
+
+        // Financial Metrics (Paid & Outstanding Balance)
+        $bookingInvoiceIds = (clone $statsQuery)->whereNotNull('invoice_id')->pluck('invoice_id');
+        
+        $totalInvoiceAmount = (float) Invoice::whereIn('id', $bookingInvoiceIds)->sum('amount');
+        $totalPaid = (float) Payment::whereIn('invoice_id', $bookingInvoiceIds)
+            ->where('status', 'successful')
+            ->sum('amount');
+        
+        $totalBalance = max(0, $totalInvoiceAmount - $totalPaid);
+
         $genderBreakdown = [
             'male' => HostelBooking::whereHas('student', fn($q) => $q->where('gender', 'male'))->count(),
             'female' => HostelBooking::whereHas('student', fn($q) => $q->where('gender', 'female'))->count(),
         ];
+
+        $canManageBookings = $user->can('manage_hostel_bookings') || $user->can('manage_hostels') || $user->hasRole('admin');
 
         return Inertia::render('Admin/Hostels/Bookings', [
             'bookings' => $bookings,
@@ -130,8 +197,10 @@ class HostelBookingController extends Controller
                 'pending' => $pendingCount,
                 'cancelled' => $cancelledCount,
                 'total_capacity' => $totalCapacity,
+                'available_rooms' => $availableRooms,
                 'occupancy_rate' => $occupancyRate,
-                'total_revenue' => $totalRevenue,
+                'total_paid' => $totalPaid,
+                'total_balance' => $totalBalance,
                 'gender_breakdown' => $genderBreakdown,
             ],
             'filters' => [
@@ -140,10 +209,14 @@ class HostelBookingController extends Controller
                 'hostel_id' => $hostelId,
                 'status' => $status,
                 'date' => $date,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'gender' => $gender,
                 'sort_by' => $sortBy,
                 'sort_direction' => $sortDirection,
                 'per_page' => $perPage,
             ],
+            'canManageBookings' => $canManageBookings,
         ]);
     }
 
@@ -436,6 +509,11 @@ class HostelBookingController extends Controller
 
     public function unbook(HostelBooking $booking)
     {
+        $user = Auth::user();
+        if (!$user->can('manage_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
+            return back()->with('error', 'Unauthorized. You do not have permission to unbook or cancel student hostel allocations.');
+        }
+
         $booking->update([
             'status' => 'cancelled',
             'updated_by' => Auth::id(),
