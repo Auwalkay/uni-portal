@@ -305,6 +305,11 @@ class HostelBookingController extends Controller
 
     public function store(Request $request)
     {
+        $user = Auth::user();
+        if (!$user->can('manage_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
+            return back()->with('error', 'Unauthorized. You do not have permission to allocate hostel rooms.');
+        }
+
         $request->validate([
             'student_id' => 'required|exists:students,id',
             'hostel_room_id' => 'required|exists:hostel_rooms,id',
@@ -534,6 +539,11 @@ class HostelBookingController extends Controller
 
     public function reallocate(HostelBooking $booking)
     {
+        $user = Auth::user();
+        if (!$user->can('manage_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
+            return back()->with('error', 'Unauthorized. You do not have permission to reallocate hostel rooms.');
+        }
+
         $room = $booking->room;
         $currentSession = Session::current();
         

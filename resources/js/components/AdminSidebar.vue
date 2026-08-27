@@ -238,7 +238,7 @@ const administrationItems = computed(() => {
             title: 'Hostels',
             href: route('admin.hostels.index'),
             icon: Building,
-            show: hasRole(['admin', 'female_hostel_supervisor', 'male_hostel_supervisor', 'hostel_viewer']) || hasPermission('manage_hostels') || hasPermission('manage_hostel_fees') || hasPermission('view_hostel_bookings') || hasPermission('view_male_hostel_bookings') || hasPermission('view_female_hostel_bookings'),
+            show: hasRole('admin') || hasPermission('manage_hostels') || hasPermission('manage_hostel_fees'),
         },
         {
             title: 'Hostel Bookings',
