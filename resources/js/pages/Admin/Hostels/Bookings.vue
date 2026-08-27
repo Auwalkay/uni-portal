@@ -338,6 +338,25 @@ const formatCurrency = (amount: any) => {
         currency: 'NGN',
     }).format(amount);
 };
+
+const getInvoicePaid = (invoice: any) => {
+    if (!invoice) return 0;
+    if (invoice.paid_amount !== undefined && invoice.paid_amount !== null && Number(invoice.paid_amount) > 0) {
+        return Number(invoice.paid_amount);
+    }
+    if (Array.isArray(invoice.payments)) {
+        return invoice.payments
+            .filter((p: any) => p.status === 'successful' || p.status === 'success' || p.status === 'paid')
+            .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+    }
+    return 0;
+};
+
+const getInvoiceBalance = (invoice: any) => {
+    if (!invoice) return 0;
+    const paid = getInvoicePaid(invoice);
+    return Math.max(0, Number(invoice.amount || 0) - paid);
+};
 </script>
 
 <template>
@@ -406,13 +425,13 @@ const formatCurrency = (amount: any) => {
                 <!-- Gender Breakdown -->
                 <div class="p-5 rounded-2xl bg-card border shadow-xs space-y-2 relative overflow-hidden">
                     <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block">Gender Distribution</span>
-                    <div class="grid grid-cols-2 gap-2 pt-1">
-                        <div class="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900 text-center">
-                            <span class="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300 block">Male</span>
+                    <div class="grid gap-2 pt-1" :class="filters.gender === 'all' ? 'grid-cols-2' : 'grid-cols-1'">
+                        <div v-if="filters.gender === 'all' || filters.gender === 'male'" class="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900 text-center">
+                            <span class="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300 block">Male Bookings</span>
                             <span class="text-lg font-black text-blue-800 dark:text-blue-200">{{ stats.gender_breakdown.male }}</span>
                         </div>
-                        <div class="p-2 rounded-xl bg-pink-50 dark:bg-pink-950/40 border border-pink-100 dark:border-pink-900 text-center">
-                            <span class="text-[10px] font-bold uppercase text-pink-700 dark:text-pink-300 block">Female</span>
+                        <div v-if="filters.gender === 'all' || filters.gender === 'female'" class="p-2 rounded-xl bg-pink-50 dark:bg-pink-950/40 border border-pink-100 dark:border-pink-900 text-center">
+                            <span class="text-[10px] font-bold uppercase text-pink-700 dark:text-pink-300 block">Female Bookings</span>
                             <span class="text-lg font-black text-pink-800 dark:text-pink-200">{{ stats.gender_breakdown.female }}</span>
                         </div>
                     </div>
@@ -467,8 +486,8 @@ const formatCurrency = (amount: any) => {
                         </Select>
                     </div>
 
-                    <!-- Gender Filter Selector -->
-                    <div>
+                    <!-- Gender Filter Selector (Only for hostel admins/managers) -->
+                    <div v-if="canManageBookings">
                         <Select v-model="filterGender" @update:modelValue="handleGenderChange">
                             <SelectTrigger class="h-10 bg-muted/30 w-full text-left">
                                 <SelectValue placeholder="Hostel Gender" />
@@ -609,12 +628,33 @@ const formatCurrency = (amount: any) => {
                                     </div>
                                 </td>
                                 <td class="px-6 py-4">
-                                    <div v-if="booking.invoice" class="space-y-1">
-                                        <p class="font-mono text-[11px] font-bold text-muted-foreground uppercase tracking-tighter">{{ booking.invoice.reference }}</p>
+                                    <div v-if="booking.invoice" class="space-y-1.5">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <p class="font-mono text-[11px] font-bold text-muted-foreground uppercase tracking-tighter">{{ booking.invoice.reference }}</p>
+                                            <span 
+                                                v-if="booking.invoice.status" 
+                                                :class="[
+                                                    'px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border',
+                                                    booking.invoice.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300' :
+                                                    booking.invoice.status === 'partial' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300' :
+                                                    'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                                                ]"
+                                            >
+                                                {{ booking.invoice.status }}
+                                            </span>
+                                        </div>
+
                                         <div class="flex items-center gap-2">
-                                            <p class="font-bold text-foreground">{{ formatCurrency(booking.invoice.amount) }}</p>
-                                            <BadgeCheck v-if="booking.invoice.status === 'paid'" class="h-4 w-4 text-emerald-500" />
-                                            <Clock v-else class="h-4 w-4 text-amber-500" />
+                                            <p class="font-bold text-foreground text-sm">{{ formatCurrency(booking.invoice.amount) }}</p>
+                                            <BadgeCheck v-if="booking.invoice.status === 'paid'" class="h-4 w-4 text-emerald-500 shrink-0" />
+                                            <Clock v-else-if="booking.invoice.status === 'partial'" class="h-4 w-4 text-amber-500 shrink-0" />
+                                            <Clock v-else class="h-4 w-4 text-slate-400 shrink-0" />
+                                        </div>
+
+                                        <!-- Partial Payment Remaining Balance Callout -->
+                                        <div v-if="booking.invoice.status === 'partial'" class="pt-1.5 text-[11px] font-semibold text-amber-800 dark:text-amber-300 flex items-center justify-between border-t border-amber-200/60 dark:border-amber-900/60">
+                                            <span>Paid: <strong class="text-emerald-600 dark:text-emerald-400 font-bold">{{ formatCurrency(getInvoicePaid(booking.invoice)) }}</strong></span>
+                                            <span>Bal: <strong class="text-rose-600 dark:text-rose-400 font-bold">{{ formatCurrency(getInvoiceBalance(booking.invoice)) }}</strong></span>
                                         </div>
                                     </div>
                                     <span v-else class="text-xs text-muted-foreground italic">No invoice linked</span>
