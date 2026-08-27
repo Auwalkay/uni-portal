@@ -47,9 +47,9 @@ class HostelBookingController extends Controller
         $gender = $request->input('gender', 'all');
 
         // Force gender scope if user has specific male/female supervisor permissions
-        if ($user->can('view_male_hostel_bookings') && !$user->can('manage_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
+        if (($user->can('view_male_hostel_bookings') || $user->hasRole('male_hostel_supervisor')) && !$user->can('manage_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
             $gender = 'male';
-        } elseif ($user->can('view_female_hostel_bookings') && !$user->can('manage_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
+        } elseif (($user->can('view_female_hostel_bookings') || $user->hasRole('female_hostel_supervisor')) && !$user->can('manage_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
             $gender = 'female';
         }
 
@@ -181,8 +181,8 @@ class HostelBookingController extends Controller
         $totalBalance = max(0, $totalInvoiceAmount - $totalPaid);
 
         $genderBreakdown = [
-            'male' => HostelBooking::whereHas('student', fn($q) => $q->where('gender', 'male'))->count(),
-            'female' => HostelBooking::whereHas('student', fn($q) => $q->where('gender', 'female'))->count(),
+            'male' => (clone $statsQuery)->whereHas('student', fn($q) => $q->where('gender', 'male'))->count(),
+            'female' => (clone $statsQuery)->whereHas('student', fn($q) => $q->where('gender', 'female'))->count(),
         ];
 
         $canManageBookings = $user->can('manage_hostel_bookings') || $user->can('manage_hostels') || $user->hasRole('admin');
