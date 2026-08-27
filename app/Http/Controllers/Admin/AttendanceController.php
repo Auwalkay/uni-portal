@@ -64,8 +64,9 @@ class AttendanceController extends Controller
 
         $allStaff = Staff::whereHas('user', fn($q) => $q->where('is_active', true))
             ->with('user:id,name')
-            ->take(100)
             ->get()
+            ->sortBy(fn($s) => $s->user?->name)
+            ->values()
             ->map(fn($s) => [
                 'id' => $s->id,
                 'name' => $s->user?->name ?? 'Unknown Staff',
