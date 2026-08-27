@@ -147,14 +147,31 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
 
     // INVOICES & PAYMENTS
     Route::middleware(['permission:view_payments'])->group(function () {
+        Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
         Route::get('invoices/search-students', [InvoiceController::class, 'searchStudents'])->name('invoices.search-students');
         Route::get('invoices/calculate-fee', [InvoiceController::class, 'calculateFee'])->name('invoices.calculate-fee');
-        Route::resource('invoices', InvoiceController::class)->only(['index', 'show', 'create', 'store', 'destroy']);
+        Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
 
-        Route::middleware(['permission:manage_payments|manual_payment_override|edit_invoices'])->group(function () {
-            Route::post('invoices/{invoice}/mark-as-paid', [InvoiceController::class, 'markAsPaid'])->name('invoices.mark-as-paid');
+        // Generate / Create Invoice
+        Route::middleware(['permission:create_invoices'])->group(function () {
+            Route::get('invoices/create', [InvoiceController::class, 'create'])->name('invoices.create');
+            Route::post('invoices', [InvoiceController::class, 'store'])->name('invoices.store');
+        });
+
+        // Delete Invoice
+        Route::middleware(['permission:cancel_invoices|delete_invoices'])->group(function () {
+            Route::delete('invoices/{invoice}', [InvoiceController::class, 'destroy'])->name('invoices.destroy');
+        });
+
+        // Edit Invoice / Breakdown / Recalculate
+        Route::middleware(['permission:edit_invoices'])->group(function () {
             Route::put('invoices/{invoice}/items', [InvoiceController::class, 'updateItems'])->name('invoices.items.update');
             Route::post('invoices/{invoice}/recalculate', [InvoiceController::class, 'recalculate'])->name('invoices.recalculate');
+        });
+
+        // Manual Invoice Payment / Override
+        Route::middleware(['permission:manual_payment_override'])->group(function () {
+            Route::post('invoices/{invoice}/mark-as-paid', [InvoiceController::class, 'markAsPaid'])->name('invoices.mark-as-paid');
             Route::post('payments/{payment}/verify', [InvoiceController::class, 'verifyPayment'])->name('payments.verify');
         });
     });
