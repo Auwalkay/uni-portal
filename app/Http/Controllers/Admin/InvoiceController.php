@@ -17,7 +17,7 @@ class InvoiceController extends Controller
         $filters = $request->only(['search', 'status', 'type', 'session_id', 'sort_field', 'sort_order', 'order']);
 
         $query = Invoice::query()
-            ->with(['user.student', 'session', 'creator']);
+            ->with(['user.student', 'session', 'creator', 'updater']);
 
         // Scope to user role if not admin/bursar? 
         // Admin middleware allows finance_officer now.
@@ -164,9 +164,9 @@ class InvoiceController extends Controller
 
     public function create()
     {
-        // Simple list won't work for thousands of students.
-        // We will implement an async search in the Frontend, querying a search endpoint.
-        // For now, we pass sessions.
+        if (!Auth::user()->can('create_invoices') && !Auth::user()->hasRole('admin')) {
+            abort(403, 'Unauthorized. You need the create_invoices permission to generate invoices.');
+        }
 
         return Inertia::render('Admin/Invoices/Create', [
             'sessions' => \App\Models\Session::latest()->get(['id', 'name']),
@@ -350,6 +350,9 @@ class InvoiceController extends Controller
 
     public function store(Request $request)
     {
+        if (!Auth::user()->can('create_invoices') && !Auth::user()->hasRole('admin')) {
+            abort(403, 'Unauthorized. You need the create_invoices permission to generate invoices.');
+        }
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
              'amount' => 'required|numeric|min:0',
@@ -500,7 +503,7 @@ class InvoiceController extends Controller
 
     public function show(Invoice $invoice)
     {
-        $invoice->load(['user.student', 'session', 'items', 'payments.user', 'payments.recorder', 'creator']);
+        $invoice->load(['user.student', 'session', 'items', 'payments.user', 'payments.recorder', 'creator', 'updater']);
 
         return Inertia::render('Admin/Invoices/Show', [
             'invoice' => $invoice,
@@ -549,6 +552,7 @@ class InvoiceController extends Controller
         $invoice->update([
             'status' => $newStatus,
             'paid_amount' => $newTotalPaid,
+            'updated_by' => Auth::id(),
         ]);
 
         // Trigger side-effects if now fully paid
@@ -645,6 +649,10 @@ class InvoiceController extends Controller
 
     public function destroy(Invoice $invoice)
     {
+        if (!Auth::user()->can('cancel_invoices') && !Auth::user()->can('delete_invoices') && !Auth::user()->hasRole('admin')) {
+            abort(403, 'Unauthorized. You need the cancel_invoices permission to delete invoices.');
+        }
+
         if ($invoice->paid_amount > 0 || $invoice->payments()->where('status', 'success')->count() > 0) {
             return back()->with('error', 'Cannot delete an invoice that has successful payments attached to it.');
         }
@@ -665,8 +673,8 @@ class InvoiceController extends Controller
 
     public function updateItems(Request $request, Invoice $invoice)
     {
-        if (!Auth::user()->can('manual_payment_override') && !Auth::user()->can('manage_payments') && !Auth::user()->can('edit_invoices')) {
-            abort(403, 'You do not have permission to edit invoice items.');
+        if (!Auth::user()->can('edit_invoices') && !Auth::user()->hasRole('admin')) {
+            abort(403, 'Unauthorized. You need the edit_invoices permission to edit invoice items.');
         }
 
         $request->validate([
@@ -704,6 +712,7 @@ class InvoiceController extends Controller
             $invoice->update([
                 'amount' => $newTotalAmount,
                 'status' => $newStatus,
+                'updated_by' => Auth::id(),
             ]);
         });
 
@@ -712,8 +721,8 @@ class InvoiceController extends Controller
 
     public function recalculate(Invoice $invoice)
     {
-        if (!Auth::user()->can('manual_payment_override') && !Auth::user()->can('manage_payments') && !Auth::user()->can('edit_invoices')) {
-            abort(403, 'You do not have permission to recalculate invoices.');
+        if (!Auth::user()->can('edit_invoices') && !Auth::user()->hasRole('admin')) {
+            abort(403, 'Unauthorized. You need the edit_invoices permission to recalculate invoices.');
         }
 
         if ($invoice->type !== 'school_fee') {
@@ -759,6 +768,7 @@ class InvoiceController extends Controller
             $invoice->update([
                 'amount' => $newTotalAmount,
                 'status' => $newStatus,
+                'updated_by' => Auth::id(),
             ]);
         });
 

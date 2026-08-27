@@ -78,6 +78,13 @@ const filterForm = ref({
     sort_order: props.filters.sort_order || 'desc',
 });
 
+const page = usePage();
+const hasPermission = (permission: string) => {
+    const permissions = (page.props.auth as any)?.user?.permissions || [];
+    const roles = (page.props.auth as any)?.user?.roles || [];
+    return permissions.includes(permission) || roles.includes('admin');
+};
+
 const manualPaymentForm = ref({
     invoice_id: '',
     invoice_ref: '',
@@ -212,7 +219,7 @@ const breadcrumbs = [
                     <h1 class="text-2xl font-bold tracking-tight">Invoice Management</h1>
                     <p class="text-muted-foreground">View and manage student invoices.</p>
                 </div>
-                <Button as-child>
+                <Button v-if="hasPermission('create_invoices')" as-child>
                     <Link :href="route('admin.invoices.create')">
                         <Plus class="w-4 h-4 mr-2" /> Create Invoice
                     </Link>
@@ -490,7 +497,7 @@ const breadcrumbs = [
                             <TableCell class="text-right">
                                 <div class="flex items-center justify-end gap-2">
                                     <Button 
-                                        v-if="invoice.status !== 'paid'" 
+                                        v-if="invoice.status !== 'paid' && hasPermission('manual_payment_override')" 
                                         size="sm" 
                                         variant="outline"
                                         class="text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700 h-8" 
@@ -504,7 +511,7 @@ const breadcrumbs = [
                                         </Link>
                                     </Button>
                                     <Button 
-                                        v-if="invoice.paid_amount == 0" 
+                                        v-if="invoice.paid_amount == 0 && (hasPermission('cancel_invoices') || hasPermission('delete_invoices'))" 
                                         size="sm" 
                                         variant="ghost" 
                                         class="text-red-500 hover:text-red-600 hover:bg-red-50 h-8 w-8 p-0"
