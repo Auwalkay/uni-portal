@@ -69,18 +69,16 @@ class HostelBookingController extends Controller
 
         // Force gender scope if user has specific male/female supervisor permissions
         $userPermittedGender = null;
-        if (($user->can('view_male_hostel_bookings') || $user->hasRole('male_hostel_supervisor')) &&
-            !$user->can('manage_hostel_bookings') &&
-            !$user->can('manage_hostels') &&
-            !$user->can('view_hostel_bookings') &&
-            !$user->hasRole('admin')) {
+        $isMaleSupervisor = ($user->can('view_male_hostel_bookings') || $user->hasRole('male_hostel_supervisor')) &&
+                            !($user->can('view_female_hostel_bookings') || $user->hasRole('female_hostel_supervisor'));
+        $isFemaleSupervisor = ($user->can('view_female_hostel_bookings') || $user->hasRole('female_hostel_supervisor')) &&
+                              !($user->can('view_male_hostel_bookings') || $user->hasRole('male_hostel_supervisor'));
+        $isGeneralAdmin = $user->can('manage_hostel_bookings') || $user->can('manage_hostels') || $user->hasRole('admin');
+
+        if ($isMaleSupervisor && !$isGeneralAdmin) {
             $userPermittedGender = 'male';
             $gender = 'male';
-        } elseif (($user->can('view_female_hostel_bookings') || $user->hasRole('female_hostel_supervisor')) &&
-            !$user->can('manage_hostel_bookings') &&
-            !$user->can('manage_hostels') &&
-            !$user->can('view_hostel_bookings') &&
-            !$user->hasRole('admin')) {
+        } elseif ($isFemaleSupervisor && !$isGeneralAdmin) {
             $userPermittedGender = 'female';
             $gender = 'female';
         }
@@ -730,17 +728,15 @@ class HostelBookingController extends Controller
         $endDate = $request->input('end_date');
         $gender = $request->input('gender', 'all');
 
-        if (($user->can('view_male_hostel_bookings') || $user->hasRole('male_hostel_supervisor')) &&
-            !$user->can('manage_hostel_bookings') &&
-            !$user->can('manage_hostels') &&
-            !$user->can('view_hostel_bookings') &&
-            !$user->hasRole('admin')) {
+        $isMaleSupervisor = ($user->can('view_male_hostel_bookings') || $user->hasRole('male_hostel_supervisor')) &&
+                            !($user->can('view_female_hostel_bookings') || $user->hasRole('female_hostel_supervisor'));
+        $isFemaleSupervisor = ($user->can('view_female_hostel_bookings') || $user->hasRole('female_hostel_supervisor')) &&
+                              !($user->can('view_male_hostel_bookings') || $user->hasRole('male_hostel_supervisor'));
+        $isGeneralAdmin = $user->can('manage_hostel_bookings') || $user->can('manage_hostels') || $user->hasRole('admin');
+
+        if ($isMaleSupervisor && !$isGeneralAdmin) {
             $gender = 'male';
-        } elseif (($user->can('view_female_hostel_bookings') || $user->hasRole('female_hostel_supervisor')) &&
-            !$user->can('manage_hostel_bookings') &&
-            !$user->can('manage_hostels') &&
-            !$user->can('view_hostel_bookings') &&
-            !$user->hasRole('admin')) {
+        } elseif ($isFemaleSupervisor && !$isGeneralAdmin) {
             $gender = 'female';
         }
 
