@@ -47,6 +47,10 @@ const props = defineProps<{
         total: number;
     };
     sessions: any[];
+    currentSession?: {
+        id: string;
+        name: string;
+    };
     hostels: any[];
     stats: {
         total_bookings: number;
@@ -73,6 +77,9 @@ const props = defineProps<{
         session_id?: string;
         level?: string;
         hostel_id?: string;
+        block_id?: string;
+        floor_id?: string;
+        room_id?: string;
         status?: string;
         date?: string;
         start_date?: string;
@@ -86,9 +93,12 @@ const props = defineProps<{
 }>();
 
 const searchTerm = ref('');
-const filterSessionId = ref(props.filters.session_id || '');
+const filterSessionId = ref(props.filters.session_id || props.currentSession?.id || 'all');
 const filterLevel = ref(props.filters.level || 'all');
 const filterHostelId = ref(props.filters.hostel_id || 'all');
+const filterBlockId = ref(props.filters.block_id || 'all');
+const filterFloorId = ref(props.filters.floor_id || 'all');
+const filterRoomId = ref(props.filters.room_id || 'all');
 const filterStatus = ref(props.filters.status || 'all');
 const filterDate = ref(props.filters.date || '');
 const filterStartDate = ref(props.filters.start_date || '');
@@ -97,6 +107,26 @@ const filterGender = ref(props.filters.gender || 'all');
 
 const filterSortBy = ref(props.filters.sort_by || 'created_at');
 const filterSortDirection = ref(props.filters.sort_direction || 'desc');
+
+// Strict cascading available options for Filters
+const availableFilterBlocks = computed(() => {
+    if (!props.hostels || props.hostels.length === 0) return [];
+    if (!filterHostelId.value || filterHostelId.value === 'all') return [];
+    const hostel = props.hostels.find(h => h.id === filterHostelId.value);
+    return hostel?.blocks || [];
+});
+
+const availableFilterFloors = computed(() => {
+    if (!filterBlockId.value || filterBlockId.value === 'all') return [];
+    const block = availableFilterBlocks.value.find(b => b.id === filterBlockId.value);
+    return block?.floors || [];
+});
+
+const availableFilterRooms = computed(() => {
+    if (!filterFloorId.value || filterFloorId.value === 'all') return [];
+    const floor = availableFilterFloors.value.find(f => f.id === filterFloorId.value);
+    return floor?.rooms || [];
+});
 
 // --- Admin Booking Modal State ---
 const isBookModalOpen = ref(false);
@@ -120,7 +150,7 @@ const form = useForm({
     mark_as_paid: false,
 });
 
-// Cascading computed selectors
+// Cascading computed selectors for Modal
 const activeHostel = computed(() => {
     return availableHostels.value.find(h => h.id === selectedHostelId.value);
 });
@@ -234,6 +264,9 @@ const applyFilters = () => {
         session_id: filterSessionId.value === 'all' ? 'all' : filterSessionId.value,
         level: filterLevel.value === 'all' ? '' : filterLevel.value,
         hostel_id: filterHostelId.value === 'all' ? '' : filterHostelId.value,
+        block_id: filterBlockId.value === 'all' ? '' : filterBlockId.value,
+        floor_id: filterFloorId.value === 'all' ? '' : filterFloorId.value,
+        room_id: filterRoomId.value === 'all' ? '' : filterRoomId.value,
         status: filterStatus.value === 'all' ? '' : filterStatus.value,
         date: filterDate.value,
         start_date: filterStartDate.value,
@@ -247,11 +280,31 @@ const applyFilters = () => {
     });
 };
 
+const exportCsv = () => {
+    const params = new URLSearchParams();
+    if (filterSessionId.value) params.append('session_id', filterSessionId.value);
+    if (filterLevel.value && filterLevel.value !== 'all') params.append('level', filterLevel.value);
+    if (filterHostelId.value && filterHostelId.value !== 'all') params.append('hostel_id', filterHostelId.value);
+    if (filterBlockId.value && filterBlockId.value !== 'all') params.append('block_id', filterBlockId.value);
+    if (filterFloorId.value && filterFloorId.value !== 'all') params.append('floor_id', filterFloorId.value);
+    if (filterRoomId.value && filterRoomId.value !== 'all') params.append('room_id', filterRoomId.value);
+    if (filterStatus.value && filterStatus.value !== 'all') params.append('status', filterStatus.value);
+    if (filterDate.value) params.append('date', filterDate.value);
+    if (filterStartDate.value) params.append('start_date', filterStartDate.value);
+    if (filterEndDate.value) params.append('end_date', filterEndDate.value);
+    if (filterGender.value && filterGender.value !== 'all') params.append('gender', filterGender.value);
+
+    window.location.href = `${route('admin.hostels.bookings.export')}?${params.toString()}`;
+};
+
 const resetFilters = () => {
     searchTerm.value = '';
-    filterSessionId.value = 'all';
+    filterSessionId.value = props.currentSession?.id || 'all';
     filterLevel.value = 'all';
     filterHostelId.value = 'all';
+    filterBlockId.value = 'all';
+    filterFloorId.value = 'all';
+    filterRoomId.value = 'all';
     filterStatus.value = 'all';
     filterDate.value = '';
     filterStartDate.value = '';
@@ -395,7 +448,7 @@ const getInvoiceBalance = (invoice: any) => {
                     <p class="text-muted-foreground mt-1">Monitor and manage student accommodation assignments across sessions.</p>
                 </div>
                 <div class="flex items-center gap-3">
-                    <Button variant="outline" class="gap-2 shadow-sm border-primary/20 hover:bg-primary/5 text-primary font-semibold">
+                    <Button @click="exportCsv" variant="outline" class="gap-2 shadow-sm border-primary/20 hover:bg-primary/5 text-primary font-semibold">
                         <Download class="h-4 w-4" />
                         Export CSV
                     </Button>
@@ -469,14 +522,14 @@ const getInvoiceBalance = (invoice: any) => {
                 <!-- Gender Breakdown -->
                 <div class="p-5 rounded-2xl bg-card border shadow-xs space-y-2 relative overflow-hidden">
                     <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block">Gender Distribution</span>
-                    <div class="grid gap-2 pt-1" :class="filters.gender === 'all' ? 'grid-cols-2' : 'grid-cols-1'">
-                        <div v-if="filters.gender === 'all' || filters.gender === 'male'" class="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900 text-center">
+                    <div class="grid gap-2 pt-1" :class="(!filters.gender || filters.gender === 'all') ? 'grid-cols-2' : 'grid-cols-1'">
+                        <div v-if="!filters.gender || filters.gender === 'all' || filters.gender === 'male'" class="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900 text-center">
                             <span class="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300 block">Male</span>
-                            <span class="text-lg font-black text-blue-800 dark:text-blue-200">{{ stats.gender_breakdown.male }}</span>
+                            <span class="text-lg font-black text-blue-800 dark:text-blue-200">{{ stats.gender_breakdown?.male ?? 0 }}</span>
                         </div>
-                        <div v-if="filters.gender === 'all' || filters.gender === 'female'" class="p-2 rounded-xl bg-pink-50 dark:bg-pink-950/40 border border-pink-100 dark:border-pink-900 text-center">
+                        <div v-if="!filters.gender || filters.gender === 'all' || filters.gender === 'female'" class="p-2 rounded-xl bg-pink-50 dark:bg-pink-950/40 border border-pink-100 dark:border-pink-900 text-center">
                             <span class="text-[10px] font-bold uppercase text-pink-700 dark:text-pink-300 block">Female</span>
-                            <span class="text-lg font-black text-pink-800 dark:text-pink-200">{{ stats.gender_breakdown.female }}</span>
+                            <span class="text-lg font-black text-pink-800 dark:text-pink-200">{{ stats.gender_breakdown?.female ?? 0 }}</span>
                         </div>
                     </div>
                 </div>
@@ -507,7 +560,7 @@ const getInvoiceBalance = (invoice: any) => {
                             <SelectContent>
                                 <SelectItem value="all">-- All Academic Sessions --</SelectItem>
                                 <SelectItem v-for="session in sessions" :key="session.id" :value="session.id">
-                                    {{ session.name }}
+                                    {{ session.name }} {{ currentSession && session.id === currentSession.id ? '(Active Current)' : '' }}
                                 </SelectItem>
                             </SelectContent>
                         </Select>
@@ -526,6 +579,72 @@ const getInvoiceBalance = (invoice: any) => {
                                 <SelectItem value="all">-- All Hostels --</SelectItem>
                                 <SelectItem v-for="hostel in hostels" :key="hostel.id" :value="hostel.id">
                                     {{ hostel.name }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <!-- Block Selector -->
+                    <div>
+                        <Select 
+                            v-model="filterBlockId" 
+                            @update:modelValue="handleBlockChange"
+                            :disabled="!filterHostelId || filterHostelId === 'all'"
+                        >
+                            <SelectTrigger class="h-10 bg-muted/30 w-full text-left" :class="{'opacity-50 cursor-not-allowed': !filterHostelId || filterHostelId === 'all'}">
+                                <div class="flex items-center gap-2">
+                                    <Building class="h-4 w-4 text-muted-foreground" />
+                                    <SelectValue :placeholder="filterHostelId && filterHostelId !== 'all' ? 'All Blocks' : 'Select Hostel First'" />
+                                </div>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">-- All Blocks --</SelectItem>
+                                <SelectItem v-for="block in availableFilterBlocks" :key="block.id" :value="block.id">
+                                    {{ block.name }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <!-- Floor Selector -->
+                    <div>
+                        <Select 
+                            v-model="filterFloorId" 
+                            @update:modelValue="handleFloorChange"
+                            :disabled="!filterBlockId || filterBlockId === 'all'"
+                        >
+                            <SelectTrigger class="h-10 bg-muted/30 w-full text-left" :class="{'opacity-50 cursor-not-allowed': !filterBlockId || filterBlockId === 'all'}">
+                                <div class="flex items-center gap-2">
+                                    <DoorOpen class="h-4 w-4 text-muted-foreground" />
+                                    <SelectValue :placeholder="filterBlockId && filterBlockId !== 'all' ? 'All Floors' : 'Select Block First'" />
+                                </div>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">-- All Floors --</SelectItem>
+                                <SelectItem v-for="floor in availableFilterFloors" :key="floor.id" :value="floor.id">
+                                    {{ floor.name }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <!-- Room Selector -->
+                    <div>
+                        <Select 
+                            v-model="filterRoomId" 
+                            @update:modelValue="handleRoomFilterChange"
+                            :disabled="!filterFloorId || filterFloorId === 'all'"
+                        >
+                            <SelectTrigger class="h-10 bg-muted/30 w-full text-left" :class="{'opacity-50 cursor-not-allowed': !filterFloorId || filterFloorId === 'all'}">
+                                <div class="flex items-center gap-2">
+                                    <Bed class="h-4 w-4 text-muted-foreground" />
+                                    <SelectValue :placeholder="filterFloorId && filterFloorId !== 'all' ? 'All Rooms' : 'Select Floor First'" />
+                                </div>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">-- All Rooms --</SelectItem>
+                                <SelectItem v-for="room in availableFilterRooms" :key="room.id" :value="room.id">
+                                    Room {{ room.room_number }} (Cap: {{ room.capacity }})
                                 </SelectItem>
                             </SelectContent>
                         </Select>
