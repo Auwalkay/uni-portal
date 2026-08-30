@@ -4,53 +4,53 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Session;
-use App\Models\Faculty;
-use App\Models\Department;
-use App\Models\Programme;
 use App\Models\Student;
 use App\Models\Invoice;
+use App\Models\Payment;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class BursaryController extends Controller
 {
-    public function studentFeesReport(Request $request)
+    private function getFilteredStudentsQuery(Request $request, &$sessionId = null, &$feeType = 'school_fee')
     {
         $sessionId = $request->session_id ?? Session::current()?->id;
-
-        $query = Student::query()
-            ->select('students.*')
-            ->join('users', 'users.id', '=', 'students.user_id')
-            ->leftJoin('invoices', function ($join) use ($sessionId) {
-                $join->on('invoices.user_id', '=', 'students.user_id')
-                    ->where('invoices.type', '=', 'school_fee')
-                    ->where('invoices.session_id', '=', $sessionId);
-            })
-            ->with(['user', 'faculty', 'department', 'program', 'academicDepartment', 'scholarship', 'invoices']);
-
-        // Filters
-        if ($request->filled('session_id')) {
-            $query->whereHas('invoices', function ($q) use ($request) {
-                $q->where('session_id', $request->session_id)->where('type', 'school_fee');
-            });
+        $feeType = $request->input('fee_type', $request->input('type', 'school_fee'));
+        if (empty($feeType) || !in_array($feeType, ['school_fee', 'hostel_fee', 'acceptance_fee', 'application_fee'])) {
+            $feeType = 'school_fee';
         }
 
+        $query = Student::query()
+            ->select('students.*', 'users.name as user_name')
+            ->distinct()
+            ->join('users', 'users.id', '=', 'students.user_id')
+            ->leftJoin('invoices', function ($join) use ($sessionId, $feeType) {
+                $join->on('invoices.user_id', '=', 'students.user_id')
+                    ->where('invoices.session_id', '=', $sessionId)
+                    ->where('invoices.type', '=', $feeType);
+            });
+
+        // Faculty filter
         if ($request->filled('faculty_id') && $request->faculty_id !== 'ALL') {
             $query->where('students.faculty_id', $request->faculty_id);
         }
 
+        // Department filter
         if ($request->filled('department_id') && $request->department_id !== 'ALL') {
             $query->where('students.department_id', $request->department_id);
         }
 
+        // Program filter
         if ($request->filled('program_id') && $request->program_id !== 'ALL') {
             $query->where('students.program_id', $request->program_id);
         }
 
+        // Level filter
         if ($request->filled('level') && $request->level !== 'ALL') {
             $query->where('students.current_level', $request->level);
         }
 
+        // Search filter
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -59,21 +59,21 @@ class BursaryController extends Controller
             });
         }
 
-        // Apply specific fee status filter if requested
+        // Fee Status Filter (unpaid / pending / partial / paid)
         if ($request->filled('status') && $request->status !== 'ALL') {
-            $status = $request->status;
+            $status = strtolower($request->status);
 
-            if ($status === 'unpaid') {
-                $query->where(function ($q) use ($sessionId) {
-                    $q->whereDoesntHave('invoices', function ($sq) use ($sessionId) {
-                        $sq->where('type', 'school_fee')->where('session_id', $sessionId);
-                    })->orWhereHas('invoices', function ($sq) use ($sessionId) {
-                        $sq->where('type', 'school_fee')->where('session_id', $sessionId)->whereIn('status', ['unpaid', 'pending']);
+            if ($status === 'unpaid' || $status === 'pending') {
+                $query->where(function ($q) use ($sessionId, $feeType) {
+                    $q->whereDoesntHave('invoices', function ($sq) use ($sessionId, $feeType) {
+                        $sq->where('session_id', $sessionId)->where('type', $feeType);
+                    })->orWhereHas('invoices', function ($sq) use ($sessionId, $feeType) {
+                        $sq->where('session_id', $sessionId)->where('type', $feeType)->whereIn('status', ['unpaid', 'pending']);
                     });
                 });
             } else {
-                $query->whereHas('invoices', function ($q) use ($status, $sessionId) {
-                    $q->where('type', 'school_fee')->where('session_id', $sessionId)->where('status', $status);
+                $query->whereHas('invoices', function ($q) use ($status, $sessionId, $feeType) {
+                    $q->where('session_id', $sessionId)->where('type', $feeType)->where('status', $status);
                 });
             }
         }
@@ -92,12 +92,23 @@ class BursaryController extends Controller
             $query->orderBy('users.name', $sortOrder);
         }
 
+        return $query;
+    }
+
+    public function studentFeesReport(Request $request)
+    {
+        $sessionId = null;
+        $feeType = 'school_fee';
+        $query = $this->getFilteredStudentsQuery($request, $sessionId, $feeType);
+
+        $query->with(['user', 'faculty', 'department', 'program', 'academicDepartment', 'scholarship', 'invoices']);
+
         $perPage = $request->query('per_page', 20);
         $students = $query->paginate($perPage)->withQueryString();
 
         // Calculate Stats for the whole filtered set (not just paginated)
-        $totalStatsQuery = clone $query;
-        $allMatchingStudents = $totalStatsQuery->get();
+        $totalStatsQuery = $this->getFilteredStudentsQuery($request, $sessionId, $feeType);
+        $allMatchingStudents = $totalStatsQuery->with(['invoices'])->get();
         
         $stats = [
             'total_billed' => 0,
@@ -109,14 +120,14 @@ class BursaryController extends Controller
             'unpaid_count' => 0,
         ];
 
-        $allMatchingStudents->each(function ($student) use ($sessionId, &$stats) {
+        $allMatchingStudents->each(function ($student) use ($sessionId, $feeType, &$stats) {
             $invoice = $student->invoices
-                ->where('type', 'school_fee')
                 ->where('session_id', $sessionId)
+                ->where('type', $feeType)
                 ->first();
 
-            $billed = $invoice ? $invoice->amount : 0;
-            $paid = $invoice ? $invoice->paid_amount : 0;
+            $billed = $invoice ? (float)$invoice->amount : 0;
+            $paid = $invoice ? (float)$invoice->paid_amount : 0;
             
             $stats['total_billed'] += $billed;
             $stats['total_paid'] += $paid;
@@ -129,24 +140,25 @@ class BursaryController extends Controller
         });
 
         // Load invoices for the selected session with their payments to avoid N+1 for paginated list
-        $students->getCollection()->each(function ($student) use ($sessionId) {
+        $students->getCollection()->each(function ($student) use ($sessionId, $feeType) {
             $invoice = $student->invoices
-                ->where('type', 'school_fee')
                 ->where('session_id', $sessionId)
+                ->where('type', $feeType)
                 ->first();
 
             $lastPayment = null;
             if ($invoice) {
-                $lastPayment = \App\Models\Payment::where('invoice_id', $invoice->id)
+                $lastPayment = Payment::where('invoice_id', $invoice->id)
                     ->where('status', 'success')
                     ->latest('paid_at')
                     ->first();
             }
 
             $student->fee_status = $invoice ? $invoice->status : 'unpaid';
-            $student->total_billed = $invoice ? $invoice->amount : 0;
-            $student->total_paid = $invoice ? $invoice->paid_amount : 0;
-            $student->balance = $invoice ? ($invoice->amount - $invoice->paid_amount) : 0;
+            $student->fee_type = $feeType;
+            $student->total_billed = $invoice ? (float)$invoice->amount : 0;
+            $student->total_paid = $invoice ? (float)$invoice->paid_amount : 0;
+            $student->balance = $invoice ? ((float)$invoice->amount - (float)$invoice->paid_amount) : 0;
             $student->last_payment_date = $lastPayment ? $lastPayment->paid_at : null;
         });
 
@@ -160,14 +172,15 @@ class BursaryController extends Controller
             'programs' => \App\Services\AcademicCacheService::getAllProgrammes(),
             'filters' => [
                 'session_id' => $request->query('session_id'),
+                'fee_type' => $feeType,
                 'faculty_id' => $request->query('faculty_id'),
                 'department_id' => $request->query('department_id'),
                 'program_id' => $request->query('program_id'),
                 'level' => $request->query('level'),
                 'status' => $request->query('status'),
                 'search' => $request->query('search'),
-                'sort_by' => $sortBy,
-                'sort_order' => $sortOrder,
+                'sort_by' => $request->query('sort_by', 'name'),
+                'sort_order' => $request->query('sort_order', 'asc'),
                 'per_page' => (int)$perPage,
             ],
         ]);
@@ -175,29 +188,35 @@ class BursaryController extends Controller
 
     public function exportPDF(Request $request)
     {
-        // Similar logic to exportExcel but for PDF
-        $sessionId = $request->session_id ?? Session::current()?->id;
+        $sessionId = null;
+        $feeType = 'school_fee';
+        $query = $this->getFilteredStudentsQuery($request, $sessionId, $feeType);
         $session = Session::find($sessionId);
-        
-        // Use a simple query for the PDF view
-        $students = Student::query()
-            ->with(['user', 'faculty', 'department', 'program', 'invoices' => function($q) use ($sessionId) {
-                $q->where('type', 'school_fee')->where('session_id', $sessionId);
-            }])
-            ->get(); // In real app, we would apply all filters here too
 
-        $students->transform(function ($student) use ($sessionId) {
+        $students = $query->with([
+            'user', 
+            'faculty', 
+            'department', 
+            'program', 
+            'invoices' => function($q) use ($sessionId, $feeType) {
+                $q->where('session_id', $sessionId)->where('type', $feeType);
+            }
+        ])->get();
+
+        $students->transform(function ($student) use ($feeType) {
             $invoice = $student->invoices->first();
             $student->fee_status = $invoice ? $invoice->status : 'unpaid';
-            $student->total_billed = $invoice ? $invoice->amount : 0;
-            $student->total_paid = $invoice ? $invoice->paid_amount : 0;
-            $student->balance = $invoice ? ($invoice->amount - $invoice->paid_amount) : 0;
+            $student->fee_type = $feeType;
+            $student->total_billed = $invoice ? (float)$invoice->amount : 0;
+            $student->total_paid = $invoice ? (float)$invoice->paid_amount : 0;
+            $student->balance = $invoice ? ((float)$invoice->amount - (float)$invoice->paid_amount) : 0;
             return $student;
         });
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.bursary_fees_report', [
             'students' => $students,
             'session' => $session,
+            'feeType' => $feeType,
             'date' => now()->format('d M, Y')
         ])->setPaper('a4', 'landscape');
         
@@ -206,79 +225,39 @@ class BursaryController extends Controller
 
     public function exportExcel(Request $request)
     {
-        $query = Student::query()
-            ->with(['user', 'faculty', 'department', 'program', 'scholarship']);
+        $sessionId = null;
+        $feeType = 'school_fee';
+        $query = $this->getFilteredStudentsQuery($request, $sessionId, $feeType);
 
-        // Apply same filters as report
-        if ($request->filled('session_id')) {
-            $query->whereHas('invoices', function ($q) use ($request) {
-                $q->where('session_id', $request->session_id)->where('type', 'school_fee');
-            });
-        }
-        
-        if ($request->filled('status')) {
-            $status = $request->status;
-            $sessionId = $request->session_id ?? Session::current()?->id;
-
-            if ($status === 'unpaid') {
-                $query->where(function ($q) use ($sessionId) {
-                    $q->whereDoesntHave('invoices', function ($sq) use ($sessionId) {
-                        $sq->where('type', 'school_fee')->where('session_id', $sessionId);
-                    })->orWhereHas('invoices', function ($sq) use ($sessionId) {
-                        $sq->where('type', 'school_fee')->where('session_id', $sessionId)->where('status', 'unpaid');
-                    });
-                });
-            } else {
-                $query->whereHas('invoices', function ($q) use ($status, $sessionId) {
-                    $q->where('type', 'school_fee')->where('session_id', $sessionId)->where('status', $status);
-                });
-            }
-        }
-        if ($request->filled('faculty_id')) $query->where('faculty_id', $request->faculty_id);
-        if ($request->filled('department_id')) $query->where('department_id', $request->department_id);
-        if ($request->filled('program_id')) $query->where('program_id', $request->program_id);
-        if ($request->filled('level')) $query->where('current_level', $request->level);
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('matriculation_number', 'like', "%{$search}%")
-                    ->orWhereHas('user', function ($u) use ($search) {
-                        $u->where('name', 'like', "%{$search}%");
-                    });
-            });
-        }
-
-        $sessionId = $request->session_id ?? Session::current()?->id;
-
-        // Eager load everything needed for the export in one go
         $students = $query->with([
             'user', 
             'faculty', 
             'department', 
             'program', 
             'scholarship',
-            'invoices' => function($q) use ($sessionId) {
-                $q->where('type', 'school_fee')->where('session_id', $sessionId);
+            'invoices' => function($q) use ($sessionId, $feeType) {
+                $q->where('session_id', $sessionId)->where('type', $feeType);
             }
         ])->get();
 
         $invoiceIds = $students->pluck('invoices')->flatten()->pluck('id')->filter()->values();
 
-        $latestPaymentByInvoice = \App\Models\Payment::whereIn('invoice_id', $invoiceIds)
+        $latestPaymentByInvoice = Payment::whereIn('invoice_id', $invoiceIds)
             ->where('status', 'success')
             ->orderByDesc('paid_at')
             ->get()
             ->groupBy('invoice_id')
             ->map(fn ($payments) => $payments->first());
 
-        $students->transform(function ($student) use ($latestPaymentByInvoice) {
-            $invoice = $student->invoices->first(); // Since we filtered in with()
+        $students->transform(function ($student) use ($latestPaymentByInvoice, $feeType) {
+            $invoice = $student->invoices->first();
             $lastPayment = $invoice ? $latestPaymentByInvoice->get($invoice->id) : null;
 
             $student->fee_status = $invoice ? $invoice->status : 'unpaid';
-            $student->total_billed = $invoice ? $invoice->amount : 0;
-            $student->total_paid = $invoice ? $invoice->paid_amount : 0;
-            $student->balance = $invoice ? ($invoice->amount - $invoice->paid_amount) : 0;
+            $student->fee_type = $feeType;
+            $student->total_billed = $invoice ? (float)$invoice->amount : 0;
+            $student->total_paid = $invoice ? (float)$invoice->paid_amount : 0;
+            $student->balance = $invoice ? ((float)$invoice->amount - (float)$invoice->paid_amount) : 0;
             $student->last_payment_date = $lastPayment ? $lastPayment->paid_at : null;
 
             return $student;

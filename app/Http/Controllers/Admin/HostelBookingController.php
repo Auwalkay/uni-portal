@@ -37,10 +37,22 @@ class HostelBookingController extends Controller
 
         $currentSession = Session::current();
         
-        $sessionId = $request->input('session_id', $currentSession?->id);
+        $sessionId = $request->input('session_id');
+        if ($sessionId === 'all') {
+            $sessionId = null;
+        } elseif (is_null($sessionId) && !$request->has('session_id')) {
+            $sessionId = $currentSession?->id;
+        }
+
         $level = $request->input('level');
+        if ($level === 'all') $level = null;
+
         $hostelId = $request->input('hostel_id');
+        if ($hostelId === 'all') $hostelId = null;
+
         $status = $request->input('status');
+        if ($status === 'all') $status = null;
+
         $date = $request->input('date');
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
@@ -83,7 +95,14 @@ class HostelBookingController extends Controller
             });
         }
         
-        if ($status) {
+        if ($status === 'expired') {
+            if ($currentSession) {
+                $query->where('session_id', '!=', $currentSession->id)
+                    ->whereIn('status', ['pending', 'confirmed']);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        } elseif ($status) {
             $query->where('status', $status);
         }
         
@@ -91,11 +110,12 @@ class HostelBookingController extends Controller
             $query->whereDate('hostel_bookings.created_at', $date);
         }
 
-        if ($startDate && $endDate) {
-            $query->whereBetween('hostel_bookings.created_at', [
-                Carbon::parse($startDate)->startOfDay(),
-                Carbon::parse($endDate)->endOfDay()
-            ]);
+        if ($startDate) {
+            $query->whereDate('hostel_bookings.created_at', '>=', Carbon::parse($startDate)->startOfDay());
+        }
+
+        if ($endDate) {
+            $query->whereDate('hostel_bookings.created_at', '<=', Carbon::parse($endDate)->endOfDay());
         }
 
         if ($gender === 'male' || $gender === 'female') {
@@ -142,16 +162,39 @@ class HostelBookingController extends Controller
         if ($sessionId) {
             $statsQuery->where('session_id', $sessionId);
         }
+        if ($level) {
+            $statsQuery->whereHas('student', function ($q) use ($level) {
+                $q->where('current_level', $level);
+            });
+        }
+        if ($hostelId) {
+            $statsQuery->whereHas('room.floor.block', function ($q) use ($hostelId) {
+                $q->where('hostel_id', $hostelId);
+            });
+        }
+        if ($status === 'expired') {
+            if ($currentSession) {
+                $statsQuery->where('session_id', '!=', $currentSession->id)
+                    ->whereIn('status', ['pending', 'confirmed']);
+            } else {
+                $statsQuery->whereRaw('1 = 0');
+            }
+        } elseif ($status) {
+            $statsQuery->where('status', $status);
+        }
+        if ($date) {
+            $statsQuery->whereDate('created_at', $date);
+        }
+        if ($startDate) {
+            $statsQuery->whereDate('created_at', '>=', Carbon::parse($startDate)->startOfDay());
+        }
+        if ($endDate) {
+            $statsQuery->whereDate('created_at', '<=', Carbon::parse($endDate)->endOfDay());
+        }
         if ($gender === 'male' || $gender === 'female') {
             $statsQuery->whereHas('room.floor.block.hostel', function ($q) use ($gender) {
                 $q->where('gender_type', $gender);
             });
-        }
-        if ($startDate && $endDate) {
-            $statsQuery->whereBetween('created_at', [
-                Carbon::parse($startDate)->startOfDay(),
-                Carbon::parse($endDate)->endOfDay()
-            ]);
         }
 
         $totalBookingsCount = (clone $statsQuery)->count();
@@ -161,7 +204,11 @@ class HostelBookingController extends Controller
 
         // Capacity for scoped hostels
         $capacityQuery = HostelRoom::query();
-        if ($gender === 'male' || $gender === 'female') {
+        if ($hostelId) {
+            $capacityQuery->whereHas('floor.block', function ($q) use ($hostelId) {
+                $q->where('hostel_id', $hostelId);
+            });
+        } elseif ($gender === 'male' || $gender === 'female') {
             $capacityQuery->whereHas('floor.block.hostel', function ($q) use ($gender) {
                 $q->where('gender_type', $gender);
             });
