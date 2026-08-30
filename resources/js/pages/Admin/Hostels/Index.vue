@@ -122,6 +122,18 @@ const getHostelOccupiedBeds = (hostel: any) => {
     }, 0);
 };
 
+const getHostelOccupiedRooms = (hostel: any) => {
+    if (!hostel.blocks) return 0;
+    return hostel.blocks.reduce((sum: number, block: any) => {
+        return sum + block.floors.reduce((fSum: number, floor: any) => {
+            return fSum + floor.rooms.reduce((rSum: number, room: any) => {
+                const booked = room.bookings ? room.bookings.length : 0;
+                return rSum + (booked > 0 ? 1 : 0);
+            }, 0);
+        }, 0);
+    }, 0);
+};
+
 const getHostelVacantBeds = (hostel: any) => {
     const cap = getHostelTotalCapacity(hostel);
     const occ = getHostelOccupiedBeds(hostel);
@@ -130,6 +142,8 @@ const getHostelVacantBeds = (hostel: any) => {
 
 // Global Metrics
 const totalHostels = computed(() => props.hostels.length);
+const totalRoomsAll = computed(() => props.hostels.reduce((sum, h) => sum + getHostelTotalRooms(h), 0));
+const occupiedRoomsAll = computed(() => props.hostels.reduce((sum, h) => sum + getHostelOccupiedRooms(h), 0));
 const totalCapacityAll = computed(() => props.hostels.reduce((sum, h) => sum + getHostelTotalCapacity(h), 0));
 const totalVacantAll = computed(() => props.hostels.reduce((sum, h) => sum + getHostelVacantBeds(h), 0));
 const maleHostelsCount = computed(() => props.hostels.filter(h => h.gender_type === 'male').length);
@@ -368,12 +382,12 @@ const submitRoomImport = () => {
 
                 <div class="bg-card rounded-2xl border shadow-sm p-6 flex items-center space-x-4">
                     <div class="h-14 w-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                        <Bed class="h-7 w-7" />
+                        <DoorOpen class="h-7 w-7" />
                     </div>
                     <div>
-                        <p class="text-xs font-bold text-muted-foreground uppercase tracking-wider">System Bed Capacity</p>
-                        <h3 class="text-2xl font-black text-foreground">{{ totalCapacityAll }} <span class="text-xs font-bold text-muted-foreground">Beds</span></h3>
-                        <p class="text-[11px] text-muted-foreground mt-0.5">Total capacity across all rooms</p>
+                        <p class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Rooms & Occupied</p>
+                        <h3 class="text-2xl font-black text-foreground">{{ occupiedRoomsAll }} <span class="text-xs font-bold text-muted-foreground">/ {{ totalRoomsAll }} Rooms</span></h3>
+                        <p class="text-[11px] text-muted-foreground mt-0.5">{{ totalCapacityAll }} Total Beds Capacity</p>
                     </div>
                 </div>
 
