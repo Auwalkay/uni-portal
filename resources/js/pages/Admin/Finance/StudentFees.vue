@@ -67,6 +67,7 @@ const props = defineProps<{
 }>();
 
 const selectedSession = ref(props.filters.session_id || props.currentSession?.id || '');
+const selectedFeeType = ref(props.filters.fee_type || 'school_fee');
 const selectedFaculty = ref(props.filters.faculty_id || 'ALL');
 const selectedDept = ref(props.filters.department_id || 'ALL');
 const selectedLevel = ref(props.filters.level || 'ALL');
@@ -81,6 +82,7 @@ const levels = ['100', '200', '300', '400', '500', '600'];
 const updateFilters = () => {
     router.get(route('admin.finance.bursary.student-fees'), {
         session_id: selectedSession.value,
+        fee_type: selectedFeeType.value,
         faculty_id: selectedFaculty.value === 'ALL' ? '' : selectedFaculty.value,
         department_id: selectedDept.value === 'ALL' ? '' : selectedDept.value,
         level: selectedLevel.value === 'ALL' ? '' : selectedLevel.value,
@@ -111,7 +113,7 @@ watch(searchQuery, () => {
     timeout = setTimeout(updateFilters, 500);
 });
 
-watch([selectedSession, selectedFaculty, selectedDept, selectedLevel, selectedStatus, sortBy, sortOrder, perPage], () => {
+watch([selectedSession, selectedFeeType, selectedFaculty, selectedDept, selectedLevel, selectedStatus, sortBy, sortOrder, perPage], () => {
     updateFilters();
 });
 
@@ -247,6 +249,21 @@ const getStatusBadge = (status: string) => {
                     </Select>
                 </div>
 
+                <div class="w-48">
+                    <Label class="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Fee Category</Label>
+                    <Select v-model="selectedFeeType">
+                        <SelectTrigger class="w-full h-12 border-none bg-white rounded-xl shadow-sm font-bold text-sm">
+                            <SelectValue placeholder="Fee Category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="school_fee">School Fees</SelectItem>
+                            <SelectItem value="hostel_fee">Hostel Accommodation</SelectItem>
+                            <SelectItem value="acceptance_fee">Acceptance Fees</SelectItem>
+                            <SelectItem value="application_fee">Application Fees</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
                 <div class="w-52">
                     <Label class="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Faculty</Label>
                     <Select v-model="selectedFaculty">
@@ -339,9 +356,14 @@ const getStatusBadge = (status: string) => {
                                 </div>
                             </TableCell>
                             <TableCell class="py-6">
-                                <div class="flex flex-col">
+                                <div class="flex flex-col gap-0.5">
                                     <span class="text-xs font-black text-slate-600">{{ student.program?.name }}</span>
-                                    <span class="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">{{ student.current_level }} Level</span>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">{{ student.current_level }} Level</span>
+                                        <span v-if="student.fee_type" class="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 font-bold text-slate-600 uppercase tracking-tight">
+                                            {{ student.fee_type.replace('_', ' ') }}
+                                        </span>
+                                    </div>
                                 </div>
                             </TableCell>
                             <TableCell class="py-6 text-right font-black text-slate-400 text-xs">

@@ -222,7 +222,7 @@ const submitBooking = () => {
 
 const applyFilters = () => {
     router.get(route('admin.hostels.bookings.index'), {
-        session_id: filterSessionId.value,
+        session_id: filterSessionId.value === 'all' ? 'all' : filterSessionId.value,
         level: filterLevel.value === 'all' ? '' : filterLevel.value,
         hostel_id: filterHostelId.value === 'all' ? '' : filterHostelId.value,
         status: filterStatus.value === 'all' ? '' : filterStatus.value,
@@ -236,6 +236,21 @@ const applyFilters = () => {
         preserveState: true,
         replace: true
     });
+};
+
+const resetFilters = () => {
+    searchTerm.value = '';
+    filterSessionId.value = 'all';
+    filterLevel.value = 'all';
+    filterHostelId.value = 'all';
+    filterStatus.value = 'all';
+    filterDate.value = '';
+    filterStartDate.value = '';
+    filterEndDate.value = '';
+    if (props.canManageBookings) {
+        filterGender.value = 'all';
+    }
+    applyFilters();
 };
 
 const handleSessionChange = (val: string) => {
@@ -461,6 +476,7 @@ const getInvoiceBalance = (invoice: any) => {
                                 </div>
                             </SelectTrigger>
                             <SelectContent>
+                                <SelectItem value="all">-- All Academic Sessions --</SelectItem>
                                 <SelectItem v-for="session in sessions" :key="session.id" :value="session.id">
                                     {{ session.name }}
                                 </SelectItem>
@@ -563,7 +579,7 @@ const getInvoiceBalance = (invoice: any) => {
                             {{ props.bookings?.total || filteredBookings.length }} Bookings Found
                         </span>
                     </div>
-                    <Button variant="ghost" size="sm" class="text-xs text-muted-foreground hover:text-foreground" @click="() => { filterLevel='all'; filterHostelId='all'; filterStatus='all'; filterDate=''; applyFilters(); }">
+                    <Button variant="ghost" size="sm" class="text-xs text-muted-foreground hover:text-foreground" @click="resetFilters">
                         Reset Filters
                     </Button>
                 </div>
