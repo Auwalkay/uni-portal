@@ -29,7 +29,10 @@ import {
     X,
     Loader2,
     ArrowUpDown,
-    FileText
+    FileText,
+    DoorOpen,
+    Building,
+    Wallet
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
 import { debounce } from 'lodash';
@@ -50,11 +53,17 @@ const props = defineProps<{
         confirmed: number;
         pending: number;
         cancelled: number;
+        total_rooms?: number;
+        occupied_rooms?: number;
+        vacant_rooms?: number;
+        room_occupancy_rate?: number;
         total_capacity: number;
         available_rooms: number;
+        available_beds?: number;
         occupancy_rate: number;
         total_paid: number;
         total_balance: number;
+        total_invoiced?: number;
         gender_breakdown: {
             male: number;
             female: number;
@@ -398,30 +407,50 @@ const getInvoiceBalance = (invoice: any) => {
             </div>
 
             <!-- Global Accommodation Analytics Cards -->
-            <div v-if="stats" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <!-- Available Rooms & Capacity -->
-                <div class="p-5 rounded-2xl bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 text-white shadow-lg relative overflow-hidden space-y-2">
-                    <Hotel class="absolute -right-4 -bottom-4 w-24 h-24 text-white/10 rotate-12" />
-                    <span class="text-[10px] font-bold uppercase tracking-widest text-indigo-300 block">Rooms Available / Capacity</span>
-                    <div class="flex items-baseline gap-2">
-                        <span class="text-3xl font-black text-emerald-400">{{ stats.available_rooms }}</span>
-                        <span class="text-xs font-bold text-indigo-200">/ {{ stats.total_capacity }} Total Beds</span>
+            <div v-if="stats" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <!-- Total Amount Paid -->
+                <div class="p-5 rounded-2xl bg-gradient-to-br from-emerald-900 via-emerald-950 to-slate-900 text-white shadow-lg relative overflow-hidden space-y-2">
+                    <Wallet class="absolute -right-4 -bottom-4 w-24 h-24 text-white/10 rotate-12" />
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-emerald-300 block">Total Amount Paid</span>
+                    <div class="flex items-baseline gap-1">
+                        <span class="text-2xl font-black text-emerald-400">{{ formatCurrency(stats.total_paid) }}</span>
                     </div>
-                    <div class="text-xs text-indigo-200/80 font-semibold pt-1 border-t border-indigo-800/60 flex items-center gap-1.5">
-                        <BadgeCheck class="w-3.5 h-3.5 text-indigo-400" />
-                        {{ stats.occupancy_rate }}% Bed Occupancy Rate
+                    <div class="text-xs text-emerald-200/80 font-semibold pt-1 border-t border-emerald-800/60 flex items-center justify-between gap-1">
+                        <span class="flex items-center gap-1">
+                            <BadgeCheck class="w-3.5 h-3.5 text-emerald-400" />
+                            Paid Payments
+                        </span>
+                        <span v-if="stats.total_invoiced" class="text-[11px] text-emerald-300/70">
+                            Inv: {{ formatCurrency(stats.total_invoiced) }}
+                        </span>
                     </div>
                 </div>
 
-                <!-- Total Amount Paid -->
+                <!-- Rooms & Occupied Rooms -->
                 <div class="p-5 rounded-2xl bg-card border shadow-xs space-y-2 relative overflow-hidden">
-                    <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block">Amount Paid</span>
-                    <div class="flex items-baseline gap-1">
-                        <span class="text-2xl font-black text-emerald-600 dark:text-emerald-400">{{ formatCurrency(stats.total_paid) }}</span>
+                    <DoorOpen class="absolute -right-3 -bottom-3 w-20 h-20 text-muted/10 rotate-6" />
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block">Rooms & Occupied Rooms</span>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-3xl font-black text-indigo-600 dark:text-indigo-400">{{ stats.occupied_rooms || 0 }}</span>
+                        <span class="text-xs font-bold text-muted-foreground">/ {{ stats.total_rooms || 0 }} Rooms</span>
+                    </div>
+                    <div class="text-xs text-muted-foreground font-medium pt-1 border-t flex items-center gap-1.5">
+                        <Building class="w-3.5 h-3.5 text-indigo-500" />
+                        <span>{{ stats.vacant_rooms || 0 }} Vacant ({{ stats.room_occupancy_rate || 0 }}% Occupied)</span>
+                    </div>
+                </div>
+
+                <!-- Available Beds & Capacity -->
+                <div class="p-5 rounded-2xl bg-card border shadow-xs space-y-2 relative overflow-hidden">
+                    <Hotel class="absolute -right-3 -bottom-3 w-20 h-20 text-muted/10 rotate-6" />
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block">Available Beds / Capacity</span>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-3xl font-black text-emerald-600 dark:text-emerald-400">{{ stats.available_rooms }}</span>
+                        <span class="text-xs font-bold text-muted-foreground">/ {{ stats.total_capacity }} Beds</span>
                     </div>
                     <div class="text-xs text-muted-foreground font-medium pt-1 border-t flex items-center gap-1.5">
                         <BadgeCheck class="w-3.5 h-3.5 text-emerald-500" />
-                        Successful accommodation payments
+                        <span>{{ stats.occupancy_rate }}% Bed Occupancy Rate</span>
                     </div>
                 </div>
 
@@ -433,7 +462,7 @@ const getInvoiceBalance = (invoice: any) => {
                     </div>
                     <div class="text-xs text-muted-foreground font-medium pt-1 border-t flex items-center gap-1.5">
                         <Clock class="w-3.5 h-3.5 text-amber-500" />
-                        Unpaid accommodation invoice fees
+                        Unpaid accommodation fees
                     </div>
                 </div>
 
@@ -442,11 +471,11 @@ const getInvoiceBalance = (invoice: any) => {
                     <span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block">Gender Distribution</span>
                     <div class="grid gap-2 pt-1" :class="filters.gender === 'all' ? 'grid-cols-2' : 'grid-cols-1'">
                         <div v-if="filters.gender === 'all' || filters.gender === 'male'" class="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900 text-center">
-                            <span class="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300 block">Male Bookings</span>
+                            <span class="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300 block">Male</span>
                             <span class="text-lg font-black text-blue-800 dark:text-blue-200">{{ stats.gender_breakdown.male }}</span>
                         </div>
                         <div v-if="filters.gender === 'all' || filters.gender === 'female'" class="p-2 rounded-xl bg-pink-50 dark:bg-pink-950/40 border border-pink-100 dark:border-pink-900 text-center">
-                            <span class="text-[10px] font-bold uppercase text-pink-700 dark:text-pink-300 block">Female Bookings</span>
+                            <span class="text-[10px] font-bold uppercase text-pink-700 dark:text-pink-300 block">Female</span>
                             <span class="text-lg font-black text-pink-800 dark:text-pink-200">{{ stats.gender_breakdown.female }}</span>
                         </div>
                     </div>

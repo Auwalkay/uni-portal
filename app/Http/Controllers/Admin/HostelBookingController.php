@@ -157,44 +157,12 @@ class HostelBookingController extends Controller
         }
         $hostels = $hostelsQuery->get(['id', 'name', 'gender_type']);
 
-        // Scoped Analytics Calculations
+        // Global Analytics Calculations (Unfiltered by UI request search/filters)
         $statsQuery = HostelBooking::query();
-        if ($sessionId) {
-            $statsQuery->where('session_id', $sessionId);
-        }
-        if ($level) {
-            $statsQuery->whereHas('student', function ($q) use ($level) {
-                $q->where('current_level', $level);
-            });
-        }
-        if ($hostelId) {
-            $statsQuery->whereHas('room.floor.block', function ($q) use ($hostelId) {
-                $q->where('hostel_id', $hostelId);
-            });
-        }
-        if ($status === 'expired') {
-            if ($currentSession) {
-                $statsQuery->where('session_id', '!=', $currentSession->id)
-                    ->whereIn('status', ['pending', 'confirmed']);
-            } else {
-                $statsQuery->whereRaw('1 = 0');
-            }
-        } elseif ($status) {
-            $statsQuery->where('status', $status);
-        }
-        if ($date) {
-            $statsQuery->whereDate('created_at', $date);
-        }
-        if ($startDate) {
-            $statsQuery->whereDate('created_at', '>=', Carbon::parse($startDate)->startOfDay());
-        }
-        if ($endDate) {
-            $statsQuery->whereDate('created_at', '<=', Carbon::parse($endDate)->endOfDay());
-        }
-        if ($gender === 'male' || $gender === 'female') {
-            $statsQuery->whereHas('room.floor.block.hostel', function ($q) use ($gender) {
-                $q->where('gender_type', $gender);
-            });
+        if (($user->can('view_male_hostel_bookings') || $user->hasRole('male_hostel_supervisor')) && !$user->can('manage_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
+            $statsQuery->whereHas('room.floor.block.hostel', fn($q) => $q->where('gender_type', 'male'));
+        } elseif (($user->can('view_female_hostel_bookings') || $user->hasRole('female_hostel_supervisor')) && !$user->can('manage_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
+            $statsQuery->whereHas('room.floor.block.hostel', fn($q) => $q->where('gender_type', 'female'));
         }
 
         $totalBookingsCount = (clone $statsQuery)->count();
@@ -202,19 +170,26 @@ class HostelBookingController extends Controller
         $pendingCount = (clone $statsQuery)->where('status', 'pending')->count();
         $cancelledCount = (clone $statsQuery)->where('status', 'cancelled')->count();
 
-        // Capacity for scoped hostels
+        // Rooms and Capacity for hostels
         $capacityQuery = HostelRoom::query();
-        if ($hostelId) {
-            $capacityQuery->whereHas('floor.block', function ($q) use ($hostelId) {
-                $q->where('hostel_id', $hostelId);
-            });
-        } elseif ($gender === 'male' || $gender === 'female') {
-            $capacityQuery->whereHas('floor.block.hostel', function ($q) use ($gender) {
-                $q->where('gender_type', $gender);
-            });
+        if (($user->can('view_male_hostel_bookings') || $user->hasRole('male_hostel_supervisor')) && !$user->can('manage_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
+            $capacityQuery->whereHas('floor.block.hostel', fn($q) => $q->where('gender_type', 'male'));
+        } elseif (($user->can('view_female_hostel_bookings') || $user->hasRole('female_hostel_supervisor')) && !$user->can('manage_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
+            $capacityQuery->whereHas('floor.block.hostel', fn($q) => $q->where('gender_type', 'female'));
         }
-        $totalCapacity = (int) $capacityQuery->sum('capacity');
-        $availableRooms = max(0, $totalCapacity - $confirmedCount);
+
+        $totalRooms = (clone $capacityQuery)->count();
+        $totalCapacity = (int) (clone $capacityQuery)->sum('capacity');
+
+        // Occupied Rooms: Rooms with at least 1 active booking (pending or confirmed)
+        $occupiedRooms = (clone $capacityQuery)->whereHas('bookings', function ($q) {
+            $q->whereIn('status', ['pending', 'confirmed']);
+        })->count();
+
+        $vacantRooms = max(0, $totalRooms - $occupiedRooms);
+        $roomOccupancyRate = $totalRooms > 0 ? round(($occupiedRooms / $totalRooms) * 100, 1) : 0;
+
+        $availableBeds = max(0, $totalCapacity - $confirmedCount);
         $occupancyRate = $totalCapacity > 0 ? round(($confirmedCount / $totalCapacity) * 100, 1) : 0;
 
         // Financial Metrics (Paid & Outstanding Balance)
@@ -222,7 +197,7 @@ class HostelBookingController extends Controller
         
         $totalInvoiceAmount = (float) Invoice::whereIn('id', $bookingInvoiceIds)->sum('amount');
         $totalPaid = (float) Payment::whereIn('invoice_id', $bookingInvoiceIds)
-            ->where('status', 'successful')
+            ->whereIn('status', ['successful', 'success', 'paid'])
             ->sum('amount');
         
         $totalBalance = max(0, $totalInvoiceAmount - $totalPaid);
@@ -243,11 +218,17 @@ class HostelBookingController extends Controller
                 'confirmed' => $confirmedCount,
                 'pending' => $pendingCount,
                 'cancelled' => $cancelledCount,
+                'total_rooms' => $totalRooms,
+                'occupied_rooms' => $occupiedRooms,
+                'vacant_rooms' => $vacantRooms,
+                'room_occupancy_rate' => $roomOccupancyRate,
                 'total_capacity' => $totalCapacity,
-                'available_rooms' => $availableRooms,
+                'available_rooms' => $availableBeds,
+                'available_beds' => $availableBeds,
                 'occupancy_rate' => $occupancyRate,
                 'total_paid' => $totalPaid,
                 'total_balance' => $totalBalance,
+                'total_invoiced' => $totalInvoiceAmount,
                 'gender_breakdown' => $genderBreakdown,
             ],
             'filters' => [
