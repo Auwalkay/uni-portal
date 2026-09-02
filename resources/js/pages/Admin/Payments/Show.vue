@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AdminLayout from '@/layouts/AdminLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage, router } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
 import { 
     Printer, 
     ArrowLeft, 
@@ -19,7 +20,9 @@ import {
     History,
     ExternalLink,
     AlertCircle,
-    Receipt
+    Receipt,
+    RefreshCw,
+    Loader2
 } from 'lucide-vue-next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -38,6 +41,28 @@ import { route } from 'ziggy-js';
 const props = defineProps<{
     payment: any;
 }>();
+
+const isRequerying = ref(false);
+
+const hasPermission = (permission: string) => {
+    const user = usePage().props.auth?.user as any;
+    if (!user) return false;
+    return user.permissions?.includes(permission) || user.roles?.includes('admin') || user.roles?.includes('super_admin');
+};
+
+const canRequery = computed(() => {
+    return hasPermission('verify_payments') || hasPermission('manual_payment_override') || hasPermission('manage_payments');
+});
+
+const requeryPayment = () => {
+    isRequerying.value = true;
+    router.post(route('payments.verify', props.payment.id), {}, {
+        preserveScroll: true,
+        onFinish: () => {
+            isRequerying.value = false;
+        }
+    });
+};
 
 const formatDate = (dateString: string) => {
     if (!dateString) return 'N/A';
@@ -97,6 +122,18 @@ const printPage = () => {
                 </div>
 
                 <div class="flex items-center gap-3 w-full md:w-auto">
+                    <Button 
+                        v-if="payment.status !== 'success' && canRequery" 
+                        variant="outline" 
+                        @click="requeryPayment" 
+                        :disabled="isRequerying"
+                        class="flex-1 md:flex-none border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 font-bold"
+                    >
+                        <Loader2 v-if="isRequerying" class="w-4 h-4 mr-2 animate-spin" />
+                        <RefreshCw v-else class="w-4 h-4 mr-2" />
+                        Requery Status
+                    </Button>
+
                     <Button variant="outline" @click="printPage" class="flex-1 md:flex-none">
                         <Printer class="w-4 h-4 mr-2" /> Print Audit
                     </Button>
