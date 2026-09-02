@@ -19,18 +19,18 @@ class PaymentController extends Controller
             $sessionId = $currentSession->id;
         }
 
-        // Date range period logic (default: monthly)
-        $period = $request->input('period', 'monthly');
+        // Date range period logic (default: monthly, but default to 'all' if user is searching)
+        $period = $request->input('period', $request->filled('search') ? 'all' : 'monthly');
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
 
-        if ($period !== 'custom') {
+        if ($period !== 'custom' && $period !== 'all') {
             $startDate = match ($period) {
                 'daily' => now()->startOfDay()->toDateString(),
                 'weekly' => now()->subDays(6)->startOfDay()->toDateString(),
                 'monthly' => now()->subDays(29)->startOfDay()->toDateString(),
                 'yearly' => now()->subDays(364)->startOfDay()->toDateString(),
-                default => now()->subDays(29)->startOfDay()->toDateString(),
+                default => null,
             };
             $endDate = now()->endOfDay()->toDateString();
         }
@@ -57,12 +57,16 @@ class PaymentController extends Controller
 
         // Search Filter
         if ($request->filled('search')) {
-            $search = $request->search;
+            $search = trim($request->search);
             $query->where(function ($q) use ($search) {
                 $q->where('payments.gateway_reference', 'like', "%{$search}%")
+                    ->orWhere('payments.id', 'like', "%{$search}%")
                     ->orWhere('users.name', 'like', "%{$search}%")
                     ->orWhere('users.email', 'like', "%{$search}%")
-                    ->orWhere('students.matriculation_number', 'like', "%{$search}%");
+                    ->orWhere('students.matriculation_number', 'like', "%{$search}%")
+                    ->orWhereHas('invoice', function ($iq) use ($search) {
+                        $iq->where('reference', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -102,17 +106,17 @@ class PaymentController extends Controller
             }
         }
 
-        // Date Range Filters (based on payment date)
+        // Date Range Filters (based on paid_at or created_at for pending/failed payments)
         if ($startDate) {
-            $query->where('payments.paid_at', '>=', $startDate . ' 00:00:00');
+            $query->whereRaw('COALESCE(payments.paid_at, payments.created_at) >= ?', [$startDate . ' 00:00:00']);
         }
         if ($endDate) {
-            $query->where('payments.paid_at', '<=', $endDate . ' 23:59:59');
+            $query->whereRaw('COALESCE(payments.paid_at, payments.created_at) <= ?', [$endDate . ' 23:59:59']);
         }
 
         // Sorting
         $sortBy = $request->query('sort_by', 'date');
-        $sortOrder = $request->query('sort_order', 'desc');
+        $sortOrder = strtolower($request->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
 
         if ($sortBy === 'name') {
             $query->orderBy('users.name', $sortOrder);
@@ -121,7 +125,7 @@ class PaymentController extends Controller
         } elseif ($sortBy === 'status') {
             $query->orderBy('payments.status', $sortOrder);
         } else {
-            $query->orderBy('payments.paid_at', $sortOrder);
+            $query->orderByRaw("COALESCE(payments.paid_at, payments.created_at) {$sortOrder}");
         }
 
         $payments = $query->paginate(15)->withQueryString();

@@ -150,13 +150,14 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
         Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
         Route::get('invoices/search-students', [InvoiceController::class, 'searchStudents'])->name('invoices.search-students');
         Route::get('invoices/calculate-fee', [InvoiceController::class, 'calculateFee'])->name('invoices.calculate-fee');
-        Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
 
         // Generate / Create Invoice
         Route::middleware(['permission:create_invoices'])->group(function () {
             Route::get('invoices/create', [InvoiceController::class, 'create'])->name('invoices.create');
             Route::post('invoices', [InvoiceController::class, 'store'])->name('invoices.store');
         });
+
+        Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
 
         // Delete Invoice
         Route::middleware(['permission:cancel_invoices|delete_invoices'])->group(function () {
