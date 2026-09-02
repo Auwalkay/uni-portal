@@ -62,18 +62,33 @@ class AttendanceController extends Controller
 
         $attendances = $query->paginate(20)->withQueryString();
 
+        $targetDate = $request->date ?? now()->toDateString();
+        $existingAttendances = Attendance::whereDate('date', $targetDate)
+            ->get(['staff_id', 'status', 'clock_in', 'clock_out', 'notes'])
+            ->keyBy('staff_id');
+
         $allStaff = Staff::whereHas('user', fn($q) => $q->where('is_active', true))
-            ->with('user:id,name')
+            ->with(['user:id,name', 'department:id,name'])
+            ->select('id', 'user_id', 'department_id', 'staff_number')
             ->get()
             ->sortBy(fn($s) => $s->user?->name)
             ->values()
-            ->map(fn($s) => [
-                'id' => $s->id,
-                'name' => $s->user?->name ?? 'Unknown Staff',
-                'staff_number' => $s->staff_number
-            ]);
+            ->map(function ($s) use ($existingAttendances) {
+                $att = $existingAttendances->get($s->id);
+                return [
+                    'id' => $s->id,
+                    'name' => $s->user?->name ?? 'Unknown Staff',
+                    'staff_number' => $s->staff_number,
+                    'department_id' => $s->department_id,
+                    'department_name' => $s->department?->name ?? 'Unassigned',
+                    'existing_status' => $att?->status ?? null,
+                    'clock_in' => $att?->clock_in ? (strlen($att->clock_in) > 5 ? substr($att->clock_in, 0, 5) : $att->clock_in) : null,
+                    'clock_out' => $att?->clock_out ? (strlen($att->clock_out) > 5 ? substr($att->clock_out, 0, 5) : $att->clock_out) : null,
+                    'notes' => $att?->notes ?? '',
+                ];
+            });
 
-        $holiday = Holiday::whereDate('date', $request->date ?? now()->toDateString())->first();
+        $holiday = Holiday::whereDate('date', $targetDate)->first();
         $holidays = Holiday::orderBy('date', 'desc')->get();
 
         return Inertia::render('Admin/HR/Attendance/Index', [
@@ -91,6 +106,69 @@ class AttendanceController extends Controller
                 ]
             ),
         ]);
+    }
+
+    public function bulkStore(Request $request)
+    {
+        $validated = $request->validate([
+            'date' => 'required|date',
+            'attendances' => 'required|array',
+            'attendances.*.staff_id' => 'required|exists:staff,id',
+            'attendances.*.status' => 'required|in:present,late,absent,on_leave',
+            'attendances.*.clock_in' => 'nullable',
+            'attendances.*.clock_out' => 'nullable',
+            'attendances.*.notes' => 'nullable|string',
+        ]);
+
+        $date = $validated['date'];
+        $userId = auth()->id();
+        $now = now()->toDateTimeString();
+
+        $rows = [];
+        foreach ($validated['attendances'] as $item) {
+            $status = $item['status'];
+            $clockIn = !empty($item['clock_in']) ? $item['clock_in'] : ($status === 'present' ? '08:00:00' : ($status === 'late' ? '09:30:00' : null));
+            $clockOut = !empty($item['clock_out']) ? $item['clock_out'] : ($status === 'present' || $status === 'late' ? '17:00:00' : null);
+
+            $rows[] = [
+                'id' => (string) \Illuminate\Support\Str::uuid(),
+                'staff_id' => $item['staff_id'],
+                'date' => $date,
+                'status' => $status,
+                'clock_in' => $clockIn,
+                'clock_out' => $clockOut,
+                'notes' => !empty($item['notes']) ? $item['notes'] : null,
+                'source' => 'manual',
+                'created_by' => $userId,
+                'updated_by' => $userId,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        // Perform batch upsert in chunks of 500 to handle large numbers of staff (5000+) efficiently
+        DB::transaction(function () use ($rows) {
+            foreach (array_chunk($rows, 500) as $chunk) {
+                Attendance::upsert(
+                    $chunk,
+                    ['staff_id', 'date'],
+                    ['status', 'clock_in', 'clock_out', 'notes', 'source', 'updated_by', 'updated_at']
+                );
+            }
+        });
+
+        $count = count($rows);
+
+        activity('attendance')
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'date' => $date,
+                'count' => $count,
+                'ip_address' => $request->ip(),
+            ])
+            ->log("Bulk marked attendance for {$count} staff members on date {$date}");
+
+        return back()->with('success', "Successfully saved attendance for {$count} staff members on {$date}.");
     }
 
     public function storeHoliday(Request $request)
