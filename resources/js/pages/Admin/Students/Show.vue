@@ -1184,7 +1184,7 @@ const submitStudentSession = () => {
                                         {{ formatDate(attempt.paid_at || attempt.created_at) }}
                                     </TableCell>
                                     <TableCell class="py-3 px-4 font-mono font-bold text-foreground">
-                                        {{ attempt.gateway_reference || attempt.reference || 'N/A' }}
+                                        {{ attempt.gateway_reference || attempt.reference || attempt.id }}
                                     </TableCell>
                                     <TableCell class="py-3 px-4 font-bold text-foreground">
                                         {{ formatCurrency(attempt.amount) }}

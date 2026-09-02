@@ -28,7 +28,13 @@ import {
     ChevronsUpDown,
     ArrowUpDown,
     ArrowUp,
-    ArrowDown
+    ArrowDown,
+    UserCheck,
+    UserX,
+    Loader2,
+    Sparkles,
+    CheckSquare,
+    ListCheck
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
 import {
@@ -79,7 +85,17 @@ const props = defineProps<{
         total: number;
     };
     departments: Array<{ id: string; name: string }>;
-    allStaff: Array<{ id: string; name: string; staff_number?: string }>;
+    allStaff: Array<{ 
+        id: string; 
+        name: string; 
+        staff_number?: string;
+        department_id?: string;
+        department_name?: string;
+        existing_status?: string | null;
+        clock_in?: string | null;
+        clock_out?: string | null;
+        notes?: string;
+    }>;
     holiday: any;
     holidays: Array<{ id: string; name: string; date: string; description?: string }>;
     filters: {
@@ -125,6 +141,109 @@ const handleSort = (column: string) => {
 watch([selectedDate, selectedDept, selectedStatus, sortBy, sortDir], () => {
     applyFilters();
 });
+
+// Quick Batch Attendance Sheet State
+const showQuickSheetModal = ref(false);
+const quickSheetSearch = ref('');
+const quickSheetDept = ref('ALL');
+
+const batchMap = ref<Record<string, { status: string; clock_in?: string; clock_out?: string; notes?: string }>>({});
+
+const syncBatchMap = () => {
+    const map: Record<string, { status: string; clock_in?: string; clock_out?: string; notes?: string }> = {};
+    props.allStaff.forEach(s => {
+        map[s.id] = {
+            status: s.existing_status || 'present',
+            clock_in: s.clock_in || '',
+            clock_out: s.clock_out || '',
+            notes: s.notes || '',
+        };
+    });
+    batchMap.value = map;
+};
+
+watch(() => props.allStaff, () => {
+    syncBatchMap();
+}, { immediate: true });
+
+const quickSheetPage = ref(1);
+const quickSheetPerPage = ref(50);
+
+watch([quickSheetSearch, quickSheetDept], () => {
+    quickSheetPage.value = 1;
+});
+
+const filteredQuickStaff = computed(() => {
+    return props.allStaff.filter(s => {
+        const matchesDept = quickSheetDept.value === 'ALL' || String(s.department_id) === String(quickSheetDept.value);
+        const q = quickSheetSearch.value.toLowerCase().trim();
+        const matchesQuery = !q || s.name.toLowerCase().includes(q) || (s.staff_number && s.staff_number.toLowerCase().includes(q));
+        return matchesDept && matchesQuery;
+    });
+});
+
+const totalQuickPages = computed(() => {
+    return Math.ceil(filteredQuickStaff.value.length / quickSheetPerPage.value) || 1;
+});
+
+const paginatedQuickStaff = computed(() => {
+    const start = (quickSheetPage.value - 1) * quickSheetPerPage.value;
+    return filteredQuickStaff.value.slice(start, start + quickSheetPerPage.value);
+});
+
+const setStaffStatus = (staffId: string, status: 'present' | 'absent' | 'late' | 'on_leave') => {
+    if (batchMap.value[staffId]) {
+        batchMap.value[staffId].status = status;
+    }
+};
+
+const markAllVisible = (status: 'present' | 'absent' | 'late' | 'on_leave') => {
+    filteredQuickStaff.value.forEach(s => {
+        if (batchMap.value[s.id]) {
+            batchMap.value[s.id].status = status;
+        }
+    });
+};
+
+const quickStats = computed(() => {
+    let present = 0;
+    let absent = 0;
+    let late = 0;
+    let onLeave = 0;
+
+    Object.values(batchMap.value).forEach(item => {
+        if (item.status === 'present') present++;
+        else if (item.status === 'absent') absent++;
+        else if (item.status === 'late') late++;
+        else if (item.status === 'on_leave') onLeave++;
+    });
+
+    return { present, absent, late, onLeave, total: props.allStaff.length };
+});
+
+const isSubmittingBulk = ref(false);
+
+const saveBulkAttendance = () => {
+    isSubmittingBulk.value = true;
+    const payload = {
+        date: selectedDate.value,
+        attendances: props.allStaff.map(s => ({
+            staff_id: s.id,
+            status: batchMap.value[s.id]?.status || 'present',
+            clock_in: batchMap.value[s.id]?.clock_in || null,
+            clock_out: batchMap.value[s.id]?.clock_out || null,
+            notes: batchMap.value[s.id]?.notes || null,
+        })),
+    };
+
+    router.post(route('admin.attendance.bulk-store'), payload, {
+        preserveScroll: true,
+        onFinish: () => {
+            isSubmittingBulk.value = false;
+            showQuickSheetModal.value = false;
+        },
+    });
+};
 
 const showImportModal = ref(false);
 const importForm = useForm({
@@ -360,6 +479,14 @@ const markAbsentForUnlogged = () => {
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
+
+                    <Button 
+                        @click="syncBatchMap(); showQuickSheetModal = true" 
+                        :disabled="!!holiday" 
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm flex-1 sm:flex-none"
+                    >
+                        <CheckSquare class="w-4 h-4 mr-2" /> Quick Ticking Sheet
+                    </Button>
 
                     <Button variant="outline" @click="markAbsentForUnlogged" :disabled="!!holiday" class="border-red-200 bg-red-50 text-red-700 hover:bg-red-100 flex-1 sm:flex-none">
                         <XCircle class="w-4 h-4 mr-2" /> Mark Absent
@@ -844,6 +971,234 @@ const markAbsentForUnlogged = () => {
                         <Button @click="submitEditHoliday" :disabled="editHolidayForm.processing || !editHolidayForm.name || !editHolidayForm.date" class="w-full bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200">
                             {{ editHolidayForm.processing ? 'Updating...' : 'Update Holiday Details' }}
                         </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <!-- Quick Attendance Ticking Sheet Modal -->
+            <Dialog v-model:open="showQuickSheetModal">
+                <DialogContent class="max-w-[95vw] lg:max-w-[1100px] max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl">
+                    <DialogHeader class="p-6 pb-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <div>
+                                <DialogTitle class="text-xl font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                                    <CheckSquare class="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                                    Quick Staff Attendance Sheet
+                                </DialogTitle>
+                                <DialogDescription class="text-xs text-muted-foreground mt-0.5">
+                                    Easily tick Present, Absent, Late, or On Leave for active staff members for <span class="font-bold text-slate-900 dark:text-slate-100 font-mono">{{ selectedDate }}</span>
+                                </DialogDescription>
+                            </div>
+
+                            <!-- Live Stat Badges -->
+                            <div class="flex flex-wrap items-center gap-2 text-xs">
+                                <Badge variant="outline" class="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold px-2.5 py-1">
+                                    ✓ Present: {{ quickStats.present }}
+                                </Badge>
+                                <Badge variant="outline" class="bg-rose-50 text-rose-700 border-rose-200 font-bold px-2.5 py-1">
+                                    ✗ Absent: {{ quickStats.absent }}
+                                </Badge>
+                                <Badge variant="outline" class="bg-amber-50 text-amber-700 border-amber-200 font-bold px-2.5 py-1">
+                                    🕒 Late: {{ quickStats.late }}
+                                </Badge>
+                                <Badge variant="outline" class="bg-blue-50 text-blue-700 border-blue-200 font-bold px-2.5 py-1">
+                                    🏖 Leave: {{ quickStats.onLeave }}
+                                </Badge>
+                            </div>
+                        </div>
+                    </DialogHeader>
+
+                    <!-- Sheet Controls & Filters -->
+                    <div class="p-4 bg-slate-100/60 dark:bg-slate-900/40 border-b border-slate-200/60 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex flex-wrap items-center gap-2 flex-1 min-w-[280px]">
+                            <div class="relative flex-1 min-w-[200px]">
+                                <Search class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input 
+                                    v-model="quickSheetSearch" 
+                                    placeholder="Filter staff by name or staff no..." 
+                                    class="pl-9 h-9 text-xs bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800" 
+                                />
+                            </div>
+                            <Select v-model="quickSheetDept">
+                                <SelectTrigger class="w-[180px] h-9 text-xs bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800">
+                                    <SelectValue placeholder="All Departments" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="ALL" class="text-xs">All Departments</SelectItem>
+                                    <SelectItem v-for="dept in departments" :key="dept.id" :value="String(dept.id)" class="text-xs">{{ dept.name }}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <!-- Batch Quick Action Buttons -->
+                        <div class="flex items-center gap-2">
+                            <Button 
+                                type="button" 
+                                variant="outline" 
+                                size="sm" 
+                                class="h-9 text-xs font-bold bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                                @click="markAllVisible('present')"
+                            >
+                                <UserCheck class="w-3.5 h-3.5 mr-1.5" /> Mark All Present
+                            </Button>
+                            <Button 
+                                type="button" 
+                                variant="outline" 
+                                size="sm" 
+                                class="h-9 text-xs font-bold bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+                                @click="markAllVisible('absent')"
+                            >
+                                <UserX class="w-3.5 h-3.5 mr-1.5" /> Mark All Absent
+                            </Button>
+                        </div>
+                    </div>
+
+                    <!-- Staff Interactive Ticking Table -->
+                    <div class="flex-1 overflow-y-auto p-4 max-h-[50vh]">
+                        <div class="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                            <Table>
+                                <TableHeader class="bg-slate-50 dark:bg-slate-900">
+                                    <TableRow>
+                                        <TableHead class="w-[50px]">#</TableHead>
+                                        <TableHead>Staff Member</TableHead>
+                                        <TableHead>Department</TableHead>
+                                        <TableHead class="text-center w-[380px]">Attendance Status</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody class="divide-y">
+                                    <TableRow v-for="(staff, idx) in paginatedQuickStaff" :key="staff.id" class="hover:bg-slate-50/60 dark:hover:bg-slate-900/40 transition-colors">
+                                        <TableCell class="text-xs text-muted-foreground font-mono">{{ (quickSheetPage - 1) * quickSheetPerPage + idx + 1 }}</TableCell>
+                                        <TableCell>
+                                            <div class="flex items-center gap-2.5">
+                                                <Avatar class="h-8 w-8 border border-slate-200 dark:border-slate-800">
+                                                    <AvatarFallback class="bg-indigo-100 text-indigo-700 font-bold text-xs">{{ staff.name.charAt(0) }}</AvatarFallback>
+                                                </Avatar>
+                                                <div>
+                                                    <p class="font-semibold text-xs text-slate-900 dark:text-slate-100 leading-tight">{{ staff.name }}</p>
+                                                    <p class="text-[10px] text-muted-foreground font-mono">{{ staff.staff_number || 'N/A' }}</p>
+                                                </div>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell class="text-xs text-muted-foreground">
+                                            {{ staff.department_name || 'General' }}
+                                        </TableCell>
+                                        <TableCell class="text-center">
+                                            <!-- Interactive Status Pills -->
+                                            <div class="inline-flex p-1 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 gap-1">
+                                                <button 
+                                                    type="button" 
+                                                    @click="setStaffStatus(staff.id, 'present')"
+                                                    :class="[
+                                                        'px-3 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1',
+                                                        batchMap[staff.id]?.status === 'present' 
+                                                            ? 'bg-emerald-600 text-white shadow-sm scale-105' 
+                                                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                                                    ]"
+                                                >
+                                                    <CheckCircle2 class="w-3.5 h-3.5" /> Present
+                                                </button>
+
+                                                <button 
+                                                    type="button" 
+                                                    @click="setStaffStatus(staff.id, 'absent')"
+                                                    :class="[
+                                                        'px-3 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1',
+                                                        batchMap[staff.id]?.status === 'absent' 
+                                                            ? 'bg-rose-600 text-white shadow-sm scale-105' 
+                                                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                                                    ]"
+                                                >
+                                                    <XCircle class="w-3.5 h-3.5" /> Absent
+                                                </button>
+
+                                                <button 
+                                                    type="button" 
+                                                    @click="setStaffStatus(staff.id, 'late')"
+                                                    :class="[
+                                                        'px-3 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1',
+                                                        batchMap[staff.id]?.status === 'late' 
+                                                            ? 'bg-amber-500 text-white shadow-sm scale-105' 
+                                                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                                                    ]"
+                                                >
+                                                    <Clock3 class="w-3.5 h-3.5" /> Late
+                                                </button>
+
+                                                <button 
+                                                    type="button" 
+                                                    @click="setStaffStatus(staff.id, 'on_leave')"
+                                                    :class="[
+                                                        'px-3 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1',
+                                                        batchMap[staff.id]?.status === 'on_leave' 
+                                                            ? 'bg-blue-600 text-white shadow-sm scale-105' 
+                                                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                                                    ]"
+                                                >
+                                                    <Calendar class="w-3.5 h-3.5" /> Leave
+                                                </button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+
+                                    <TableRow v-if="filteredQuickStaff.length === 0">
+                                        <TableCell colspan="4" class="h-28 text-center text-xs text-muted-foreground">
+                                            No active staff members found matching your filter.
+                                        </TableCell>
+                                    </TableRow>
+                                </TableBody>
+                            </Table>
+                        </div>
+
+                        <!-- Sheet Pagination Controls -->
+                        <div v-if="filteredQuickStaff.length > quickSheetPerPage" class="flex items-center justify-between pt-3 pb-1 text-xs text-muted-foreground">
+                            <span>Showing {{ (quickSheetPage - 1) * quickSheetPerPage + 1 }} to {{ Math.min(quickSheetPage * quickSheetPerPage, filteredQuickStaff.length) }} of {{ filteredQuickStaff.length }} staff</span>
+                            <div class="flex items-center gap-2">
+                                <Button 
+                                    type="button" 
+                                    variant="outline" 
+                                    size="sm" 
+                                    class="h-8 text-xs font-bold"
+                                    :disabled="quickSheetPage <= 1"
+                                    @click="quickSheetPage--"
+                                >
+                                    <ChevronLeft class="w-3.5 h-3.5 mr-1" /> Previous
+                                </Button>
+                                <span class="font-bold text-slate-700 dark:text-slate-300">Page {{ quickSheetPage }} of {{ totalQuickPages }}</span>
+                                <Button 
+                                    type="button" 
+                                    variant="outline" 
+                                    size="sm" 
+                                    class="h-8 text-xs font-bold"
+                                    :disabled="quickSheetPage >= totalQuickPages"
+                                    @click="quickSheetPage++"
+                                >
+                                    Next <ChevronRight class="w-3.5 h-3.5 ml-1" />
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer Actions -->
+                    <DialogFooter class="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-row items-center justify-between">
+                        <p class="text-xs text-muted-foreground hidden sm:block">
+                            Submitting will save attendance logs for <strong class="text-slate-800 dark:text-slate-200">{{ allStaff.length }}</strong> staff members.
+                        </p>
+
+                        <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                            <Button type="button" variant="outline" class="rounded-xl font-bold" @click="showQuickSheetModal = false">
+                                Cancel
+                            </Button>
+                            <Button 
+                                type="button" 
+                                class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl px-6 shadow-md"
+                                :disabled="isSubmittingBulk"
+                                @click="saveBulkAttendance"
+                            >
+                                <Loader2 v-if="isSubmittingBulk" class="w-4 h-4 mr-2 animate-spin" />
+                                <CheckCircle2 v-else class="w-4 h-4 mr-2" />
+                                Save & Confirm All Attendance
+                            </Button>
+                        </div>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

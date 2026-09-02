@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AdminLayout from '@/layouts/AdminLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { ref, watch, computed } from 'vue';
 import { debounce } from 'lodash';
 import { 
@@ -13,7 +13,9 @@ import {
     CheckCircle,
     Clock,
     AlertCircle,
-    Download
+    Download,
+    RefreshCw,
+    Loader2
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
 
@@ -226,6 +228,27 @@ const downloadReceipt = (paymentId: string) => {
     window.open(route('admin.payments.download_receipt', paymentId), '_blank');
 };
 
+const requeryingId = ref<string | null>(null);
+
+const hasPermission = (permission: string) => {
+    const user = usePage().props.auth?.user as any;
+    if (!user) return false;
+    return user.permissions?.includes(permission) || user.roles?.includes('admin') || user.roles?.includes('super_admin');
+};
+
+const canRequery = computed(() => {
+    return hasPermission('verify_payments') || hasPermission('manual_payment_override') || hasPermission('manage_payments');
+});
+
+const requeryPayment = (paymentId: string) => {
+    requeryingId.value = paymentId;
+    router.post(route('payments.verify', paymentId), {}, {
+        preserveScroll: true,
+        onFinish: () => {
+            requeryingId.value = null;
+        }
+    });
+};
 </script>
 
 <template>
@@ -516,6 +539,18 @@ const downloadReceipt = (paymentId: string) => {
                                 {{ formatDate(payment.paid_at) }}
                             </TableCell>
                             <TableCell class="text-right flex items-center justify-end gap-2">
+                                <Button 
+                                    v-if="payment.status !== 'success' && canRequery" 
+                                    variant="outline" 
+                                    size="sm" 
+                                    @click="requeryPayment(payment.id)" 
+                                    :disabled="requeryingId === payment.id"
+                                    title="Requery Payment Status from Gateway"
+                                    class="text-indigo-600 border-indigo-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                                >
+                                    <Loader2 v-if="requeryingId === payment.id" class="w-4 h-4 animate-spin" />
+                                    <RefreshCw v-else class="w-4 h-4" />
+                                </Button>
                                 <Button v-if="payment.status === 'success'" variant="outline" size="sm" @click="downloadReceipt(payment.id)" title="Download Receipt">
                                     <Download class="w-4 h-4" />
                                 </Button>

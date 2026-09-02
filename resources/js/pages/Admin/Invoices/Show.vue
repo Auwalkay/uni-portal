@@ -12,7 +12,7 @@ import Swal from 'sweetalert2';
 import { 
     ArrowLeft, Printer, CreditCard, CheckCircle2, Clock, Calendar, 
     User, Mail, School, Building, RefreshCw, Download, ShieldCheck,
-    AlertCircle, Wallet, History, Trash2, Edit3, Plus, Trash
+    AlertCircle, Wallet, History, Trash2, Edit3, Plus, Trash, Tag
 } from 'lucide-vue-next';
 import { type BreadcrumbItem } from '@/types';
 import { 
@@ -640,9 +640,16 @@ const filteredPayments = computed(() => {
                                         </Badge>
                                     </div>
 
+                                    <!-- Transaction Reference / ID -->
+                                    <div class="text-[11px] font-mono text-slate-600 dark:text-slate-300 flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900/60 px-2.5 py-1.5 rounded-md border border-slate-200/60 dark:border-slate-800">
+                                        <Tag class="w-3 h-3 text-indigo-500 flex-shrink-0" />
+                                        <span class="font-medium text-slate-400">Txn ID:</span>
+                                        <span class="font-bold select-all text-slate-800 dark:text-slate-200 truncate">{{ payment.gateway_reference || payment.id }}</span>
+                                    </div>
+
                                     <div class="flex flex-wrap items-center gap-2">
                                         <Badge variant="outline" class="text-[9px] h-5 font-mono text-slate-500 capitalize bg-slate-50 dark:bg-slate-900 border-slate-100">
-                                            {{ payment.channel }}
+                                            {{ payment.channel || payment.gateway || 'Online' }}
                                         </Badge>
                                         <div v-if="payment.recorder" class="text-[10px] text-slate-400 flex items-center gap-1 font-medium">
                                             <User class="w-3 h-3 text-slate-400" /> Collected by {{ payment.recorder.name }}

@@ -126,6 +126,7 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
 
             Route::middleware(['permission:manage_attendance'])->group(function () {
                 Route::post('attendance', [AttendanceController::class, 'store'])->name('attendance.store');
+                Route::post('attendance/bulk-store', [AttendanceController::class, 'bulkStore'])->name('attendance.bulk-store');
                 Route::put('attendance/{attendance}', [AttendanceController::class, 'update'])->name('attendance.update');
                 Route::post('attendance/import', [AttendanceController::class, 'import'])->name('attendance.import');
                 Route::post('attendance/mark-absent', [AttendanceController::class, 'markAbsent'])->name('attendance.mark-absent');
