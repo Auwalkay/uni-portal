@@ -94,7 +94,28 @@ const props = defineProps<{
         new: number;
         graduating: number;
     };
+    permissions?: {
+        can_view?: boolean;
+        can_create?: boolean;
+        can_edit?: boolean;
+        can_delete?: boolean;
+        can_import?: boolean;
+        can_export?: boolean;
+        can_assign_scholarship?: boolean;
+        can_toggle_status?: boolean;
+    };
 }>();
+
+const userPermissions = computed(() => ({
+    can_view: props.permissions?.can_view ?? true,
+    can_create: props.permissions?.can_create ?? true,
+    can_edit: props.permissions?.can_edit ?? true,
+    can_delete: props.permissions?.can_delete ?? true,
+    can_import: props.permissions?.can_import ?? true,
+    can_export: props.permissions?.can_export ?? true,
+    can_assign_scholarship: props.permissions?.can_assign_scholarship ?? true,
+    can_toggle_status: props.permissions?.can_toggle_status ?? true,
+}));
 
 const search = ref(props.filters.search || '');
 const selectedSession = ref(props.filters.session_id || '');
@@ -330,7 +351,7 @@ const handleExport = () => {
                     </div>
 
                     <div class="flex gap-2">
-                        <Dialog v-model:open="showImportModal">
+                        <Dialog v-if="userPermissions.can_import" v-model:open="showImportModal">
                             <DialogTrigger as-child>
                                 <Button variant="outline">
                                     <Upload class="w-4 h-4 mr-2" /> Import
@@ -479,15 +500,15 @@ const handleExport = () => {
                             </DialogContent>
                         </Dialog>
 
-                        <Button variant="outline" @click="handleExport" class="border-green-600/30 text-green-600 hover:bg-green-600/10 hover:text-green-700">
+                        <Button v-if="userPermissions.can_export" variant="outline" @click="handleExport" class="border-green-600/30 text-green-600 hover:bg-green-600/10 hover:text-green-700">
                             <FileSpreadsheet class="w-4 h-4 mr-2" /> Export
                         </Button>
 
-                        <Button variant="outline" @click="openBulkModal" class="border-primary/30 text-primary hover:bg-primary/10">
+                        <Button v-if="userPermissions.can_assign_scholarship" variant="outline" @click="openBulkModal" class="border-primary/30 text-primary hover:bg-primary/10">
                             <Award class="w-4 h-4 mr-2" /> Assign Scholarship
                         </Button>
 
-                        <Button as-child shadow="md">
+                        <Button v-if="userPermissions.can_create" as-child shadow="md">
                             <Link :href="route('admin.students.create')">
                                 <UserPlus class="w-4 h-4 mr-2" /> Add Student
                             </Link>
@@ -744,17 +765,18 @@ const handleExport = () => {
                             </TableCell>
                             <TableCell class="text-right">
                                 <div class="flex justify-end gap-2">
-                                    <Button variant="outline" size="sm" as-child>
+                                    <Button v-if="userPermissions.can_view" variant="outline" size="sm" as-child>
                                         <Link :href="route('admin.students.show', student.id)">
                                             View
                                         </Link>
                                     </Button>
-                                    <Button variant="secondary" size="sm" as-child>
+                                    <Button v-if="userPermissions.can_edit" variant="secondary" size="sm" as-child>
                                         <Link :href="route('admin.students.edit', student.id)">
                                             Edit
                                         </Link>
                                     </Button>
                                     <Button 
+                                        v-if="userPermissions.can_toggle_status"
                                         :variant="student.user.is_active ? 'destructive' : 'default'" 
                                         size="sm"
                                         @click="() => router.put(route('admin.students.toggle_status', student.id))"

@@ -168,35 +168,93 @@ class StudentController extends Controller
         return redirect()->route('admin.students.index')->with('success', 'Student created successfully.');
     }
 
+    protected function applyStudentAccessScope($query, $user)
+    {
+        // 1. Global Admins & University Leadership: Full access across all departments
+        if ($user->can('manage_users') || $user->hasAnyRole([
+            'admin', 'super_admin', 'vc', 'ict_admin', 'registrar', 
+            'bursar', 'admission_director', 'admissions_officer', 'admissions_manager', 'student_affairs_officer'
+        ])) {
+            return;
+        }
+
+        $staff = $user->staff?->loadMissing('department');
+
+        // 2. Deans: View all students in their Faculty
+        if ($user->hasRole('dean') || $user->can('view_faculty_students')) {
+            $facultyId = $staff?->department?->faculty_id;
+            if ($facultyId) {
+                $query->whereHas('academicDepartment', function ($q) use ($facultyId) {
+                    $q->where('faculty_id', $facultyId);
+                });
+                return;
+            }
+        }
+
+        // 3. HODs: View all students in their Department
+        if ($user->hasRole('hod') || $user->can('view_department_students')) {
+            $departmentId = $staff?->department_id;
+            if ($departmentId) {
+                $query->where('department_id', $departmentId);
+                return;
+            }
+        }
+
+        // 4. Lecturers / Course Coordinators: View students registered in allocated courses
+        $query->whereHas('registrations', function ($q) use ($user) {
+            $q->whereHas('course', function ($cq) use ($user) {
+                $cq->whereHas('allocations', function ($aq) use ($user) {
+                    $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
+                });
+            });
+        });
+    }
+
+    protected function isUserAuthorizedForStudent(Student $student, $user): bool
+    {
+        if ($user->can('manage_users') || $user->hasAnyRole([
+            'admin', 'super_admin', 'vc', 'ict_admin', 'registrar', 
+            'bursar', 'admission_director', 'admissions_officer', 'admissions_manager', 'student_affairs_officer'
+        ])) {
+            return true;
+        }
+
+        $staff = $user->staff?->loadMissing('department');
+
+        if ($user->hasRole('dean') || $user->can('view_faculty_students')) {
+            $facultyId = $staff?->department?->faculty_id;
+            if ($facultyId && $student->academicDepartment?->faculty_id === $facultyId) {
+                return true;
+            }
+        }
+
+        if ($user->hasRole('hod') || $user->can('view_department_students')) {
+            $departmentId = $staff?->department_id;
+            if ($departmentId && $student->department_id === $departmentId) {
+                return true;
+            }
+        }
+
+        return $student->registrations()->whereHas('course', function ($q) use ($user) {
+            $q->whereHas('allocations', function ($aq) use ($user) {
+                $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
+            });
+        })->exists();
+    }
+
     public function index(Request $request)
     {
         $user = auth()->user();
 
         // Base query for counts/stats (unfiltered by search/pagination)
         $statsQuery = Student::query();
-        if (!$user->can('manage_users')) {
-            $statsQuery->whereHas('registrations', function ($q) use ($user) {
-                $q->whereHas('course', function ($cq) use ($user) {
-                    $cq->whereHas('allocations', function ($aq) use ($user) {
-                        $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
-                    });
-                });
-            });
-        }
+        $this->applyStudentAccessScope($statsQuery, $user);
 
         $query = Student::query()
             ->with(['user', 'academicDepartment.faculty', 'admittedSession', 'program', 'scholarship']);
 
-        // Access Control: Lecturers see only students registered in their allocated courses
-        if (!$user->can('manage_users')) {
-            $query->whereHas('registrations', function ($q) use ($user) {
-                $q->whereHas('course', function ($cq) use ($user) {
-                    $cq->whereHas('allocations', function ($aq) use ($user) {
-                        $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
-                    });
-                });
-            });
-        }
+        // Access Control: Apply role/department/faculty scope
+        $this->applyStudentAccessScope($query, $user);
 
         // Search Filter
         if ($request->filled('search')) {
@@ -322,6 +380,16 @@ class StudentController extends Controller
                     ];
                 }
             ),
+            'permissions' => [
+                'can_view' => $user->can('view_students') || $user->can('manage_users') || $user->hasRole(['admin', 'admission_director', 'vc', 'ict_admin', 'dean', 'hod']),
+                'can_create' => $user->can('create_students') || $user->can('admit_students') || $user->hasRole(['admin', 'admission_director']),
+                'can_edit' => $user->can('edit_students') || $user->hasRole(['admin', 'admission_director']),
+                'can_delete' => $user->can('delete_students') || $user->hasRole('admin'),
+                'can_import' => $user->can('import_students') || $user->can('create_students') || $user->hasRole(['admin', 'admission_director']),
+                'can_export' => $user->can('view_students') || $user->can('export_students') || $user->hasRole(['admin', 'admission_director', 'vc', 'ict_admin', 'dean', 'hod']),
+                'can_assign_scholarship' => $user->can('edit_students') || $user->can('manage_scholarships') || $user->hasRole(['admin', 'bursar', 'admission_director']),
+                'can_toggle_status' => $user->can('edit_students') || $user->hasRole('admin'),
+            ],
         ]);
     }
 
@@ -329,17 +397,9 @@ class StudentController extends Controller
     {
         $user = auth()->user();
         
-        // Authorization check for lecturers
-        if (!$user->can('manage_users')) {
-            $isAuthorized = $student->registrations()->whereHas('course', function ($q) use ($user) {
-                $q->whereHas('allocations', function ($aq) use ($user) {
-                    $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
-                });
-            })->exists();
-
-            if (!$isAuthorized) {
-                abort(403, 'You are not authorized to view this student.');
-            }
+        // Authorization check (Admins, Deans, HODs, Lecturers)
+        if (!$this->isUserAuthorizedForStudent($student, $user)) {
+            abort(403, 'You are not authorized to view this student.');
         }
 
         $canViewFinance = $user->can('view_payments');

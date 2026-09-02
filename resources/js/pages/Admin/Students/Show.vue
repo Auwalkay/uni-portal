@@ -336,7 +336,7 @@ const submitStudentSession = () => {
                                     </DialogContent>
                                 </Dialog>
 
-                                <Button variant="outline" size="sm" class="rounded-xl font-bold gap-1.5" as-child>
+                                <Button v-if="permissions.can_edit_students" variant="outline" size="sm" class="rounded-xl font-bold gap-1.5" as-child>
                                     <Link :href="route('admin.students.edit', student.id)">
                                         <Edit class="w-4 h-4" /> Edit Profile
                                     </Link>
@@ -358,7 +358,7 @@ const submitStudentSession = () => {
                                     <Lock class="w-4 h-4" /> Reset Password
                                 </Button>
 
-                                <Button v-if="student.status !== 'graduated'" variant="outline" size="sm" class="rounded-xl font-bold gap-1.5 border-blue-200 text-blue-600 hover:bg-blue-50" @click="promoteStudent">
+                                <Button v-if="permissions.can_edit_students && student.status !== 'graduated'" variant="outline" size="sm" class="rounded-xl font-bold gap-1.5 border-blue-200 text-blue-600 hover:bg-blue-50" @click="promoteStudent">
                                     <TrendingUp class="w-4 h-4" /> Promote Student
                                 </Button>
                             </div>
