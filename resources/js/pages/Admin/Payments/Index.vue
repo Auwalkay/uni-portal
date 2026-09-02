@@ -150,6 +150,16 @@ const handleSort = (column: string) => {
     }
 };
 
+// Auto search with debounce
+watch(search, debounce(() => {
+    applyFilters();
+}, 400));
+
+// Auto trigger when select filters change
+watch([selectedSession, selectedFaculty, selectedDepartment, selectedStatus, selectedMethod, selectedPeriod, startDate, endDate], () => {
+    applyFilters();
+});
+
 // Auto clear department if faculty mismatch
 watch(selectedFaculty, () => {
     if (selectedFaculty.value && selectedDepartment.value) {
@@ -177,6 +187,7 @@ const clearFilters = () => {
     endDate.value = '';
     sortBy.value = 'date';
     sortOrder.value = 'desc';
+    applyFilters();
 };
 
 const formatDate = (dateString: string) => {
@@ -304,9 +315,10 @@ const downloadReceipt = (paymentId: string) => {
                             <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input
                               type="search"
-                              placeholder="Search reference, name..."
+                              placeholder="Search reference, name, matric no, invoice..."
                               class="pl-8"
                               v-model="search"
+                              @keyup.enter="applyFilters"
                             />
                         </div>
                     </div>
@@ -394,6 +406,7 @@ const downloadReceipt = (paymentId: string) => {
                               <SelectValue placeholder="Period" />
                             </SelectTrigger>
                             <SelectContent>
+                                <SelectItem value="all">All Time</SelectItem>
                                 <SelectItem value="daily">Daily</SelectItem>
                                 <SelectItem value="weekly">Weekly</SelectItem>
                                 <SelectItem value="monthly">Monthly</SelectItem>
