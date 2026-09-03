@@ -70,13 +70,13 @@ class InventoryController extends Controller
             'recent_assignments' => $recentAssignments,
             'filters' => $request->only(['search', 'category_id']),
             'permissions' => [
-                'can_manage' => $request->user()->can('manage_inventory'),
-                'can_create' => $request->user()->can('create_inventory_items'),
-                'can_edit' => $request->user()->can('edit_inventory_items'),
-                'can_delete' => $request->user()->can('delete_inventory_items'),
-                'can_restock' => $request->user()->can('restock_inventory_items'),
-                'can_create_requisition' => $request->user()->can('create_inventory_requisitions'),
-                'can_approve_requisition' => $request->user()->can('approve_inventory_requisitions'),
+                'can_manage' => $request->user()->hasRole(['super_admin', 'admin', 'bursar', 'store_officer']) || $request->user()->can('manage_inventory'),
+                'can_create' => $request->user()->hasRole(['super_admin', 'admin', 'bursar', 'store_officer']) || $request->user()->can('create_inventory_items') || $request->user()->can('manage_inventory'),
+                'can_edit' => $request->user()->hasRole(['super_admin', 'admin', 'bursar', 'store_officer']) || $request->user()->can('edit_inventory_items') || $request->user()->can('manage_inventory'),
+                'can_delete' => $request->user()->hasRole(['super_admin', 'admin', 'bursar', 'store_officer']) || $request->user()->can('delete_inventory_items') || $request->user()->can('manage_inventory'),
+                'can_restock' => $request->user()->hasRole(['super_admin', 'admin', 'bursar', 'store_officer']) || $request->user()->can('restock_inventory_items') || $request->user()->can('manage_inventory'),
+                'can_create_requisition' => $request->user()->hasRole(['super_admin', 'admin', 'bursar', 'store_officer']) || $request->user()->can('create_inventory_requisitions') || $request->user()->can('view_inventory'),
+                'can_approve_requisition' => $request->user()->hasRole(['super_admin', 'admin', 'bursar', 'store_officer']) || $request->user()->can('approve_inventory_requisitions') || $request->user()->can('manage_inventory'),
             ],
         ]);
     }

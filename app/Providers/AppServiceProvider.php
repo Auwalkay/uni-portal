@@ -38,6 +38,11 @@ class AppServiceProvider extends ServiceProvider
             \Illuminate\Auth\Events\Login::class,
             \App\Listeners\LoginListener::class
         );
+
+        // Implicitly grant "Super Admin" role all permissions
+        \Illuminate\Support\Facades\Gate::before(function ($user, $ability) {
+            return $user->hasRole('super_admin') ? true : null;
+        });
     }
 
     protected function configureDefaults(): void

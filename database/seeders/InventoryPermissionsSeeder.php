@@ -14,6 +14,14 @@ class InventoryPermissionsSeeder extends Seeder
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
         $permissions = [
+            'view_inventory',
+            'manage_inventory',
+            'create_inventory_items',
+            'edit_inventory_items',
+            'delete_inventory_items',
+            'restock_inventory_items',
+            'create_inventory_requisitions',
+            'approve_inventory_requisitions',
             'view_inventory_requisitions',
             'manage_inventory_requisitions',
             'view_inventory_assignments',
