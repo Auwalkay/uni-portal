@@ -268,6 +268,7 @@ class AccommodationController extends Controller
                 }
             }
 
+            $finalAmount = max(0, $fee->amount - $discountAmount);
             $expiryDays = intval(SystemSetting::get('hostel_booking_expiry_days', 2));
             $dueDate = now()->addDays($expiryDays);
 
