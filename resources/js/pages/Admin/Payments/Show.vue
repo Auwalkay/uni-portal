@@ -56,7 +56,7 @@ const canRequery = computed(() => {
 
 const requeryPayment = () => {
     isRequerying.value = true;
-    router.post(route('payments.verify', props.payment.id), {}, {
+    router.post(route('admin.payments.verify', props.payment.id), {}, {
         preserveScroll: true,
         onFinish: () => {
             isRequerying.value = false;

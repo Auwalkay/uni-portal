@@ -242,7 +242,7 @@ const canRequery = computed(() => {
 
 const requeryPayment = (paymentId: string) => {
     requeryingId.value = paymentId;
-    router.post(route('payments.verify', paymentId), {}, {
+    router.post(route('admin.payments.verify', paymentId), {}, {
         preserveScroll: true,
         onFinish: () => {
             requeryingId.value = null;
