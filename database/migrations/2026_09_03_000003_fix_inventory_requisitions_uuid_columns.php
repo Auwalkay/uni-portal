@@ -12,12 +12,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('inventory_requisitions', function (Blueprint $table) {
-            // Modify user_id, department_id, approved_by to char(36) / uuid
-            DB::statement("ALTER TABLE inventory_requisitions MODIFY user_id CHAR(36) NOT NULL");
-            DB::statement("ALTER TABLE inventory_requisitions MODIFY department_id CHAR(36) NULL");
-            DB::statement("ALTER TABLE inventory_requisitions MODIFY approved_by CHAR(36) NULL");
-        });
+        if (DB::getDriverName() === 'mysql') {
+            Schema::table('inventory_requisitions', function (Blueprint $table) {
+                // Modify user_id, department_id, approved_by to char(36) / uuid
+                DB::statement("ALTER TABLE inventory_requisitions MODIFY user_id CHAR(36) NOT NULL");
+                DB::statement("ALTER TABLE inventory_requisitions MODIFY department_id CHAR(36) NULL");
+                DB::statement("ALTER TABLE inventory_requisitions MODIFY approved_by CHAR(36) NULL");
+            });
+        }
     }
 
     /**
@@ -25,10 +27,12 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('inventory_requisitions', function (Blueprint $table) {
-            DB::statement("ALTER TABLE inventory_requisitions MODIFY user_id BIGINT UNSIGNED NOT NULL");
-            DB::statement("ALTER TABLE inventory_requisitions MODIFY department_id BIGINT UNSIGNED NULL");
-            DB::statement("ALTER TABLE inventory_requisitions MODIFY approved_by BIGINT UNSIGNED NULL");
-        });
+        if (DB::getDriverName() === 'mysql') {
+            Schema::table('inventory_requisitions', function (Blueprint $table) {
+                DB::statement("ALTER TABLE inventory_requisitions MODIFY user_id BIGINT UNSIGNED NOT NULL");
+                DB::statement("ALTER TABLE inventory_requisitions MODIFY department_id BIGINT UNSIGNED NULL");
+                DB::statement("ALTER TABLE inventory_requisitions MODIFY approved_by BIGINT UNSIGNED NULL");
+            });
+        }
     }
 };
