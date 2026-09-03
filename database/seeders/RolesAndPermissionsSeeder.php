@@ -116,7 +116,20 @@ class RolesAndPermissionsSeeder extends Seeder
             // Inventory Management
             'view_inventory',
             'manage_inventory',
+            'create_inventory_items',
+            'edit_inventory_items',
+            'delete_inventory_items',
+            'restock_inventory_items',
+            'create_inventory_requisitions',
+            'approve_inventory_requisitions',
             'assign_inventory',
+            'view_inventory_requisitions',
+            'manage_inventory_requisitions',
+            'view_inventory_assignments',
+            'manage_inventory_assignments',
+            'view_inventory_categories',
+            'manage_inventory_categories',
+            'view_inventory_audit_logs',
             'manage_inventory_complaints',
             
             // Personal

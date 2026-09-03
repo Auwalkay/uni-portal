@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\FinanceController;
 use App\Http\Controllers\Admin\InventoryAssignmentController;
 use App\Http\Controllers\Admin\InventoryComplaintController;
 use App\Http\Controllers\Admin\InventoryController;
+use App\Http\Controllers\Admin\InventoryRequisitionController;
 use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\PayrollController;
 use App\Http\Controllers\Admin\SalaryController;
@@ -181,17 +182,28 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
     // INVENTORY MANAGEMENT
     Route::middleware(['permission:view_inventory'])->group(function () {
         Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
+        Route::get('inventory/requisitions', [InventoryRequisitionController::class, 'index'])->name('inventory.requisitions.index');
+        Route::get('inventory/assignments', [InventoryAssignmentController::class, 'index'])->name('inventory.assignments.index');
+        Route::get('inventory/categories', [InventoryController::class, 'categoriesIndex'])->name('inventory.categories.index');
+        Route::get('inventory/audit-logs', [InventoryController::class, 'auditLogsIndex'])->name('inventory.audit-logs.index');
         Route::get('inventory/staff/search', [InventoryAssignmentController::class, 'searchStaff'])->name('inventory.staff.search');
         Route::get('inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
         Route::get('inventory/export-assignments', [InventoryController::class, 'exportAssignments'])->name('inventory.export-assignments');
         Route::get('inventory/complaints', [InventoryComplaintController::class, 'index'])->name('inventory.complaints.index');
+        Route::get('inventory/requisitions/{requisition}/voucher', [InventoryRequisitionController::class, 'downloadVoucher'])->name('inventory.requisitions.voucher');
 
         Route::middleware(['permission:manage_inventory'])->group(function () {
-            Route::post('inventory', [InventoryController::class, 'store'])->name('inventory.store');
-            Route::put('inventory/{item}', [InventoryController::class, 'update'])->name('inventory.update');
-            Route::delete('inventory/{item}', [InventoryController::class, 'destroy'])->name('inventory.destroy');
-            Route::post('inventory/import', [InventoryController::class, 'import'])->name('inventory.import');
+            Route::post('inventory', [InventoryController::class, 'store'])->middleware('permission:create_inventory_items')->name('inventory.store');
+            Route::put('inventory/{item}', [InventoryController::class, 'update'])->middleware('permission:edit_inventory_items')->name('inventory.update');
+            Route::post('inventory/{item}/restock', [InventoryController::class, 'restock'])->middleware('permission:restock_inventory_items')->name('inventory.restock');
+            Route::delete('inventory/{item}', [InventoryController::class, 'destroy'])->middleware('permission:delete_inventory_items')->name('inventory.destroy');
+            Route::post('inventory/import', [InventoryController::class, 'import'])->middleware('permission:create_inventory_items')->name('inventory.import');
             Route::post('inventory/categories', [InventoryController::class, 'storeCategory'])->name('inventory.categories.store');
+
+            // Requisitions
+            Route::post('inventory/requisitions', [InventoryRequisitionController::class, 'store'])->middleware('permission:create_inventory_requisitions')->name('inventory.requisitions.store');
+            Route::post('inventory/requisitions/{requisition}/approve', [InventoryRequisitionController::class, 'approve'])->middleware('permission:approve_inventory_requisitions')->name('inventory.requisitions.approve');
+            Route::post('inventory/requisitions/{requisition}/reject', [InventoryRequisitionController::class, 'reject'])->middleware('permission:approve_inventory_requisitions')->name('inventory.requisitions.reject');
 
             // Assignments
             Route::post('inventory/assignments', [InventoryAssignmentController::class, 'store'])->name('inventory.assignments.store');

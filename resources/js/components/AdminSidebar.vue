@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building, Package, LifeBuoy, Library, Activity, Megaphone } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building, Package, LifeBuoy, Library, Activity, Megaphone, UserCheck, FolderTree } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -299,10 +299,34 @@ const frontDeskItems = computed(() => {
 const inventoryItems = computed(() => {
     return [
         {
-            title: 'Items & Categories',
-            href: '/admin/inventory',
+            title: 'Store Items Directory',
+            href: route().has('admin.inventory.index') ? route('admin.inventory.index') : '/admin/inventory',
             icon: Package,
             show: hasPermission('view_inventory'),
+        },
+        {
+            title: 'Store Requisitions (SIV)',
+            href: route().has('admin.inventory.requisitions.index') ? route('admin.inventory.requisitions.index') : '/admin/inventory/requisitions',
+            icon: FileText,
+            show: hasPermission('view_inventory') || hasPermission('view_inventory_requisitions'),
+        },
+        {
+            title: 'Staff Assignments',
+            href: route().has('admin.inventory.assignments.index') ? route('admin.inventory.assignments.index') : '/admin/inventory/assignments',
+            icon: UserCheck,
+            show: hasPermission('view_inventory') || hasPermission('view_inventory_assignments'),
+        },
+        {
+            title: 'Store Categories',
+            href: route().has('admin.inventory.categories.index') ? route('admin.inventory.categories.index') : '/admin/inventory/categories',
+            icon: FolderTree,
+            show: hasPermission('view_inventory') || hasPermission('view_inventory_categories'),
+        },
+        {
+            title: 'Stock Audit Log',
+            href: route().has('admin.inventory.audit-logs.index') ? route('admin.inventory.audit-logs.index') : '/admin/inventory/audit-logs',
+            icon: Activity,
+            show: hasPermission('view_inventory') || hasPermission('view_inventory_audit_logs'),
         },
     ].filter(i => i.show);
 });
