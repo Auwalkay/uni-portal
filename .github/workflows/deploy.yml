@@ -17,7 +17,7 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || 22 }}
           script: |
-            cd ${{ secrets.SERVER_PATH }}
+            cd ${{ secrets.SERVER_PATH || '/apps/uni-portal' }}
             git pull origin main
             composer install --no-dev --optimize-autoloader
             php artisan migrate --force
