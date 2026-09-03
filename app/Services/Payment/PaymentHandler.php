@@ -70,7 +70,27 @@ class PaymentHandler
         if ($invoice->type === 'hostel_fee') {
             $booking = \App\Models\HostelBooking::where('invoice_id', $invoice->id)->first();
             if ($booking) {
-                $booking->update(['status' => 'confirmed']);
+                $room = $booking->room;
+                if ($room) {
+                    $otherConfirmedCount = \App\Models\HostelBooking::where('hostel_room_id', $room->id)
+                        ->where('session_id', $booking->session_id)
+                        ->where('status', 'confirmed')
+                        ->where('id', '!=', $booking->id)
+                        ->count();
+
+                    if ($otherConfirmedCount < $room->capacity) {
+                        $booking->update(['status' => 'confirmed']);
+                    } else {
+                        Log::warning('[HOSTEL_OVERBOOKING_PREVENTED] Hostel booking payment confirmed for cancelled/expired reservation, but room capacity has been filled.', [
+                            'booking_id' => $booking->id,
+                            'invoice_id' => $invoice->id,
+                            'user_id' => $payment->user_id,
+                            'room_id' => $room->id,
+                        ]);
+                    }
+                } else {
+                    $booking->update(['status' => 'confirmed']);
+                }
             }
         }
         

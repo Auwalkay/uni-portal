@@ -161,6 +161,24 @@ class PaymentController extends Controller
             return back()->with('error', 'Invoice already paid.');
         }
 
+        if ($invoice->status === 'cancelled') {
+            return back()->with('error', 'This invoice has been cancelled. Please generate or select a new reservation/invoice.');
+        }
+
+        // Strict Due Date Check for Hostel Fee Invoices ONLY (School Fee and other invoices do NOT check due dates)
+        if ($invoice->type === 'hostel_fee') {
+            if ($invoice->due_date && $invoice->due_date->isPast()) {
+                \Illuminate\Support\Facades\DB::transaction(function () use ($invoice) {
+                    $invoice->update(['status' => 'cancelled']);
+                    if ($invoice->booking && $invoice->booking->status === 'pending') {
+                        $invoice->booking->update(['status' => 'cancelled']);
+                    }
+                });
+
+                return back()->with('error', 'The payment due date for this hostel reservation has expired. Please select an available room again.');
+            }
+        }
+
         if ($invoice->type === 'school_fee') {
             $session = $invoice->session;
             if ($session && !$session->school_fee_payment_enabled) {

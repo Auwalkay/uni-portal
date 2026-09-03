@@ -268,7 +268,8 @@ class AccommodationController extends Controller
                 }
             }
 
-            $finalAmount = $fee->amount - $discountAmount;
+            $expiryDays = intval(SystemSetting::get('hostel_booking_expiry_days', 2));
+            $dueDate = now()->addDays($expiryDays);
 
             // Check if there is an existing ACTIVE hostel fee invoice for this session
             $invoice = Invoice::where('user_id', $user->id)
@@ -302,15 +303,17 @@ class AccommodationController extends Controller
                     ]);
                 }
                 
-                // If the new room has a different fee, we update the invoice amount if unpaid
+                // If the new room has a different fee or is unpaid, update invoice amount and due_date to match booking expiry
                 if (!$isPaid) {
-                    $invoice->update(['amount' => $finalAmount]);
+                    $invoice->update([
+                        'amount' => $finalAmount,
+                        'due_date' => $dueDate,
+                        'status' => 'pending',
+                    ]);
                 }
             } else {
                 // Generate Invoice
                 $reference = 'HST-'.strtoupper(uniqid());
-
-                $expiryDays = intval(SystemSetting::get('hostel_booking_expiry_days', 2));
 
                 $invoice = Invoice::create([
                     'user_id' => $user->id,
@@ -319,7 +322,7 @@ class AccommodationController extends Controller
                     'type' => 'hostel_fee',
                     'amount' => $finalAmount,
                     'status' => 'pending',
-                    'due_date' => now()->addDays($expiryDays),
+                    'due_date' => $dueDate,
                 ]);
 
                 InvoiceItem::create([
