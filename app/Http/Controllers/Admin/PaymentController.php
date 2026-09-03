@@ -53,7 +53,7 @@ class PaymentController extends Controller
             ->select('payments.*')
             ->join('users', 'users.id', '=', 'payments.user_id')
             ->leftJoin('students', 'students.user_id', '=', 'payments.user_id')
-            ->with(['invoice.session', 'user.student.academicDepartment.faculty']);
+            ->with(['invoice.session', 'user.student.department.faculty']);
 
         // Search Filter
         if ($request->filled('search')) {
@@ -149,7 +149,7 @@ class PaymentController extends Controller
     }
     public function show(\App\Models\Payment $payment)
     {
-        $payment->load(['user.student.academicDepartment.faculty', 'invoice.session', 'invoice.items']);
+        $payment->load(['user.student.department.faculty', 'invoice.session', 'invoice.items']);
 
         return \Inertia\Inertia::render('Admin/Payments/Show', [
             'payment' => $payment

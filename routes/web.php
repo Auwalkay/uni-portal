@@ -172,8 +172,8 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
             Route::post('invoices/{invoice}/recalculate', [InvoiceController::class, 'recalculate'])->name('invoices.recalculate');
         });
 
-        // Manual Invoice Payment / Override
-        Route::middleware(['permission:manual_payment_override'])->group(function () {
+        // Manual Invoice Payment / Override / Requery
+        Route::middleware(['permission:manual_payment_override|verify_payments|manage_payments'])->group(function () {
             Route::post('invoices/{invoice}/mark-as-paid', [InvoiceController::class, 'markAsPaid'])->name('invoices.mark-as-paid');
             Route::post('payments/{payment}/verify', [InvoiceController::class, 'verifyPayment'])->name('payments.verify');
         });
