@@ -605,51 +605,60 @@ class InvoiceController extends Controller
 
     public function verifyPayment(\App\Models\Payment $payment)
     {
-        // Resolve the correct gateway service based on the payment's gateway field
-        $gatewayName = $payment->gateway ?? 'squadco';
-
-        if ($gatewayName === 'paystack') {
-            $gatewayService = app(\App\Services\PaystackService::class);
-        } else {
-            $gatewayService = app(\App\Services\SquadcoService::class);
-        }
-
-        // 1. Verify with the gateway
-        $paymentData = $gatewayService->verifyTransaction($payment->gateway_reference);
-
-        // $data = $this->gateway->verifyTransaction($reference);
-
-        if ($paymentData && $paymentData['status'] === 'success') {
-            $payment = Payment::where('gateway_reference', $payment->gateway_reference)->first();
-
-            if ($payment && $payment->status !== 'success') {
-                app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($payment->gateway_reference, $paymentData);
+        try {
+            if (empty($payment->gateway_reference)) {
+                return back()->with('error', 'Cannot requery payment: No gateway reference exists for this transaction.');
             }
 
-            // return redirect()->route('applicant.apply.show')->with('success', 'Payment successful! Application submitted.');
-        }
+            // Resolve the correct gateway service based on the payment's gateway field
+            $gatewayName = strtolower($payment->gateway ?? 'squadco');
 
-        if (!$paymentData || ($paymentData['status'] ?? null) !== 'success') {
-            $statusMsg = $paymentData['status'] ?? 'no response';
+            if ($gatewayName === 'paystack') {
+                $gatewayService = app(\App\Services\PaystackService::class);
+            } else {
+                $gatewayService = app(\App\Services\SquadcoService::class);
+            }
+
+            // 1. Verify with the gateway
+            $paymentData = $gatewayService->verifyTransaction($payment->gateway_reference);
+
+            $status = strtolower($paymentData['status'] ?? $paymentData['transaction_status'] ?? '');
+            $isSuccess = in_array($status, ['success', 'successful', 'approved', 'completed', 'paid']);
+
+            if ($paymentData && $isSuccess) {
+                if ($payment->status !== 'success') {
+                    app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($payment->gateway_reference, $paymentData);
+                    return back()->with('success', 'Payment verified with gateway and marked as Successful!');
+                }
+
+                return back()->with('info', 'Payment is already verified and marked as Successful.');
+            }
+
+            // Failure or Non-successful response
+            $statusMsg = !empty($status) ? $status : 'No response from gateway';
             $gatewayResponse = $paymentData['gateway_response'] ?? null;
             if (!$gatewayResponse && isset($paymentData['original_data']['gateway_response'])) {
                 $gatewayResponse = $paymentData['original_data']['gateway_response'];
             }
             if ($gatewayResponse) {
-                $statusMsg .= " (Reason: {$gatewayResponse})";
+                $statusMsg .= " ({$gatewayResponse})";
             }
             
-            // Auto mark the payment as failed
-            $payment->update(['status' => 'failed']);
+            // Auto mark the payment as failed if non-successful response received
+            if ($payment->status !== 'success') {
+                $payment->update(['status' => 'failed']);
+            }
             
             return back()->with('error', "Payment verification failed. Gateway status: {$statusMsg}.");
-        }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('[PAYMENT_REQUERY_ERROR] Exception in verifyPayment', [
+                'payment_id' => $payment->id,
+                'gateway_reference' => $payment->gateway_reference ?? null,
+                'error' => $e->getMessage(),
+            ]);
 
-        if ($payment->status === 'success') {
-            return back()->with('info', 'Payment is already marked as successful.');
+            return back()->with('error', 'Payment re-query error: ' . $e->getMessage());
         }
-
-        return back()->with('success', 'Payment verified and updated successfully.');
     }
 
     public function destroy(Invoice $invoice)

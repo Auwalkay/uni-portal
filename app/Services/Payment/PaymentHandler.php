@@ -36,19 +36,21 @@ class PaymentHandler
             'raw_gateway_data' => $data,
         ]);
 
-        // Increment paid amount
-        $payment->invoice->increment('paid_amount', $payment->amount);
-        $payment->invoice->refresh();
+        // Increment paid amount safely
+        if ($payment->invoice) {
+            $payment->invoice->increment('paid_amount', $payment->amount);
+            $payment->invoice->refresh();
 
-        // Update invoice status
-        if ($payment->invoice->paid_amount >= $payment->invoice->amount) {
-            $payment->invoice->update(['status' => 'paid']);
-        } else {
-            $payment->invoice->update(['status' => 'partial']);
+            // Update invoice status
+            if ($payment->invoice->paid_amount >= $payment->invoice->amount) {
+                $payment->invoice->update(['status' => 'paid']);
+            } else {
+                $payment->invoice->update(['status' => 'partial']);
+            }
+
+            // Specific Logic based on Invoice Type
+            $this->handleInvoiceTypeSideEffects($payment);
         }
-
-        // Specific Logic based on Invoice Type
-        $this->handleInvoiceTypeSideEffects($payment);
 
         // Send Receipt Email
         $this->sendReceipt($payment);
@@ -95,8 +97,10 @@ class PaymentHandler
     protected function sendReceipt($payment)
     {
         try {
-            Mail::to($payment->user->email)->send(new FeeReceipt($payment, $payment->invoice, $payment->user));
-        } catch (\Exception $e) {
+            if ($payment->user && $payment->user->email) {
+                Mail::to($payment->user->email)->send(new FeeReceipt($payment, $payment->invoice, $payment->user));
+            }
+        } catch (\Throwable $e) {
             Log::error('Failed to send receipt email: ' . $e->getMessage());
         }
     }

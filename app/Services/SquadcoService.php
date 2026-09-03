@@ -90,12 +90,16 @@ class SquadcoService implements PaymentGatewayInterface
 
         if ($response->successful()) {
             $data = $response->json()['data'] ?? [];
+            $amountInNaira = isset($data['transaction_amount']) 
+                ? ($data['transaction_amount'] / 100) 
+                : ($data['amount'] ?? 0);
+
             return [
-                'status' => $data['transaction_status'] ?? null,
-                'reference' => $data['transaction_ref'] ?? null,
-                'amount' => $data['amount'] ?? 0,
-                'channel' => $data['payment_method'] ?? 'squadco',
-                'gateway_response' => $data['transaction_status'] ?? null,
+                'status' => $data['transaction_status'] ?? 'pending',
+                'reference' => $data['transaction_ref'] ?? $reference,
+                'amount' => $amountInNaira,
+                'channel' => $data['transaction_type'] ?? $data['payment_method'] ?? 'squadco',
+                'gateway_response' => $data['transaction_status'] ?? 'Success',
                 'original_data' => $data
             ];
         }
