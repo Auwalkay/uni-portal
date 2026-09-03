@@ -11,7 +11,9 @@ import {
     ChevronDown,
     TrendingUp,
     CheckCircle,
+    CheckCircle2,
     Clock,
+    Calendar,
     AlertCircle,
     Download,
     RefreshCw,
@@ -492,8 +494,8 @@ const requeryPayment = (paymentId: string) => {
                             <TableHead class="cursor-pointer hover:text-primary transition-colors" @click="handleSort('status')">
                                 Status {{ sortBy === 'status' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕' }}
                             </TableHead>
-                            <TableHead class="cursor-pointer hover:text-primary transition-colors" @click="handleSort('date')">
-                                Date {{ sortBy === 'date' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕' }}
+                            <TableHead class="cursor-pointer hover:text-primary transition-colors min-w-[170px]" @click="handleSort('date')">
+                                Payment Timeline {{ sortBy === 'date' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕' }}
                             </TableHead>
                             <TableHead class="text-right">Actions</TableHead>
                         </TableRow>
@@ -535,8 +537,16 @@ const requeryPayment = (paymentId: string) => {
                                     {{ payment.status }}
                                 </Badge>
                             </TableCell>
-                            <TableCell class="text-muted-foreground text-sm">
-                                {{ formatDate(payment.paid_at) }}
+                            <TableCell class="text-xs space-y-1 py-3">
+                                <div class="flex items-center gap-1.5 text-foreground whitespace-nowrap">
+                                    <Calendar class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                    <span><strong class="text-muted-foreground font-medium">Created:</strong> {{ formatDate(payment.created_at) }}</span>
+                                </div>
+                                <div class="flex items-center gap-1.5 whitespace-nowrap" :class="payment.paid_at ? 'text-green-700 dark:text-green-400 font-medium' : 'text-muted-foreground/70'">
+                                    <CheckCircle2 v-if="payment.paid_at" class="w-3.5 h-3.5 text-green-600 shrink-0" />
+                                    <Clock v-else class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                    <span><strong class="font-medium">Paid:</strong> {{ payment.paid_at ? formatDate(payment.paid_at) : 'Not paid yet' }}</span>
+                                </div>
                             </TableCell>
                             <TableCell class="text-right flex items-center justify-end gap-2">
                                 <Button 

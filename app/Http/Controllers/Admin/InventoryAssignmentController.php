@@ -12,6 +12,37 @@ use Illuminate\Support\Facades\DB;
 
 class InventoryAssignmentController extends Controller
 {
+    public function index(Request $request)
+    {
+        Gate::authorize('view_inventory');
+
+        $query = InventoryAssignment::with(['item', 'assignable.user', 'assignable.department']);
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->whereHas('item', fn($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%"))
+                  ->orWhereHasMorph('assignable', [\App\Models\Staff::class], function ($q) use ($search) {
+                      $q->whereHas('user', fn($userQ) => $userQ->where('name', 'like', "%{$search}%"));
+                  });
+        }
+
+        if ($request->filled('status') && $request->status !== 'ALL') {
+            $query->where('status', $request->status);
+        }
+
+        $assignments = $query->latest()->paginate(15)->withQueryString();
+        $items = InventoryItem::where('available_quantity', '>', 0)->get(['id', 'name', 'sku', 'available_quantity', 'total_quantity']);
+
+        return \Inertia\Inertia::render('Admin/Inventory/Assignments', [
+            'assignments' => $assignments,
+            'items' => $items,
+            'filters' => $request->only(['search', 'status']),
+            'permissions' => [
+                'can_manage' => $request->user()->can('manage_inventory') || $request->user()->can('manage_inventory_assignments') || $request->user()->can('assign_inventory'),
+            ],
+        ]);
+    }
+
     public function store(Request $request)
     {
         Gate::authorize('manage_inventory');
