@@ -183,19 +183,57 @@
         <h1 class="error-title">@yield('title')</h1>
         <p class="error-message">@yield('message')</p>
         
-        <div class="actions-wrap">
-            <a href="/dashboard" class="btn btn-primary">Return to Portal Home</a>
+        <div class="actions-wrap" style="flex-wrap: wrap;">
+            <a href="/" target="_top" class="btn btn-primary">Return to Portal Home</a>
             <button type="button" onclick="goBack()" class="btn btn-secondary">Go Back</button>
+            <button type="button" onclick="dismissModal()" class="btn btn-secondary" style="border-color: #ef4444; color: #ef4444; background: rgba(239, 68, 68, 0.08);">Dismiss Modal</button>
         </div>
 
         <script>
+            function dismissModal() {
+                try {
+                    // Remove iframe if rendered inside Inertia error modal iframe
+                    if (window.frameElement) {
+                        window.frameElement.remove();
+                        return;
+                    }
+                } catch (e) {}
+
+                try {
+                    // Try removing iframe or backdrop from top document
+                    if (window.top && window.top.document) {
+                        const iframes = window.top.document.querySelectorAll('iframe');
+                        let removed = false;
+                        iframes.forEach(function(iframe) {
+                            iframe.remove();
+                            removed = true;
+                        });
+                        if (removed) return;
+                    }
+                } catch (e) {}
+
+                // Fallback: Refresh top page to clear modal
+                try {
+                    window.top.location.reload();
+                } catch (e) {
+                    window.location.reload();
+                }
+            }
+
             function goBack() {
+                try {
+                    if (window.frameElement) {
+                        window.frameElement.remove();
+                        return;
+                    }
+                } catch (e) {}
+
                 if (document.referrer && document.referrer !== window.location.href && document.referrer.includes(window.location.host)) {
-                    window.location.href = document.referrer;
+                    window.top.location.href = document.referrer;
                 } else if (window.history.length > 1) {
                     window.history.back();
                 } else {
-                    window.location.href = '/dashboard';
+                    window.top.location.href = '/';
                 }
             }
         </script>
