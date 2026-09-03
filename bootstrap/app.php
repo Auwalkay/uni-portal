@@ -26,9 +26,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(LogSystemRequests::class);
 
         $middleware->web(append: [
+            'throttle:global-ip',
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+        ]);
+
+        $middleware->api(append: [
+            'throttle:api',
         ]);
 
         $middleware->alias([

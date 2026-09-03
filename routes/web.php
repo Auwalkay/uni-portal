@@ -288,8 +288,12 @@ Route::get('dashboard', function () {
 require __DIR__.'/settings.php';
 
 // Webhooks
-Route::post('webhooks/squadco', [SquadcoWebhookController::class, 'handle'])->name('webhooks.squadco');
-Route::post('webhooks/paystack', [PaystackWebhookController::class, 'handle'])->name('webhooks.paystack');
+Route::middleware('throttle:webhooks')->group(function () {
+    Route::post('webhooks/squadco', [SquadcoWebhookController::class, 'handle'])->name('webhooks.squadco');
+    Route::post('webhooks/paystack', [PaystackWebhookController::class, 'handle'])->name('webhooks.paystack');
+});
 
 // Public Verification
-Route::get('verify-admission/{identifier}', [AdmissionVerificationController::class, 'verify'])->name('verify.admission');
+Route::get('verify-admission/{identifier}', [AdmissionVerificationController::class, 'verify'])
+    ->middleware('throttle:public-verification')
+    ->name('verify.admission');
