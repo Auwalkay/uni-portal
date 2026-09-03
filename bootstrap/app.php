@@ -38,7 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
-        $schedule->command('payments:requery')->everyFifteenMinutes();
+        $schedule->command('payments:requery')->everyFiveMinutes();
         $schedule->command('students:birthday-wishes')->dailyAt('08:00');
         $schedule->command('hostels:cancel-overdue')->daily();
     })

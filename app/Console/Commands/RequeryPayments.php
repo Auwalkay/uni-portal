@@ -30,50 +30,61 @@ class RequeryPayments extends Command
      */
     public function handle()
     {
-        $limit = $this->option('limit');
+        $limit = (int) $this->option('limit');
         
-        $pendingPayments = Payment::where('status', 'pending')
-            ->where('gateway_reference', 'NOT LIKE', 'TEMP-%') // Ignore temporary local refs
-            ->where('created_at', '<', now()->subMinutes(5)) // Give it a few minutes to breathe
-            ->latest()
+        // Include both pending and failed payments from the last 7 days that have valid gateway references
+        $payments = Payment::whereIn('status', ['pending', 'failed'])
+            ->whereNotNull('gateway_reference')
+            ->where('gateway_reference', '!=', '')
+            ->where('gateway_reference', 'NOT LIKE', 'TEMP-%')
+            ->where('created_at', '>=', now()->subDays(7))
+            ->where('created_at', '<', now()->subMinutes(3)) // Give fresh payments 3 minutes to settle
+            ->latest('updated_at')
             ->limit($limit)
             ->get();
 
-        $this->info("Found {$pendingPayments->count()} pending payments to requery.");
+        $this->info("Found {$payments->count()} pending/failed payments to requery.");
 
-        if ($pendingPayments->isEmpty()) {
+        if ($payments->isEmpty()) {
             return Command::SUCCESS;
         }
 
         $handler = app(PaymentHandler::class);
-        $squadco = new SquadcoService();
-        $paystack = new PaystackService();
+        $squadco = app(SquadcoService::class);
+        $paystack = app(PaystackService::class);
 
         $successCount = 0;
         $failedCount = 0;
 
-        foreach ($pendingPayments as $payment) {
+        foreach ($payments as $payment) {
             try {
-                $this->comment("Checking reference: {$payment->gateway_reference} (Gateway: {$payment->gateway})");
+                $this->comment("Checking reference: {$payment->gateway_reference} (Gateway: {$payment->gateway}, Current Status: {$payment->status})");
                 
                 $gateway = ($payment->gateway === 'paystack') ? $paystack : $squadco;
                 $data = $gateway->verifyTransaction($payment->gateway_reference);
 
-                if ($data && $data['status'] === 'success') {
+                if ($data && ($data['status'] ?? null) === 'success') {
                     $handler->handleSuccessfulPayment($payment->gateway_reference, $data);
-                    $this->info("✓ Payment {$payment->gateway_reference} verified as SUCCESS.");
+                    $this->info("✓ Payment {$payment->gateway_reference} verified as SUCCESS (was {$payment->status}).");
                     $successCount++;
                 } else {
                     $status = $data['status'] ?? 'unknown';
-                    // Automatically mark as failed if status is failed, abandoned, cancelled, expired, or pending for over 15 mins
-                    $isNonSuccessfulOrOld = !$data || in_array($status, ['failed', 'cancelled', 'error', 'abandoned', 'expired']) || $payment->created_at->lt(now()->subMinutes(15));
                     
-                    if ($isNonSuccessfulOrOld) {
-                        $payment->update(['status' => 'failed']);
-                        $this->warn("✗ Payment {$payment->gateway_reference} (Status: {$status}) marked as FAILED.");
-                        $failedCount++;
+                    if ($payment->status === 'pending') {
+                        // For pending payments: mark as failed if explicitly failed/abandoned on gateway or if > 24 hours old
+                        $isExplicitlyFailedOrVeryOld = !$data || in_array($status, ['failed', 'cancelled', 'error', 'abandoned', 'expired']) || $payment->created_at->lt(now()->subHours(24));
+                        
+                        if ($isExplicitlyFailedOrVeryOld) {
+                            $payment->update(['status' => 'failed']);
+                            $this->warn("✗ Pending payment {$payment->gateway_reference} (Status: {$status}) marked as FAILED.");
+                            $failedCount++;
+                        } else {
+                            $this->line("- Payment {$payment->gateway_reference} is still pending on gateway.");
+                        }
                     } else {
-                        $this->line("- Payment {$payment->gateway_reference} is still pending on gateway.");
+                        // For already failed payments: touch timestamp so we iterate fairly across records
+                        $payment->touch();
+                        $this->line("- Payment {$payment->gateway_reference} remains failed on gateway.");
                     }
                 }
 
@@ -86,7 +97,7 @@ class RequeryPayments extends Command
             }
         }
 
-        $this->info("Requery process completed. Successes: {$successCount}, Failures: {$failedCount}");
+        $this->info("Requery process completed. Re-verified Successes: {$successCount}, Marked Failed: {$failedCount}");
         
         return Command::SUCCESS;
     }
