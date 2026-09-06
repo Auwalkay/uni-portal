@@ -19,32 +19,44 @@ class SquadcoService implements PaymentGatewayInterface
 
     public function initializeTransaction($email, $amount, $reference, $callbackUrl = null, array $metadata = [])
     {
-        // Amount is in kobo (cent)
-        $response = Http::withToken($this->secretKey)
-            ->post("{$this->baseUrl}/transaction/initiate", [
-                'amount' => (int) ($amount * 100),
-                'email' => $email,
-                'currency' => 'NGN',
-                'initiate_type' => 'inline',
-                'pass_charge' => true,
-                'transaction_ref' => $reference,
-                'callback_url' => $callbackUrl,
-                'customer_name' => $metadata['customer_name'] ?? null,
-                'payment_channels' => $metadata['payment_channels'] ?? ['card', 'bank', 'ussd', 'transfer'],
-                'metadata' => $metadata,
-            ]);
+        $payload = [
+            'amount' => (int) ($amount * 100),
+            'email' => $email,
+            'currency' => 'NGN',
+            'initiate_type' => 'inline',
+            'pass_charge' => true,
+            'transaction_ref' => $reference,
+            'callback_url' => $callbackUrl,
+            'customer_name' => $metadata['customer_name'] ?? null,
+            'payment_channels' => $metadata['payment_channels'] ?? ['card', 'bank', 'ussd', 'transfer'],
+            'metadata' => $metadata,
+        ];
+
+        Log::info('[PAYMENT_INITIATE_REQUEST] [Squadco]', [
+            'url' => "{$this->baseUrl}/transaction/initiate",
+            'method' => 'POST',
+            'exact_payload' => $payload,
+        ]);
+
+        $response = Http::withToken($this->secretKey)->post("{$this->baseUrl}/transaction/initiate", $payload);
+
+        $rawResponseBody = $response->json() ?? $response->body();
+
+        Log::info('[PAYMENT_INITIATE_RESPONSE] [Squadco]', [
+            'reference' => $reference,
+            'status_code' => $response->status(),
+            'successful' => $response->successful(),
+            'exact_response' => $rawResponseBody,
+        ]);
 
         if ($response->successful()) {
-            $data = $response->json()['data'];
-            // Normalize to match Paystack pattern expected by controller
+            $data = $response->json()['data'] ?? [];
             return [
                 'authorization_url' => $data['checkout_url'] ?? null,
                 'reference' => $data['transaction_ref'] ?? $reference,
                 'original_data' => $data
             ];
         }
-
-        Log::error('Squadco Initialize Error: ' . $response->body());
 
         return null;
     }
@@ -57,23 +69,40 @@ class SquadcoService implements PaymentGatewayInterface
      */
     public function verifyTransaction($reference)
     {
-        $response = Http::withToken($this->secretKey)
-            ->get("{$this->baseUrl}/transaction/verify/{$reference}");
+        $url = "{$this->baseUrl}/transaction/verify/{$reference}";
+
+        Log::info('[PAYMENT_REQUERY_REQUEST] [Squadco]', [
+            'url' => $url,
+            'method' => 'GET',
+            'reference' => $reference,
+        ]);
+
+        $response = Http::withToken($this->secretKey)->get($url);
+
+        $rawResponseBody = $response->json() ?? $response->body();
+
+        Log::info('[PAYMENT_REQUERY_RESPONSE] [Squadco]', [
+            'reference' => $reference,
+            'status_code' => $response->status(),
+            'successful' => $response->successful(),
+            'exact_response' => $rawResponseBody,
+        ]);
 
         if ($response->successful()) {
-            $data = $response->json()['data'];
-            // Normalize to match Paystack pattern expected by controller
+            $data = $response->json()['data'] ?? [];
+            $amountInNaira = isset($data['transaction_amount']) 
+                ? ($data['transaction_amount'] / 100) 
+                : ($data['amount'] ?? 0);
+
             return [
-                'status' => $data['transaction_status'] ?? null,
-                'reference' => $data['transaction_ref'] ?? null,
-                'amount' => $data['amount'] ?? 0, // Keep in kobo to match Paystack pattern
-                'channel' => $data['payment_method'] ?? 'squadco',
-                'gateway_response' => $data['transaction_status'] ?? null,
+                'status' => $data['transaction_status'] ?? 'pending',
+                'reference' => $data['transaction_ref'] ?? $reference,
+                'amount' => $amountInNaira,
+                'channel' => $data['transaction_type'] ?? $data['payment_method'] ?? 'squadco',
+                'gateway_response' => $data['transaction_status'] ?? 'Success',
                 'original_data' => $data
             ];
         }
-
-        Log::error('Squadco Verify Error: ' . $response->body());
 
         $body = $response->json();
         if ($body && isset($body['message'])) {

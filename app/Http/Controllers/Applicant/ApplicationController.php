@@ -70,8 +70,8 @@ class ApplicationController extends Controller
                 'next_of_kin_name' => 'required|string',
                 'next_of_kin_phone' => 'required|string',
                 'next_of_kin_relationship' => 'required|string',
-                'passport_photo' => 'nullable|file|mimes:jpeg,png,jpg|max:2048',
-                'waec_result' => 'nullable|file|mimes:pdf,jpeg,png,jpg|max:2048',
+                'passport_photo' => 'nullable|file|mimes:jpeg,png,jpg|max:500',
+                'waec_result' => 'nullable|file|mimes:pdf,jpeg,png,jpg|max:500',
             ]);
 
             $user = $request->user();

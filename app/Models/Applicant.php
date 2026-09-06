@@ -22,6 +22,11 @@ class Applicant extends Model
         return $this->belongsTo(Programme::class, 'program_choice_1');
     }
 
+    public function program(): BelongsTo
+    {
+        return $this->belongsTo(Programme::class, 'program_choice_1');
+    }
+
     public function documents(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(ApplicantDocument::class);

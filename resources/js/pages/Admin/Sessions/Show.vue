@@ -29,6 +29,9 @@ interface Session {
     registration_enabled: boolean;
     applications_enabled: boolean;
     admissions_enabled: boolean;
+    school_fee_payment_enabled: boolean;
+    late_payment_deadline: string | null;
+    late_fee_amount: number;
     semesters: any[];
 }
 
@@ -50,10 +53,24 @@ const props = defineProps<{
     feeTypes: FeeType[];
 }>();
 
+const formatDateForInput = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    try {
+        const date = new Date(dateStr);
+        const pad = (num: number) => String(num).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    } catch (e) {
+        return '';
+    }
+};
+
 const settingsForm = useForm({
     registration_enabled: props.session.registration_enabled,
     applications_enabled: props.session.applications_enabled,
     admissions_enabled: props.session.admissions_enabled,
+    school_fee_payment_enabled: props.session.school_fee_payment_enabled === undefined ? true : !!props.session.school_fee_payment_enabled,
+    late_payment_deadline: formatDateForInput(props.session.late_payment_deadline),
+    late_fee_amount: props.session.late_fee_amount || 0,
 });
 
 const isFeeModalOpen = ref(false);
@@ -335,12 +352,32 @@ if (typeof route !== 'function') {
                                 <Switch :checked="settingsForm.applications_enabled" @update:checked="val => settingsForm.applications_enabled = val" />
                             </div>
                             <Separator />
-                            <div class="flex items-center justify-between space-x-2">
+                             <div class="flex items-center justify-between space-x-2">
                                 <div class="grid gap-1">
                                     <Label class="text-base font-semibold">Admissions Status</Label>
                                     <p class="text-sm text-muted-foreground">Allow applicants to check admission status.</p>
                                 </div>
                                 <Switch :checked="settingsForm.admissions_enabled" @update:checked="val => settingsForm.admissions_enabled = val" />
+                            </div>
+                            <Separator />
+                            <div class="flex items-center justify-between space-x-2">
+                                <div class="grid gap-1">
+                                    <Label class="text-base font-semibold">School Fee Payment Status</Label>
+                                    <p class="text-sm text-muted-foreground">Allow students to make school fee payments for this session.</p>
+                                </div>
+                                <Switch :checked="settingsForm.school_fee_payment_enabled" @update:checked="val => settingsForm.school_fee_payment_enabled = val" />
+                            </div>
+                            <Separator />
+                            <div class="grid gap-2">
+                                <Label class="text-base font-semibold">Late Payment Fine Deadline</Label>
+                                <p class="text-sm text-muted-foreground">The date and time after which late fee fines will be applied.</p>
+                                <Input type="datetime-local" v-model="settingsForm.late_payment_deadline" class="max-w-md" />
+                            </div>
+                            <Separator />
+                            <div class="grid gap-2">
+                                <Label class="text-base font-semibold">Late Payment Fine Amount (NGN)</Label>
+                                <p class="text-sm text-muted-foreground">The fine amount applied to school fee invoices after the deadline passes.</p>
+                                <Input type="number" step="0.01" min="0" v-model="settingsForm.late_fee_amount" class="max-w-md" placeholder="e.g. 10000.00" />
                             </div>
                         </CardContent>
                         <CardFooter class="bg-muted/20 border-t p-4 flex justify-end">

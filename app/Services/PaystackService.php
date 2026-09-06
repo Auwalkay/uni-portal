@@ -20,33 +20,62 @@ class PaystackService implements PaymentGatewayInterface
 
     public function initializeTransaction($email, $amount, $reference, $callbackUrl = null, array $metadata = [])
     {
-        // Amount is in kobo
-        $response = Http::withToken($this->secretKey)->post("{$this->baseUrl}/transaction/initialize", [
+        $payload = [
             'email' => $email,
-            'amount' => $amount * 100,
+            'amount' => (int) ($amount * 100),
             'reference' => $reference,
             'callback_url' => $callbackUrl,
             'metadata' => $metadata,
+        ];
+
+        Log::info('[PAYMENT_INITIATE_REQUEST] [Paystack]', [
+            'url' => "{$this->baseUrl}/transaction/initialize",
+            'method' => 'POST',
+            'exact_payload' => $payload,
+        ]);
+
+        $response = Http::withToken($this->secretKey)->post("{$this->baseUrl}/transaction/initialize", $payload);
+
+        $rawResponseBody = $response->json() ?? $response->body();
+
+        Log::info('[PAYMENT_INITIATE_RESPONSE] [Paystack]', [
+            'reference' => $reference,
+            'status_code' => $response->status(),
+            'successful' => $response->successful(),
+            'exact_response' => $rawResponseBody,
         ]);
 
         if ($response->successful()) {
-            return $response->json()['data'];
+            return $response->json()['data'] ?? [];
         }
-
-        Log::error('Paystack Initialize Error: '.$response->body());
 
         return null;
     }
 
     public function verifyTransaction($reference)
     {
-        $response = Http::withToken($this->secretKey)->get("{$this->baseUrl}/transaction/verify/{$reference}");
+        $url = "{$this->baseUrl}/transaction/verify/{$reference}";
+
+        Log::info('[PAYMENT_REQUERY_REQUEST] [Paystack]', [
+            'url' => $url,
+            'method' => 'GET',
+            'reference' => $reference,
+        ]);
+
+        $response = Http::withToken($this->secretKey)->get($url);
+
+        $rawResponseBody = $response->json() ?? $response->body();
+
+        Log::info('[PAYMENT_REQUERY_RESPONSE] [Paystack]', [
+            'reference' => $reference,
+            'status_code' => $response->status(),
+            'successful' => $response->successful(),
+            'exact_response' => $rawResponseBody,
+        ]);
 
         if ($response->successful()) {
-            return $response->json()['data'];
+            return $response->json()['data'] ?? [];
         }
-
-        Log::error('Paystack Verify Error: '.$response->body());
 
         $body = $response->json();
         if ($body && isset($body['message'])) {

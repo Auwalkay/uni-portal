@@ -24,11 +24,15 @@ class AttendanceImport implements ToModel, WithChunkReading, WithHeadingRow
     */
     public function model(array $row)
     {
-        $staffId = $row['staff_id'];
+        $staffId = trim((string)($row['staff_id'] ?? ''));
         
-        // Find staff by their internal reference or ID if it's a UUID
-        $staff = Staff::where('id', $staffId)
-            ->orWhere('employee_id', $staffId) // Assuming there's an employee_id column
+        if (empty($staffId)) {
+            return null;
+        }
+        
+        // Find staff by staff_number or UUID id
+        $staff = Staff::where('staff_number', $staffId)
+            ->orWhere('id', $staffId)
             ->first();
 
         if (!$staff) {

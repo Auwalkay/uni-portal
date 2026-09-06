@@ -17,6 +17,62 @@ class Student extends Model
         return LogOptions::defaults()->logFillable()->logOnlyDirty()->dontLogEmptyChanges();
     }
 
+    protected static function booted()
+    {
+        static::creating(function ($model) {
+            if (auth()->check()) {
+                $model->created_by = auth()->id();
+                $model->updated_by = auth()->id();
+            }
+        });
+
+        static::updating(function ($model) {
+            if (auth()->check()) {
+                $model->updated_by = auth()->id();
+            }
+        });
+
+        static::saved(function ($student) {
+            static::clearStatsCache();
+        });
+
+        static::deleted(function ($student) {
+            static::clearStatsCache();
+        });
+    }
+
+    public static function clearStatsCache()
+    {
+        \Illuminate\Support\Facades\Cache::forget('students_stats_admin');
+        if (auth()->check()) {
+            \Illuminate\Support\Facades\Cache::forget('students_stats_' . auth()->id());
+        }
+    }
+
+    protected function firstName(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn (?string $value) => $value ? mb_strtoupper($value, 'UTF-8') : null,
+            set: fn (?string $value) => $value ? mb_strtoupper(trim($value), 'UTF-8') : null,
+        );
+    }
+
+    protected function lastName(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn (?string $value) => $value ? mb_strtoupper($value, 'UTF-8') : null,
+            set: fn (?string $value) => $value ? mb_strtoupper(trim($value), 'UTF-8') : null,
+        );
+    }
+
+    protected function middleName(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn (?string $value) => $value ? mb_strtoupper($value, 'UTF-8') : null,
+            set: fn (?string $value) => $value ? mb_strtoupper(trim($value), 'UTF-8') : null,
+        );
+    }
+
     protected $fillable = [
         'user_id',
         'matriculation_number',
@@ -45,6 +101,9 @@ class Student extends Model
         'next_of_kin_relationship',
         'scholarship_id',
         'fee_policy',
+        'pending_promotion_session_id',
+        'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
@@ -66,12 +125,41 @@ class Student extends Model
         return $this->belongsTo(Department::class, 'department_id');
     }
 
+    public function getEffectiveDepartmentIdAttribute()
+    {
+        if (!empty($this->department_id)) {
+            return $this->department_id;
+        }
+
+        if (!empty($this->program_id) && $this->program?->department_id) {
+            $deptId = $this->program->department_id;
+            try {
+                $this->quietly()->update(['department_id' => $deptId]);
+            } catch (\Throwable $e) {
+                // Ignore if in read-only transaction
+            }
+            return $deptId;
+        }
+
+        return null;
+    }
+
+    public function hasDepartment(): bool
+    {
+        return !empty($this->effective_department_id);
+    }
+
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class, 'department_id');
     }
 
-    public function program()
+    public function program(): BelongsTo
+    {
+        return $this->belongsTo(Programme::class, 'program_id');
+    }
+
+    public function programme(): BelongsTo
     {
         return $this->belongsTo(Programme::class, 'program_id');
     }
@@ -124,5 +212,61 @@ class Student extends Model
     public function invoices()
     {
         return $this->hasMany(Invoice::class, 'user_id', 'user_id');
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updater(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function getMatricNoAttribute()
+    {
+        return $this->attributes['matriculation_number'] ?? $this->attributes['matric_number'] ?? null;
+    }
+
+    public function getMatricNumberAttribute()
+    {
+        return $this->attributes['matriculation_number'] ?? $this->attributes['matric_no'] ?? null;
+    }
+
+    /**
+     * Check if the student has cleared previous session fees and promote them.
+     */
+    public function checkAndPromoteStudent()
+    {
+        if ($this->pending_promotion_session_id) {
+            $targetSession = \App\Models\Session::find($this->pending_promotion_session_id);
+            if ($targetSession) {
+                $previousSession = \App\Models\Session::where('start_date', '<', $targetSession->start_date)
+                    ->orderBy('start_date', 'desc')
+                    ->first();
+                
+                $hasUnpaid = false;
+                if ($previousSession) {
+                    $hasUnpaid = \App\Models\Invoice::where('user_id', $this->user_id)
+                        ->where('session_id', $previousSession->id)
+                        ->where('type', 'school_fee')
+                        ->where('status', '!=', 'paid')
+                        ->exists();
+                }
+
+                if (!$hasUnpaid) {
+                    $currentSemesterName = $targetSession->semesters()->where('is_current', true)->value('name')
+                        ?? $targetSession->semesters()->where('name', 'First Semester')->value('name')
+                        ?? 'First Semester';
+                    
+                    // Clear the pending promotion flag
+                    $this->update(['pending_promotion_session_id' => null]);
+                    
+                    // Dispatch the promotion job
+                    \App\Jobs\Academic\ProcessStudentSessionJob::dispatch($this, $targetSession, $currentSemesterName);
+                }
+            }
+        }
     }
 }

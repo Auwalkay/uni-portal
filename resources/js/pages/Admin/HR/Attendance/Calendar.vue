@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/tooltip"
 
 const props = defineProps<{
-    staffList: Array<any>;
+    staffList: any;
     attendances: Record<string, Record<string, any>>;
     daysInMonth: number;
     currentMonth: string;
@@ -50,6 +50,14 @@ const props = defineProps<{
 
 const selectedMonth = ref(props.selectedDate);
 const selectedDept = ref(props.filters.department_id || 'ALL');
+const searchQuery = ref(props.filters.search || '');
+
+const staffArray = computed(() => {
+    if (Array.isArray(props.staffList)) {
+        return props.staffList;
+    }
+    return props.staffList?.data || [];
+});
 
 const days = computed(() => {
     const arr = [];
@@ -69,6 +77,7 @@ const updateCalendar = () => {
     router.get(route('admin.attendance.calendar'), {
         date: selectedMonth.value,
         department_id: selectedDept.value === 'ALL' ? '' : selectedDept.value,
+        search: searchQuery.value,
     }, {
         preserveState: true,
         replace: true,
@@ -115,15 +124,19 @@ const getStatusLabel = (status: string) => {
                     </div>
                 </div>
 
-                <div class="flex items-center gap-4 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-                    <div class="flex items-center gap-2 px-2 border-r border-slate-100">
-                        <Label class="text-[10px] font-bold uppercase text-slate-400">Month</Label>
-                        <Input type="month" v-model="selectedMonth" class="border-none h-8 w-40 focus-visible:ring-0 font-bold" />
+                <div class="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-4 bg-white p-2 rounded-lg border border-slate-200 shadow-sm w-full sm:w-auto">
+                    <div class="flex items-center gap-2 px-2 border-r border-slate-100 flex-1 sm:flex-none">
+                        <Search class="w-3.5 h-3.5 text-slate-400" />
+                        <Input type="text" placeholder="Search staff name..." v-model="searchQuery" @keyup.enter="updateCalendar" class="border-none h-8 w-full sm:w-44 focus-visible:ring-0 text-xs font-bold" />
                     </div>
-                    <div class="flex items-center gap-2 px-2">
+                    <div class="flex items-center gap-2 px-2 border-r border-slate-100 flex-1 sm:flex-none">
+                        <Label class="text-[10px] font-bold uppercase text-slate-400">Month</Label>
+                        <Input type="month" v-model="selectedMonth" class="border-none h-8 w-full sm:w-40 focus-visible:ring-0 font-bold" />
+                    </div>
+                    <div class="flex items-center gap-2 px-2 flex-1 sm:flex-none">
                         <Label class="text-[10px] font-bold uppercase text-slate-400">Dept</Label>
                         <Select v-model="selectedDept">
-                            <SelectTrigger class="border-none h-8 w-48 focus:ring-0 shadow-none font-bold">
+                            <SelectTrigger class="border-none h-8 w-full sm:w-48 focus:ring-0 shadow-none font-bold">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -164,11 +177,11 @@ const getStatusLabel = (status: string) => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
-                            <tr v-for="staff in staffList" :key="staff.id" class="hover:bg-slate-50/80 transition-colors">
+                            <tr v-for="staff in staffArray" :key="staff.id" class="hover:bg-slate-50/80 transition-colors">
                                 <td class="sticky left-0 z-10 bg-white px-6 py-4 border-r border-slate-100 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
                                     <div class="flex flex-col">
                                         <span class="font-bold text-slate-900 leading-tight">{{ staff.user?.name }}</span>
-                                        <span class="text-[10px] text-slate-400 font-medium uppercase tracking-tight">{{ staff.department?.name }}</span>
+                                        <span v-if="staff.staff_number" class="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 w-fit mt-0.5">{{ staff.staff_number }}</span>
                                     </div>
                                 </td>
                                 <td v-for="d in days" :key="d.day" 
@@ -209,7 +222,7 @@ const getStatusLabel = (status: string) => {
                                     </TooltipProvider>
                                 </td>
                             </tr>
-                            <tr v-if="staffList.length === 0">
+                            <tr v-if="staffArray.length === 0">
                                 <td :colspan="days.length + 1" class="py-20 text-center">
                                     <div class="flex flex-col items-center gap-2 opacity-30">
                                         <LayoutGrid class="w-12 h-12" />

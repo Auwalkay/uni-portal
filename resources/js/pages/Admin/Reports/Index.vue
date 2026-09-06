@@ -29,17 +29,19 @@ import {
   LinearScale,
   PointElement,
   LineElement,
-  ArcElement
+  ArcElement,
+  Filler
 } from 'chart.js';
 import { Line, Doughnut, Bar, Pie } from 'vue-chartjs';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement, Filler);
 
 const props = defineProps<{
     academicStats: {
         total_students: number;
         students_by_level: Array<{ label: string, value: number }>;
         students_by_gender: Array<{ label: string, value: number }>;
+        students_by_session: Array<{ label: string, value: number }>;
         total_faculties: number;
         total_departments: number;
         total_programmes: number;
@@ -122,6 +124,7 @@ const props = defineProps<{
         entry_mode?: string | null;
         start_date?: string | null;
         end_date?: string | null;
+        period?: string | null;
     };
 }>();
 
@@ -138,6 +141,7 @@ const filterForm = ref({
     entry_mode: props.filters.entry_mode || 'all',
     start_date: props.filters.start_date || '',
     end_date: props.filters.end_date || '',
+    period: props.filters.period || 'monthly',
 });
 
 // Filter lists computed based on parent selections
@@ -183,6 +187,7 @@ const clearFilters = () => {
         entry_mode: 'all',
         start_date: '',
         end_date: '',
+        period: 'monthly',
     };
     router.get(route('admin.reports.index'), {}, {
         preserveState: true,
@@ -197,7 +202,8 @@ watch(() => [
     filterForm.value.gender,
     filterForm.value.entry_mode,
     filterForm.value.start_date,
-    filterForm.value.end_date
+    filterForm.value.end_date,
+    filterForm.value.period
 ], () => {
     applyFilters();
 });
@@ -232,6 +238,20 @@ const studentsByLevelChartData = computed(() => {
             label: 'Students Count',
             data: data.length ? data : [0],
             backgroundColor: '#4f46e5',
+            borderRadius: 8,
+        }]
+    };
+});
+
+const studentsBySessionChartData = computed(() => {
+    const labels = props.academicStats.students_by_session.map(item => item.label);
+    const data = props.academicStats.students_by_session.map(item => item.value);
+    return {
+        labels: labels.length ? labels : ['No Data'],
+        datasets: [{
+            label: 'Students Count',
+            data: data.length ? data : [0],
+            backgroundColor: '#0ea5e9',
             borderRadius: 8,
         }]
     };
@@ -319,6 +339,31 @@ const hasActiveFilters = computed(() => {
     return Object.values(props.filters).some(val => val !== null && val !== undefined);
 });
 
+const reconciliationExportUrl = computed(() => {
+    const params = new URLSearchParams();
+    params.append('type', 'reconciliation');
+    Object.entries(filterForm.value).forEach(([key, val]) => {
+        if (val !== 'all' && val !== '' && val !== null && val !== undefined) {
+            params.append(key, val);
+        }
+    });
+    return route('admin.reports.export') + '?' + params.toString();
+});
+
+const isRefreshing = ref(false);
+const refreshStats = () => {
+    isRefreshing.value = true;
+    router.get(route('admin.reports.index'), {
+        ...filterForm.value,
+        refresh: 'true'
+    }, {
+        preserveState: true,
+        onFinish: () => {
+            isRefreshing.value = false;
+        }
+    });
+};
+
 const breadcrumbs = [
     { title: 'Dashboard', href: '/admin/dashboard' },
     { title: 'Reports', href: '/admin/reports' },
@@ -338,6 +383,9 @@ const breadcrumbs = [
                     <p class="text-muted-foreground mt-1">Unified reporting hub aggregating statistics and trends across all modules.</p>
                 </div>
                 <div class="flex items-center gap-3">
+                    <Button variant="outline" @click="refreshStats" :disabled="isRefreshing" class="text-slate-600 border-slate-200 hover:bg-slate-50">
+                        <RefreshCw class="w-4 h-4 mr-2" :class="{ 'animate-spin': isRefreshing }" /> Refresh Stats
+                    </Button>
                     <Button v-if="hasActiveFilters" variant="outline" @click="clearFilters" class="text-rose-600 hover:bg-rose-50 hover:text-rose-700">
                         <RefreshCw class="w-4 h-4 mr-2" /> Clear Filters
                     </Button>
@@ -355,7 +403,7 @@ const breadcrumbs = [
                     <Filter class="w-4 h-4 text-indigo-600" />
                     <CardTitle class="text-sm font-semibold">Report Filters</CardTitle>
                 </CardHeader>
-                <CardContent class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-4">
+                <CardContent class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-10 gap-4">
                     <div class="space-y-1.5">
                         <Label class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Session</Label>
                         <Select v-model="filterForm.session_id">
@@ -439,11 +487,26 @@ const breadcrumbs = [
                     </div>
 
                     <div class="space-y-1.5">
+                        <Label class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Period</Label>
+                        <Select v-model="filterForm.period">
+                            <SelectTrigger class="h-9"><SelectValue placeholder="Select Period" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Time</SelectItem>
+                                <SelectItem value="daily">Daily</SelectItem>
+                                <SelectItem value="weekly">Weekly</SelectItem>
+                                <SelectItem value="monthly">Monthly</SelectItem>
+                                <SelectItem value="yearly">Yearly</SelectItem>
+                                <SelectItem value="custom">Custom Range</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div v-if="filterForm.period === 'custom'" class="space-y-1.5">
                         <Label class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Start Date</Label>
                         <Input type="date" v-model="filterForm.start_date" class="h-9 text-xs dark:bg-gray-900" />
                     </div>
 
-                    <div class="space-y-1.5">
+                    <div v-if="filterForm.period === 'custom'" class="space-y-1.5">
                         <Label class="text-[11px] font-bold uppercase tracking-wider text-slate-500">End Date</Label>
                         <Input type="date" v-model="filterForm.end_date" class="h-9 text-xs dark:bg-gray-900" />
                     </div>
@@ -542,7 +605,16 @@ const breadcrumbs = [
 
             <!-- TAB CONTENT: ACADEMICS & ADMISSIONS -->
             <div v-if="activeTab === 'academics'" class="space-y-6 animate-in fade-in duration-300">
-                <div class="grid gap-4 md:grid-cols-4">
+                <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
+                    <Card>
+                        <CardContent class="p-6 flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-slate-500">Total Students</p>
+                                <h3 class="text-2xl font-bold mt-1">{{ academicStats.total_students }}</h3>
+                            </div>
+                            <GraduationCap class="w-8 h-8 text-blue-600" />
+                        </CardContent>
+                    </Card>
                     <Card>
                         <CardContent class="p-6 flex items-center justify-between">
                             <div>
@@ -600,6 +672,18 @@ const breadcrumbs = [
                     </Card>
                 </div>
 
+                <!-- Session Breakdown Chart -->
+                <div class="grid gap-6 md:grid-cols-1">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle class="text-base font-bold">Students by Admission Session</CardTitle>
+                        </CardHeader>
+                        <CardContent class="h-[280px]">
+                            <Bar :data="studentsBySessionChartData" :options="{ responsive: true, maintainAspectRatio: false }" />
+                        </CardContent>
+                    </Card>
+                </div>
+
                 <!-- NEW: DETAILED BREAKDOWNS (TABLES) -->
                 <div class="grid gap-6 md:grid-cols-3">
                     <!-- Students per Faculty Table -->
@@ -616,7 +700,7 @@ const breadcrumbs = [
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    <TableRow v-for="fac in studentsByFaculty" :key="fac.label">
+                                    <TableRow v-for="(fac, idx) in studentsByFaculty" :key="`fac-${idx}-${fac.label}`">
                                         <TableCell class="font-medium text-slate-800">{{ fac.label }}</TableCell>
                                         <TableCell class="text-right font-bold text-indigo-600">{{ fac.value }}</TableCell>
                                     </TableRow>
@@ -643,7 +727,7 @@ const breadcrumbs = [
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    <TableRow v-for="dept in studentsByDepartment" :key="dept.label">
+                                    <TableRow v-for="(dept, idx) in studentsByDepartment" :key="`dept-${idx}-${dept.label}`">
                                         <TableCell class="font-medium text-slate-800">{{ dept.label }}</TableCell>
                                         <TableCell class="text-[11px] text-slate-500">{{ dept.faculty }}</TableCell>
                                         <TableCell class="text-right font-bold text-indigo-600">{{ dept.value }}</TableCell>
@@ -671,7 +755,7 @@ const breadcrumbs = [
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    <TableRow v-for="prog in studentsByProgramme" :key="prog.label">
+                                    <TableRow v-for="(prog, idx) in studentsByProgramme" :key="`prog-${idx}-${prog.label}`">
                                         <TableCell class="font-medium text-slate-800">{{ prog.label }}</TableCell>
                                         <TableCell class="text-[11px] text-slate-500">{{ prog.department }}</TableCell>
                                         <TableCell class="text-right font-bold text-indigo-600">{{ prog.value }}</TableCell>
@@ -688,6 +772,14 @@ const breadcrumbs = [
 
             <!-- TAB CONTENT: FINANCE & PAYROLL -->
             <div v-if="activeTab === 'finance'" class="space-y-6 animate-in fade-in duration-300">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Financial Overview & Audits</h2>
+                    <Button as-child variant="outline" class="border-indigo-200 text-indigo-700 hover:bg-indigo-50 shadow-sm">
+                        <a :href="reconciliationExportUrl">
+                            <Download class="w-4 h-4 mr-2" /> Export Reconciliation Report
+                        </a>
+                    </Button>
+                </div>
                 <div class="grid gap-4 md:grid-cols-4">
                     <Card>
                         <CardContent class="p-6">
@@ -742,6 +834,19 @@ const breadcrumbs = [
                                     <p class="text-lg font-bold mt-1 text-slate-900">{{ financeStats.scholarship.total_scholarships }} schemes</p>
                                 </div>
                                 <Award class="w-6 h-6 text-amber-500" />
+                            </div>
+
+                            <!-- Scholarship Breakdown list -->
+                            <div v-if="financeStats.scholarship.breakdown && financeStats.scholarship.breakdown.length > 0" class="space-y-2 mt-4 pt-4 border-t">
+                                <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Student Count by Scholarship</h4>
+                                <div class="max-h-[150px] overflow-y-auto pr-1 space-y-2">
+                                    <div v-for="sch in financeStats.scholarship.breakdown" :key="sch.id" class="flex justify-between items-center text-xs p-2 bg-slate-50 rounded border">
+                                        <div class="font-medium text-slate-800 truncate max-w-[200px]" :title="sch.name">
+                                            {{ sch.name }}
+                                        </div>
+                                        <Badge variant="outline" class="font-semibold">{{ sch.student_count }} Students</Badge>
+                                    </div>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>

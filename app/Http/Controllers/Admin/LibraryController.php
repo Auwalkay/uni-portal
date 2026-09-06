@@ -120,7 +120,18 @@ class LibraryController extends Controller
             $validated['ebook_file_path'] = $path;
         }
 
-        Book::create($validated);
+        $book = Book::create($validated);
+
+        activity('library')
+            ->performedOn($book)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'title' => $book->title,
+                'author' => $book->author,
+                'isbn' => $book->isbn,
+                'is_ebook' => $book->is_ebook,
+            ])
+            ->log("Added new book '{$book->title}' to library catalog");
 
         return redirect()->back()->with('success', 'Book added to catalog successfully.');
     }
@@ -181,6 +192,15 @@ class LibraryController extends Controller
 
         $book->update($validated);
 
+        activity('library')
+            ->performedOn($book)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'title' => $book->title,
+                'author' => $book->author,
+            ])
+            ->log("Updated book details for '{$book->title}'");
+
         return redirect()->back()->with('success', 'Book details updated successfully.');
     }
 
@@ -192,6 +212,15 @@ class LibraryController extends Controller
         if ($book->loans()->whereIn('status', ['approved', 'active', 'overdue'])->exists()) {
             return redirect()->back()->with('error', 'Cannot delete a book that is currently checked out.');
         }
+
+        activity('library')
+            ->performedOn($book)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'title' => $book->title,
+                'isbn' => $book->isbn,
+            ])
+            ->log("Deleted book '{$book->title}' from library catalog");
 
         $book->delete();
 
@@ -209,7 +238,13 @@ class LibraryController extends Controller
 
         $validated['slug'] = Str::slug($validated['name']);
 
-        LibraryCategory::create($validated);
+        $category = LibraryCategory::create($validated);
+
+        activity('library')
+            ->performedOn($category)
+            ->causedBy(auth()->user())
+            ->withProperties(['name' => $category->name])
+            ->log("Created library category '{$category->name}'");
 
         return redirect()->back()->with('success', 'Category created successfully.');
     }
@@ -233,6 +268,15 @@ class LibraryController extends Controller
                     'borrowed_at' => now(),
                     'due_at' => now()->addDays(14), // Standard 2 weeks loan
                 ]);
+
+                activity('library')
+                    ->performedOn($loan)
+                    ->causedBy(auth()->user())
+                    ->withProperties([
+                        'book' => $book->title,
+                        'borrower' => $loan->user?->name,
+                    ])
+                    ->log("Approved book loan for '{$book->title}' to {$loan->user?->name}");
             });
 
             return redirect()->back()->with('success', 'Borrow request approved successfully.');
@@ -254,6 +298,16 @@ class LibraryController extends Controller
             'admin_notes' => $request->admin_notes,
         ]);
 
+        activity('library')
+            ->performedOn($loan)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'book' => $loan->book?->title,
+                'borrower' => $loan->user?->name,
+                'reason' => $request->admin_notes,
+            ])
+            ->log("Rejected book loan request for '{$loan->book?->title}'");
+
         return redirect()->back()->with('success', 'Borrow request rejected.');
     }
 
@@ -270,6 +324,15 @@ class LibraryController extends Controller
                     'status' => 'returned',
                     'returned_at' => now(),
                 ]);
+
+                activity('library')
+                    ->performedOn($loan)
+                    ->causedBy(auth()->user())
+                    ->withProperties([
+                        'book' => $book->title,
+                        'borrower' => $loan->user?->name,
+                    ])
+                    ->log("Recorded return of book '{$book->title}' borrowed by {$loan->user?->name}");
             });
 
             return redirect()->back()->with('success', 'Book return recorded successfully.');

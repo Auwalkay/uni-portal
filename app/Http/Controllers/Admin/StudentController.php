@@ -16,10 +16,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
-use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Facades\Hash;
 use App\Mail\StudentAccountCreated;
 use App\Services\AcademicCacheService;
 use App\Exports\StudentsExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class StudentController extends Controller
 {
@@ -70,8 +71,8 @@ class StudentController extends Controller
             'jamb_score' => 'nullable|integer',
             'previous_institution' => 'nullable|string|max:255',
             'password' => 'nullable|string|min:8',
-            'passport_photo' => 'nullable|image|max:2048',
-            'waec_result' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'passport_photo' => 'nullable|image|max:1024',
+            'waec_result' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:1024',
             'fee_policy' => 'required|in:admission_session,current_session',
             'scholarship_id' => 'nullable|exists:scholarships,id',
         ]);
@@ -136,14 +137,14 @@ class StudentController extends Controller
 
             $currentSession = \App\Models\Session::find($validated['admitted_session_id']);
 
-            $currenSemester = $currentSession->semesters()->where('is_current', true)->first();
+            $currenSemester = $currentSession ? $currentSession->semesters()->where('is_current', true)->first() : null;
 
             StudentSession::create([
                 'student_id' => $student->id,
                 'session_id' => $validated['admitted_session_id'],
                 'level' => $validated['current_level'],
                 'status' => 'active',
-                'semester' => $currenSemester->name,
+                'semester' => $currenSemester?->name ?? 'First Semester',
             ]);
 
             // Handle WAEC Result
@@ -167,22 +168,93 @@ class StudentController extends Controller
         return redirect()->route('admin.students.index')->with('success', 'Student created successfully.');
     }
 
+    protected function applyStudentAccessScope($query, $user)
+    {
+        // 1. Global Admins & University Leadership: Full access across all departments
+        if ($user->can('manage_users') || $user->hasAnyRole([
+            'admin', 'super_admin', 'vc', 'ict_admin', 'registrar', 
+            'bursar', 'admission_director', 'admissions_officer', 'admissions_manager', 'student_affairs_officer'
+        ])) {
+            return;
+        }
+
+        $staff = $user->staff?->loadMissing('department');
+
+        // 2. Deans: View all students in their Faculty
+        if ($user->hasRole('dean') || $user->can('view_faculty_students')) {
+            $facultyId = $staff?->department?->faculty_id;
+            if ($facultyId) {
+                $query->whereHas('academicDepartment', function ($q) use ($facultyId) {
+                    $q->where('faculty_id', $facultyId);
+                });
+                return;
+            }
+        }
+
+        // 3. HODs: View all students in their Department
+        if ($user->hasRole('hod') || $user->can('view_department_students')) {
+            $departmentId = $staff?->department_id;
+            if ($departmentId) {
+                $query->where('department_id', $departmentId);
+                return;
+            }
+        }
+
+        // 4. Lecturers / Course Coordinators: View students registered in allocated courses
+        $query->whereHas('registrations', function ($q) use ($user) {
+            $q->whereHas('course', function ($cq) use ($user) {
+                $cq->whereHas('allocations', function ($aq) use ($user) {
+                    $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
+                });
+            });
+        });
+    }
+
+    protected function isUserAuthorizedForStudent(Student $student, $user): bool
+    {
+        if ($user->can('manage_users') || $user->hasAnyRole([
+            'admin', 'super_admin', 'vc', 'ict_admin', 'registrar', 
+            'bursar', 'admission_director', 'admissions_officer', 'admissions_manager', 'student_affairs_officer'
+        ])) {
+            return true;
+        }
+
+        $staff = $user->staff?->loadMissing('department');
+
+        if ($user->hasRole('dean') || $user->can('view_faculty_students')) {
+            $facultyId = $staff?->department?->faculty_id;
+            if ($facultyId && $student->academicDepartment?->faculty_id === $facultyId) {
+                return true;
+            }
+        }
+
+        if ($user->hasRole('hod') || $user->can('view_department_students')) {
+            $departmentId = $staff?->department_id;
+            if ($departmentId && $student->department_id === $departmentId) {
+                return true;
+            }
+        }
+
+        return $student->registrations()->whereHas('course', function ($q) use ($user) {
+            $q->whereHas('allocations', function ($aq) use ($user) {
+                $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
+            });
+        })->exists();
+    }
+
     public function index(Request $request)
     {
         $user = auth()->user();
+
+        // Base query for counts/stats (unfiltered by search/pagination)
+        $statsQuery = Student::query();
+        $this->applyStudentAccessScope($statsQuery, $user);
+
         $query = Student::query()
             ->with(['user', 'academicDepartment.faculty', 'admittedSession', 'program', 'scholarship']);
 
-        // Access Control: Lecturers see only students registered in their allocated courses
-        if (!$user->can('manage_users')) {
-            $query->whereHas('registrations', function ($q) use ($user) {
-                $q->whereHas('course', function ($cq) use ($user) {
-                    $cq->whereHas('allocations', function ($aq) use ($user) {
-                        $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
-                    });
-                });
-            });
-        }
+        // Access Control: Apply role/department/faculty scope
+        $this->applyStudentAccessScope($query, $user);
 
         // Search Filter
         if ($request->filled('search')) {
@@ -197,29 +269,29 @@ class StudentController extends Controller
         }
 
         // Session Filter (Admitted Session)
-        if ($request->filled('session_id')) {
+        if ($request->filled('session_id') && $request->session_id !== 'ALL_SESSIONS') {
             $query->where('admitted_session_id', $request->session_id);
         }
 
         // Faculty Filter
-        if ($request->filled('faculty_id')) {
+        if ($request->filled('faculty_id') && $request->faculty_id !== 'ALL_FACULTIES') {
             $query->whereHas('academicDepartment', function ($q) use ($request) {
                 $q->where('faculty_id', $request->faculty_id);
             });
         }
 
         // Department Filter
-        if ($request->filled('department_id')) {
+        if ($request->filled('department_id') && $request->department_id !== 'ALL_DEPARTMENTS') {
             $query->where('department_id', $request->department_id);
         }
 
         // Level Filter
-        if ($request->filled('level')) {
+        if ($request->filled('level') && $request->level !== 'ALL_LEVELS') {
             $query->where('current_level', $request->level);
         }
 
         // Program Filter
-        if ($request->filled('program_id')) {
+        if ($request->filled('program_id') && $request->program_id !== 'ALL_PROGRAMS') {
             $query->where('program_id', $request->program_id);
         } elseif ($request->filled('program')) {
             // Fallback for string search if needed, or legacy
@@ -229,7 +301,7 @@ class StudentController extends Controller
         }
 
         // Scholarship Filter
-        if ($request->filled('scholarship_id')) {
+        if ($request->filled('scholarship_id') && $request->scholarship_id !== 'ALL_SCHOLARSHIPS') {
             if ($request->scholarship_id === 'NONE' || $request->scholarship_id === 'none') {
                 $query->whereNull('scholarship_id');
             } else {
@@ -239,26 +311,84 @@ class StudentController extends Controller
 
         // Date Range Filter
         if ($request->filled('date_from')) {
-            $query->whereDate('created_at', '>=', $request->date_from);
+            $query->whereDate('students.created_at', '>=', $request->date_from);
         }
         if ($request->filled('date_to')) {
-            $query->whereDate('created_at', '<=', $request->date_to);
+            $query->whereDate('students.created_at', '<=', $request->date_to);
         }
 
-        $students = $query->latest()->paginate(15)->withQueryString();
+        // Gender Filter
+        if ($request->filled('gender') && $request->gender !== 'ALL_GENDERS' && $request->gender !== 'all') {
+            $query->where('gender', strtolower($request->gender));
+        }
+
+        // Status Filter
+        if ($request->filled('status') && $request->status !== 'ALL_STATUS' && $request->status !== 'all') {
+            $query->whereHas('user', function ($q) use ($request) {
+                $q->where('is_active', $request->status === 'active');
+            });
+        }
+
+        // Entry Mode Filter
+        if ($request->filled('entry_mode') && $request->entry_mode !== 'ALL_MODES' && $request->entry_mode !== 'all') {
+            $query->where('entry_mode', $request->entry_mode);
+        }
+
+        // Sorting
+        $sortBy = $request->query('sort_by', 'created_at');
+        $sortOrder = $request->query('sort_order', 'desc');
+
+        if ($sortBy === 'name') {
+            $query->join('users', 'students.user_id', '=', 'users.id')
+                ->select('students.*')
+                ->orderBy('users.name', $sortOrder);
+        } elseif ($sortBy === 'matriculation_number') {
+            $query->orderBy('students.matriculation_number', $sortOrder);
+        } elseif ($sortBy === 'level') {
+            $query->orderBy('students.current_level', $sortOrder);
+        } else {
+            $query->orderBy('students.created_at', $sortOrder);
+        }
+
+        $perPage = $request->integer('per_page', 15);
+        if (!in_array($perPage, [10, 15, 25, 50, 100])) {
+            $perPage = 15;
+        }
+
+        $students = $query->paginate($perPage)->withQueryString();
 
         return Inertia::render('Admin/Students/Index', [
             'students' => $students,
-            'filters' => $request->only(['search', 'session_id', 'faculty_id', 'department_id', 'level', 'program_id', 'program', 'scholarship_id', 'date_from', 'date_to']),
+            'filters' => $request->only([
+                'search', 'session_id', 'faculty_id', 'department_id', 'level',
+                'program_id', 'program', 'scholarship_id', 'date_from', 'date_to',
+                'gender', 'status', 'entry_mode', 'sort_by', 'sort_order', 'per_page'
+            ]),
             'sessions' => fn() => AcademicCacheService::getSessions(),
             'faculties' => fn() => AcademicCacheService::getFaculties(),
             'departments' => fn() => AcademicCacheService::getAllDepartments(),
             'programmes' => fn() => AcademicCacheService::getProgrammes(),
             'scholarships' => fn() => AcademicCacheService::getScholarships(),
-            'stats' => [
-                'total' => (clone $query)->count(),
-                'new' => (clone $query)->where('admitted_session_id', Session::latest('start_date')->value('id'))->count(),
-                'graduating' => (clone $query)->whereIn('current_level', ['400', '500', '600'])->count(),
+            'stats' => fn() => \Illuminate\Support\Facades\Cache::remember(
+                'students_stats_' . ($user->can('manage_users') ? 'admin' : $user->id),
+                60 * 5, // Cache for 5 minutes
+                function () use ($statsQuery) {
+                    return [
+                        'total' => (clone $statsQuery)->count(),
+                        'new' => (clone $statsQuery)->where('admitted_session_id', Session::latest('start_date')->value('id'))->count(),
+                        'graduating' => (clone $statsQuery)->whereIn('current_level', ['400', '500', '600'])->count(),
+                    ];
+                }
+            ),
+            'permissions' => [
+                'can_view' => $user->can('view_students') || $user->can('manage_users') || $user->hasRole(['admin', 'admission_director', 'vc', 'ict_admin', 'dean', 'hod']),
+                'can_create' => $user->can('create_students') || $user->can('admit_students') || $user->hasRole(['admin', 'admission_director']),
+                'can_edit' => $user->can('edit_students') || $user->hasRole(['admin', 'admission_director']),
+                'can_delete' => $user->can('delete_students') || $user->hasRole('admin'),
+                'can_import' => $user->can('import_students') || $user->can('create_students') || $user->hasRole(['admin', 'admission_director']),
+                'can_export' => $user->can('view_students') || $user->can('export_students') || $user->hasRole(['admin', 'admission_director', 'vc', 'ict_admin', 'dean', 'hod']),
+                'can_assign_scholarship' => $user->can('edit_students') || $user->can('manage_scholarships') || $user->hasRole(['admin', 'bursar', 'admission_director']),
+                'can_toggle_status' => $user->can('edit_students') || $user->hasRole('admin'),
             ],
         ]);
     }
@@ -267,17 +397,9 @@ class StudentController extends Controller
     {
         $user = auth()->user();
         
-        // Authorization check for lecturers
-        if (!$user->can('manage_users')) {
-            $isAuthorized = $student->registrations()->whereHas('course', function ($q) use ($user) {
-                $q->whereHas('allocations', function ($aq) use ($user) {
-                    $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
-                });
-            })->exists();
-
-            if (!$isAuthorized) {
-                abort(403, 'You are not authorized to view this student.');
-            }
+        // Authorization check (Admins, Deans, HODs, Lecturers)
+        if (!$this->isUserAuthorizedForStudent($student, $user)) {
+            abort(403, 'You are not authorized to view this student.');
         }
 
         $canViewFinance = $user->can('view_payments');
@@ -291,10 +413,15 @@ class StudentController extends Controller
             'state',
             'lga',
             'scholarship',
+            'sessions.session',
+            'oLevelResults',
+            'hostelBookings.session',
+            'hostelBookings.invoice',
+            'hostelBookings.room.floor.block.hostel',
         ]);
 
         if ($canViewFinance) {
-            $student->load(['user.invoices.session', 'user.payments']);
+            $student->load(['user.invoices.session', 'user.invoices.payments', 'user.invoices.items', 'user.payments']);
         }
 
         if ($canViewAcademics) {
@@ -323,10 +450,12 @@ class StudentController extends Controller
                 'can_view_finance' => $canViewFinance,
                 'can_view_academics' => $canViewAcademics,
                 'can_edit_admission' => $user->hasRole('admission_director') || $user->hasRole('admin'),
+                'can_edit_students' => $user->can('edit_students'),
                 'can_perform_registration' => $user->can('perform_student_registration'),
-                'manage_student_registrations' => $user->can('manage_student_registrations'),
+                'manage_student_registrations' => $user->can('manage_student_registrations') || $user->can('fix_course_registration'),
+                'can_reset_password' => $user->can('reset_student_password') || $user->can('edit_students'),
             ],
-            'sessions' => ($user->hasRole('admission_director') || $user->hasRole('admin')) 
+            'sessions' => ($user->hasRole('admission_director') || $user->hasRole('admin') || $user->can('edit_students')) 
                 ? AcademicCacheService::getSessions() 
                 : [],
         ]);
@@ -344,6 +473,7 @@ class StudentController extends Controller
 
         $student->update([
             'admitted_session_id' => $validated['admitted_session_id'],
+            'updated_by' => auth()->id(),
         ]);
 
         return back()->with('success', 'Admission session updated successfully.');
@@ -351,22 +481,34 @@ class StudentController extends Controller
 
     public function import(Request $request)
     {
+        if ($request->scholarship_id === 'none') {
+            $request->merge(['scholarship_id' => null]);
+        }
+
         $request->validate([
-            'file' => 'required|mimes:csv,txt,xlsx|max:10240',
-            'session_id' => 'required|exists:academic_sessions,id',
-            'faculty_id' => 'required|exists:faculties,id',
-            'department_id' => 'required|exists:departments,id',
-            'program_id' => 'required|exists:programmes,id',
-            'level' => 'required|in:100,200,300,400,500',
+            'file'          => 'required|mimes:csv,txt,xlsx|max:10240',
+            'session_id'    => 'required|exists:academic_sessions,id',
+            'faculty_id'    => 'nullable|exists:faculties,id',
+            'department_id' => 'nullable|exists:departments,id',
+            'program_id'    => 'nullable|exists:programmes,id',
+            'level'         => 'nullable|in:100,200,300,400,500',
+            'scholarship_id'=> 'nullable|exists:scholarships,id',
         ]);
 
         try {
+            // Prevent timeout on larger import files
+            set_time_limit(180);
+
+            // Temporarily lower hashing cost for fast import speed
+            config(['hashing.bcrypt.rounds' => 4]);
+
             $import = new StudentImport(
-                $request->faculty_id,
-                $request->department_id,
-                $request->program_id,
+                $request->faculty_id    ?: null,
+                $request->department_id ?: null,
+                $request->program_id    ?: null,
                 $request->session_id,
-                $request->level
+                $request->level         ?: null,
+                $request->scholarship_id
             );
             Excel::import($import, $request->file('file'));
 
@@ -383,20 +525,23 @@ class StudentController extends Controller
             {
                 return collect([
                     [
-                        'first_name' => 'John',
-                        'last_name' => 'Doe',
-                        'email' => 'john.doe@example.com',
-                        'phone_number' => '08012345678',
-                        'gender' => 'male',
-                        'dob' => '2000-01-01',
-                        'address' => '123 University Road',
-                        'state' => 'Lagos',
-                        'lga' => 'Ikeja',
-                        'entry_mode' => 'UTME',
-                        'matric_number' => 'UNI/2024/0001',
-                        'jamb_reg' => '2024123456AB',
-                        'jamb_score' => '280',
+                        'first_name'           => 'John',
+                        'last_name'            => 'Doe',
+                        'email'                => 'john.doe@example.com',
+                        'phone_number'         => '08012345678',
+                        'gender'               => 'male',
+                        'dob'                  => '2000-01-01',
+                        'address'              => '123 University Road',
+                        'state'                => 'Lagos',
+                        'lga'                  => 'Ikeja',
+                        'entry_mode'           => 'UTME',
+                        'matric_number'        => 'UNI/2024/0001',
+                        'jamb_reg'             => '2024123456AB',
+                        'jamb_score'           => '280',
                         'previous_institution' => '',
+                        'programme'            => 'Computer Science',  // Used if Programme not selected on form
+                        'level'                => '100',               // Used if Level not selected on form
+                        'scholarship'          => 'Full Tuition',      // Optional: name of scholarship
                     ]
                 ]);
             }
@@ -418,6 +563,9 @@ class StudentController extends Controller
                     'jamb_reg',
                     'jamb_score',
                     'previous_institution',
+                    'programme',   // Optional: overridden by form selection
+                    'level',       // Optional: overridden by form selection
+                    'scholarship', // Optional: name of scholarship
                 ];
             }
         };
@@ -435,6 +583,7 @@ class StudentController extends Controller
         
         return Inertia::render('Admin/Students/Edit', [
             'student' => $student,
+            'can_edit_name_email' => auth()->user()->can('edit_student_name_email'),
             'sessions' => AcademicCacheService::getSessions(),
             'faculties' => AcademicCacheService::getFaculties(),
             'programmes' => AcademicCacheService::getProgrammes(),
@@ -476,6 +625,20 @@ class StudentController extends Controller
             'scholarship_id' => 'nullable|exists:scholarships,id',
         ]);
 
+        $canEditNameEmail = $request->user()->can('edit_student_name_email');
+        
+        $nameParts = explode(' ', $student->user->name, 2);
+        $oldFirstName = $nameParts[0] ?? '';
+        $oldLastName = $nameParts[1] ?? '';
+        $oldEmail = $student->user->email;
+
+        $hasNameChanged = ($request->first_name !== $oldFirstName) || ($request->last_name !== $oldLastName);
+        $hasEmailChanged = $request->email !== $oldEmail;
+
+        if (($hasNameChanged || $hasEmailChanged) && !$canEditNameEmail) {
+            abort(403, 'You do not have permission to edit the student name or email.');
+        }
+
         DB::transaction(function () use ($validated, $student, $request) {
             $student->user->update([
                 'name' => $validated['first_name'] . ' ' . $validated['last_name'],
@@ -510,6 +673,12 @@ class StudentController extends Controller
                 'fee_policy' => $validated['fee_policy'],
                 'scholarship_id' => $validated['scholarship_id'] ?? null,
             ]);
+
+            // Sync the active session's level to match the new current_level
+            $activeSession = $student->currentSession()->first();
+            if ($activeSession) {
+                $activeSession->update(['level' => $validated['current_level']]);
+            }
         });
 
         return redirect()->route('admin.students.index')->with('success', 'Student updated successfully.');
@@ -541,5 +710,136 @@ class StudentController extends Controller
         } catch (\Exception $e) {
             return back()->with('error', 'Promotion failed: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Toggle a student user active/deactive status.
+     */
+    public function toggleStatus(Request $request, Student $student)
+    {
+        if (!$request->user()->can('edit_students')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $user = $student->user;
+        $newStatus = !$user->is_active;
+
+        $user->update(['is_active' => $newStatus]);
+
+        activity('student')
+            ->performedOn($student)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'student_name' => $user->name,
+                'status' => $newStatus ? 'activated' : 'deactivated',
+            ])
+            ->log("Student account " . ($newStatus ? 'activated' : 'deactivated'));
+
+        $statusText = $newStatus ? 'activated' : 'deactivated';
+        return back()->with('success', "Student account has been successfully {$statusText}.");
+    }
+
+    /**
+     * Bulk assign scholarship to multiple students.
+     */
+    public function bulkAssignScholarship(Request $request)
+    {
+        if (!$request->user()->can('edit_students')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $validated = $request->validate([
+            'student_ids' => 'required|array',
+            'student_ids.*' => 'required|exists:students,id',
+            'scholarship_id' => 'nullable|exists:scholarships,id',
+        ]);
+
+        $scholarshipId = $validated['scholarship_id'] ?? null;
+
+        // Perform mass update
+        Student::whereIn('id', $validated['student_ids'])->update([
+            'scholarship_id' => $scholarshipId,
+        ]);
+
+        // Log activity for each student
+        $students = Student::whereIn('id', $validated['student_ids'])->with('user')->get();
+        foreach ($students as $student) {
+            activity('student')
+                ->performedOn($student)
+                ->causedBy(auth()->user())
+                ->withProperties([
+                    'student_name' => $student->user->name,
+                    'scholarship_id' => $scholarshipId,
+                ])
+                ->log("Scholarship assigned/updated in bulk");
+        }
+
+        return back()->with('success', count($validated['student_ids']) . ' students updated successfully.');
+    }
+
+    /**
+     * Search students for bulk scholarship assignment.
+     */
+    public function searchBulk(Request $request)
+    {
+        if (!$request->user()->can('edit_students')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $query = $request->query('query');
+        if (empty($query)) {
+            return response()->json([]);
+        }
+
+        $students = Student::with('user')
+            ->where(function ($q) use ($query) {
+                $q->where('matriculation_number', 'like', "%{$query}%")
+                  ->orWhereHas('user', function ($uq) use ($query) {
+                      $uq->where('name', 'like', "%{$query}%")
+                        ->orWhere('email', 'like', "%{$query}%");
+                  });
+            })
+            ->limit(10)
+            ->get()
+            ->map(function ($student) {
+                return [
+                    'id' => $student->id,
+                    'name' => $student->user->name,
+                    'matriculation_number' => $student->matriculation_number,
+                    'email' => $student->user->email,
+                ];
+            });
+
+        return response()->json($students);
+    }
+
+    public function resetPassword(Student $student)
+    {
+        if (!auth()->user()->can('reset_student_password') && !auth()->user()->can('edit_students')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $newPassword = Str::random(10);
+        $student->user->update([
+            'password' => Hash::make($newPassword),
+        ]);
+
+        activity('student')
+            ->performedOn($student)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'student_id' => $student->id,
+                'student_name' => $student->user->name,
+                'reset_by' => auth()->user()->name,
+            ])
+            ->log("Password reset for student {$student->user->name}");
+
+        try {
+            Mail::to($student->user->email)->send(new StudentAccountCreated($student->user, $newPassword, $student->matriculation_number));
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to send reset password email to student: ' . $e->getMessage());
+        }
+
+        return back()->with('success', "Password reset successfully for {$student->user->name}. New password: {$newPassword}");
     }
 }

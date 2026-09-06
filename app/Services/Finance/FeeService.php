@@ -138,6 +138,7 @@ class FeeService
                 if ($adminChargeEnabled && $scholarship->covers_admin_charges) {
                     $baseForDiscount += $adminChargeAmount;
                 }
+
                 if ($scholarship->type === 'fixed') {
                     $discountAmount = max(0, $baseForDiscount - $scholarship->amount);
                 } else {
@@ -145,7 +146,18 @@ class FeeService
                 }
             }
 
-            $finalAmount = $totalAmountBeforeDiscount - $discountAmount;
+            // Check if late payment fine should be applied immediately
+            $lateFineAmount = 0;
+            $applyLateFine = false;
+            if ($session->late_payment_deadline && $session->late_payment_deadline->isPast() && $session->late_fee_amount > 0) {
+                $isEnabled = filter_var(\App\Models\SystemSetting::get('late_fee_enabled', true), FILTER_VALIDATE_BOOLEAN);
+                if ($isEnabled) {
+                    $lateFineAmount = (float) $session->late_fee_amount;
+                    $applyLateFine = true;
+                }
+            }
+
+            $finalAmount = $totalAmountBeforeDiscount - $discountAmount + $lateFineAmount;
 
             $studentSession = StudentSession::firstOrCreate(
                 ['student_id' => $student->id, 'session_id' => $session->id],
@@ -162,6 +174,7 @@ class FeeService
                 'amount' => $finalAmount,
                 'status' => 'pending',
                 'due_date' => now()->addWeeks(4),
+                'late_fine_applied' => $applyLateFine,
             ]);
 
             foreach ($resolvedConfigs as $config) {
@@ -192,8 +205,96 @@ class FeeService
                 ]);
             }
 
+            if ($applyLateFine) {
+                InvoiceItem::create([
+                    'invoice_id' => $invoice->id,
+                    'description' => 'Late Payment Fine (' . $session->name . ')',
+                    'amount' => $lateFineAmount,
+                ]);
+            }
+
             return $invoice;
         });
+    }
+
+    /**
+     * Calculate expected school fee for a student for a session without creating an invoice.
+     */
+    public function calculateExpectedSchoolFee(Student $student, Session $session): float
+    {
+        $targetSessionId = ($student->fee_policy === 'admission_session' && $student->admitted_session_id) 
+            ? $student->admitted_session_id 
+            : $session->id;
+
+        $allConfigs = FeeConfiguration::where('session_id', $targetSessionId)
+            ->where(function ($q) use ($student) {
+                $q->where('level', $student->current_level)->orWhereNull('level');
+            })
+            ->where(function ($q) use ($student) {
+                $q->where('entry_mode', $student->entry_mode)->orWhereNull('entry_mode');
+            })
+            ->where('is_compulsory', true)
+            ->with('feeType')
+            ->get();
+
+        $resolvedConfigs = collect();
+        $groupedConfigs = $allConfigs->groupBy('fee_type_id');
+
+        foreach ($groupedConfigs as $feeTypeId => $configs) {
+            $resolved = null;
+            if ($student->program_id) $resolved = $configs->where('program_id', $student->program_id)->first();
+            if (!$resolved && $student->department_id) $resolved = $configs->where('department_id', $student->department_id)->whereNull('program_id')->first();
+            if (!$resolved && $student->faculty_id) $resolved = $configs->where('faculty_id', $student->faculty_id)->whereNull('department_id')->whereNull('program_id')->first();
+            if (!$resolved) $resolved = $configs->whereNull('faculty_id')->whereNull('department_id')->whereNull('program_id')->first();
+            if ($resolved) {
+                $resolvedConfigs->push($resolved);
+            }
+        }
+
+        $academicTotal = $resolvedConfigs->sum('amount');
+        $adminChargeEnabled = SystemSetting::get('admin_charge_enabled', true);
+        $adminChargeAmount = SystemSetting::get('admin_charge_amount', 250000);
+        
+        $totalAmountBeforeDiscount = $academicTotal;
+        if ($adminChargeEnabled) {
+            $totalAmountBeforeDiscount += $adminChargeAmount;
+        }
+
+        $discountAmount = 0;
+        if ($student->scholarship && ($student->program?->scholarship_eligible ?? true)) {
+            $scholarship = $student->scholarship;
+            $baseForDiscount = 0;
+            foreach ($resolvedConfigs as $config) {
+                if (!$config->feeType || !$config->feeType->is_one_time) {
+                    if ($config->feeType) {
+                        $feeName = strtolower($config->feeType->name);
+                        $feeSlug = $config->feeType->slug;
+                        $isExcluded = str_contains($feeName, 'drug test') || 
+                                      str_contains($feeSlug, 'drug-test') ||
+                                      str_contains($feeName, 'acceptance') || 
+                                      str_contains($feeSlug, 'acceptance') ||
+                                      str_contains($feeName, 'matriculation') || 
+                                      str_contains($feeSlug, 'matriculation');
+                        if ($isExcluded) {
+                            continue;
+                        }
+                    }
+                    $baseForDiscount += $config->amount;
+                }
+            }
+
+            if ($adminChargeEnabled && $scholarship->covers_admin_charges) {
+                $baseForDiscount += $adminChargeAmount;
+            }
+
+            if ($scholarship->type === 'fixed') {
+                $discountAmount = max(0, $baseForDiscount - $scholarship->amount);
+            } else {
+                $discountAmount = $baseForDiscount * ($scholarship->percentage / 100);
+            }
+        }
+
+        return max(0, $totalAmountBeforeDiscount - $discountAmount);
     }
 
     /**

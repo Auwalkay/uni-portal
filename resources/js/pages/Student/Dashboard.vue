@@ -4,7 +4,7 @@ import { Head, Link } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import StudentLayout from '@/layouts/StudentLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard, Calendar, CalendarClock, MapPin, FileText } from 'lucide-vue-next';
+import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard, Calendar, CalendarClock, MapPin, FileText, Home, Megaphone, Download, Pin, Lock, ShieldAlert } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -24,6 +24,9 @@ const props = defineProps<{
     schoolFeeStatus?: string; // 'paid', 'partial', 'pending', 'cancelled', etc.
     showRegistrationNotification?: boolean;
     registrationMessage?: string;
+    isRegistrationActive?: boolean;
+    showHostelNotification?: boolean;
+    hostelNotificationMessage?: string;
     stats?: {
         cgpa: string;
         totalUnits: number;
@@ -33,10 +36,27 @@ const props = defineProps<{
         semester: string;
     };
     timetable?: Array<any>;
+    pendingSession?: string;
+    announcements?: Array<any>;
+    activeSession?: {
+        id: string;
+        name: string;
+        school_fee_payment_enabled: boolean;
+        late_payment_deadline: string | null;
+        late_fee_amount: number;
+    };
 }>();
+
+const pinnedAnnouncements = computed(() => {
+    return props.announcements?.filter(bulletin => bulletin.is_pinned) || [];
+});
 
 const hasPaidEnough = computed(() => {
     return props.schoolFeeStatus === 'paid' || props.schoolFeeStatus === 'partial';
+});
+
+const isSecondSemester = computed(() => {
+    return props.stats?.semester && (props.stats.semester.toLowerCase().includes('second') || props.stats.semester === '2');
 });
 
 const paymentStatusText = computed(() => {
@@ -49,8 +69,36 @@ const paymentStatusText = computed(() => {
     }
 });
 
-const formatTime = (time: string) => {
-    return time.substring(0, 5);
+const isLateFeeOverdue = computed(() => {
+    if (!props.activeSession?.late_payment_deadline) return false;
+    return new Date(props.activeSession.late_payment_deadline) < new Date();
+});
+
+const formattedLateDeadline = computed(() => {
+    if (!props.activeSession?.late_payment_deadline) return '';
+    try {
+        return new Date(props.activeSession.late_payment_deadline).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch (e) {
+        return '';
+    }
+});
+
+const formatTime = (time: string | null) => {
+    if (!time) return '---';
+    const parts = time.split(':');
+    let h = parseInt(parts[0], 10);
+    if (isNaN(h)) return time;
+    const m = parts[1] || '00';
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    return `${h.toString().padStart(2, '0')}:${m} ${ampm}`;
 };
 
 const getClassesForDay = (day: string) => {
@@ -86,21 +134,27 @@ const greeting = () => {
     <StudentLayout :breadcrumbs="breadcrumbs">
         <div class="flex-1 space-y-6 p-6">
             <!-- Welcome Banner -->
-            <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 p-8 shadow-lg">
-                <div class="relative z-10 flex items-center gap-6 text-white">
+            <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 p-6 sm:p-8 shadow-lg">
+                <div class="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-6 text-white text-center sm:text-left">
                     <img 
                         :src="student?.passport_photo_path ? `/storage/${student.passport_photo_path}` : `https://ui-avatars.com/api/?name=${user?.name}&background=random`" 
                         alt="Profile Photo" 
-                        class="h-20 w-20 rounded-full border-4 border-white/30 object-cover shadow-md"
+                        class="h-24 w-24 sm:h-20 sm:w-20 rounded-full border-4 border-white/30 object-cover shadow-md flex-shrink-0"
                     />
-                    <div>
-                        <h1 class="text-3xl font-bold tracking-tight">{{ greeting() }}, {{ user?.name.split(' ')[0] }}!</h1>
-                        <p class="mt-2 text-blue-100">
+                    <div class="flex-1 min-w-0 w-full">
+                        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white leading-tight break-words">{{ greeting() }}, {{ user?.name.split(' ')[0] }}!</h1>
+                        <p class="mt-2 text-sm sm:text-base text-blue-100 break-words">
                             {{ student?.matriculation_number || 'Matriculation Pending' }} &bull; {{ student?.program?.name || 'Program N/A' }}
                         </p>
-                        <div class="mt-4 inline-flex items-center rounded-full bg-white/20 px-3 py-1 text-sm backdrop-blur-sm">
-                            <CalendarDays class="mr-2 h-4 w-4" />
-                            {{ stats?.session }} Session &bull; {{ stats?.semester }}
+                        <div class="mt-4 flex flex-wrap justify-center sm:justify-start gap-2">
+                            <div class="inline-flex items-center rounded-full bg-white/20 px-3 py-1 text-xs sm:text-sm backdrop-blur-sm">
+                                <CalendarDays class="mr-2 h-4 w-4" />
+                                {{ stats?.session }} Session &bull; {{ stats?.semester }}
+                            </div>
+                            <div v-if="pendingSession" class="inline-flex items-center rounded-full bg-amber-500/30 border border-amber-400/40 text-amber-100 px-3 py-1 text-xs sm:text-sm backdrop-blur-sm font-medium">
+                                <Clock class="mr-2 h-4 w-4 text-amber-300" />
+                                Promotion Pending to {{ pendingSession }}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -108,22 +162,160 @@ const greeting = () => {
                 <div class="absolute -right-12 -top-12 h-64 w-64 rounded-full bg-white/10 blur-3xl"></div>
             </div>
 
-            <!-- Registration Notification -->
-            <div v-if="showRegistrationNotification" class="rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm flex items-start gap-4">
-                <div class="rounded-full bg-blue-100 p-2">
-                    <AlertCircle class="h-6 w-6 text-blue-600" />
+            <!-- Pending Promotion Notification -->
+            <div v-if="pendingSession" class="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm flex items-start gap-4 text-amber-900">
+                <div class="rounded-full bg-amber-100 p-2">
+                    <AlertCircle class="h-6 w-6 text-amber-600" />
                 </div>
                 <div class="flex-1">
-                    <h3 class="font-semibold text-blue-900">Course Registration Open</h3>
-                    <p class="text-blue-700 mt-1 text-sm">
-                        {{ registrationMessage || 'Course registration for the current semester is now open. Please register your courses before the deadline.' }}
+                    <h3 class="font-semibold text-amber-800">Academic Promotion Pending</h3>
+                    <p class="mt-1 text-sm text-amber-700">
+                        Your academic promotion to the **{{ pendingSession }}** session is currently pending. Please resolve any outstanding school fees for the previous session ({{ stats?.session }}) to automatically complete your promotion and register courses.
                     </p>
-                    <Link :href="route('student.courses.create')" class="mt-3 inline-flex items-center text-sm font-medium text-blue-800 hover:text-blue-900 underline underline-offset-4">
+                </div>
+            </div>
+
+            <!-- School Fee Payments Closed Notification -->
+            <div v-if="activeSession && !activeSession.school_fee_payment_enabled && schoolFeeStatus !== 'paid'" class="rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm flex items-start gap-4 text-red-900">
+                <div class="rounded-full bg-red-100 p-2">
+                    <AlertCircle class="h-6 w-6 text-red-600" />
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-semibold text-red-800">School Fee Payments Suspended</h3>
+                    <p class="mt-1 text-sm text-red-700">
+                        School fee payment for the <strong>{{ activeSession.name }}</strong> session is currently disabled. Please contact the Bursary department for assistance.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Unpaid School Fees Notification -->
+            <div v-if="activeSession && activeSession.school_fee_payment_enabled && schoolFeeStatus !== 'paid' && schoolFeeStatus !== 'partial'" class="rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm flex items-start gap-4 text-red-900">
+                <div class="rounded-full bg-red-100 p-2">
+                    <CreditCard class="h-6 w-6 text-red-600" />
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-semibold text-red-800">Outstanding School Fees</h3>
+                    <p class="mt-1 text-sm text-red-700">
+                        You have not paid your school fees for the <strong>{{ activeSession.name }}</strong> session. Please generate your invoice and make a payment to secure your student registration.
+                    </p>
+                    <Link :href="route('student.payments.index')" class="mt-3 inline-flex items-center text-sm font-medium text-red-800 hover:text-red-900 underline underline-offset-4">
+                        Pay Fees Now &rarr;
+                    </Link>
+                </div>
+            </div>
+
+            <!-- Late Payment Fine Notification -->
+            <div v-if="activeSession?.late_payment_deadline && schoolFeeStatus !== 'paid' && schoolFeeStatus !== 'partial'" 
+                :class="[
+                    'rounded-xl border p-4 shadow-sm flex items-start gap-4',
+                    isLateFeeOverdue 
+                        ? 'border-red-200 bg-red-50 text-red-900' 
+                        : 'border-orange-200 bg-orange-50 text-orange-900'
+                ]"
+            >
+                <div :class="['rounded-full p-2', isLateFeeOverdue ? 'bg-red-100' : 'bg-orange-100']">
+                    <CalendarClock :class="['h-6 w-6', isLateFeeOverdue ? 'text-red-600' : 'text-orange-600']" />
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-semibold">{{ isLateFeeOverdue ? 'Late Registration Fine Applied' : 'Late Payment Deadline Warning' }}</h3>
+                    <p :class="['mt-1 text-sm', isLateFeeOverdue ? 'text-red-700' : 'text-orange-700']">
+                        <span v-if="isLateFeeOverdue">
+                            The late registration deadline of <strong>{{ formattedLateDeadline }}</strong> has passed. A late fine of <strong>₦{{ new Intl.NumberFormat().format(activeSession.late_fee_amount) }}</strong> has been added to your unpaid school fee invoice.
+                        </span>
+                        <span v-else>
+                            Please note that the deadline to pay school fees without penalty is <strong>{{ formattedLateDeadline }}</strong>. A late registration fine of <strong>₦{{ new Intl.NumberFormat().format(activeSession.late_fee_amount) }}</strong> will be applied after this date.
+                        </span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Outstanding Second Semester School Fees (Partial Payment) -->
+            <div v-if="activeSession && isSecondSemester && schoolFeeStatus === 'partial'" class="rounded-xl border border-amber-200 bg-amber-50/80 p-4 shadow-sm flex items-start gap-4 text-amber-950 mb-4">
+                <div class="rounded-full bg-amber-100 p-2">
+                    <ShieldAlert class="h-6 w-6 text-amber-600" />
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-semibold text-amber-900">Second Semester Registration Locked</h3>
+                    <p class="mt-1 text-sm text-amber-800">
+                        You have only made a partial payment of your school fees for the current session. Course registration/editing and exam card downloads for the Second Semester are locked until your payment is fully cleared.
+                    </p>
+                    <Link :href="route('student.payments.index')" class="mt-3 inline-flex items-center text-sm font-medium text-amber-850 hover:text-amber-900 underline underline-offset-4">
+                        Clear Outstanding Balance Now &rarr;
+                    </Link>
+                </div>
+            </div>
+
+            <!-- Registration Notification -->
+            <div v-if="showRegistrationNotification" 
+                :class="[
+                    'rounded-xl border p-4 shadow-sm flex items-start gap-4',
+                    isRegistrationActive 
+                        ? 'border-blue-200 bg-blue-50 text-blue-900' 
+                        : 'border-amber-200 bg-amber-50 text-amber-900'
+                ]"
+            >
+                <div :class="['rounded-full p-2', isRegistrationActive ? 'bg-blue-100' : 'bg-amber-100']">
+                    <AlertCircle :class="['h-6 w-6', isRegistrationActive ? 'text-blue-600' : 'text-amber-600']" />
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-semibold">{{ isRegistrationActive ? 'Course Registration Open' : 'Course Registration Notice' }}</h3>
+                    <p :class="['mt-1 text-sm', isRegistrationActive ? 'text-blue-700' : 'text-amber-700']">
+                        {{ registrationMessage }}
+                    </p>
+                    <Link v-if="isRegistrationActive && !(isSecondSemester && schoolFeeStatus === 'partial')" :href="route('student.courses.create')" class="mt-3 inline-flex items-center text-sm font-medium text-blue-800 hover:text-blue-900 underline underline-offset-4">
                         Register Courses Now &rarr;
                     </Link>
                 </div>
             </div>
 
+            <!-- Hostel Booking Notification -->
+            <div v-if="showHostelNotification" class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm flex items-start gap-4 text-emerald-900">
+                <div class="rounded-full bg-emerald-100 p-2">
+                    <Home class="h-6 w-6 text-emerald-600" />
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-semibold">Hostel Booking Open</h3>
+                    <p class="mt-1 text-sm text-emerald-700">
+                        {{ hostelNotificationMessage }}
+                    </p>
+                    <Link :href="route('student.accommodation.index')" class="mt-3 inline-flex items-center text-sm font-medium text-emerald-800 hover:text-emerald-900 underline underline-offset-4">
+                        Book Your Room Now &rarr;
+                    </Link>
+                </div>
+            </div>
+
+            <!-- Pinned Announcements Banner -->
+            <div v-if="pinnedAnnouncements.length > 0" class="space-y-3">
+                <div 
+                    v-for="bulletin in pinnedAnnouncements" 
+                    :key="bulletin.id" 
+                    class="rounded-xl border border-amber-200 bg-amber-50/70 p-5 shadow-sm flex items-start gap-4 text-amber-950 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100"
+                >
+                    <div class="rounded-full bg-amber-100 dark:bg-amber-950 p-2">
+                        <Pin class="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex flex-wrap items-center justify-between gap-4">
+                            <h3 class="font-bold text-base flex items-center gap-2">
+                                {{ bulletin.title }}
+                                <Badge class="bg-amber-600 hover:bg-amber-700 text-white border-0 text-[10px] py-0.5 px-2">Important Notice</Badge>
+                            </h3>
+                            <span class="text-xs opacity-75 whitespace-nowrap">{{ new Date(bulletin.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}</span>
+                        </div>
+                        <div v-if="bulletin.content" class="mt-2 text-sm opacity-90 leading-relaxed" v-html="bulletin.content"></div>
+                        <div v-if="bulletin.document_path" class="mt-3">
+                            <a 
+                                :href="`/storage/${bulletin.document_path}`" 
+                                target="_blank" 
+                                class="inline-flex items-center gap-1.5 text-xs font-bold text-amber-900 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 underline underline-offset-4"
+                            >
+                                <Download class="h-4 w-4" /> View Scanned Document Attachment
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+ 
             <!-- Stats Grid -->
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div class="rounded-xl border bg-card p-6 shadow-sm transition-all hover:shadow-md">
@@ -330,6 +522,55 @@ const greeting = () => {
                                         <div class="flex items-center gap-3 mt-1.5 text-xs text-indigo-200">
                                             <span class="flex items-center gap-1"><MapPin class="w-3 h-3 opacity-70" /> {{ cls.venue }}</span>
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <!-- Latest Announcements Card -->
+                    <Card class="border border-border bg-card shadow-sm">
+                        <CardHeader class="flex flex-row items-center justify-between pb-3 border-b">
+                            <CardTitle class="text-md font-semibold flex items-center gap-2 text-foreground">
+                                <Megaphone class="w-4 h-4 text-primary" /> Latest Announcements
+                            </CardTitle>
+                            <Link href="/student/announcements" class="text-xs text-primary hover:underline font-medium">
+                                View All
+                            </Link>
+                        </CardHeader>
+                        <CardContent class="pt-4 space-y-4">
+                            <div v-if="!announcements || announcements.length === 0" class="text-center py-6 text-muted-foreground text-sm">
+                                No announcements published.
+                            </div>
+                            <div v-else class="space-y-3.5">
+                                <div v-for="bulletin in announcements" :key="bulletin.id" class="relative pl-4 border-l-2 border-primary/20 pb-3 last:pb-0 last:border-0">
+                                    <!-- Pin Indicator -->
+                                    <div v-if="bulletin.is_pinned" class="absolute -left-[5px] top-1.5 h-2 w-2 rounded-full bg-amber-500 ring-4 ring-background"></div>
+                                    
+                                    <h4 class="font-semibold text-sm text-foreground line-clamp-1 flex items-center gap-1.5">
+                                        {{ bulletin.title }}
+                                        <Badge v-if="bulletin.is_pinned" variant="outline" class="h-4 px-1 text-[9px] border-amber-500 text-amber-600 bg-amber-500/5">
+                                            Pinned
+                                        </Badge>
+                                        <Badge v-if="bulletin.document_path" variant="outline" class="h-4 px-1 text-[9px] border-blue-500 text-blue-600 bg-blue-500/5">
+                                            File
+                                        </Badge>
+                                    </h4>
+                                    <p class="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                                        {{ bulletin.content || 'Scanned document attached.' }}
+                                    </p>
+                                    <div class="flex items-center justify-between mt-1.5">
+                                        <span class="text-[10px] text-muted-foreground">
+                                            {{ new Date(bulletin.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}
+                                        </span>
+                                        <a 
+                                            v-if="bulletin.document_path"
+                                            :href="`/storage/${bulletin.document_path}`" 
+                                            target="_blank" 
+                                            class="inline-flex items-center gap-1 text-[10px] font-semibold text-primary hover:underline"
+                                        >
+                                            <Download class="h-3 w-3" /> Scanned File
+                                        </a>
                                     </div>
                                 </div>
                             </div>

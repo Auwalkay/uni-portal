@@ -63,6 +63,7 @@ interface Scholarship {
 
 const props = defineProps<{
     student: any;
+    can_edit_name_email: boolean;
     faculties: Faculty[];
     sessions: Session[];
     states: State[];
@@ -217,19 +218,19 @@ const breadcrumbs = [
                                 <CardContent class="grid md:grid-cols-2 gap-x-8 gap-y-6">
                                     <div class="space-y-2">
                                         <Label for="first_name">First Name</Label>
-                                        <Input id="first_name" v-model="form.first_name" required />
+                                        <Input id="first_name" v-model="form.first_name" :disabled="!can_edit_name_email" required />
                                         <p v-if="form.errors.first_name" class="text-xs text-destructive">{{ form.errors.first_name }}</p>
                                     </div>
                                     <div class="space-y-2">
                                         <Label for="last_name">Last Name</Label>
-                                        <Input id="last_name" v-model="form.last_name" required />
+                                        <Input id="last_name" v-model="form.last_name" :disabled="!can_edit_name_email" required />
                                         <p v-if="form.errors.last_name" class="text-xs text-destructive">{{ form.errors.last_name }}</p>
                                     </div>
                                     <div class="space-y-2">
                                         <Label for="email">Email Address</Label>
                                         <div class="relative">
                                             <Mail class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                            <Input id="email" type="email" v-model="form.email" class="pl-10" required />
+                                            <Input id="email" type="email" v-model="form.email" class="pl-10" :disabled="!can_edit_name_email" required />
                                         </div>
                                         <p v-if="form.errors.email" class="text-xs text-destructive">{{ form.errors.email }}</p>
                                     </div>

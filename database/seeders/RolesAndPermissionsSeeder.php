@@ -45,6 +45,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_students',
             'create_students',
             'edit_students',
+            'edit_student_name_email',
             'delete_students',
             'import_students',
             'manage_users', // Global student search/access
@@ -53,6 +54,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_staff',
             'create_staff',
             'edit_staff',
+            'edit_staff_profile',
+            'assign_staff_roles',
             'delete_staff',
             'manage_staff', // Global staff management
             'view_salaries',
@@ -60,6 +63,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'run_payroll',
             'view_attendance',
             'manage_attendance',
+            'reset_student_password',
+            'fix_course_registration',
             
             // Finance & Payments
             'view_payments',
@@ -68,6 +73,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'manual_payment_override',
             'create_invoices',
             'cancel_invoices',
+            'edit_invoices',
             'manage_scholarships',
             'view_expenses',
             'create_expenses',
@@ -77,9 +83,16 @@ class RolesAndPermissionsSeeder extends Seeder
             // Infrastructure & Utilities
             'manage_hostels',
             'manage_hostel_bookings',
+            'view_hostel_bookings',
+            'view_male_hostel_bookings',
+            'view_female_hostel_bookings',
+            'create_hostels',
+            'manage_hostel_fees',
+            'toggle_hostels',
             'manage_visitors',
             'view_audit_logs',
             'manage_system_settings',
+            'manage_support',
             // Dashboard & Analytics
             'view_global_analytics',
             'view_revenue_stats',
@@ -103,7 +116,20 @@ class RolesAndPermissionsSeeder extends Seeder
             // Inventory Management
             'view_inventory',
             'manage_inventory',
+            'create_inventory_items',
+            'edit_inventory_items',
+            'delete_inventory_items',
+            'restock_inventory_items',
+            'create_inventory_requisitions',
+            'approve_inventory_requisitions',
             'assign_inventory',
+            'view_inventory_requisitions',
+            'manage_inventory_requisitions',
+            'view_inventory_assignments',
+            'manage_inventory_assignments',
+            'view_inventory_categories',
+            'manage_inventory_categories',
+            'view_inventory_audit_logs',
             'manage_inventory_complaints',
             
             // Personal
@@ -153,6 +179,27 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage_sickbay_inventory',
         ]);
 
+        // --- HOSTEL SUPERVISORS ---
+        $maleHostelSupervisor = Role::firstOrCreate(['name' => 'male_hostel_supervisor']);
+        $maleHostelSupervisor->syncPermissions([
+            'access_admin_dashboard',
+            'view_hostel_bookings',
+            'view_male_hostel_bookings',
+        ]);
+
+        $femaleHostelSupervisor = Role::firstOrCreate(['name' => 'female_hostel_supervisor']);
+        $femaleHostelSupervisor->syncPermissions([
+            'access_admin_dashboard',
+            'view_hostel_bookings',
+            'view_female_hostel_bookings',
+        ]);
+
+        $hostelViewer = Role::firstOrCreate(['name' => 'hostel_viewer']);
+        $hostelViewer->syncPermissions([
+            'access_admin_dashboard',
+            'view_hostel_bookings',
+        ]);
+
         // --- ACADEMIC ROLES ---
         $registrar = Role::firstOrCreate(['name' => 'registrar']);
         $registrar->syncPermissions([
@@ -187,7 +234,17 @@ class RolesAndPermissionsSeeder extends Seeder
         $dean->syncPermissions(['access_admin_dashboard', 'approve_results', 'view_results', 'manage_courses']);
 
         $hod = Role::firstOrCreate(['name' => 'hod']);
-        $hod->syncPermissions(['access_admin_dashboard', 'approve_results', 'view_results', 'manage_courses', 'assign_coordinators', 'perform_student_registration', 'manage_student_registrations']);
+        $hod->syncPermissions([
+            'access_admin_dashboard',
+            'approve_results',
+            'view_results',
+            'manage_courses',
+            'assign_coordinators',
+            'perform_student_registration',
+            'manage_student_registrations',
+            'view_staff',
+            'manage_timetables',
+        ]);
 
         $courseCoordinator = Role::firstOrCreate(['name' => 'course_coordinator']);
         $courseCoordinator->syncPermissions(['access_admin_dashboard', 'view_results']);
@@ -217,10 +274,10 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // --- FINANCE ROLES ---
         $bursar = Role::firstOrCreate(['name' => 'bursar']);
-        $bursar->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments', 'manual_payment_override', 'view_bursary_reports']);
+        $bursar->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments', 'manual_payment_override', 'view_bursary_reports', 'manage_hostel_fees']);
 
         $headOfFinance = Role::firstOrCreate(['name' => 'head_of_finance']);
-        $headOfFinance->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments', 'manual_payment_override', 'view_bursary_reports']);
+        $headOfFinance->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments', 'manual_payment_override', 'view_bursary_reports', 'manage_hostel_fees']);
 
         $financeOfficer = Role::firstOrCreate(['name' => 'finance_officer']);
         $financeOfficer->syncPermissions(['access_admin_dashboard', 'verify_payments', 'view_payments']);
@@ -228,9 +285,55 @@ class RolesAndPermissionsSeeder extends Seeder
         $financeClerk = Role::firstOrCreate(['name' => 'finance_clerk']);
         $financeClerk->syncPermissions(['access_admin_dashboard', 'view_payments']);
 
-        // --- FRONT DESK ---
+        // --- HOSTEL ROLES ---
+        $warden = Role::firstOrCreate(['name' => 'hostel_warden']);
+        $warden->syncPermissions([
+            'access_admin_dashboard',
+            'view_students',
+            'manage_hostels',
+            'manage_hostel_bookings',
+            'toggle_hostels',
+        ]);
+
+        // --- FRONT DESK & ICT & EXECUTIVE ---
         $receptionist = Role::firstOrCreate(['name' => 'receptionist']);
         $receptionist->syncPermissions(['access_admin_dashboard', 'manage_visitors']);
+
+        $ictStaff = Role::firstOrCreate(['name' => 'ict_staff']);
+        $ictStaff->syncPermissions([
+            'access_admin_dashboard',
+            'view_staff',
+            'edit_staff_profile',
+            'assign_staff_roles',
+            'view_students',
+            'reset_student_password',
+            'fix_course_registration',
+            'manage_users',
+            'manage_system_settings',
+            'view_system_status',
+            'view_audit_logs',
+            'view_recent_activities',
+            'impersonate_users',
+            'manage_bulk_communications',
+        ]);
+
+        $vc = Role::firstOrCreate(['name' => 'vice_chancellor']);
+        $vc->syncPermissions([
+            'access_admin_dashboard',
+            'view_staff',
+            'view_students',
+            'view_system_status',
+            'view_audit_logs',
+            'view_recent_activities',
+            'view_global_analytics',
+            'view_revenue_stats',
+            'view_academic_stats',
+            'view_admission_stats',
+            'view_payments',
+            'view_bursary_reports',
+            'view_salaries',
+            'manage_hostels',
+        ]);
 
         // --- CORE ROLES ---
         $staff = Role::firstOrCreate(['name' => 'staff']);

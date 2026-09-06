@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { route } from 'ziggy-js';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
+import Swal from 'sweetalert2';
 import { 
     ArrowLeft, Printer, CreditCard, CheckCircle2, Clock, Calendar, 
     User, Mail, School, Building, RefreshCw, Download, ShieldCheck,
-    AlertCircle, Wallet, History
+    AlertCircle, Wallet, History, Trash2, Edit3, Plus, Trash, Tag
 } from 'lucide-vue-next';
 import { type BreadcrumbItem } from '@/types';
-import { route } from 'ziggy-js';
-import { useForm } from '@inertiajs/vue3';
 import { 
     Dialog, 
     DialogContent, 
@@ -25,7 +26,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ref, computed } from 'vue';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const props = defineProps<{
     auth: {
@@ -38,7 +45,7 @@ const props = defineProps<{
 }>();
 
 const hasPermission = (permission: string) => {
-    return props.auth.user.permissions.includes(permission);
+    return props.auth?.user?.permissions?.includes(permission) ?? false;
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -46,16 +53,115 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: props.invoice.reference, href: `/admin/invoices/${props.invoice.id}` },
 ];
 
+// Edit Items Modal State
+const isEditItemsOpen = ref(false);
+const editItemsForm = useForm({
+    items: props.invoice.items ? props.invoice.items.map((i: any) => ({
+        description: i.description,
+        amount: Number(i.amount)
+    })) : []
+});
+
+const openEditItemsModal = () => {
+    editItemsForm.items = props.invoice.items ? props.invoice.items.map((i: any) => ({
+        description: i.description,
+        amount: Number(i.amount)
+    })) : [];
+    isEditItemsOpen.value = true;
+};
+
+const addItemRow = () => {
+    editItemsForm.items.push({
+        description: '',
+        amount: 0
+    });
+};
+
+const removeItemRow = (index: number) => {
+    if (editItemsForm.items.length > 1) {
+        editItemsForm.items.splice(index, 1);
+    } else {
+        Swal.fire('Warning', 'An invoice must have at least one line item.', 'warning');
+    }
+};
+
+const previewItemsTotal = computed(() => {
+    return editItemsForm.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+});
+
+const saveInvoiceItems = () => {
+    editItemsForm.put(`/admin/invoices/${props.invoice.id}/items`, {
+        onSuccess: () => {
+            isEditItemsOpen.value = false;
+            Swal.fire('Updated!', 'Invoice items and total amount updated.', 'success');
+        }
+    });
+};
+
+// Recalculate Action
+const recalculateFee = () => {
+    Swal.fire({
+        title: 'Recalculate Fee?',
+        text: 'This will evaluate current session fee rules and scholarship policy for this student, posting an adjustment line item for any discrepancy.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#3b82f6',
+        confirmButtonText: 'Yes, recalculate now'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            router.post(`/admin/invoices/${props.invoice.id}/recalculate`, {}, {
+                onSuccess: () => {
+                    Swal.fire('Recalculated!', 'Invoice balance recalibrated.', 'success');
+                }
+            });
+        }
+    });
+};
+
+const deleteInvoice = () => {
+    Swal.fire({
+        title: 'Delete Invoice?',
+        text: `Are you sure you want to delete invoice ${props.invoice.reference}? This action cannot be undone.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#3b82f6',
+        confirmButtonText: 'Yes, delete it!'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            router.delete(route('admin.invoices.destroy', props.invoice.id), {
+                onSuccess: () => {
+                    Swal.fire('Deleted!', 'Invoice has been deleted.', 'success');
+                }
+            });
+        }
+    });
+};
+
 const formatCurrency = (value: number) => {
     return '₦' + new Intl.NumberFormat('en-NG').format(value);
 };
 
-const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('en-GB', {
+const formatDate = (date: string, includeTime = true) => {
+    if (!date) return 'N/A';
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return 'N/A';
+    
+    const dateStr = d.toLocaleDateString('en-GB', {
         day: 'numeric',
         month: 'short',
         year: 'numeric'
     });
+
+    if (!includeTime) return dateStr;
+
+    const timeStr = d.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    });
+
+    return `${dateStr}, ${timeStr}`;
 };
 
 const getStatusColor = (status: string) => {
@@ -75,6 +181,8 @@ const printInvoice = () => {
 
 const manualPaymentForm = useForm({
     amount: balance.value,
+    paid_at: new Date().toISOString().split('T')[0],
+    channel: 'transfer',
 });
 
 const isDialogOpen = ref(false);
@@ -98,6 +206,14 @@ const verifyPayment = (paymentId: string) => {
 const downloadReceipt = (paymentId: string) => {
     window.open(route('admin.payments.download_receipt', paymentId), '_blank');
 };
+
+const selectedStatus = ref('all');
+const filteredPayments = computed(() => {
+    if (selectedStatus.value === 'all') {
+        return props.payments;
+    }
+    return props.payments.filter(payment => payment.status === selectedStatus.value);
+});
 </script>
 
 <template>
@@ -117,14 +233,45 @@ const downloadReceipt = (paymentId: string) => {
                         </Button>
                         <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">Invoice Review</h1>
                     </div>
-                    <p class="text-slate-500 flex items-center gap-2 pl-11">
-                        <span class="font-mono">{{ invoice.reference }}</span>
+                    <p class="text-slate-500 flex flex-wrap items-center gap-2 pl-11 text-xs font-medium">
+                        <span class="font-mono font-bold">{{ invoice.reference }}</span>
                         <span class="text-slate-300">•</span>
                         <span>Issued on {{ formatDate(invoice.created_at) }}</span>
+                        <span v-if="invoice.creator" class="text-slate-300">•</span>
+                        <span v-if="invoice.creator">Generated by: <strong class="text-slate-700 dark:text-slate-200 font-semibold">{{ invoice.creator.name }}</strong></span>
+                        <span v-if="invoice.updater" class="text-slate-300">•</span>
+                        <span v-if="invoice.updater">Last Updated by: <strong class="text-slate-700 dark:text-slate-200 font-semibold">{{ invoice.updater.name }}</strong></span>
                     </p>
                 </div>
 
                 <div class="flex items-center gap-3 w-full md:w-auto">
+                    <Button 
+                        v-if="invoice.type === 'school_fee' && hasPermission('edit_invoices')" 
+                        variant="outline" 
+                        @click="recalculateFee" 
+                        class="flex-1 md:flex-none border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-300"
+                    >
+                        <RefreshCw class="w-4 h-4 mr-2" /> Recalculate Fee
+                    </Button>
+
+                    <Button 
+                        v-if="hasPermission('edit_invoices')" 
+                        variant="outline" 
+                        @click="openEditItemsModal" 
+                        class="flex-1 md:flex-none border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-900 dark:text-indigo-300"
+                    >
+                        <Edit3 class="w-4 h-4 mr-2" /> Edit Breakdown
+                    </Button>
+
+                    <Button 
+                        v-if="invoice.paid_amount == 0 && (hasPermission('cancel_invoices') || hasPermission('delete_invoices'))" 
+                        variant="destructive" 
+                        @click="deleteInvoice" 
+                        class="flex-1 md:flex-none"
+                    >
+                        <Trash2 class="w-4 h-4 mr-2" /> Delete Invoice
+                    </Button>
+
                     <Button variant="outline" @click="printInvoice" class="flex-1 md:flex-none">
                         <Printer class="w-4 h-4 mr-2" /> Print
                     </Button>
@@ -147,6 +294,31 @@ const downloadReceipt = (paymentId: string) => {
                                     <div class="flex justify-between text-sm text-slate-500">
                                         <span>Current Balance:</span>
                                         <span class="font-bold text-slate-900 dark:text-slate-100">{{ formatCurrency(balance) }}</span>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="space-y-2">
+                                        <Label for="paid_at" class="text-sm font-semibold">Payment Date</Label>
+                                        <Input 
+                                            id="paid_at"
+                                            type="date" 
+                                            v-model="manualPaymentForm.paid_at" 
+                                            class="w-full"
+                                        />
+                                    </div>
+                                    <div class="space-y-2">
+                                        <Label for="channel" class="text-sm font-semibold">Payment Method</Label>
+                                        <Select v-model="manualPaymentForm.channel">
+                                            <SelectTrigger class="w-full">
+                                                <SelectValue placeholder="Method" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="transfer">Bank Transfer</SelectItem>
+                                                <SelectItem value="pos">POS Terminal</SelectItem>
+                                                <SelectItem value="cash">Cash Payment</SelectItem>
+                                                <SelectItem value="manual">Manual Register</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </div>
                                 <div class="space-y-2">
@@ -177,52 +349,134 @@ const downloadReceipt = (paymentId: string) => {
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
+
+                    <!-- Edit Invoice Items Breakdown Dialog -->
+                    <Dialog v-model:open="isEditItemsOpen">
+                        <DialogContent class="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+                            <DialogHeader>
+                                <DialogTitle>Edit Invoice Breakdown & Adjustment Items</DialogTitle>
+                                <DialogDescription>
+                                    Add, modify, or remove line items. Enter negative amounts (e.g. -50000) for credit adjustments or discounts.
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            <div class="space-y-4 py-3">
+                                <div v-for="(item, idx) in editItemsForm.items" :key="idx" class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border">
+                                    <div class="flex-1 space-y-1">
+                                        <Label class="text-xs font-semibold text-slate-600 dark:text-slate-400">Description</Label>
+                                        <Input v-model="item.description" placeholder="Item description / adjustment reason" class="h-9 text-sm" />
+                                    </div>
+                                    <div class="w-36 space-y-1">
+                                        <Label class="text-xs font-semibold text-slate-600 dark:text-slate-400">Amount (₦)</Label>
+                                        <Input v-model.number="item.amount" type="number" step="any" placeholder="0" class="h-9 text-sm font-mono font-bold" />
+                                    </div>
+                                    <div class="pt-5">
+                                        <Button type="button" variant="ghost" size="icon" class="h-9 w-9 text-red-500 hover:text-red-700 hover:bg-red-50" @click="removeItemRow(idx)">
+                                            <Trash class="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <Button type="button" variant="outline" size="sm" class="w-full gap-2 border-dashed" @click="addItemRow">
+                                    <Plus class="h-4 w-4" /> Add Item / Adjustment Line
+                                </Button>
+
+                                <!-- Live Calculation Preview -->
+                                <div class="p-4 rounded-xl bg-slate-100 dark:bg-slate-900 border space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-500">Items Calculated Total:</span>
+                                        <span class="font-bold font-mono">{{ formatCurrency(previewItemsTotal) }}</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-500">Payments Recorded:</span>
+                                        <span class="font-bold font-mono text-emerald-600">{{ formatCurrency(invoice.paid_amount || 0) }}</span>
+                                    </div>
+                                    <Separator />
+                                    <div class="flex justify-between text-base">
+                                        <span class="font-semibold">New Remaining Balance:</span>
+                                        <span class="font-black font-mono" :class="previewItemsTotal - (invoice.paid_amount || 0) <= 0 ? 'text-emerald-600' : 'text-slate-900 dark:text-slate-100'">
+                                            {{ formatCurrency(Math.max(0, previewItemsTotal - (invoice.paid_amount || 0))) }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <DialogFooter class="sm:justify-between">
+                                <Button variant="ghost" @click="isEditItemsOpen = false">Cancel</Button>
+                                <Button :disabled="editItemsForm.processing" @click="saveInvoiceItems" class="bg-indigo-600 hover:bg-indigo-700 text-white">
+                                    {{ editItemsForm.processing ? 'Saving Changes...' : 'Save & Update Invoice Total' }}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                 </div>
             </div>
 
             <!-- Smart Summary Cards -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 no-print">
-                <Card class="bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border-slate-200 shadow-sm">
+                <!-- Total Billed Card -->
+                <Card class="bg-gradient-to-br from-indigo-50/60 to-purple-50/60 dark:from-slate-900/30 dark:to-slate-800/30 backdrop-blur-md border-indigo-100/50 dark:border-slate-800 shadow-sm hover:-translate-y-1 hover:shadow-md transition-all duration-300">
                     <CardContent class="p-6">
                         <div class="flex items-center justify-between">
-                            <div class="space-y-1">
-                                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Billed</p>
-                                <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ formatCurrency(invoice.amount) }}</p>
+                            <div class="space-y-2">
+                                <p class="text-xs font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Total Billed</p>
+                                <p class="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{{ formatCurrency(invoice.amount) }}</p>
+                                <span class="inline-flex items-center gap-1.5 text-xs text-slate-500 mt-2">
+                                    <Calendar class="w-3.5 h-3.5 text-slate-400" /> Billed on {{ formatDate(invoice.created_at) }}
+                                </span>
                             </div>
-                            <div class="p-3 bg-slate-100 dark:bg-slate-800 rounded-2xl text-slate-600 dark:text-slate-400">
+                            <div class="p-4 bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 rounded-2xl shadow-inner">
                                 <Wallet class="w-6 h-6" />
                             </div>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card class="bg-emerald-50/50 dark:bg-emerald-950/10 border-emerald-100 shadow-sm">
+                <!-- Total Collected Card -->
+                <Card class="bg-gradient-to-br from-emerald-50/60 to-teal-50/60 dark:from-emerald-950/10 dark:to-teal-950/10 backdrop-blur-md border-emerald-100/50 dark:border-emerald-900/30 shadow-sm hover:-translate-y-1 hover:shadow-md transition-all duration-300">
                     <CardContent class="p-6">
-                        <div class="flex items-center justify-between">
-                            <div class="space-y-1">
-                                <p class="text-xs font-semibold uppercase tracking-wider text-emerald-600/80">Total Collected</p>
-                                <p class="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{{ formatCurrency(invoice.paid_amount) }}</p>
+                        <div class="flex items-center justify-between col-span-3 w-full">
+                            <div class="space-y-2 flex-1 mr-4">
+                                <p class="text-xs font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">Total Collected</p>
+                                <p class="text-3xl font-black text-emerald-800 dark:text-emerald-300 tracking-tight">{{ formatCurrency(invoice.paid_amount) }}</p>
+                                
+                                <div class="mt-4 w-full bg-emerald-200/50 dark:bg-emerald-950/50 h-2 rounded-full overflow-hidden shadow-inner">
+                                    <div class="bg-emerald-500 h-full rounded-full transition-all duration-700 ease-out" :style="{ width: `${progressPercentage}%` }"></div>
+                                </div>
+                                <div class="flex justify-between items-center mt-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">
+                                    <span>Collected</span>
+                                    <span>{{ progressPercentage }}%</span>
+                                </div>
                             </div>
-                            <div class="p-3 bg-emerald-100 dark:bg-emerald-900/50 rounded-2xl text-emerald-600">
+                            <div class="p-4 bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 rounded-2xl shadow-inner self-start">
                                 <CheckCircle2 class="w-6 h-6" />
                             </div>
-                        </div>
-                        <div class="mt-4 w-full bg-emerald-100 dark:bg-emerald-900/30 h-1.5 rounded-full overflow-hidden">
-                            <div class="bg-emerald-500 h-full transition-all duration-500" :style="{ width: `${progressPercentage}%` }"></div>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card :class="[balance > 0 ? 'bg-amber-50/50 border-amber-100' : 'bg-slate-50 border-slate-100', 'shadow-sm']">
+                <!-- Current Balance Card -->
+                <Card :class="[
+                    balance > 0 
+                        ? 'bg-gradient-to-br from-amber-50/60 to-orange-50/60 border-amber-100/50 dark:from-amber-950/10 dark:to-orange-950/10 dark:border-amber-900/30' 
+                        : 'bg-gradient-to-br from-slate-50 to-slate-100/80 border-slate-200 dark:from-slate-900/20 dark:to-slate-850/20 dark:border-slate-800', 
+                    'backdrop-blur-md shadow-sm hover:-translate-y-1 hover:shadow-md transition-all duration-300'
+                ]">
                     <CardContent class="p-6">
                         <div class="flex items-center justify-between">
-                            <div class="space-y-1">
-                                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Current Balance</p>
-                                <p :class="['text-2xl font-bold', balance > 0 ? 'text-amber-700' : 'text-slate-400']">
+                            <div class="space-y-2">
+                                <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Current Balance</p>
+                                <p :class="['text-3xl font-black tracking-tight', balance > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-slate-400']">
                                     {{ formatCurrency(balance) }}
                                 </p>
+                                <span :class="[
+                                    'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider', 
+                                    balance > 0 ? 'bg-amber-100/70 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400' : 'bg-emerald-100/70 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400'
+                                ]">
+                                    {{ balance > 0 ? 'Payment Required' : 'Fully Cleared' }}
+                                </span>
                             </div>
-                            <div :class="['p-3 rounded-2xl', balance > 0 ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400']">
+                            <div :class="['p-4 rounded-2xl shadow-inner', balance > 0 ? 'bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400' : 'bg-slate-500/10 text-slate-400']">
                                 <AlertCircle class="w-6 h-6" />
                             </div>
                         </div>
@@ -236,7 +490,9 @@ const downloadReceipt = (paymentId: string) => {
                 <div class="lg:col-span-8 space-y-6">
                     <Card class="border-none shadow-xl bg-white dark:bg-slate-900 overflow-hidden relative">
                         <!-- Decorative top bar -->
-                        <div class="h-1.5 w-full bg-slate-900 dark:bg-slate-50"></div>
+                        <div class="h-2 w-full transition-colors duration-300" :class="[
+                            invoice.status === 'paid' ? 'bg-emerald-500' : (invoice.status === 'partial' ? 'bg-blue-500' : 'bg-amber-500')
+                        ]"></div>
                         
                         <CardHeader class="px-8 pt-10 pb-8 border-b border-slate-100 dark:border-slate-800">
                             <div class="flex flex-col md:flex-row justify-between gap-8">
@@ -271,7 +527,7 @@ const downloadReceipt = (paymentId: string) => {
                                     <div class="pt-4 border-t border-slate-100 dark:border-slate-800 md:border-t-0 md:pt-0">
                                         <div class="flex md:flex-col justify-between gap-1">
                                             <span class="text-xs font-bold text-slate-400 uppercase">Payment Due</span>
-                                            <span class="text-lg font-bold text-slate-900 dark:text-white">{{ formatDate(invoice.due_date) }}</span>
+                                            <span class="text-lg font-bold text-slate-900 dark:text-white">{{ formatDate(invoice.due_date, false) }}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -342,42 +598,70 @@ const downloadReceipt = (paymentId: string) => {
                 <div class="lg:col-span-4 space-y-6 no-print">
                     
                     <Card class="border-slate-200 shadow-sm overflow-hidden">
-                        <CardHeader class="bg-slate-50/80 dark:bg-slate-900/80 border-b py-4">
+                        <CardHeader class="bg-slate-50/80 dark:bg-slate-900/80 border-b py-3 px-4 flex flex-row items-center justify-between gap-4">
                             <CardTitle class="text-sm font-bold flex items-center gap-2">
                                 <History class="w-4 h-4 text-slate-400" /> Transaction History
                             </CardTitle>
+                            
+                            <!-- Mini Status Selector -->
+                            <Select v-model="selectedStatus">
+                                <SelectTrigger class="w-[110px] h-7 text-xs font-semibold px-2">
+                                    <SelectValue placeholder="All" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all" class="text-xs">All Attempts</SelectItem>
+                                    <SelectItem value="success" class="text-xs">Success</SelectItem>
+                                    <SelectItem value="pending" class="text-xs">Pending</SelectItem>
+                                    <SelectItem value="failed" class="text-xs">Failed</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </CardHeader>
-                        <CardContent class="p-0">
-                            <div class="divide-y divide-slate-100 dark:divide-slate-800">
-                                <div v-for="payment in payments" :key="payment.id" class="p-5 space-y-3 hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors">
-                                    <div class="flex items-start justify-between">
+                        <CardContent class="p-0 max-h-[550px] overflow-y-auto">
+                            <div class="p-5 pr-6 relative pl-8 border-l border-slate-100 dark:border-slate-800 space-y-8 ml-6 my-4">
+                                <div v-for="payment in filteredPayments" :key="payment.id" class="relative space-y-3">
+                                    <!-- Timeline Node Indicator -->
+                                    <div class="absolute -left-[37px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full border bg-white dark:bg-slate-950 transition-colors shadow-sm"
+                                         :class="payment.status === 'success' ? 'border-emerald-500 text-emerald-500' : 'border-amber-500 text-amber-500'">
+                                        <div class="h-1.5 w-1.5 rounded-full" :class="payment.status === 'success' ? 'bg-emerald-500' : 'bg-amber-500'"></div>
+                                    </div>
+                                    
+                                    <div class="flex items-start justify-between gap-4">
                                         <div class="space-y-0.5">
-                                            <p class="text-lg font-black text-slate-900 dark:text-white">{{ formatCurrency(payment.amount) }}</p>
-                                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{{ formatDate(payment.paid_at) }}</p>
+                                            <p class="text-lg font-black text-slate-900 dark:text-white leading-none">{{ formatCurrency(payment.amount) }}</p>
+                                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                                {{ payment.paid_at ? formatDate(payment.paid_at) : 'Initiated ' + formatDate(payment.created_at) }}
+                                            </p>
                                         </div>
                                         <Badge 
                                             variant="secondary" 
-                                            :class="['text-[10px] font-bold uppercase px-2', payment.status === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']"
+                                            :class="['text-[9px] font-bold uppercase px-2 py-0.5 tracking-wider rounded-md border', payment.status === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100']"
                                         >
                                             {{ payment.status }}
                                         </Badge>
                                     </div>
 
-                                    <div class="flex flex-wrap gap-2">
-                                        <Badge variant="outline" class="text-[10px] h-5 font-mono text-slate-500 capitalize">
-                                            {{ payment.channel }}
+                                    <!-- Transaction Reference / ID -->
+                                    <div class="text-[11px] font-mono text-slate-600 dark:text-slate-300 flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900/60 px-2.5 py-1.5 rounded-md border border-slate-200/60 dark:border-slate-800">
+                                        <Tag class="w-3 h-3 text-indigo-500 flex-shrink-0" />
+                                        <span class="font-medium text-slate-400">Txn ID:</span>
+                                        <span class="font-bold select-all text-slate-800 dark:text-slate-200 truncate">{{ payment.gateway_reference || payment.id }}</span>
+                                    </div>
+
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <Badge variant="outline" class="text-[9px] h-5 font-mono text-slate-500 capitalize bg-slate-50 dark:bg-slate-900 border-slate-100">
+                                            {{ payment.channel || payment.gateway || 'Online' }}
                                         </Badge>
-                                        <div v-if="payment.recorder" class="text-[10px] text-slate-400 flex items-center gap-1">
-                                            <User class="w-3 h-3" /> Recorded by {{ payment.recorder.name.split(' ')[0] }}
+                                        <div v-if="payment.recorder" class="text-[10px] text-slate-400 flex items-center gap-1 font-medium">
+                                            <User class="w-3 h-3 text-slate-400" /> Collected by {{ payment.recorder.name }}
                                         </div>
                                     </div>
 
-                                    <div class="pt-2 flex items-center gap-2">
+                                    <div class="pt-1 flex items-center gap-2">
                                         <Button 
                                             v-if="payment.status === 'success'"
                                             size="sm" 
                                             variant="secondary" 
-                                            class="h-8 w-full text-xs font-bold"
+                                            class="h-8 w-full text-xs font-bold bg-slate-100 hover:bg-slate-200 border border-slate-200/50"
                                             @click="downloadReceipt(payment.id)"
                                         >
                                             <Download class="w-3.5 h-3.5 mr-2" /> Receipt
@@ -393,11 +677,11 @@ const downloadReceipt = (paymentId: string) => {
                                         </Button>
                                     </div>
                                 </div>
-                                <div v-if="payments.length === 0" class="p-10 text-center space-y-2">
+                                <div v-if="filteredPayments.length === 0" class="p-10 text-center space-y-2">
                                     <div class="mx-auto w-10 h-10 bg-slate-50 dark:bg-slate-900 rounded-full flex items-center justify-center text-slate-300">
                                         <Clock class="w-5 h-5" />
                                     </div>
-                                    <p class="text-sm text-slate-400">No payments detected.</p>
+                                    <p class="text-sm text-slate-400">No matching payments detected.</p>
                                 </div>
                             </div>
                         </CardContent>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building, Package, LifeBuoy, Library, Activity } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building, Package, LifeBuoy, Library, Activity, Megaphone, UserCheck, FolderTree } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -56,7 +56,7 @@ const overviewItems = computed(() => {
             title: 'System Reports',
             href: '/admin/reports',
             icon: FileText,
-            show: hasRole('admin') || hasPermission('view_bursary_reports'),
+            show: hasRole('admin') || hasRole('super_admin') || hasPermission('view_bursary_reports') || hasPermission('manage_system_settings') || hasPermission('view_global_analytics'),
         },
     ].filter(item => item.show);
 });
@@ -211,16 +211,22 @@ const financeItems = computed(() => {
 const administrationItems = computed(() => {
     return [
         {
+            title: 'Announcements',
+            href: '/admin/announcements',
+            icon: Megaphone,
+            show: hasPermission('manage_bulk_communications'),
+        },
+        {
             title: 'Staff Management',
             href: route().has('admin.staff.index') ? route('admin.staff.index') : '#',
             icon: Users,
-            show: hasRole('admin') || hasPermission('manage_staff'),
+            show: hasRole('admin') || hasPermission('manage_staff') || hasPermission('view_staff'),
         },
         {
             title: 'Support Tickets',
             href: '/admin/support-tickets',
             icon: LifeBuoy,
-            show: hasRole('admin') || hasPermission('manage_system_settings'),
+            show: hasRole('admin') || hasPermission('manage_system_settings') || hasPermission('manage_support'),
         },
         {
             title: 'Attendance',
@@ -232,31 +238,31 @@ const administrationItems = computed(() => {
             title: 'Hostels',
             href: route('admin.hostels.index'),
             icon: Building,
-            show: hasRole('admin') || hasPermission('manage_hostels'),
+            show: hasRole('admin') || hasPermission('manage_hostels') || hasPermission('manage_hostel_fees'),
         },
         {
             title: 'Hostel Bookings',
             href: route('admin.hostels.bookings.index'),
             icon: FileText,
-            show: hasRole('admin') || hasPermission('manage_hostels'),
+            show: hasRole(['admin', 'female_hostel_supervisor', 'male_hostel_supervisor', 'hostel_viewer']) || hasPermission('manage_hostels') || hasPermission('manage_hostel_bookings') || hasPermission('view_hostel_bookings') || hasPermission('view_male_hostel_bookings') || hasPermission('view_female_hostel_bookings'),
         },
         {
             title: 'System Users',
             href: '/admin/users',
             icon: Shield,
-            show: hasPermission('manage_system_settings'),
+            show: hasPermission('manage_system_settings') || hasPermission('manage_users'),
         },
         {
             title: 'Audit Logs',
-            href: route('admin.activity-logs.index'),
+            href: route().has('admin.activity-logs.index') ? route('admin.activity-logs.index') : '/admin/settings/logs',
             icon: Shield,
-            show: hasPermission('manage_system_settings'),
+            show: hasPermission('manage_system_settings') || hasPermission('view_audit_logs') || hasPermission('view_activity_logs'),
         },
         {
             title: 'Designations',
             href: route().has('admin.designations.index') ? route('admin.designations.index') : '/admin/designations',
             icon: Award,
-            show: hasPermission('manage_staff'),
+            show: hasPermission('manage_staff') || hasPermission('manage_users'),
         },
     ].filter(i => i.show);
 });
@@ -279,13 +285,13 @@ const frontDeskItems = computed(() => {
             title: 'Complaints',
             href: route().has('admin.front-desk.complaints.index') ? route('admin.front-desk.complaints.index') : '#',
             icon: FileText,
-            show: hasPermission('manage_complaints'),
+            show: hasPermission('manage_visitors'),
         },
         {
             title: 'Enquiries',
             href: route().has('admin.front-desk.enquiries.index') ? route('admin.front-desk.enquiries.index') : '#',
             icon: BookOpen,
-            show: hasPermission('manage_enquiries'),
+            show: hasPermission('manage_visitors'),
         },
     ].filter(i => i.show);
 });
@@ -293,10 +299,34 @@ const frontDeskItems = computed(() => {
 const inventoryItems = computed(() => {
     return [
         {
-            title: 'Items & Categories',
-            href: '/admin/inventory',
+            title: 'Store Items Directory',
+            href: route().has('admin.inventory.index') ? route('admin.inventory.index') : '/admin/inventory',
             icon: Package,
             show: hasPermission('view_inventory'),
+        },
+        {
+            title: 'Store Requisitions (SIV)',
+            href: route().has('admin.inventory.requisitions.index') ? route('admin.inventory.requisitions.index') : '/admin/inventory/requisitions',
+            icon: FileText,
+            show: hasPermission('view_inventory') || hasPermission('view_inventory_requisitions'),
+        },
+        {
+            title: 'Staff Assignments',
+            href: route().has('admin.inventory.assignments.index') ? route('admin.inventory.assignments.index') : '/admin/inventory/assignments',
+            icon: UserCheck,
+            show: hasPermission('view_inventory') || hasPermission('view_inventory_assignments'),
+        },
+        {
+            title: 'Store Categories',
+            href: route().has('admin.inventory.categories.index') ? route('admin.inventory.categories.index') : '/admin/inventory/categories',
+            icon: FolderTree,
+            show: hasPermission('view_inventory') || hasPermission('view_inventory_categories'),
+        },
+        {
+            title: 'Stock Audit Log',
+            href: route().has('admin.inventory.audit-logs.index') ? route('admin.inventory.audit-logs.index') : '/admin/inventory/audit-logs',
+            icon: Activity,
+            show: hasPermission('view_inventory') || hasPermission('view_inventory_audit_logs'),
         },
     ].filter(i => i.show);
 });
@@ -377,10 +407,8 @@ const footerNavItems = computed(() => {
         <SidebarHeader>
             <SidebarMenu>
                 <SidebarMenuItem>
-                    <SidebarMenuButton size="lg" as-child>
-                        <Link href="/dashboard">
-                            <AppLogo />
-                        </Link>
+                    <SidebarMenuButton size="lg" :as="Link" href="/dashboard">
+                        <AppLogo />
                     </SidebarMenuButton>
                 </SidebarMenuItem>
             </SidebarMenu>

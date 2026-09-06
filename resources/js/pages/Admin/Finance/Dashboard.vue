@@ -41,8 +41,8 @@ const formatDate = (dateString: string) => {
 <template>
     <Head title="Finance Dashboard" />
     <AdminLayout>
-        <div class="p-6 space-y-6">
-            <div class="flex items-center justify-between">
+        <div class="p-4 sm:p-6 space-y-6">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h2 class="text-3xl font-bold tracking-tight">Finance Dashboard</h2>
                     <p class="text-muted-foreground">Overview of school finances and cash flow.</p>
@@ -83,16 +83,16 @@ const formatDate = (dateString: string) => {
                     </CardHeader>
                     <CardContent>
                         <div class="text-2xl font-bold" :class="stats.netBalance >= 0 ? 'text-primary' : 'text-rose-600'">
-                            {{ formatCurrency(stats.netBalance) }}
+                             {{ formatCurrency(stats.netBalance) }}
                         </div>
                         <p class="text-xs text-muted-foreground">Available funds</p>
                     </CardContent>
                 </Card>
             </div>
 
-            <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+            <div class="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-7">
                 <!-- Chart Placeholder -->
-                <Card class="col-span-4">
+                <Card class="col-span-1 md:col-span-2 lg:col-span-4">
                     <CardHeader>
                         <CardTitle>Cash Flow Overview</CardTitle>
                         <CardDescription>Monthly inflow vs outflow for the last 6 months.</CardDescription>
@@ -118,7 +118,7 @@ const formatDate = (dateString: string) => {
                 </Card>
 
                 <!-- Recent Transactions -->
-                <Card class="col-span-3">
+                <Card class="col-span-1 md:col-span-2 lg:col-span-3">
                     <CardHeader>
                         <CardTitle>Recent Transactions</CardTitle>
                         <CardDescription>Latest financial activities.</CardDescription>

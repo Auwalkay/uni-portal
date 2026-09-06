@@ -389,7 +389,7 @@ const submitApplication = () => {
                                 accept="image/*"
                                 @update:file="(file) => form.passport_photo = file"
                             />
-                            <p class="text-xs text-muted-foreground mt-3">Upload a recent, clear passport photograph. Max size: 2MB.</p>
+                            <p class="text-xs text-muted-foreground mt-3">Upload a recent, clear passport photograph. Max size: 500KB.</p>
                         </div>
                         
                         <div class="bg-muted/20 p-6 rounded-xl border border-border/50">
@@ -398,7 +398,7 @@ const submitApplication = () => {
                                 accept=".pdf,image/*"
                                 @update:file="(file) => form.waec_result = file"
                             />
-                            <p class="text-xs text-muted-foreground mt-3">Upload a scanned copy of your result or statement of result.</p>
+                            <p class="text-xs text-muted-foreground mt-3">Upload a scanned copy of your result or statement of result. Max size: 500KB.</p>
                         </div>
                     </div>
                     </Transition>

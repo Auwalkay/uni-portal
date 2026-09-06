@@ -55,11 +55,14 @@ class StaffImport implements ToModel, WithChunkReading, WithHeadingRow, WithVali
                 $user->assignRole('staff');
             }
 
-            // Assign specific role (e.g., Lecturer) if provided
+            // Assign specific roles (e.g., Lecturer, Hostel Warden) if provided
             if (!empty($row['role'])) {
-                $role = Role::where('name', $row['role'])->first();
-                if ($role && !$user->hasRole($role->name)) {
-                    $user->assignRole($role->name);
+                $roleNames = array_map('trim', explode(',', $row['role']));
+                foreach ($roleNames as $roleName) {
+                    $role = Role::where('name', $roleName)->first();
+                    if ($role && !$user->hasRole($role->name)) {
+                        $user->assignRole($role->name);
+                    }
                 }
             }
 

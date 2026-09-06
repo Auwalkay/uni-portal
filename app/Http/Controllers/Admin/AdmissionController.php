@@ -67,43 +67,59 @@ class AdmissionController extends Controller
 
         $paymentInfo = Invoice::where('user_id', $applicant->user_id)
             ->where('type', 'application_fee')
-            ->with('payments') // Load successful payments check?
+            ->with('payments')
             ->first();
 
         return Inertia::render('Admin/Admissions/Show', [
-            'applicant' => $applicant,
+            'applicant'    => $applicant,
             'payment_info' => $paymentInfo,
+            'programmes'   => fn() => \App\Services\AcademicCacheService::getProgrammes(),
+            'scholarships' => fn() => \App\Services\AcademicCacheService::getScholarships(),
         ]);
     }
 
     public function update(Request $request, Applicant $applicant)
     {
-        $request->validate([
+        $rules = [
             'status' => 'required|string|in:draft,submitted,screening,admitted,rejected',
-        ]);
+        ];
 
-        $applicant->update([
-            'status' => $request->status,
-        ]);
+        // Extra fields required when admitting
+        if ($request->status === 'admitted') {
+            $rules['admitted_level']        = 'required|in:100,200,300,400,500';
+            $rules['admitted_programme_id'] = 'required|exists:programmes,id';
+            $rules['scholarship_id']        = 'nullable|exists:scholarships,id';
+        }
+
+        $validated = $request->validate($rules);
+
+        $updateData = ['status' => $validated['status']];
+
+        if ($validated['status'] === 'admitted') {
+            $updateData['admitted_level']        = $validated['admitted_level'];
+            $updateData['admitted_programme_id'] = $validated['admitted_programme_id'];
+            $updateData['scholarship_id']        = $validated['scholarship_id'] ?? null;
+        }
+
+        $applicant->update($updateData);
 
         // Optional: acceptance fee generation
         $chargeAcceptanceFee = false; // Set to true/config to enable
 
-        if ($request->status === 'admitted' && $chargeAcceptanceFee) {
+        if ($validated['status'] === 'admitted' && $chargeAcceptanceFee) {
             Invoice::firstOrCreate(
-                [
-                    'user_id' => $applicant->user_id,
-                    'type' => 'acceptance_fee',
-                ],
+                ['user_id' => $applicant->user_id, 'type' => 'acceptance_fee'],
                 [
                     'reference' => 'ACC-'.strtoupper(uniqid()),
-                    'amount' => 50000.00,
-                    'status' => 'pending',
+                    'amount'   => 50000.00,
+                    'status'   => 'pending',
                     'due_date' => now()->addWeeks(2),
                 ]
             );
+        }
 
-            // Send Admission Email
+        if ($validated['status'] === 'admitted') {
+            $applicant->load('user');
             Mail::to($applicant->user->email)->send(new StudentAdmitted($applicant));
             Log::info("Admission email queued for applicant: {$applicant->jamb_registration_number}");
         }

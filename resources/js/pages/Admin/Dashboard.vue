@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, computed } from 'vue';
 import { route } from 'ziggy-js';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { BookOpen, CreditCard, Users, GraduationCap, TrendingUp, Calendar, ArrowRight, UserPlus, FileText, ArrowUpRight, ArrowDownRight, Activity, CalendarClock, MapPin, Building2, Library, School, Building, LineChart } from 'lucide-vue-next';
+import { BookOpen, CreditCard, Users, GraduationCap, TrendingUp, Calendar, ArrowRight, UserPlus, FileText, ArrowUpRight, ArrowDownRight, Activity, CalendarClock, MapPin, Building2, Library, School, Building, LineChart, Pin, Download, RefreshCw } from 'lucide-vue-next';
 import StatsCard from '@/components/StatsCard.vue';
 import BarChart from '@/components/Charts/BarChart.vue';
 import DoughnutChart from '@/components/Charts/DoughnutChart.vue';
@@ -103,7 +103,12 @@ const props = defineProps<{
         view_global_analytics: boolean;
         view_system_status: boolean;
     };
+    announcements?: Array<any>;
  }>();
+
+const pinnedAnnouncements = computed(() => {
+    return props.announcements?.filter(bulletin => bulletin.is_pinned) || [];
+});
 
 const user = props.auth?.user;
 const roleColorMap: Record<string, string> = {
@@ -120,8 +125,16 @@ const roleLabelMap: Record<string, string> = {
     admissions: 'Admissions Officer',
 };
 
-const formatTime = (time: string) => {
-    return time.substring(0, 5);
+const formatTime = (time: string | null) => {
+    if (!time) return '---';
+    const parts = time.split(':');
+    let h = parseInt(parts[0], 10);
+    if (isNaN(h)) return time;
+    const m = parts[1] || '00';
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    return `${h.toString().padStart(2, '0')}:${m} ${ampm}`;
 };
 
 const getClassesForDay = (day: string) => {
@@ -133,10 +146,29 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const selectedSession = ref(props.filters.session_id);
+const selectedPeriod = ref(props.filters.period || 'weekly');
+const isRefreshing = ref(false);
 
-watch(selectedSession, (newSession) => {
+const refreshStats = () => {
+    isRefreshing.value = true;
     router.visit(route('admin.dashboard'), {
-        data: { session_id: newSession },
+        data: { 
+            session_id: selectedSession.value, 
+            period: selectedPeriod.value,
+            refresh: 'true' 
+        },
+        preserveState: true,
+        preserveScroll: true,
+        only: ['stats', 'recentActivity', 'charts', 'currentSessionName', 'filters'],
+        onFinish: () => {
+            isRefreshing.value = false;
+        }
+    });
+};
+
+watch([selectedSession, selectedPeriod], ([newSession, newPeriod]) => {
+    router.visit(route('admin.dashboard'), {
+        data: { session_id: newSession, period: newPeriod },
         preserveState: true,
         preserveScroll: true,
         only: ['stats', 'recentActivity', 'charts', 'currentSessionName', 'filters']
@@ -293,9 +325,9 @@ const staffChartData = {
     <Head title="Admin Dashboard" />
 
     <AdminLayout :breadcrumbs="breadcrumbs">
-        <div class="flex flex-col gap-6 p-6">
+        <div class="flex flex-col gap-6 p-4 sm:p-6">
             <!-- Personalized Welcome Banner -->
-            <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r p-8 text-white shadow-xl mb-2" :class="roleColorMap[userRole] || 'from-slate-800 to-slate-900'">
+            <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r p-6 sm:p-8 text-white shadow-xl mb-2" :class="roleColorMap[userRole] || 'from-slate-800 to-slate-900'">
                 <div class="absolute right-0 top-0 h-full w-1/3 bg-white/5 backdrop-blur-3xl -mr-20 transform skew-x-12"></div>
                 <div class="absolute left-0 bottom-0 h-32 w-32 bg-white/5 rounded-full blur-3xl -ml-16 -mb-16"></div>
                 
@@ -304,36 +336,88 @@ const staffChartData = {
                         <Badge variant="secondary" class="bg-white/20 text-white border-0 hover:bg-white/30 px-3 py-1 mb-2">
                             {{ roleLabelMap[userRole] }} Dashboard
                         </Badge>
-                        <h1 class="text-4xl font-extrabold tracking-tight">
+                        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight">
                             Welcome back, <span class="text-primary-foreground underline decoration-primary-foreground/30">{{ user?.name.split(' ')[0] }}</span>!
                         </h1>
-                        <p class="text-white/80 text-lg max-w-2xl font-medium">
+                        <p class="text-white/80 text-base sm:text-lg max-w-2xl font-medium">
                             Here's what's happening at Mewar International University for the <span class="font-bold underline">{{ currentSessionName }}</span> session.
                         </p>
                     </div>
-
-                    <div class="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/10 min-w-[240px]">
-                         <div class="flex items-center justify-between mb-4">
-                            <span class="text-sm font-semibold text-white/70 uppercase tracking-widest">Selected Session</span>
-                            <Calendar class="w-4 h-4 text-white/50" />
+                    <div class="flex flex-col gap-4 bg-white/10 backdrop-blur-md rounded-xl p-4 sm:p-6 border border-white/10 min-w-[240px] sm:min-w-[400px] w-full md:w-auto">
+                        <div class="flex flex-col sm:flex-row gap-4">
+                            <div class="flex-1">
+                                 <div class="flex items-center justify-between mb-4">
+                                    <span class="text-sm font-semibold text-white/70 uppercase tracking-widest">Selected Session</span>
+                                    <Calendar class="w-4 h-4 text-white/50" />
+                                </div>
+                                 <Select v-model="selectedSession">
+                                    <SelectTrigger class="w-full h-11 bg-white/20 border-0 text-white focus:ring-offset-slate-900">
+                                        <SelectValue placeholder="Select Session" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem v-for="session in sessions" :key="session.id" :value="session.id">
+                                            {{ session.name }} Session
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div class="flex-1">
+                                 <div class="flex items-center justify-between mb-4">
+                                    <span class="text-sm font-semibold text-white/70 uppercase tracking-widest">Date Range</span>
+                                    <CalendarClock class="w-4 h-4 text-white/50" />
+                                </div>
+                                 <Select v-model="selectedPeriod">
+                                    <SelectTrigger class="w-full h-11 bg-white/20 border-0 text-white focus:ring-offset-slate-900">
+                                        <SelectValue placeholder="Select Period" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="daily">Daily</SelectItem>
+                                        <SelectItem value="weekly">Weekly</SelectItem>
+                                        <SelectItem value="monthly">Monthly</SelectItem>
+                                        <SelectItem value="yearly">Yearly</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
-                         <Select v-model="selectedSession">
-                            <SelectTrigger class="w-full h-11 bg-white/20 border-0 text-white focus:ring-offset-slate-900">
-                                <SelectValue placeholder="Select Session" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem v-for="session in sessions" :key="session.id" :value="session.id">
-                                    {{ session.name }} Session
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                         <p v-if="can.view_system_status" class="text-[10px] text-white/50 mt-3 flex items-center gap-1.5 font-mono">
-                            <Activity class="w-3 h-3" /> System Status: Optimal Performance
-                        </p>
+                        <Button variant="secondary" @click="refreshStats" :disabled="isRefreshing" class="w-full h-10 bg-white/20 hover:bg-white/30 text-white border-0">
+                            <RefreshCw class="w-4 h-4 mr-2" :class="{ 'animate-spin': isRefreshing }" /> Refresh Analytics
+                        </Button>
                     </div>
                 </div>
             </div>
 
+            <!-- Pinned Announcements Banner -->
+            <div v-if="pinnedAnnouncements.length > 0" class="space-y-3 mb-2">
+                <div 
+                    v-for="bulletin in pinnedAnnouncements" 
+                    :key="bulletin.id" 
+                    class="rounded-xl border border-amber-200 bg-amber-50/70 p-5 shadow-sm flex items-start gap-4 text-amber-950 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100"
+                >
+                    <div class="rounded-full bg-amber-100 dark:bg-amber-950 p-2">
+                        <Pin class="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex flex-wrap items-center justify-between gap-4">
+                            <h3 class="font-bold text-base flex items-center gap-2">
+                                {{ bulletin.title }}
+                                <Badge class="bg-amber-600 hover:bg-amber-700 text-white border-0 text-[10px] py-0.5 px-2">Official Notice</Badge>
+                            </h3>
+                            <span class="text-xs opacity-75 whitespace-nowrap">{{ new Date(bulletin.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}</span>
+                        </div>
+                        <div v-if="bulletin.content" class="mt-2 text-sm opacity-90 leading-relaxed" v-html="bulletin.content"></div>
+                        <div v-if="bulletin.document_path" class="mt-3">
+                            <a 
+                                :href="`/storage/${bulletin.document_path}`" 
+                                target="_blank" 
+                                class="inline-flex items-center gap-1.5 text-xs font-bold text-amber-900 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 underline underline-offset-4"
+                            >
+                                <Download class="h-4 w-4" /> View Scanned Document Attachment
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+ 
             <!-- Role-Centric "Hero" Metrics -->
             <div class="grid gap-6">
                 <!-- FINANCE HERO -->
@@ -344,7 +428,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-emerald-100 uppercase tracking-wider">Net Cash Flow</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-3xl font-bold">{{ formatCurrency(stats.net_cash_flow || 0) }}</div>
+                            <div class="text-2xl sm:text-3xl font-bold truncate">{{ formatCurrency(stats.net_cash_flow || 0) }}</div>
                             <div class="mt-2 flex items-center gap-1.5 text-xs text-emerald-200">
                                 <TrendingUp class="w-3 h-3" /> Inflow - Outflow
                             </div>
@@ -355,7 +439,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Revenue</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ formatCurrency(stats.revenue || 0) }}</div>
+                            <div class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white truncate">{{ formatCurrency(stats.revenue || 0) }}</div>
                             <div class="mt-2 flex items-center gap-1.5 text-xs text-emerald-600 font-bold">
                                 <ArrowUpRight class="w-3 h-3" /> {{ stats.revenue_growth }}% <span class="text-muted-foreground font-normal">vs last session</span>
                             </div>
@@ -366,7 +450,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Outflow</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ formatCurrency(stats.total_outflow || 0) }}</div>
+                            <div class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white truncate">{{ formatCurrency(stats.total_outflow || 0) }}</div>
                              <p class="text-xs text-muted-foreground mt-2">Expenses & Payroll</p>
                         </CardContent>
                     </Card>
@@ -375,7 +459,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Outstanding Fees</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-3xl font-bold text-amber-600">{{ formatCurrency(stats.outstanding_fees || 0) }}</div>
+                            <div class="text-2xl sm:text-3xl font-bold text-amber-600 truncate">{{ formatCurrency(stats.outstanding_fees || 0) }}</div>
                              <div class="h-1.5 w-full bg-amber-100 dark:bg-amber-900/30 rounded-full mt-3 overflow-hidden">
                                 <div class="h-full bg-amber-500 rounded-full" style="width: 45%"></div>
                             </div>
@@ -391,7 +475,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-indigo-100 uppercase tracking-wider">Classes Today</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-4xl font-bold">{{ lecturerStats?.classes_today || 0 }}</div>
+                            <div class="text-3xl sm:text-4xl font-bold">{{ lecturerStats?.classes_today || 0 }}</div>
                             <div class="mt-2 flex items-center gap-1.5 text-xs text-indigo-200">
                                 <Calendar class="w-3 h-3" /> {{ new Date().toLocaleDateString('en-GB', { weekday: 'long' }) }}
                             </div>
@@ -402,7 +486,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Active Students</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ lecturerStats?.total_students || 0 }}</div>
+                            <div class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">{{ lecturerStats?.total_students || 0 }}</div>
                              <p class="text-xs text-muted-foreground mt-2">Across all your courses</p>
                         </CardContent>
                     </Card>
@@ -411,7 +495,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Allocated Courses</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ lecturerStats?.total_courses || 0 }}</div>
+                            <div class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">{{ lecturerStats?.total_courses || 0 }}</div>
                              <p class="text-xs text-muted-foreground mt-2">This academic session</p>
                         </CardContent>
                     </Card>
@@ -437,7 +521,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-amber-100 uppercase tracking-wider">Incoming Apps</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-4xl font-bold">{{ stats.admissions_funnel?.total_applicants || 0 }}</div>
+                            <div class="text-3xl sm:text-4xl font-bold">{{ stats.admissions_funnel?.total_applicants || 0 }}</div>
                             <div class="mt-2 flex items-center gap-1.5 text-xs text-amber-200">
                                 <FileText class="w-3 h-3" /> All applicants
                             </div>
@@ -448,7 +532,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Admitted (Proxy)</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ stats.admissions_funnel?.screened_applicants || 0 }}</div>
+                            <div class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">{{ stats.admissions_funnel?.screened_applicants || 0 }}</div>
                              <p class="text-xs text-muted-foreground mt-2">Applicants with records</p>
                         </CardContent>
                     </Card>
@@ -457,7 +541,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Pending Review</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-3xl font-bold text-rose-600">{{ stats.admissions_funnel?.pending_screening || 0 }}</div>
+                            <div class="text-2xl sm:text-3xl font-bold text-rose-600">{{ stats.admissions_funnel?.pending_screening || 0 }}</div>
                              <p class="text-xs text-muted-foreground mt-2 font-medium">Action required</p>
                         </CardContent>
                     </Card>
@@ -466,7 +550,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Compliance</CardTitle>
                         </CardHeader>
                         <CardContent>
-                             <div class="text-3xl font-bold text-indigo-700">{{ stats.registration_compliance }}%</div>
+                             <div class="text-2xl sm:text-3xl font-bold text-indigo-700">{{ stats.registration_compliance }}%</div>
                              <div class="h-1.5 w-full bg-indigo-100 rounded-full mt-3 overflow-hidden">
                                 <div class="h-full bg-indigo-600 rounded-full" :style="{ width: `${stats.registration_compliance}%` }"></div>
                             </div>
@@ -482,7 +566,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-slate-400 uppercase tracking-wider">Institutional Scale</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-4xl font-extrabold">{{ (stats.total_students || 0).toLocaleString() }}</div>
+                            <div class="text-3xl sm:text-4xl font-extrabold">{{ (stats.total_students || 0).toLocaleString() }}</div>
                             <div class="mt-2 flex items-center gap-1.5 text-xs text-emerald-400 font-bold">
                                 <Users class="w-3 h-3" /> Total Enrolled Students
                             </div>
@@ -493,7 +577,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Active Programs</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ stats.structural?.programs || 0 }}</div>
+                            <div class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">{{ stats.structural?.programs || 0 }}</div>
                              <p class="text-xs text-muted-foreground mt-2">Across {{ stats.structural?.faculties }} Faculties</p>
                         </CardContent>
                     </Card>
@@ -502,7 +586,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Human Resources</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ stats.structural?.staff || 0 }}</div>
+                            <div class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">{{ stats.structural?.staff || 0 }}</div>
                              <p class="text-xs text-muted-foreground mt-2">Academic & Non-Academic</p>
                         </CardContent>
                     </Card>
@@ -511,7 +595,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Session Revenue</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-3xl font-bold text-primary">{{ formatCurrency(stats.revenue || 0) }}</div>
+                            <div class="text-2xl sm:text-3xl font-bold text-primary truncate">{{ formatCurrency(stats.revenue || 0) }}</div>
                              <p class="text-xs text-muted-foreground mt-2 font-medium">Current session performance</p>
                         </CardContent>
                     </Card>
@@ -924,9 +1008,8 @@ const staffChartData = {
                          <div class="space-y-6">
                             <div v-for="(item, index) in recentActivity" :key="index" class="flex items-start gap-4 pb-4 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
                                 <div class="flex items-center justify-center w-8 h-8 rounded-full shrink-0"
-                                     :class="item.type === 'payment' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'">
-                                     <CreditCard v-if="item.type === 'payment'" class="h-4 w-4" />
-                                     <UserPlus v-else class="h-4 w-4" />
+                                     :class="item.type === 'payment' ? 'bg-emerald-100 text-emerald-600' : (item.type === 'invoice_generated' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600')">
+                                     <component :is="getIcon(item.icon)" class="h-4 w-4" />
                                 </div>
                                 <div class="flex-1 min-w-0">
                                     <div class="flex items-center justify-between gap-2 mb-0.5">

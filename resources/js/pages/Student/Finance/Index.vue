@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import StudentLayout from '@/layouts/StudentLayout.vue';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
@@ -7,8 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format as formatDate } from 'date-fns';
-import { CreditCard, ChevronDown, ChevronUp, FileText, Download } from 'lucide-vue-next';
-import { ref, computed, watch } from 'vue';
+import { CreditCard, ChevronDown, ChevronUp, FileText, Download, Clock, AlertTriangle } from 'lucide-vue-next';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+
+const page = usePage();
+const hasDepartment = computed(() => {
+    const student = (page.props.auth as any)?.user?.student;
+    return Boolean(student?.department_id || student?.program?.department_id || student?.programme?.department_id);
+});
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
@@ -201,6 +207,51 @@ const getPaymentDate = (invoice: any) => {
     }
     return formatDate(new Date(invoice.updated_at), 'MMM d, yyyy');
 };
+
+// Real-time Countdown Timer State for Pending Invoices
+const currentTime = ref(Date.now());
+let timerInterval: any = null;
+
+onMounted(() => {
+    timerInterval = setInterval(() => {
+        currentTime.value = Date.now();
+    }, 1000);
+});
+
+onUnmounted(() => {
+    if (timerInterval) clearInterval(timerInterval);
+});
+
+const getInvoiceCountdown = (dueDateStr: string | null | undefined) => {
+    if (!dueDateStr) return null;
+    const _tick = currentTime.value;
+    const dueTime = new Date(dueDateStr).getTime();
+    const diff = dueTime - _tick;
+
+    if (diff <= 0) {
+        return { expired: true, text: 'Expired' };
+    }
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+    let parts = [];
+    if (days > 0) parts.push(`${days}d`);
+    parts.push(`${String(hours).padStart(2, '0')}h`);
+    parts.push(`${String(minutes).padStart(2, '0')}m`);
+    parts.push(`${String(seconds).padStart(2, '0')}s`);
+
+    return {
+        expired: false,
+        text: parts.join(' '),
+        days,
+        hours,
+        minutes,
+        seconds
+    };
+};
 </script>
 
 <template>
@@ -208,6 +259,19 @@ const getPaymentDate = (invoice: any) => {
 
     <StudentLayout>
         <div class="space-y-6 p-6">
+            <!-- Missing Department Warning Banner -->
+            <div v-if="!hasDepartment" class="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-200 flex items-center justify-between shadow-sm">
+                <div class="flex items-center gap-3">
+                    <AlertTriangle class="h-5 w-5 text-amber-600 shrink-0" />
+                    <div>
+                        <h4 class="font-bold text-sm">Academic Department Assignment Pending</h4>
+                        <p class="text-xs text-amber-700 dark:text-amber-300">
+                            Your student profile currently has no assigned academic department. Payment processing and fee invoice generation are disabled until your department is assigned by the administration.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <div class="flex items-center justify-between">
                 <div>
                     <h2 class="text-3xl font-bold tracking-tight">Financials</h2>
@@ -215,12 +279,12 @@ const getPaymentDate = (invoice: any) => {
                 </div>
                 <div class="flex items-center gap-3">
                     <div v-if="optionalFees && optionalFees.length > 0">
-                        <Button variant="outline" @click="isOptionalFeeModalOpen = true">
+                        <Button variant="outline" :disabled="!hasDepartment" @click="isOptionalFeeModalOpen = true">
                             Initiate Optional Fee
                         </Button>
                     </div>
                     <div v-if="canGenerateInvoice">
-                         <Button @click="router.post(route('student.payments.create_school_fee'))">
+                         <Button :disabled="!hasDepartment" @click="router.post(route('student.payments.create_school_fee'))">
                             Pay School Fees
                         </Button>
                     </div>
@@ -269,7 +333,28 @@ const getPaymentDate = (invoice: any) => {
                                     <TableCell class="font-bold">{{ formatCurrency(invoice.amount) }}</TableCell>
                                     <TableCell class="text-green-600">{{ formatCurrency(Number(invoice.paid_amount || 0)) }}</TableCell>
                                     <TableCell class="text-red-600 font-medium">{{ formatCurrency(invoice.amount - Number(invoice.paid_amount || 0)) }}</TableCell>
-                                    <TableCell>{{ invoice.due_date ? formatDate(new Date(invoice.due_date), 'MMM d, yyyy') : 'N/A' }}</TableCell>
+                                    <TableCell>
+                                        <div>
+                                            <div class="text-xs">{{ invoice.due_date ? formatDate(new Date(invoice.due_date), 'MMM d, yyyy') : 'N/A' }}</div>
+                                            <div v-if="invoice.status !== 'paid' && invoice.due_date" class="mt-1">
+                                                <Badge 
+                                                    v-if="getInvoiceCountdown(invoice.due_date)?.expired" 
+                                                    variant="destructive" 
+                                                    class="font-mono text-[9px] px-1.5 py-0.2 uppercase"
+                                                >
+                                                    Expired
+                                                </Badge>
+                                                <Badge 
+                                                    v-else 
+                                                    variant="outline" 
+                                                    class="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 font-mono font-bold text-[10px] px-2 py-0.5 inline-flex items-center gap-1"
+                                                >
+                                                    <Clock class="w-3 h-3 animate-pulse text-amber-600" />
+                                                    {{ getInvoiceCountdown(invoice.due_date)?.text }}
+                                                </Badge>
+                                            </div>
+                                        </div>
+                                    </TableCell>
                                     <TableCell>{{ getPaymentDate(invoice) }}</TableCell>
                                     <TableCell>
                                         <Badge variant="outline" :class="getStatusColor(invoice.status)">
@@ -277,15 +362,21 @@ const getPaymentDate = (invoice: any) => {
                                         </Badge>
                                     </TableCell>
                                     <TableCell class="text-right">
-                                        <Button 
-                                            v-if="invoice.status !== 'paid'" 
-                                            @click.stop="openPaymentModal(invoice)"
-                                            size="sm"
-                                        >
-                                            <CreditCard class="mr-2 h-4 w-4" />
-                                            Pay Now
-                                        </Button>
-                                        <span v-else class="text-muted-foreground text-sm font-medium">Paid</span>
+                                         <div v-if="invoice.status !== 'paid'">
+                                             <Button 
+                                                 v-if="invoice.type !== 'school_fee' || invoice.session?.school_fee_payment_enabled" 
+                                                 :disabled="!hasDepartment"
+                                                 @click.stop="openPaymentModal(invoice)"
+                                                 size="sm"
+                                             >
+                                                 <CreditCard class="mr-2 h-4 w-4" />
+                                                 Pay Now
+                                             </Button>
+                                             <span v-else class="text-amber-600 dark:text-amber-400 text-xs font-semibold flex items-center justify-end gap-1 px-2.5 py-1">
+                                                 Suspended
+                                             </span>
+                                         </div>
+                                         <span v-else class="text-muted-foreground text-sm font-medium">Paid</span>
                                     </TableCell>
                                 </TableRow>
                                 <!-- Expanded Details Row -->

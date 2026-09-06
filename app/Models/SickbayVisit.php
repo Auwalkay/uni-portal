@@ -5,9 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 class SickbayVisit extends Model
 {
+    use LogsActivity;
+
     protected $fillable = [
         'user_id', 'attended_by', 'check_in_at', 'check_out_at', 
         'symptoms', 'visit_type', 'status', 'bed_number', 'admitted_to_bed_at'
@@ -18,6 +22,11 @@ class SickbayVisit extends Model
         'check_out_at' => 'datetime',
         'admitted_to_bed_at' => 'datetime',
     ];
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()->logFillable()->logOnlyDirty();
+    }
 
     public function patient(): BelongsTo
     {

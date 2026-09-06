@@ -98,9 +98,9 @@ class PaymentController extends Controller
 
         $data = $this->gateway->verifyTransaction($reference);
 
-        if ($data && $data['status'] === 'success') {
-            $payment = Payment::where('gateway_reference', $reference)->first();
+        $payment = Payment::where('gateway_reference', $reference)->first();
 
+        if ($data && $data['status'] === 'success') {
             if ($payment && $payment->status !== 'success') {
                 app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($reference, $data);
             }
@@ -108,6 +108,10 @@ class PaymentController extends Controller
             return redirect()->route('applicant.apply.show')->with('success', 'Payment successful! Application submitted.');
         }
 
-        return redirect()->route('applicant.payment.index')->with('error', 'Payment verification failed.');
+        if ($payment && $payment->status !== 'success') {
+            $payment->update(['status' => 'failed']);
+        }
+
+        return redirect()->route('applicant.payment.index')->with('error', 'Payment verification failed or was abandoned.');
     }
 }

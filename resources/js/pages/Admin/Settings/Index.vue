@@ -15,7 +15,8 @@ import {
     ShieldAlert,
     Award,
     Hash,
-    CreditCard
+    CreditCard,
+    Home
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
 import {
@@ -50,9 +51,15 @@ const props = defineProps<{
         application_fee: string | number;
         enforce_school_fee_for_results: boolean;
         enforce_hostel_fee_for_results: boolean;
+        enable_exam_card_download: boolean;
+        enable_hostel_booking: boolean;
+        hostel_booking_expiry_days?: number;
+        promote_pending_payments: boolean;
+        late_fee_enabled: boolean;
     }
 }>();
 
+// Breadcrumbs
 const breadcrumbs = [
     { title: 'System Settings', href: '/admin/settings' }
 ];
@@ -81,6 +88,43 @@ const resultVisibilityForm = useForm({
     hostelFee: props.settings.enforce_hostel_fee_for_results
 });
 
+const examCardForm = useForm({
+    enabled: props.settings.enable_exam_card_download
+});
+
+const hostelBookingForm = useForm({
+    enabled: props.settings.enable_hostel_booking,
+    expiryDays: props.settings.hostel_booking_expiry_days ?? 2,
+});
+
+const promotionForm = useForm({
+    promotePendingPayments: props.settings.promote_pending_payments
+});
+
+const lateFeeForm = useForm({
+    enabled: props.settings.late_fee_enabled
+});
+
+const submitLateFeeSetting = () => {
+    router.post(route('admin.settings.update'), { 
+        key: 'late_fee_enabled', 
+        value: lateFeeForm.enabled ? 'true' : 'false' 
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            Swal.fire({
+                icon: 'success',
+                title: 'Updated',
+                text: 'Late payment fine override settings updated successfully',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
+            });
+        }
+    });
+};
+
 const submitResultVisibility = () => {
     router.post(route('admin.settings.update'), { 
         key: 'enforce_school_fee_for_results', 
@@ -104,6 +148,74 @@ const submitResultVisibility = () => {
                         timer: 3000
                     });
                 }
+            });
+        }
+    });
+};
+
+const submitExamCardSetting = () => {
+    router.post(route('admin.settings.update'), { 
+        key: 'enable_exam_card_download', 
+        value: examCardForm.enabled ? 'true' : 'false' 
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            Swal.fire({
+                icon: 'success',
+                title: 'Updated',
+                text: 'Exam card download settings updated successfully',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
+            });
+        }
+    });
+};
+
+const submitHostelBookingSetting = () => {
+    router.post(route('admin.settings.update'), { 
+        key: 'enable_hostel_booking', 
+        value: hostelBookingForm.enabled ? 'true' : 'false' 
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            router.post(route('admin.settings.update'), {
+                key: 'hostel_booking_expiry_days',
+                value: String(hostelBookingForm.expiryDays || 2)
+            }, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Updated',
+                        text: 'Hostel booking availability and reservation expiry window updated successfully',
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 3000
+                    });
+                }
+            });
+        }
+    });
+};
+
+const submitPromotionSetting = () => {
+    router.post(route('admin.settings.update'), { 
+        key: 'promote_pending_payments', 
+        value: promotionForm.promotePendingPayments ? 'true' : 'false' 
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            Swal.fire({
+                icon: 'success',
+                title: 'Updated',
+                text: 'Student promotion settings updated successfully',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
             });
         }
     });
@@ -406,6 +518,133 @@ const settingsModules = [
                         </div>
                         <Button @click="submitResultVisibility" class="w-full bg-rose-600 hover:bg-rose-700 text-white">
                             Update Visibility Settings
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                <!-- Exam Card Access Card -->
+                <Card class="border-emerald-200 bg-emerald-50/30">
+                    <CardHeader class="flex flex-row items-center gap-4">
+                        <div class="bg-emerald-100 p-3 rounded-xl text-emerald-600">
+                            <Award class="w-6 h-6" />
+                        </div>
+                        <div>
+                            <CardTitle>Exam Card Settings</CardTitle>
+                            <CardDescription>Control student access to download exam cards.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent class="space-y-6">
+                        <div class="grid gap-4">
+                            <div class="flex items-center justify-between">
+                                <Label for="enable_exam_card">Enable Exam Card Downloads</Label>
+                                <Switch 
+                                    id="enable_exam_card" 
+                                    v-model:checked="examCardForm.enabled" 
+                                />
+                            </div>
+                        </div>
+                        <Button @click="submitExamCardSetting" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white">
+                            Update Exam Card Settings
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                <!-- Hostel Booking Access Card -->
+                <Card class="border-sky-200 bg-sky-50/30">
+                    <CardHeader class="flex flex-row items-center gap-4">
+                        <div class="bg-sky-100 p-3 rounded-xl text-sky-600">
+                            <Building class="w-6 h-6" />
+                        </div>
+                        <div>
+                            <CardTitle>Hostel Booking Settings</CardTitle>
+                            <CardDescription>Control student accommodation booking availability & reservation expiry window.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent class="space-y-6">
+                        <div class="grid gap-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <Label for="enable_hostel_booking" class="font-bold">Enable Hostel Bookings</Label>
+                                    <p class="text-xs text-muted-foreground">Allow students to select and reserve hostel rooms.</p>
+                                </div>
+                                <Switch 
+                                    id="enable_hostel_booking" 
+                                    v-model:checked="hostelBookingForm.enabled" 
+                                />
+                            </div>
+
+                            <div class="space-y-2">
+                                <Label for="hostel_booking_expiry_days" class="font-bold">Unpaid Reservation Expiry (Days)</Label>
+                                <Input 
+                                    id="hostel_booking_expiry_days" 
+                                    type="number" 
+                                    min="1" 
+                                    max="30"
+                                    v-model="hostelBookingForm.expiryDays"
+                                    class="bg-background"
+                                    placeholder="Enter number of days (e.g. 2)"
+                                />
+                                <p class="text-xs text-muted-foreground">
+                                    Number of days an unpaid accommodation reservation remains active before automatically expiring and releasing the bedspace back to the vacant pool.
+                                </p>
+                            </div>
+                        </div>
+                        <Button @click="submitHostelBookingSetting" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl">
+                            Update Hostel Booking Settings
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                <!-- Student Promotion Settings Card -->
+                <Card class="border-purple-200 bg-purple-50/30">
+                    <CardHeader class="flex flex-row items-center gap-4">
+                        <div class="bg-purple-100 p-3 rounded-xl text-purple-600">
+                            <UserCheck class="w-6 h-6" />
+                        </div>
+                        <div>
+                            <CardTitle>Promotion Settings</CardTitle>
+                            <CardDescription>Control academic promotion criteria.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent class="space-y-6">
+                        <div class="grid gap-4">
+                            <div class="flex items-center justify-between">
+                                <Label for="promote_pending_payments">Promote Students with Pending Fees</Label>
+                                <Switch 
+                                    id="promote_pending_payments" 
+                                    v-model:checked="promotionForm.promotePendingPayments" 
+                                />
+                            </div>
+                        </div>
+                        <Button @click="submitPromotionSetting" class="w-full bg-purple-600 hover:bg-purple-700 text-white">
+                            Update Promotion Settings
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                <!-- Late Payment Policy Card -->
+                <Card class="border-orange-200 bg-orange-50/30">
+                    <CardHeader class="flex flex-row items-center gap-4">
+                        <div class="bg-orange-100 p-3 rounded-xl text-orange-600">
+                            <ShieldAlert class="w-6 h-6" />
+                        </div>
+                        <div>
+                            <CardTitle>Late Payment Fine Policy</CardTitle>
+                            <CardDescription>Enable or disable late payment fine system globally.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent class="space-y-6">
+                        <div class="grid gap-4">
+                            <div class="flex items-center justify-between">
+                                <Label for="enable_late_fees">Enable Late Payment Fines (Global Override)</Label>
+                                <Switch 
+                                    id="enable_late_fees" 
+                                    v-model:checked="lateFeeForm.enabled" 
+                                />
+                            </div>
+                        </div>
+                        <Button @click="submitLateFeeSetting" class="w-full bg-orange-600 hover:bg-orange-700 text-white">
+                            Update Fine Policy
                         </Button>
                     </CardContent>
                 </Card>

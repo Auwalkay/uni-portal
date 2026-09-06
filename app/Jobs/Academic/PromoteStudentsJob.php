@@ -40,13 +40,18 @@ class PromoteStudentsJob implements ShouldQueue
             $session->update(['is_current' => true]);
 
             Semester::query()->update(['is_current' => false]);
-            $firstSemester = $session->semesters()->where('name', 'First Semester')->first();
+            $firstSemester = $session->semesters()->where('name', 'First Semester')->first()
+                ?? $session->semesters()->where('name', 'Summer Semester')->first()
+                ?? $session->semesters()->first();
             if ($firstSemester) {
                 $firstSemester->update(['is_current' => true]);
             }
         });
 
-        $firstSemesterName = $session->semesters()->where('name', 'First Semester')->value('name') ?? 'First Semester';
+        $firstSemesterName = $session->semesters()->where('name', 'First Semester')->value('name')
+            ?? $session->semesters()->where('name', 'Summer Semester')->value('name')
+            ?? $session->semesters()->value('name')
+            ?? 'First Semester';
 
         // 2. Dispatch Individual Jobs for each student
         // Using chunkById to handle large datasets (5K+) without memory issues

@@ -25,6 +25,8 @@ class DatabaseSeeder extends Seeder
             LibrarySeeder::class,
             SickbaySeeder::class,
             ExpensePermissionSeeder::class,
+            InventoryPermissionsSeeder::class,
+            InventoryCategorySeeder::class,
         ]);
     }
 }

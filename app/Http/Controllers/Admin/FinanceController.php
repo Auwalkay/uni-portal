@@ -122,6 +122,13 @@ class FinanceController extends Controller
             'faculties' => AcademicCacheService::getAllFaculties(),
             'departments' => AcademicCacheService::getAllDepartments(),
             'programs' => AcademicCacheService::getAllProgrammes(),
+            'hostels' => \App\Models\Hostel::latest()->get(),
+            'hostelFees' => \App\Models\HostelFee::with(['session', 'hostel'])->latest()->get(),
+            'hostelFeeLogs' => \Spatie\Activitylog\Models\Activity::with('causer')
+                ->where('log_name', 'hostel_fee')
+                ->latest()
+                ->take(15)
+                ->get(),
         ]);
     }
 

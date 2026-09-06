@@ -99,10 +99,13 @@ class CourseAllocationController extends Controller
             \App\Services\AcademicCacheService::clearTimetableCache();
 
             $stats = $import->getStats();
-            $msg = "Import processed: {$stats['created']} created, {$stats['skipped']} skipped.";
+            $msg = "Import processed: {$stats['created']} allocations created.";
+            if ($stats['duplicates'] > 0) {
+                $msg .= " ({$stats['duplicates']} duplicates skipped)";
+            }
 
             if (count($stats['errors']) > 0) {
-                return back()->with('warning', $msg . ' Some errors occurred: ' . implode(' | ', array_slice($stats['errors'], 0, 3)));
+                return back()->with('warning', $msg . ' Issues found: ' . implode(' • ', array_slice($stats['errors'], 0, 5)));
             }
 
             return back()->with('success', $msg);

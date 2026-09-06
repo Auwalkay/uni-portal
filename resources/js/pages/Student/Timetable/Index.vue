@@ -38,8 +38,16 @@ const getClassesForDay = (day: string) => {
     return props.timetables.filter(t => t.day === day);
 };
 
-const formatTime = (time: string) => {
-    return time.substring(0, 5);
+const formatTime = (time: string | null) => {
+    if (!time) return '---';
+    const parts = time.split(':');
+    let h = parseInt(parts[0], 10);
+    if (isNaN(h)) return time;
+    const m = parts[1] || '00';
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    return `${h.toString().padStart(2, '0')}:${m} ${ampm}`;
 };
 
 // Breadcrumbs if layout supported it

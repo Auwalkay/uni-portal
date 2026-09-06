@@ -194,8 +194,10 @@
 
     <div class="header">
         <div class="logo-box">
-            <img src="{{ public_path('miu-logo.png') }}" alt="Logo"
-                style="height: 45px; width: auto; max-width: 150px; margin-top: -5px;">
+            @if(file_exists(public_path('miu-logo.png')))
+                <img src="{{ public_path('miu-logo.png') }}" alt="Logo"
+                    style="height: 45px; width: auto; max-width: 150px; margin-top: -5px;">
+            @endif
         </div>
 
         <h1 class="uni-name">Mewar International University Nigeria</h1>
@@ -208,10 +210,12 @@
         </div>
 
         <div class="passport-box">
-            @if($student->passport_photo_path)
+            @if($student->passport_photo_path && file_exists(storage_path('app/public/' . $student->passport_photo_path)))
+                <img src="{{ storage_path('app/public/' . $student->passport_photo_path) }}" class="passport-photo">
+            @elseif($student->passport_photo_path && file_exists(public_path('storage/' . $student->passport_photo_path)))
                 <img src="{{ public_path('storage/' . $student->passport_photo_path) }}" class="passport-photo">
             @else
-                <div style="text-align: center; pt-10; color: #ccc;">Passport<br>Photo</div>
+                <div style="text-align: center; padding-top: 35px; color: #ccc; font-size: 10px;">Passport<br>Photo</div>
             @endif
         </div>
     </div>

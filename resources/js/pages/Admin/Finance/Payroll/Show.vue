@@ -15,14 +15,56 @@ import {
 import { format } from 'date-fns';
 import { route } from 'ziggy-js';
 import Swal from 'sweetalert2';
-import { ArrowLeft, CheckCircle, Printer } from 'lucide-vue-next';
+import { ArrowLeft, CheckCircle, Printer, Search, X } from 'lucide-vue-next';
+import { ref, watch } from 'vue';
+import { debounce } from 'lodash';
+import Pagination from '@/components/Pagination.vue';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const props = defineProps<{
     payroll: any;
     items: any;
+    filters?: {
+        search?: string;
+        status?: string;
+        per_page?: string;
+    };
 }>();
 
 const formatCurrency = (val: any) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(val);
+
+const search = ref(props.filters?.search || '');
+const selectedStatus = ref(props.filters?.status || '');
+const selectedPerPage = ref(props.filters?.per_page || '20');
+
+const updateFilters = debounce(() => {
+    router.get(route('admin.finance.payroll.show', props.payroll.id), {
+        search: search.value,
+        status: selectedStatus.value,
+        per_page: selectedPerPage.value,
+    }, {
+        preserveState: true,
+        replace: true,
+        preserveScroll: true,
+    });
+}, 300);
+
+watch([search, selectedStatus, selectedPerPage], () => {
+    updateFilters();
+});
+
+const clearFilters = () => {
+    search.value = '';
+    selectedStatus.value = '';
+    selectedPerPage.value = '20';
+};
 
 const markAsPaid = () => {
     if (confirm('Are you sure you want to mark this payroll as paid? This ends the workflow.')) {
@@ -79,6 +121,59 @@ const print = () => {
                 </Card>
             </div>
 
+            <!-- Filters -->
+            <div class="bg-white dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row gap-4 items-center justify-between no-print">
+                <div class="flex flex-1 flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                    <!-- Search -->
+                    <div class="relative w-full sm:w-[300px]">
+                        <Search class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            type="search"
+                            placeholder="Search staff name or ID..."
+                            class="pl-10 h-10"
+                            v-model="search"
+                        />
+                    </div>
+
+                    <!-- Status -->
+                    <Select v-model="selectedStatus">
+                        <SelectTrigger class="w-full sm:w-[180px] h-10">
+                            <SelectValue placeholder="Payment Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="ALL_STATUS">All Statuses</SelectItem>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="paid">Paid</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <!-- Per Page -->
+                    <Select v-model="selectedPerPage">
+                        <SelectTrigger class="w-full sm:w-[130px] h-10">
+                            <SelectValue placeholder="Per Page" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="10">10 per page</SelectItem>
+                            <SelectItem value="20">20 per page</SelectItem>
+                            <SelectItem value="50">50 per page</SelectItem>
+                            <SelectItem value="100">100 per page</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div class="flex gap-2 w-full sm:w-auto justify-end">
+                    <Button 
+                        v-if="search || (selectedStatus && selectedStatus !== 'ALL_STATUS') || selectedPerPage !== '20'" 
+                        variant="ghost" 
+                        @click="clearFilters"
+                        class="text-destructive hover:text-destructive hover:bg-destructive/10 h-10"
+                    >
+                        <X class="w-4 h-4 mr-2" />
+                        Reset
+                    </Button>
+                </div>
+            </div>
+ 
             <Card>
                 <CardHeader>
                     <CardTitle>Staff Payments</CardTitle>
@@ -113,6 +208,9 @@ const print = () => {
                             </TableRow>
                         </TableBody>
                     </Table>
+                    <div class="p-4 border-t flex justify-end no-print">
+                        <Pagination :links="items.links" />
+                    </div>
                 </CardContent>
             </Card>
         </div>

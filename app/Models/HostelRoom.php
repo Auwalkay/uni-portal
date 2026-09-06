@@ -3,18 +3,31 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 class HostelRoom extends Model
 {
-    use HasUuids;
+    use HasUuids, LogsActivity;
 
     protected $fillable = [
         'hostel_floor_id',
         'room_number',
         'capacity',
+        'is_visible',
+        'is_suspended',
     ];
+
+    protected $casts = [
+        'is_visible' => 'boolean',
+        'is_suspended' => 'boolean',
+    ];
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()->logFillable()->logOnlyDirty();
+    }
 
     public function floor()
     {

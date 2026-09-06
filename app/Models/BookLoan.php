@@ -4,9 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 class BookLoan extends Model
 {
+    use LogsActivity;
+
     protected $fillable = [
         'book_id', 'user_id', 'borrowed_at', 'due_at', 
         'returned_at', 'status', 'user_notes', 'admin_notes'
@@ -17,6 +21,11 @@ class BookLoan extends Model
         'due_at' => 'datetime',
         'returned_at' => 'datetime',
     ];
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()->logFillable()->logOnlyDirty();
+    }
 
     public function book(): BelongsTo
     {

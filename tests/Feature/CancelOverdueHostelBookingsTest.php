@@ -125,9 +125,9 @@ class CancelOverdueHostelBookingsTest extends TestCase
             ->expectsOutput('Successfully cancelled and nullified 1 overdue hostel bookings.')
             ->assertExitCode(0);
 
-        // 4. Assert that the booking and the invoice have been deleted
-        $this->assertDatabaseMissing('hostel_bookings', ['id' => $booking->id]);
-        $this->assertDatabaseMissing('invoices', ['id' => $invoice->id]);
+        // 4. Assert that the booking and the invoice statuses have been updated to cancelled (preserved for audit)
+        $this->assertDatabaseHas('hostel_bookings', ['id' => $booking->id, 'status' => 'cancelled']);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'cancelled']);
     }
 
     public function test_overdue_pending_hostel_booking_is_not_cancelled_if_payment_verifies_successfully()

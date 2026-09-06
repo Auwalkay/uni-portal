@@ -38,8 +38,31 @@ class HostelRoomController extends Controller
 
     public function destroy(Hostel $hostel, HostelBlock $block, HostelFloor $floor, HostelRoom $room)
     {
+        $activeBookings = $room->bookings()->whereIn('status', ['pending', 'confirmed'])->exists();
+        if ($activeBookings) {
+            return back()->with('error', 'Cannot delete room. There are active bookings in this room.');
+        }
+
         $room->delete();
 
         return back()->with('success', 'Room removed successfully.');
+    }
+
+    public function toggleVisibility(Hostel $hostel, HostelBlock $block, HostelFloor $floor, HostelRoom $room)
+    {
+        $room->update([
+            'is_visible' => !$room->is_visible
+        ]);
+
+        return back()->with('success', 'Room visibility updated.');
+    }
+
+    public function toggleSuspension(Hostel $hostel, HostelBlock $block, HostelFloor $floor, HostelRoom $room)
+    {
+        $room->update([
+            'is_suspended' => !$room->is_suspended
+        ]);
+
+        return back()->with('success', $room->is_suspended ? 'Room suspended successfully.' : 'Room unsuspended successfully.');
     }
 }

@@ -26,7 +26,7 @@
             <img src="{{ public_path('miu-logo.png') }}" style="max-height: 60px; margin-bottom: 15px;">
         @endif
         <h1>Student Fee Collection Report</h1>
-        <p>Academic Session: {{ $session->name }}</p>
+        <p>Academic Session: {{ $session->name }} &bull; Category: {{ strtoupper(str_replace('_', ' ', $feeType ?? 'school_fee')) }}</p>
         <div style="font-size: 9px; margin-top: 10px; color: #999;">Generated on: {{ $date }}</div>
     </div>
 
@@ -36,6 +36,7 @@
                 <th>Matric No.</th>
                 <th>Student Name</th>
                 <th>Programme</th>
+                <th>Category</th>
                 <th class="text-right">Billed (NGN)</th>
                 <th class="text-right">Paid (NGN)</th>
                 <th class="text-right">Balance (NGN)</th>
@@ -58,6 +59,7 @@
                     <td class="matric">{{ $student->matriculation_number }}</td>
                     <td class="font-bold">{{ $student->user->name }}</td>
                     <td style="font-size: 9px;">{{ $student->program->name }} ({{ $student->current_level }}L)</td>
+                    <td style="font-size: 9px; text-transform: uppercase;">{{ str_replace('_', ' ', $student->fee_type ?? 'school_fee') }}</td>
                     <td class="text-right">{{ number_format($student->total_billed, 2) }}</td>
                     <td class="text-right font-bold" style="color: #16a34a;">{{ number_format($student->total_paid, 2) }}</td>
                     <td class="text-right font-bold" style="color: #dc2626;">{{ number_format($student->balance, 2) }}</td>
@@ -71,7 +73,7 @@
         </tbody>
         <tfoot>
             <tr style="background-color: #f8fafc;">
-                <td colspan="3" class="font-bold text-right" style="padding: 15px;">TOTALS</td>
+                <td colspan="4" class="font-bold text-right" style="padding: 15px;">TOTALS</td>
                 <td class="text-right font-bold">{{ number_format($totalBilled, 2) }}</td>
                 <td class="text-right font-bold" style="color: #16a34a;">{{ number_format($totalPaid, 2) }}</td>
                 <td class="text-right font-bold" style="color: #dc2626;">{{ number_format($totalBalance, 2) }}</td>

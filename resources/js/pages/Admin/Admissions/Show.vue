@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { format } from 'date-fns';
 import { FileText, Download } from 'lucide-vue-next';
+import { computed } from 'vue';
 
 const props = defineProps<{
     applicant: {
@@ -19,6 +20,10 @@ const props = defineProps<{
         created_at: string;
         application_mode: string;
         application_number?: string;
+        program_choice_1?: string;
+        scholarship_id?: string;
+        admitted_level?: string;
+        admitted_programme_id?: string;
         
         // New Fields
         first_name?: string;
@@ -58,11 +63,18 @@ const props = defineProps<{
         status: string;
         reference: string;
     };
+    programmes: Array<{ id: string; name: string }>;
+    scholarships: Array<{ id: string; name: string }>;
 }>();
 
 const form = useForm({
     status: props.applicant.status,
+    admitted_level: props.applicant.admitted_level ?? '',
+    admitted_programme_id: props.applicant.admitted_programme_id ?? props.applicant.program_choice_1 ?? '',
+    scholarship_id: props.applicant.scholarship_id ?? '',
 });
+
+const isAdmitting = computed(() => form.status === 'admitted');
 
 const updateStatus = () => {
     form.put(route('admin.admissions.update', props.applicant.id), {
@@ -71,8 +83,6 @@ const updateStatus = () => {
         }
     });
 };
-
-import { computed } from 'vue';
 
 const passportUrl = computed(() => {
     const doc = props.applicant.documents.find(d => d.type === 'passport_photo');
@@ -136,6 +146,79 @@ const passportUrl = computed(() => {
                                 <SelectItem value="rejected">Reject Application</SelectItem>
                             </SelectContent>
                         </Select>
+
+                        <!-- Admission Details — shown only when admitting -->
+                        <template v-if="isAdmitting && applicant.status !== 'admitted'">
+                            <Separator />
+                            <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Admission Details</p>
+
+                            <!-- Level -->
+                            <div class="flex flex-col gap-1.5">
+                                <Label>Level Admitted <span class="text-destructive">*</span></Label>
+                                <Select v-model="form.admitted_level">
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Level" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="100">100 Level</SelectItem>
+                                        <SelectItem value="200">200 Level</SelectItem>
+                                        <SelectItem value="300">300 Level</SelectItem>
+                                        <SelectItem value="400">400 Level</SelectItem>
+                                        <SelectItem value="500">500 Level</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <p v-if="form.errors.admitted_level" class="text-xs text-destructive">{{ form.errors.admitted_level }}</p>
+                            </div>
+
+                            <!-- Programme -->
+                            <div class="flex flex-col gap-1.5">
+                                <Label>Programme Admitted <span class="text-destructive">*</span></Label>
+                                <Select v-model="form.admitted_programme_id">
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Programme" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem v-for="prog in programmes" :key="prog.id" :value="prog.id">
+                                            {{ prog.name }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <p v-if="form.errors.admitted_programme_id" class="text-xs text-destructive">{{ form.errors.admitted_programme_id }}</p>
+                            </div>
+
+                            <!-- Scholarship (optional) -->
+                            <div class="flex flex-col gap-1.5">
+                                <Label>Scholarship <span class="text-muted-foreground text-xs">(optional)</span></Label>
+                                <Select v-model="form.scholarship_id">
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="None" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="">No Scholarship</SelectItem>
+                                        <SelectItem v-for="s in scholarships" :key="s.id" :value="s.id">
+                                            {{ s.name }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </template>
+
+                        <!-- Show admitted details (read-only) if already admitted -->
+                        <template v-if="applicant.status === 'admitted'">
+                            <Separator />
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-muted-foreground">Level</span>
+                                    <Badge variant="secondary">{{ applicant.admitted_level ?? 'N/A' }}</Badge>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-muted-foreground">Programme</span>
+                                    <span class="text-right font-medium text-xs max-w-[140px]">
+                                        {{ programmes.find(p => p.id === applicant.admitted_programme_id)?.name ?? applicant.programme?.name ?? 'N/A' }}
+                                    </span>
+                                </div>
+                            </div>
+                        </template>
                         
                         <Button @click="updateStatus" :disabled="form.processing || applicant.status === 'admitted'" class="w-full">
                             Update Status
@@ -149,6 +232,7 @@ const passportUrl = computed(() => {
                         </a>
                     </CardContent>
                 </Card>
+
 
                 <!-- Payment Info -->
                 <Card v-if="payment_info">

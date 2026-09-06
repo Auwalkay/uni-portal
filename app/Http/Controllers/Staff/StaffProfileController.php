@@ -12,7 +12,7 @@ use Inertia\Inertia;
 
 class StaffProfileController extends Controller
 {
-    public function edit()
+    public function edit(Request $request)
     {
         $user = auth()->user();
         $staff = $user->staff()
@@ -22,9 +22,74 @@ class StaffProfileController extends Controller
         // Ensure user relation is set to the current user object
         $staff->setRelation('user', $user);
 
+        // Attendance Data with Month & Year Filtering
+        $selectedMonth = (int)$request->query('month', now()->month);
+        $selectedYear = (int)$request->query('year', now()->year);
+
+        $attendanceStats = [
+            'present' => 0,
+            'late' => 0,
+            'absent' => 0,
+            'on_leave' => 0,
+            'total' => 0,
+            'rate' => 0,
+        ];
+
+        $weeklyAttendance = [];
+
+        $attendances = \App\Models\Attendance::where('staff_id', $staff->id)
+            ->whereMonth('date', $selectedMonth)
+            ->whereYear('date', $selectedYear)
+            ->orderBy('date', 'asc')
+            ->get();
+
+        $attendanceStats['present'] = $attendances->where('status', 'present')->count();
+        $attendanceStats['late'] = $attendances->where('status', 'late')->count();
+        $attendanceStats['absent'] = $attendances->where('status', 'absent')->count();
+        $attendanceStats['on_leave'] = $attendances->where('status', 'on_leave')->count();
+        $attendanceStats['total'] = $attendances->count();
+        $attendanceStats['rate'] = $attendanceStats['total'] > 0 
+            ? round((($attendanceStats['present'] + $attendanceStats['late']) / $attendanceStats['total']) * 100, 1)
+            : 0;
+
+        // Group attendances by week
+        $grouped = $attendances->groupBy(function ($item) {
+            $carbon = \Carbon\Carbon::parse($item->date);
+            $startOfWeek = $carbon->copy()->startOfWeek(\Carbon\Carbon::MONDAY);
+            $endOfWeek = $carbon->copy()->endOfWeek(\Carbon\Carbon::SUNDAY);
+            return 'Week of ' . $startOfWeek->format('d M') . ' - ' . $endOfWeek->format('d M, Y');
+        });
+
+        foreach ($grouped as $weekLabel => $items) {
+            $weeklyAttendance[] = [
+                'week' => $weekLabel,
+                'start_date' => \Carbon\Carbon::parse($items->first()->date)->startOfWeek(\Carbon\Carbon::MONDAY)->format('Y-m-d'),
+                'records' => $items->map(fn($item) => [
+                    'id' => $item->id,
+                    'date' => \Carbon\Carbon::parse($item->date)->format('Y-m-d'),
+                    'day_name' => \Carbon\Carbon::parse($item->date)->format('l'),
+                    'formatted_date' => \Carbon\Carbon::parse($item->date)->format('d M, Y'),
+                    'clock_in' => $item->clock_in ? \Carbon\Carbon::parse($item->clock_in)->format('H:i') : null,
+                    'clock_out' => $item->clock_out ? \Carbon\Carbon::parse($item->clock_out)->format('H:i') : null,
+                    'status' => $item->status,
+                    'notes' => $item->notes,
+                ])->values(),
+                'present_count' => $items->whereIn('status', ['present', 'late'])->count(),
+                'total_count' => $items->count(),
+            ];
+        }
+
         return Inertia::render('Staff/Profile/Edit', [
             'staff' => $staff,
             'status' => session('status'),
+            'attendanceData' => [
+                'weekly' => $weeklyAttendance,
+                'stats' => $attendanceStats,
+                'filters' => [
+                    'month' => $selectedMonth,
+                    'year' => $selectedYear,
+                ],
+            ],
         ]);
     }
 

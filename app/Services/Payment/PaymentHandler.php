@@ -27,19 +27,30 @@ class PaymentHandler
             'paid_at' => now(),
         ]);
 
-        // Increment paid amount
-        $payment->invoice->increment('paid_amount', $payment->amount);
-        $payment->invoice->refresh();
+        Log::info('[PAYMENT_SUCCESS] Payment Processed & Confirmed', [
+            'payment_id' => $payment->id,
+            'gateway_reference' => $reference,
+            'amount' => $payment->amount,
+            'invoice_id' => $payment->invoice_id,
+            'user_id' => $payment->user_id,
+            'raw_gateway_data' => $data,
+        ]);
 
-        // Update invoice status
-        if ($payment->invoice->paid_amount >= $payment->invoice->amount) {
-            $payment->invoice->update(['status' => 'paid']);
-        } else {
-            $payment->invoice->update(['status' => 'partial']);
+        // Increment paid amount safely
+        if ($payment->invoice) {
+            $payment->invoice->increment('paid_amount', $payment->amount);
+            $payment->invoice->refresh();
+
+            // Update invoice status
+            if ($payment->invoice->paid_amount >= $payment->invoice->amount) {
+                $payment->invoice->update(['status' => 'paid']);
+            } else {
+                $payment->invoice->update(['status' => 'partial']);
+            }
+
+            // Specific Logic based on Invoice Type
+            $this->handleInvoiceTypeSideEffects($payment);
         }
-
-        // Specific Logic based on Invoice Type
-        $this->handleInvoiceTypeSideEffects($payment);
 
         // Send Receipt Email
         $this->sendReceipt($payment);
@@ -59,7 +70,27 @@ class PaymentHandler
         if ($invoice->type === 'hostel_fee') {
             $booking = \App\Models\HostelBooking::where('invoice_id', $invoice->id)->first();
             if ($booking) {
-                $booking->update(['status' => 'confirmed']);
+                $room = $booking->room;
+                if ($room) {
+                    $otherConfirmedCount = \App\Models\HostelBooking::where('hostel_room_id', $room->id)
+                        ->where('session_id', $booking->session_id)
+                        ->where('status', 'confirmed')
+                        ->where('id', '!=', $booking->id)
+                        ->count();
+
+                    if ($otherConfirmedCount < $room->capacity) {
+                        $booking->update(['status' => 'confirmed']);
+                    } else {
+                        Log::warning('[HOSTEL_OVERBOOKING_PREVENTED] Hostel booking payment confirmed for cancelled/expired reservation, but room capacity has been filled.', [
+                            'booking_id' => $booking->id,
+                            'invoice_id' => $invoice->id,
+                            'user_id' => $payment->user_id,
+                            'room_id' => $room->id,
+                        ]);
+                    }
+                } else {
+                    $booking->update(['status' => 'confirmed']);
+                }
             }
         }
         
@@ -74,13 +105,22 @@ class PaymentHandler
                 $payment->user->notify(new \App\Notifications\ApplicationSubmitted($applicant));
             }
         }
+
+        if ($invoice->type === 'school_fee' && $invoice->status === 'paid') {
+            $student = \App\Models\Student::where('user_id', $payment->user_id)->first();
+            if ($student) {
+                $student->checkAndPromoteStudent();
+            }
+        }
     }
 
     protected function sendReceipt($payment)
     {
         try {
-            Mail::to($payment->user->email)->send(new FeeReceipt($payment, $payment->invoice, $payment->user));
-        } catch (\Exception $e) {
+            if ($payment->user && $payment->user->email) {
+                Mail::to($payment->user->email)->send(new FeeReceipt($payment, $payment->invoice, $payment->user));
+            }
+        } catch (\Throwable $e) {
             Log::error('Failed to send receipt email: ' . $e->getMessage());
         }
     }

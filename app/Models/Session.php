@@ -21,6 +21,9 @@ class Session extends Model
         'applications_enabled' => 'boolean',
         'admissions_enabled' => 'boolean',
         'type' => 'string',
+        'late_payment_deadline' => 'datetime',
+        'school_fee_payment_enabled' => 'boolean',
+        'late_fee_amount' => 'double',
     ];
 
     public function semesters()
@@ -45,7 +48,30 @@ class Session extends Model
 
     protected static function booted()
     {
+        static::creating(function ($model) {
+            if (auth()->check()) {
+                $model->created_by = auth()->id();
+                $model->updated_by = auth()->id();
+            }
+        });
+
+        static::updating(function ($model) {
+            if (auth()->check()) {
+                $model->updated_by = auth()->id();
+            }
+        });
+
         static::saved(fn() => \App\Services\AcademicCacheService::clearAll());
         static::deleted(fn() => \App\Services\AcademicCacheService::clearAll());
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updater()
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 }

@@ -38,7 +38,7 @@ class AcademicCacheService
     public static function getScholarships()
     {
         return Cache::remember('all_scholarships', self::TTL, function () {
-            return Scholarship::where('is_active', true)->orderBy('name')->get(['id', 'name']);
+            return Scholarship::where('is_active', true)->orderBy('name')->get();
         });
     }
 
@@ -175,6 +175,17 @@ class AcademicCacheService
         Cache::forever('timetable_cache_version', time());
     }
 
+    public static function getSystemSettings()
+    {
+        return Cache::remember('system_settings_array', self::TTL, function () {
+            return [
+                'enable_exam_card_download' => filter_var(\App\Models\SystemSetting::get('enable_exam_card_download', true), FILTER_VALIDATE_BOOLEAN),
+                'enable_hostel_booking' => filter_var(\App\Models\SystemSetting::get('enable_hostel_booking', true), FILTER_VALIDATE_BOOLEAN),
+                'promote_pending_payments' => filter_var(\App\Models\SystemSetting::get('promote_pending_payments', false), FILTER_VALIDATE_BOOLEAN),
+            ];
+        });
+    }
+
     public static function clearAll()
     {
         self::clearTimetableCache();
@@ -194,6 +205,7 @@ class AcademicCacheService
         Cache::forget('faculties_with_departments_full');
         Cache::forget('non_academic_departments');
         Cache::forget('all_system_settings');
+        Cache::forget('system_settings_array');
         Cache::forget('staff_designations_list');
         Cache::forget('all_courses_lookup');
     }

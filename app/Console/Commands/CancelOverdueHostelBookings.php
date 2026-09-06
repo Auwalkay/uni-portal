@@ -94,11 +94,10 @@ class CancelOverdueHostelBookings extends Command
             if ($booking->status === 'pending') {
                 $this->info("Cancelling overdue pending booking for student ID: {$booking->student_id}");
                 DB::transaction(function () use ($booking) {
-                    if ($booking->invoice) {
-                        $booking->invoice->items()->delete();
-                        $booking->invoice->delete();
+                    if ($booking->invoice && $booking->invoice->status === 'pending') {
+                        $booking->invoice->update(['status' => 'cancelled']);
                     }
-                    $booking->delete();
+                    $booking->update(['status' => 'cancelled']);
                 });
                 $cancelledCount++;
             }

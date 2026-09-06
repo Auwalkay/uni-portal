@@ -21,8 +21,34 @@ class StudentsExport implements FromQuery, WithHeadings, WithMapping
 
     public function query()
     {
+        $user = auth()->user();
         $query = Student::query()
             ->with(['user', 'academicDepartment.faculty', 'admittedSession', 'program', 'scholarship']);
+
+        if ($user) {
+            if (!$user->can('manage_users') && !$user->hasAnyRole(['admin', 'super_admin', 'vc', 'ict_admin', 'registrar', 'bursar', 'admission_director'])) {
+                $staff = $user->staff?->loadMissing('department');
+                if ($user->hasRole('dean') || $user->can('view_faculty_students')) {
+                    $facultyId = $staff?->department?->faculty_id;
+                    if ($facultyId) {
+                        $query->whereHas('academicDepartment', fn($q) => $q->where('faculty_id', $facultyId));
+                    }
+                } elseif ($user->hasRole('hod') || $user->can('view_department_students')) {
+                    $departmentId = $staff?->department_id;
+                    if ($departmentId) {
+                        $query->where('department_id', $departmentId);
+                    }
+                } else {
+                    $query->whereHas('registrations', function ($q) use ($user) {
+                        $q->whereHas('course', function ($cq) use ($user) {
+                            $cq->whereHas('allocations', function ($aq) use ($user) {
+                                $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
+                            });
+                        });
+                    });
+                }
+            }
+        }
 
         if (!empty($this->filters['search'])) {
             $search = $this->filters['search'];

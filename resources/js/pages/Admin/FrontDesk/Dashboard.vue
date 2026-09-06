@@ -31,15 +31,15 @@ const breadcrumbs = [
     <Head title="Front Desk Dashboard" />
 
     <AdminLayout :breadcrumbs="breadcrumbs">
-        <div class="p-6 space-y-8">
+        <div class="p-4 sm:p-6 space-y-6">
             <!-- Header -->
-            <div class="flex items-center justify-between">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Front Desk Hub</h1>
                     <p class="text-slate-500 dark:text-slate-400">Welcome to the central command for campus hospitality and enquiries.</p>
                 </div>
                 <div class="flex gap-3">
-                    <Button as-child class="bg-indigo-600 hover:bg-indigo-700">
+                    <Button as-child class="bg-indigo-600 hover:bg-indigo-700 w-full sm:w-auto">
                         <Link :href="route('admin.front-desk.visitors.index')">
                             <UserPlus class="w-4 h-4 mr-2" /> Register Visitor
                         </Link>

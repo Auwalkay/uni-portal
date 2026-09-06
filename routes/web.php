@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\FinanceController;
 use App\Http\Controllers\Admin\InventoryAssignmentController;
 use App\Http\Controllers\Admin\InventoryComplaintController;
 use App\Http\Controllers\Admin\InventoryController;
+use App\Http\Controllers\Admin\InventoryRequisitionController;
 use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\PayrollController;
 use App\Http\Controllers\Admin\SalaryController;
@@ -101,9 +102,13 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
         Route::get('staff/export', [StaffController::class, 'export'])->name('staff.export');
         Route::get('staff/{staff}', [StaffController::class, 'show'])->name('staff.show');
 
-        Route::middleware(['permission:manage_staff'])->group(function () {
+        Route::middleware(['permission:manage_staff|edit_staff_profile'])->group(function () {
             Route::get('staff/{staff}/edit', [StaffController::class, 'edit'])->name('staff.edit');
             Route::put('staff/{staff}', [StaffController::class, 'update'])->name('staff.update');
+        });
+
+        Route::middleware(['permission:manage_staff'])->group(function () {
+            Route::put('staff/{staff}/toggle-status', [StaffController::class, 'toggleStatus'])->name('staff.toggle_status');
             Route::delete('staff/{staff}', [StaffController::class, 'destroy'])->name('staff.destroy');
 
             Route::post('staff/{staff}/reset-password', [StaffController::class, 'resetPassword'])->name('staff.reset_password');
@@ -115,14 +120,19 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
         Route::middleware(['permission:view_attendance'])->group(function () {
             Route::get('attendance', [AttendanceController::class, 'index'])->name('attendance.index');
             Route::get('attendance/reports', [AttendanceController::class, 'reports'])->name('attendance.reports');
+            Route::get('attendance/staff/{staff}/history', [AttendanceController::class, 'staffHistory'])->name('attendance.staff.history');
             Route::get('attendance/export', [AttendanceController::class, 'exportReport'])->name('attendance.export');
             Route::get('attendance/calendar', [AttendanceController::class, 'calendar'])->name('attendance.calendar');
             Route::get('attendance/download-template', [AttendanceController::class, 'downloadTemplate'])->name('attendance.download-template');
 
             Route::middleware(['permission:manage_attendance'])->group(function () {
                 Route::post('attendance', [AttendanceController::class, 'store'])->name('attendance.store');
+                Route::post('attendance/bulk-store', [AttendanceController::class, 'bulkStore'])->name('attendance.bulk-store');
+                Route::put('attendance/{attendance}', [AttendanceController::class, 'update'])->name('attendance.update');
                 Route::post('attendance/import', [AttendanceController::class, 'import'])->name('attendance.import');
+                Route::post('attendance/mark-absent', [AttendanceController::class, 'markAbsent'])->name('attendance.mark-absent');
                 Route::post('attendance/holidays', [AttendanceController::class, 'storeHoliday'])->name('attendance.holiday.store');
+                Route::put('attendance/holidays/{holiday}', [AttendanceController::class, 'updateHoliday'])->name('attendance.holiday.update');
                 Route::delete('attendance/holidays/{holiday}', [AttendanceController::class, 'destroyHoliday'])->name('attendance.holiday.destroy');
                 Route::delete('attendance/{attendance}', [AttendanceController::class, 'destroy'])->name('attendance.destroy');
             });
@@ -139,10 +149,31 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
 
     // INVOICES & PAYMENTS
     Route::middleware(['permission:view_payments'])->group(function () {
+        Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
         Route::get('invoices/search-students', [InvoiceController::class, 'searchStudents'])->name('invoices.search-students');
-        Route::resource('invoices', InvoiceController::class)->only(['index', 'show', 'create', 'store', 'destroy']);
+        Route::get('invoices/calculate-fee', [InvoiceController::class, 'calculateFee'])->name('invoices.calculate-fee');
 
-        Route::middleware(['permission:manage_payments'])->group(function () {
+        // Generate / Create Invoice
+        Route::middleware(['permission:create_invoices'])->group(function () {
+            Route::get('invoices/create', [InvoiceController::class, 'create'])->name('invoices.create');
+            Route::post('invoices', [InvoiceController::class, 'store'])->name('invoices.store');
+        });
+
+        Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
+
+        // Delete Invoice
+        Route::middleware(['permission:cancel_invoices|delete_invoices'])->group(function () {
+            Route::delete('invoices/{invoice}', [InvoiceController::class, 'destroy'])->name('invoices.destroy');
+        });
+
+        // Edit Invoice / Breakdown / Recalculate
+        Route::middleware(['permission:edit_invoices'])->group(function () {
+            Route::put('invoices/{invoice}/items', [InvoiceController::class, 'updateItems'])->name('invoices.items.update');
+            Route::post('invoices/{invoice}/recalculate', [InvoiceController::class, 'recalculate'])->name('invoices.recalculate');
+        });
+
+        // Manual Invoice Payment / Override / Requery
+        Route::middleware(['permission:manual_payment_override|verify_payments|manage_payments'])->group(function () {
             Route::post('invoices/{invoice}/mark-as-paid', [InvoiceController::class, 'markAsPaid'])->name('invoices.mark-as-paid');
             Route::post('payments/{payment}/verify', [InvoiceController::class, 'verifyPayment'])->name('payments.verify');
         });
@@ -151,17 +182,28 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
     // INVENTORY MANAGEMENT
     Route::middleware(['permission:view_inventory'])->group(function () {
         Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
+        Route::get('inventory/requisitions', [InventoryRequisitionController::class, 'index'])->name('inventory.requisitions.index');
+        Route::get('inventory/assignments', [InventoryAssignmentController::class, 'index'])->name('inventory.assignments.index');
+        Route::get('inventory/categories', [InventoryController::class, 'categoriesIndex'])->name('inventory.categories.index');
+        Route::get('inventory/audit-logs', [InventoryController::class, 'auditLogsIndex'])->name('inventory.audit-logs.index');
         Route::get('inventory/staff/search', [InventoryAssignmentController::class, 'searchStaff'])->name('inventory.staff.search');
         Route::get('inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
         Route::get('inventory/export-assignments', [InventoryController::class, 'exportAssignments'])->name('inventory.export-assignments');
         Route::get('inventory/complaints', [InventoryComplaintController::class, 'index'])->name('inventory.complaints.index');
+        Route::get('inventory/requisitions/{requisition}/voucher', [InventoryRequisitionController::class, 'downloadVoucher'])->name('inventory.requisitions.voucher');
 
         Route::middleware(['permission:manage_inventory'])->group(function () {
-            Route::post('inventory', [InventoryController::class, 'store'])->name('inventory.store');
-            Route::put('inventory/{item}', [InventoryController::class, 'update'])->name('inventory.update');
-            Route::delete('inventory/{item}', [InventoryController::class, 'destroy'])->name('inventory.destroy');
-            Route::post('inventory/import', [InventoryController::class, 'import'])->name('inventory.import');
+            Route::post('inventory', [InventoryController::class, 'store'])->middleware('permission:create_inventory_items')->name('inventory.store');
+            Route::put('inventory/{item}', [InventoryController::class, 'update'])->middleware('permission:edit_inventory_items')->name('inventory.update');
+            Route::post('inventory/{item}/restock', [InventoryController::class, 'restock'])->middleware('permission:restock_inventory_items')->name('inventory.restock');
+            Route::delete('inventory/{item}', [InventoryController::class, 'destroy'])->middleware('permission:delete_inventory_items')->name('inventory.destroy');
+            Route::post('inventory/import', [InventoryController::class, 'import'])->middleware('permission:create_inventory_items')->name('inventory.import');
             Route::post('inventory/categories', [InventoryController::class, 'storeCategory'])->name('inventory.categories.store');
+
+            // Requisitions
+            Route::post('inventory/requisitions', [InventoryRequisitionController::class, 'store'])->middleware('permission:create_inventory_requisitions')->name('inventory.requisitions.store');
+            Route::post('inventory/requisitions/{requisition}/approve', [InventoryRequisitionController::class, 'approve'])->middleware('permission:approve_inventory_requisitions')->name('inventory.requisitions.approve');
+            Route::post('inventory/requisitions/{requisition}/reject', [InventoryRequisitionController::class, 'reject'])->middleware('permission:approve_inventory_requisitions')->name('inventory.requisitions.reject');
 
             // Assignments
             Route::post('inventory/assignments', [InventoryAssignmentController::class, 'store'])->name('inventory.assignments.store');
@@ -173,13 +215,15 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
     });
 
     // SUPPORT TICKETS (Admin)
-    Route::get('support-tickets', [\App\Http\Controllers\Admin\SupportTicketController::class, 'index'])->name('support.index');
-    Route::get('support-tickets/{ticket}', [\App\Http\Controllers\Admin\SupportTicketController::class, 'show'])->name('support.show');
-    Route::put('support-tickets/{ticket}', [\App\Http\Controllers\Admin\SupportTicketController::class, 'update'])->name('support.update');
-    Route::post('support-tickets/{ticket}/reply', [\App\Http\Controllers\Admin\SupportTicketController::class, 'reply'])->name('support.reply');
+    Route::middleware(['permission:manage_system_settings|manage_support'])->group(function () {
+        Route::get('support-tickets', [\App\Http\Controllers\Admin\SupportTicketController::class, 'index'])->name('support.index');
+        Route::get('support-tickets/{ticket}', [\App\Http\Controllers\Admin\SupportTicketController::class, 'show'])->name('support.show');
+        Route::put('support-tickets/{ticket}', [\App\Http\Controllers\Admin\SupportTicketController::class, 'update'])->name('support.update');
+        Route::post('support-tickets/{ticket}/reply', [\App\Http\Controllers\Admin\SupportTicketController::class, 'reply'])->name('support.reply');
+    });
 
     // AUDIT LOGS
-    Route::middleware(['permission:manage_system_settings'])->group(function () {
+    Route::middleware(['permission:manage_system_settings|view_audit_logs|view_activity_logs'])->group(function () {
         Route::get('activity-logs', [\App\Http\Controllers\Admin\ActivityLogController::class, 'index'])->name('activity-logs.index');
     });
 
@@ -244,8 +288,12 @@ Route::get('dashboard', function () {
 require __DIR__.'/settings.php';
 
 // Webhooks
-Route::post('webhooks/squadco', [SquadcoWebhookController::class, 'handle'])->name('webhooks.squadco');
-Route::post('webhooks/paystack', [PaystackWebhookController::class, 'handle'])->name('webhooks.paystack');
+Route::middleware('throttle:webhooks')->group(function () {
+    Route::post('webhooks/squadco', [SquadcoWebhookController::class, 'handle'])->name('webhooks.squadco');
+    Route::post('webhooks/paystack', [PaystackWebhookController::class, 'handle'])->name('webhooks.paystack');
+});
 
 // Public Verification
-Route::get('verify-admission/{identifier}', [AdmissionVerificationController::class, 'verify'])->name('verify.admission');
+Route::get('verify-admission/{identifier}', [AdmissionVerificationController::class, 'verify'])
+    ->middleware('throttle:public-verification')
+    ->name('verify.admission');

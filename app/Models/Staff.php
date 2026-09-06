@@ -21,6 +21,30 @@ class Staff extends Model
     protected $table = 'staff'; // Explicit table name because plural of staff is staff
     protected $guarded = [];
 
+    protected function firstName(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn (?string $value) => $value ? mb_strtoupper($value, 'UTF-8') : null,
+            set: fn (?string $value) => $value ? mb_strtoupper(trim($value), 'UTF-8') : null,
+        );
+    }
+
+    protected function lastName(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn (?string $value) => $value ? mb_strtoupper($value, 'UTF-8') : null,
+            set: fn (?string $value) => $value ? mb_strtoupper(trim($value), 'UTF-8') : null,
+        );
+    }
+
+    protected function otherName(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn (?string $value) => $value ? mb_strtoupper($value, 'UTF-8') : null,
+            set: fn (?string $value) => $value ? mb_strtoupper(trim($value), 'UTF-8') : null,
+        );
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -54,5 +78,31 @@ class Staff extends Model
     public function payrollItems()
     {
         return $this->hasMany(PayrollItem::class);
+    }
+
+    protected static function booted()
+    {
+        static::creating(function ($model) {
+            if (auth()->check()) {
+                $model->created_by = auth()->id();
+                $model->updated_by = auth()->id();
+            }
+        });
+
+        static::updating(function ($model) {
+            if (auth()->check()) {
+                $model->updated_by = auth()->id();
+            }
+        });
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updater(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 }
