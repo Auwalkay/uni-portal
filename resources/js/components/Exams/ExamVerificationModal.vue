@@ -10,6 +10,8 @@ import {
 } from 'lucide-vue-next';
 import { format } from 'date-fns';
 
+import SearchableSelect from '@/components/SearchableSelect.vue';
+
 interface Props {
     open: boolean;
     selectedScheduleId?: string;
@@ -27,6 +29,14 @@ const internalSelectedScheduleId = ref(props.selectedScheduleId || '');
 watch(() => props.selectedScheduleId, (newVal) => {
     internalSelectedScheduleId.value = newVal || '';
 });
+
+const scheduleOptions = computed(() => [
+    { value: '', label: 'All Scheduled Exams (Auto-Detect Registered Courses)' },
+    ...(props.schedules || []).map(exam => ({
+        value: exam.id,
+        label: `${exam.course?.code || ''} - ${exam.course?.title || ''} (${exam.venue || ''}${exam.exam_date ? ' • ' + format(new Date(exam.exam_date), 'MMM dd') : ''}${exam.start_time ? ' ' + exam.start_time : ''})`
+    }))
+]);
 
 const isOpen = computed({
     get: () => props.open,
@@ -75,12 +85,12 @@ const handleMarkAttendance = (scheduleId: string, studentId: string) => {
                 <!-- Invigilating Exam Paper Selection -->
                 <div class="space-y-1.5 p-3 bg-purple-50/50 dark:bg-purple-950/20 rounded-lg border border-purple-100 dark:border-purple-900/40">
                     <Label class="text-xs font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300">Select Exam Paper (Invigilation Hall)</Label>
-                    <select v-model="internalSelectedScheduleId" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs font-medium">
-                        <option value="">All Scheduled Exams (Auto-Detect Registered Courses)</option>
-                        <option v-for="exam in schedules" :key="exam.id" :value="exam.id">
-                            {{ exam.course?.code }} - {{ exam.course?.title }} ({{ exam.venue }} &bull; {{ exam.exam_date ? format(new Date(exam.exam_date), 'MMM dd') : '' }} {{ exam.start_time }})
-                        </option>
-                    </select>
+                    <SearchableSelect
+                        v-model="internalSelectedScheduleId"
+                        :items="scheduleOptions"
+                        placeholder="Select Exam Paper"
+                        search-placeholder="Search by course code, title, venue..."
+                    />
                 </div>
 
                 <!-- Scan / Input Form -->
