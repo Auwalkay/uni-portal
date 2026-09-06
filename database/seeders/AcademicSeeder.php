@@ -45,23 +45,22 @@ class AcademicSeeder extends Seeder
         ];
 
         foreach ($faculties as $facultyName => $data) {
-            $faculty = Faculty::create([
-                'name' => $facultyName,
-                'code' => $data['code'],
-            ]);
+            $faculty = Faculty::firstOrCreate(
+                ['code' => $data['code']],
+                ['name' => $facultyName]
+            );
 
             foreach ($data['departments'] as $deptName => $deptData) {
-                $department = $faculty->departments()->create([
-                    'name' => $deptName,
-                    'code' => $deptData['code'],
-                ]);
+                $department = Department::firstOrCreate(
+                    ['code' => $deptData['code'], 'faculty_id' => $faculty->id],
+                    ['name' => $deptName]
+                );
 
                 foreach ($deptData['programmes'] as $progName) {
-                    $department->programmes()->create([
-                        'name' => $progName,
-                        'type' => 'UG',
-                        'is_active' => true,
-                    ]);
+                    Programme::firstOrCreate(
+                        ['name' => $progName, 'department_id' => $department->id],
+                        ['type' => 'UG', 'is_active' => true]
+                    );
                 }
             }
         }

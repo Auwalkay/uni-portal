@@ -19,39 +19,43 @@ class LibrarySeeder extends Seeder
         ];
 
         foreach ($categories as $cat) {
-            $category = LibraryCategory::create([
-                'name' => $cat['name'],
-                'slug' => Str::slug($cat['name']),
-                'description' => $cat['description'],
-            ]);
+            $category = LibraryCategory::firstOrCreate(
+                ['name' => $cat['name']],
+                [
+                    'slug' => Str::slug($cat['name']),
+                    'description' => $cat['description'],
+                ]
+            );
 
-            // Add dummy physical book
-            Book::create([
-                'library_category_id' => $category->id,
-                'title' => "Introduction to Algorithms in {$cat['name']}",
-                'author' => 'Dr. Jane Smith',
-                'isbn' => '978-' . rand(1000000000, 9999999999),
-                'publisher' => 'Academic Press',
-                'publish_year' => 2022,
-                'is_ebook' => false,
-                'total_copies' => 5,
-                'available_copies' => 5,
-                'shelf_location' => 'Shelf A-' . rand(1, 10),
-                'description' => 'A foundational physical textbook detailing major concepts in ' . $cat['name'],
-            ]);
+            // Add dummy physical book if not present
+            Book::firstOrCreate(
+                ['library_category_id' => $category->id, 'title' => "Introduction to Algorithms in {$cat['name']}"],
+                [
+                    'author' => 'Dr. Jane Smith',
+                    'isbn' => '978-' . rand(1000000000, 9999999999),
+                    'publisher' => 'Academic Press',
+                    'publish_year' => 2022,
+                    'is_ebook' => false,
+                    'total_copies' => 5,
+                    'available_copies' => 5,
+                    'shelf_location' => 'Shelf A-' . rand(1, 10),
+                    'description' => 'A foundational physical textbook detailing major concepts in ' . $cat['name'],
+                ]
+            );
 
-            // Add dummy e-book
-            Book::create([
-                'library_category_id' => $category->id,
-                'title' => "Advanced Digital Guide: {$cat['name']}",
-                'author' => 'Prof. Alan Turing',
-                'isbn' => '978-' . rand(1000000000, 9999999999),
-                'publisher' => 'E-University Press',
-                'publish_year' => 2024,
-                'is_ebook' => true,
-                'ebook_url' => 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', // Placeholder PDF link
-                'description' => 'An instantly accessible digital handbook for ' . $cat['name'],
-            ]);
+            // Add dummy e-book if not present
+            Book::firstOrCreate(
+                ['library_category_id' => $category->id, 'title' => "Advanced Digital Guide: {$cat['name']}"],
+                [
+                    'author' => 'Prof. Alan Turing',
+                    'isbn' => '978-' . rand(1000000000, 9999999999),
+                    'publisher' => 'E-University Press',
+                    'publish_year' => 2024,
+                    'is_ebook' => true,
+                    'ebook_url' => 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+                    'description' => 'An instantly accessible digital handbook for ' . $cat['name'],
+                ]
+            );
         }
     }
 }
