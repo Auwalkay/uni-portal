@@ -22,6 +22,10 @@ class TimetableController extends Controller
 
         $query = Timetable::query();
 
+        $authUser = auth()->user();
+        $isHod = $authUser->hasRole('hod') && !$authUser->hasRole('super_admin') && !$authUser->can('manage_academic_sessions');
+        $hodDepartmentId = $isHod ? $authUser->staff?->department_id : null;
+
         // Default to current session if no filter
         if ($request->filled('session_id')) {
             $query->where('session_id', $request->session_id);
@@ -32,9 +36,18 @@ class TimetableController extends Controller
         if ($request->filled('semester_id')) {
             $query->where('semester_id', $request->semester_id);
         }
-        if ($request->filled('department_id')) {
+
+        if ($isHod) {
+            if ($hodDepartmentId) {
+                $query->where('department_id', $hodDepartmentId);
+                $filters['department_id'] = $hodDepartmentId;
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        } elseif ($request->filled('department_id')) {
             $query->where('department_id', $request->department_id);
         }
+
         if ($request->filled('level')) {
             $query->where('level', $request->level);
         }
@@ -47,11 +60,16 @@ class TimetableController extends Controller
             ->paginate(15)
             ->withQueryString();
 
+        $allDepartments = AcademicCacheService::getAllDepartments();
+        if ($isHod && $hodDepartmentId) {
+            $allDepartments = collect($allDepartments)->filter(fn($d) => $d['id'] === $hodDepartmentId)->values()->all();
+        }
+
         return Inertia::render('Admin/Timetable/Index', [
             'timetables' => $timetables,
             'sessions' => AcademicCacheService::getSessions(),
             'semesters' => $currentSession ? Semester::where('session_id', $currentSession->id)->get(['id', 'name']) : [],
-            'departments' => AcademicCacheService::getAllDepartments(),
+            'departments' => $allDepartments,
             'courses' => AcademicCacheService::getAllCourses(),
             'filters' => $filters,
             'currentSession' => $currentSession,
@@ -60,6 +78,17 @@ class TimetableController extends Controller
 
     public function store(Request $request)
     {
+        $authUser = auth()->user();
+        $isHod = $authUser->hasRole('hod') && !$authUser->hasRole('super_admin') && !$authUser->can('manage_academic_sessions');
+        
+        if ($isHod) {
+            $hodDepartmentId = $authUser->staff?->department_id;
+            if (!$hodDepartmentId) {
+                abort(403, 'No department assigned to your staff profile.');
+            }
+            $request->merge(['department_id' => $hodDepartmentId]);
+        }
+
         $validated = $request->validate([
             'session_id' => 'required|exists:academic_sessions,id',
             'semester_id' => 'required|exists:semesters,id',
@@ -81,6 +110,14 @@ class TimetableController extends Controller
 
     public function destroy(Timetable $timetable)
     {
+        $authUser = auth()->user();
+        if ($authUser->hasRole('hod') && !$authUser->hasRole('super_admin') && !$authUser->can('manage_academic_sessions')) {
+            $hodDepartmentId = $authUser->staff?->department_id;
+            if (!$hodDepartmentId || $timetable->department_id !== $hodDepartmentId) {
+                abort(403, 'Unauthorized action for timetables outside your department.');
+            }
+        }
+
         $timetable->delete();
 
         \App\Services\AcademicCacheService::clearTimetableCache();

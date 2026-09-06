@@ -59,6 +59,7 @@ const props = defineProps<{
     };
     timetable?: Array<any>;
     payslips?: Array<any>;
+    canViewSalary?: boolean;
     attendanceData?: {
         weekly: Array<{
             week: string;
@@ -297,7 +298,7 @@ const resetPassword = () => {
                             <TabsTrigger value="academic" class="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary font-bold rounded-none h-14 px-1 text-base" v-if="staff.staff?.is_academic">
                                 Teaching & Research
                             </TabsTrigger>
-                            <TabsTrigger value="payslips" class="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary font-bold rounded-none h-14 px-1 text-base">
+                            <TabsTrigger value="payslips" class="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary font-bold rounded-none h-14 px-1 text-base" v-if="canViewSalary">
                                 Payslips
                             </TabsTrigger>
                             <TabsTrigger value="activity" class="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary font-bold rounded-none h-14 px-1 text-base">
@@ -572,7 +573,7 @@ const resetPassword = () => {
                         </TabsContent>
 
                         <!-- Payslips Tab -->
-                        <TabsContent value="payslips" class="space-y-6">
+                        <TabsContent value="payslips" class="space-y-6" v-if="canViewSalary">
                             <Card class="shadow-sm">
                                 <CardHeader class="border-b">
                                     <CardTitle class="text-base font-bold">Payslip History</CardTitle>
