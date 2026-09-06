@@ -501,11 +501,45 @@ class CourseRegistrationController extends Controller
             }
         }
 
+        $isExamPublished = filter_var(\App\Models\SystemSetting::get('publish_exam_timetable', false), FILTER_VALIDATE_BOOLEAN);
+        $registeredCourseIds = $registrations->pluck('course_id');
+        $examSchedules = collect([]);
+
+        if ($isExamPublished) {
+            $examSchedules = \App\Models\ExamSchedule::whereIn('course_id', $registeredCourseIds)
+                ->where('session_id', $session->id)
+                ->get()
+                ->keyBy('course_id');
+        }
+
+        $verificationToken = strtoupper(md5($student->id . $session->id . ($semester->id ?? '') . 'EXAM_ATTENDANCE_SECRET'));
+        $qrCodeData = $verificationToken;
+        $directApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' . urlencode($qrCodeData);
+
+        $qrCodeUrl = $directApiUrl;
+        try {
+            $response = \Illuminate\Support\Facades\Http::timeout(3)->get($directApiUrl);
+            if ($response->successful()) {
+                $qrCodeUrl = 'data:image/png;base64,' . base64_encode($response->body());
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('QR Code fetch failed: ' . $e->getMessage());
+        }
+
         $pdf = Pdf::loadView('documents.exam_card', [
             'student' => $student,
             'registrations' => $registrations,
+            'examSchedules' => $examSchedules,
+            'isExamPublished' => $isExamPublished,
             'session' => $session,
             'semester' => $semester,
+            'verificationToken' => $verificationToken,
+            'qrCodeUrl' => $qrCodeUrl,
+        ])->setOptions([
+            'defaultFont' => 'DejaVu Sans',
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled' => true,
+            'isFontSubsettingEnabled' => true,
         ]);
 
         return $pdf->download("Exam_Card_{$semester->name}.pdf");

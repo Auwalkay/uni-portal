@@ -61,6 +61,7 @@ class HandleInertiaRequests extends Middleware
                 'warning' => fn() => $request->session()->get('warning'),
                 'info' => fn() => $request->session()->get('info'),
                 'status' => fn() => $request->session()->get('status'),
+                'verified_candidate' => fn() => $request->session()->get('verified_candidate'),
             ],
             'ziggy' => function () use ($request) {
                 return array_merge((new \Tighten\Ziggy\Ziggy)->toArray(), [

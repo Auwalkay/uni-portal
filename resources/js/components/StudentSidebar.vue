@@ -54,6 +54,11 @@ const mainNavItems: NavItem[] = [
         icon: CalendarClock,
     },
     {
+        title: 'Exam Docket Pass',
+        href: '/student/exam-docket',
+        icon: FileText,
+    },
+    {
         title: 'Payments',
         href: '/student/payments',
         icon: CreditCard,

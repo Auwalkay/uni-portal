@@ -102,6 +102,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/courses/exam-card', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'downloadExamCard'])->name('courses.exam_card');
 
             Route::get('/timetable', [TimetableController::class, 'index'])->name('timetable.index');
+            Route::get('/exam-docket', [\App\Http\Controllers\Student\ExamDocketController::class, 'index'])->name('exam_docket.index');
+            Route::get('/exam-docket-alt', [\App\Http\Controllers\Student\ExamDocketController::class, 'index'])->name('exam-docket.index');
 
             Route::get('/results', [\App\Http\Controllers\Student\ResultController::class, 'index'])->name('results.index');
 
@@ -283,9 +285,26 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Timetable Management
         Route::middleware(['permission:manage_timetables'])->group(function () {
+            Route::post('timetables/toggle-publish', [\App\Http\Controllers\Admin\TimetableController::class, 'togglePublish'])->name('timetables.toggle_publish');
             Route::post('timetables/import', [\App\Http\Controllers\Admin\TimetableController::class, 'import'])->name('timetables.import');
             Route::get('timetables/template', [\App\Http\Controllers\Admin\TimetableController::class, 'template'])->name('timetables.template');
             Route::resource('timetables', \App\Http\Controllers\Admin\TimetableController::class)->only(['index', 'store', 'destroy']);
+        });
+
+        // Exam Management
+        Route::middleware(['permission:manage_exams|access_admin_dashboard'])->group(function () {
+            Route::post('exams/toggle-publish', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'togglePublish'])->name('exams.toggle_publish');
+            Route::get('exams', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'index'])->name('exams.index');
+            Route::post('exams', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'store'])->name('exams.store');
+            Route::post('exams/import', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'import'])->name('exams.import');
+            Route::get('exams/template', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'downloadTemplate'])->name('exams.template');
+            Route::get('exams/verify-pass/{token}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'verifyPass'])->name('exams.verify_pass');
+            Route::post('exams/mark-attendance', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'markAttendance'])->name('exams.mark_attendance');
+            Route::put('exams/{exam}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'update'])->name('exams.update');
+            Route::delete('exams/{exam}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'destroy'])->name('exams.destroy');
+            Route::post('exams/{exam}/invigilators', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'assignInvigilator'])->name('exams.invigilators.assign');
+            Route::delete('exam-invigilators/{invigilator}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'removeInvigilator'])->name('exams.invigilators.remove');
+            Route::post('exams/{exam}/incidents', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'logIncident'])->name('exams.incidents.store');
         });
 
         // Hostel Management

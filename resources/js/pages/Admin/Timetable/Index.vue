@@ -8,7 +8,7 @@ import Pagination from '@/components/Pagination.vue';
 import { 
     CalendarRange, Plus, Trash2, Filter, X, Search, Upload, Download,
     LayoutGrid, List, Clock, MapPin, BookOpen, Building2, Sparkles,
-    CalendarDays, GraduationCap, RefreshCw, CheckCircle2
+    CalendarDays, GraduationCap, RefreshCw, CheckCircle2, Eye, EyeOff
 } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -199,6 +199,23 @@ const submitImport = () => {
 
 const downloadTemplate = () => {
     window.location.href = route('admin.timetables.template');
+};
+
+const togglePublish = () => {
+    router.post(route('admin.timetables.toggle_publish'), {}, {
+        preserveScroll: true,
+        onSuccess: (page) => {
+            const flash = (page.props as any).flash;
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000,
+                icon: 'success',
+                title: flash?.success || 'Publication status updated',
+            });
+        }
+    });
 };
 
 const format12Hour = (time: string | null) => {

@@ -29,6 +29,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'assign_coordinators',
             'manage_academic_sessions',
             'manage_timetables',
+            'manage_exams',
             
             // Result Management
             'view_results',
@@ -244,6 +245,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage_student_registrations',
             'view_staff',
             'manage_timetables',
+            'view_students',
         ]);
 
         $courseCoordinator = Role::firstOrCreate(['name' => 'course_coordinator']);
