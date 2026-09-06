@@ -2,6 +2,7 @@
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import Pagination from '@/components/Pagination.vue';
 import ExamVerificationModal from '@/components/Exams/ExamVerificationModal.vue';
+import SearchableSelect from '@/components/SearchableSelect.vue';
 import { Head, useForm, router, usePage } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import { Card, CardContent } from '@/components/ui/card';
@@ -206,6 +207,93 @@ const importForm = useForm({
     semester_id: props.semesters[0]?.id || '',
     file: null as File | null,
 });
+
+// Dropdown Options for SearchableSelect
+const sessionFilterOptions = computed(() => [
+    { value: '', label: 'All Sessions' },
+    ...(props.sessions || []).map(s => ({ value: s.id, label: s.name }))
+]);
+
+const semesterFilterOptions = computed(() => [
+    { value: '', label: 'All Semesters' },
+    ...(props.semesters || []).map(sem => ({ value: sem.id, label: sem.name }))
+]);
+
+const departmentFilterOptions = computed(() => [
+    { value: '', label: 'All Departments' },
+    ...(props.departments || []).map(d => ({ value: d.id, label: d.name }))
+]);
+
+const levelFilterOptions = computed(() => [
+    { value: '', label: 'All Levels' },
+    { value: '100', label: '100 Level' },
+    { value: '200', label: '200 Level' },
+    { value: '300', label: '300 Level' },
+    { value: '400', label: '400 Level' },
+    { value: '500', label: '500 Level' },
+]);
+
+const examTypeFilterOptions = computed(() => [
+    { value: '', label: 'All Types' },
+    { value: 'final', label: 'Final Exam' },
+    { value: 'mid_term', label: 'Mid-Term Exam' },
+    { value: 'cbt', label: 'Computer Based Test (CBT)' },
+    { value: 'resit', label: 'Resit / Make-up Exam' },
+]);
+
+const sessionModalOptions = computed(() => [
+    ...(props.sessions || []).map(s => ({ value: s.id, label: s.name }))
+]);
+
+const semesterModalOptions = computed(() => [
+    ...(props.semesters || []).map(sem => ({ value: sem.id, label: sem.name }))
+]);
+
+const courseModalOptions = computed(() => [
+    { value: '', label: 'Select Course' },
+    ...(props.courses || []).map(c => ({ value: c.id, label: `${c.code} - ${c.title}` }))
+]);
+
+const departmentModalOptions = computed(() => [
+    { value: '', label: 'All Departments' },
+    ...(props.departments || []).map(d => ({ value: d.id, label: d.name }))
+]);
+
+const staffModalOptions = computed(() => [
+    { value: '', label: 'Select Staff Member' },
+    ...(props.staff || []).map(st => ({ value: st.id, label: `${st.name} (${st.staff_number})` }))
+]);
+
+const staffOptionalModalOptions = computed(() => [
+    { value: '', label: 'Select Invigilator (Optional)' },
+    ...(props.staff || []).map(st => ({ value: st.id, label: `${st.name} (${st.staff_number})` }))
+]);
+
+const invigilatorRoleOptions = computed(() => [
+    { value: 'chief', label: 'Chief Invigilator' },
+    { value: 'assistant', label: 'Assistant Invigilator' },
+]);
+
+const studentModalOptions = computed(() => [
+    { value: '', label: 'Select Student' },
+    ...(props.students || []).map(st => ({ value: st.id, label: `${st.name} (${st.matric_number})` }))
+]);
+
+const incidentCategoryOptions = computed(() => [
+    { value: 'malpractice', label: 'Exam Malpractice (Cheating)' },
+    { value: 'contraband', label: 'Unauthorized Materials' },
+    { value: 'impersonation', label: 'Impersonation' },
+    { value: 'medical', label: 'Medical Emergency' },
+    { value: 'absenteeism', label: 'Unexplained Absence' },
+    { value: 'other', label: 'Other Misconduct' },
+]);
+
+const incidentStatusOptions = computed(() => [
+    { value: 'logged', label: 'Logged' },
+    { value: 'under_investigation', label: 'Under Investigation' },
+    { value: 'resolved', label: 'Resolved' },
+    { value: 'sanctioned', label: 'Sanctioned' },
+]);
 
 const openCreateSchedule = () => {
     isEditing.value = false;
@@ -513,53 +601,66 @@ const applyFilters = () => {
 
             <!-- Filter & Search Toolbar (Hidden on Print) -->
             <Card class="border shadow-sm bg-white dark:bg-slate-900 p-4 print:hidden">
-                <div class="flex flex-col sm:flex-row flex-wrap items-center justify-between gap-3">
-                    <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2.5 w-full lg:w-auto">
+                <div class="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 flex-1">
                         <!-- Session Select -->
-                        <select v-model="filterSessionId" @change="applyFilters" class="h-9 px-3 rounded-md border border-input text-xs bg-background w-full sm:w-auto">
-                            <option value="">All Sessions</option>
-                            <option v-for="s in sessions" :key="s.id" :value="s.id">{{ s.name }}</option>
-                        </select>
+                        <SearchableSelect
+                            v-model="filterSessionId"
+                            :items="sessionFilterOptions"
+                            placeholder="All Sessions"
+                            search-placeholder="Search sessions..."
+                            trigger-class="h-9 text-xs"
+                            @update:model-value="applyFilters"
+                        />
 
                         <!-- Semester Select -->
-                        <select v-model="filterSemesterId" @change="applyFilters" class="h-9 px-3 rounded-md border border-input text-xs bg-background w-full sm:w-auto">
-                            <option value="">All Semesters</option>
-                            <option v-for="sem in semesters" :key="sem.id" :value="sem.id">{{ sem.name }}</option>
-                        </select>
+                        <SearchableSelect
+                            v-model="filterSemesterId"
+                            :items="semesterFilterOptions"
+                            placeholder="All Semesters"
+                            search-placeholder="Search semesters..."
+                            trigger-class="h-9 text-xs"
+                            @update:model-value="applyFilters"
+                        />
 
                         <!-- Department Select -->
-                        <select v-model="filterDepartmentId" @change="applyFilters" class="h-9 px-3 rounded-md border border-input text-xs bg-background w-full sm:w-auto">
-                            <option value="">All Departments</option>
-                            <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
-                        </select>
+                        <SearchableSelect
+                            v-model="filterDepartmentId"
+                            :items="departmentFilterOptions"
+                            placeholder="All Departments"
+                            search-placeholder="Search departments..."
+                            trigger-class="h-9 text-xs"
+                            @update:model-value="applyFilters"
+                        />
 
                         <!-- Level Select -->
-                        <select v-model="filterLevel" @change="applyFilters" class="h-9 px-3 rounded-md border border-input text-xs bg-background w-full sm:w-auto">
-                            <option value="">All Levels</option>
-                            <option value="100">100 Level</option>
-                            <option value="200">200 Level</option>
-                            <option value="300">300 Level</option>
-                            <option value="400">400 Level</option>
-                            <option value="500">500 Level</option>
-                        </select>
+                        <SearchableSelect
+                            v-model="filterLevel"
+                            :items="levelFilterOptions"
+                            placeholder="All Levels"
+                            search-placeholder="Search levels..."
+                            trigger-class="h-9 text-xs"
+                            @update:model-value="applyFilters"
+                        />
 
                         <!-- Exam Type -->
-                        <select v-model="filterExamType" @change="applyFilters" class="h-9 px-3 rounded-md border border-input text-xs bg-background w-full sm:w-auto">
-                            <option value="">All Types</option>
-                            <option value="final">Final Exam</option>
-                            <option value="mid_term">Mid-Term</option>
-                            <option value="cbt">CBT</option>
-                            <option value="resit">Resit</option>
-                        </select>
+                        <SearchableSelect
+                            v-model="filterExamType"
+                            :items="examTypeFilterOptions"
+                            placeholder="All Types"
+                            search-placeholder="Search exam types..."
+                            trigger-class="h-9 text-xs"
+                            @update:model-value="applyFilters"
+                        />
                     </div>
 
                     <!-- Search Input -->
-                    <div class="relative w-full sm:w-72">
+                    <div class="relative w-full lg:w-64 shrink-0">
                         <Input 
                             v-model="search" 
                             placeholder="Search Ref ID, course, venue..." 
                             @input="applyFilters"
-                            class="pl-9 h-9 text-xs focus-visible:ring-purple-500"
+                            class="pl-9 h-9 text-xs focus-visible:ring-purple-500 w-full"
                         />
                         <Search class="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                     </div>
@@ -863,15 +964,23 @@ const applyFilters = () => {
                     <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-1.5">
                             <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Academic Session</Label>
-                            <select v-model="importForm.session_id" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs" required>
-                                <option v-for="s in sessions" :key="s.id" :value="s.id">{{ s.name }}</option>
-                            </select>
+                            <SearchableSelect
+                                v-model="importForm.session_id"
+                                :items="sessionModalOptions"
+                                placeholder="Select Academic Session"
+                                search-placeholder="Search sessions..."
+                                :error-class="!!importForm.errors.session_id"
+                            />
                         </div>
                         <div class="space-y-1.5">
                             <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Semester</Label>
-                            <select v-model="importForm.semester_id" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs" required>
-                                <option v-for="sem in semesters" :key="sem.id" :value="sem.id">{{ sem.name }}</option>
-                            </select>
+                            <SearchableSelect
+                                v-model="importForm.semester_id"
+                                :items="semesterModalOptions"
+                                placeholder="Select Semester"
+                                search-placeholder="Search semesters..."
+                                :error-class="!!importForm.errors.semester_id"
+                            />
                         </div>
                     </div>
 
@@ -913,43 +1022,55 @@ const applyFilters = () => {
                     <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-1.5">
                             <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Academic Session</Label>
-                            <select v-model="scheduleForm.session_id" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs" required>
-                                <option v-for="s in sessions" :key="s.id" :value="s.id">{{ s.name }}</option>
-                            </select>
+                            <SearchableSelect
+                                v-model="scheduleForm.session_id"
+                                :items="sessionModalOptions"
+                                placeholder="Select Session"
+                                search-placeholder="Search sessions..."
+                                :error-class="!!scheduleForm.errors.session_id"
+                            />
                         </div>
                         <div class="space-y-1.5">
                             <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Semester</Label>
-                            <select v-model="scheduleForm.semester_id" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs" required>
-                                <option v-for="sem in semesters" :key="sem.id" :value="sem.id">{{ sem.name }}</option>
-                            </select>
+                            <SearchableSelect
+                                v-model="scheduleForm.semester_id"
+                                :items="semesterModalOptions"
+                                placeholder="Select Semester"
+                                search-placeholder="Search semesters..."
+                                :error-class="!!scheduleForm.errors.semester_id"
+                            />
                         </div>
                     </div>
 
                     <div class="space-y-1.5">
                         <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Course</Label>
-                        <select v-model="scheduleForm.course_id" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs" required>
-                            <option value="">Select Course</option>
-                            <option v-for="c in courses" :key="c.id" :value="c.id">{{ c.code }} - {{ c.title }}</option>
-                        </select>
+                        <SearchableSelect
+                            v-model="scheduleForm.course_id"
+                            :items="courseModalOptions"
+                            placeholder="Select Course"
+                            search-placeholder="Search courses..."
+                            :error-class="!!scheduleForm.errors.course_id"
+                        />
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-1.5">
                             <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Department (Optional)</Label>
-                            <select v-model="scheduleForm.department_id" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs">
-                                <option value="">All Departments</option>
-                                <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
-                            </select>
+                            <SearchableSelect
+                                v-model="scheduleForm.department_id"
+                                :items="departmentModalOptions"
+                                placeholder="All Departments"
+                                search-placeholder="Search departments..."
+                            />
                         </div>
                         <div class="space-y-1.5">
                             <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Level</Label>
-                            <select v-model="scheduleForm.level" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs">
-                                <option value="100">100 Level</option>
-                                <option value="200">200 Level</option>
-                                <option value="300">300 Level</option>
-                                <option value="400">400 Level</option>
-                                <option value="500">500 Level</option>
-                            </select>
+                            <SearchableSelect
+                                v-model="scheduleForm.level"
+                                :items="levelFilterOptions.filter(o => o.value !== '')"
+                                placeholder="Select Level"
+                                search-placeholder="Search levels..."
+                            />
                         </div>
                     </div>
 
@@ -981,12 +1102,12 @@ const applyFilters = () => {
 
                     <div class="space-y-1.5">
                         <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Exam Type</Label>
-                        <select v-model="scheduleForm.exam_type" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs">
-                            <option value="final">Final Exam</option>
-                            <option value="mid_term">Mid-Term Exam</option>
-                            <option value="cbt">Computer Based Test (CBT)</option>
-                            <option value="resit">Resit / Make-up Exam</option>
-                        </select>
+                        <SearchableSelect
+                            v-model="scheduleForm.exam_type"
+                            :items="examTypeFilterOptions.filter(o => o.value !== '')"
+                            placeholder="Select Exam Type"
+                            search-placeholder="Search exam types..."
+                        />
                     </div>
 
                     <div class="space-y-1.5">
@@ -1016,17 +1137,22 @@ const applyFilters = () => {
                 <form @submit.prevent="submitInvigilator" class="space-y-4 py-3">
                     <div class="space-y-1.5">
                         <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Staff Member</Label>
-                        <select v-model="invigilatorForm.staff_id" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs" required>
-                            <option value="">Select Staff Member</option>
-                            <option v-for="st in staff" :key="st.id" :value="st.id">{{ st.name }} ({{ st.staff_number }})</option>
-                        </select>
+                        <SearchableSelect
+                            v-model="invigilatorForm.staff_id"
+                            :items="staffModalOptions"
+                            placeholder="Select Staff Member"
+                            search-placeholder="Search staff by name or number..."
+                            :error-class="!!invigilatorForm.errors.staff_id"
+                        />
                     </div>
                     <div class="space-y-1.5">
                         <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Invigilator Role</Label>
-                        <select v-model="invigilatorForm.role" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs">
-                            <option value="chief">Chief Invigilator</option>
-                            <option value="assistant">Assistant Invigilator</option>
-                        </select>
+                        <SearchableSelect
+                            v-model="invigilatorForm.role"
+                            :items="invigilatorRoleOptions"
+                            placeholder="Select Invigilator Role"
+                            search-placeholder="Search roles..."
+                        />
                     </div>
                     <DialogFooter class="border-t pt-3">
                         <Button type="button" variant="ghost" @click="isInvigilatorModalOpen = false">Cancel</Button>
@@ -1048,30 +1174,33 @@ const applyFilters = () => {
                 <form @submit.prevent="submitIncident" class="space-y-4 py-3">
                     <div class="space-y-1.5">
                         <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Student Involved</Label>
-                        <select v-model="incidentForm.student_id" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs" required>
-                            <option value="">Select Student</option>
-                            <option v-for="s in students" :key="s.id" :value="s.id">{{ s.name }} ({{ s.matric_number }})</option>
-                        </select>
+                        <SearchableSelect
+                            v-model="incidentForm.student_id"
+                            :items="studentModalOptions"
+                            placeholder="Select Student"
+                            search-placeholder="Search student by name or matric..."
+                            :error-class="!!incidentForm.errors.student_id"
+                        />
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-1.5">
                             <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Reporting Invigilator</Label>
-                            <select v-model="incidentForm.invigilator_id" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs">
-                                <option value="">Select Invigilator (Optional)</option>
-                                <option v-for="st in staff" :key="st.id" :value="st.id">{{ st.name }}</option>
-                            </select>
+                            <SearchableSelect
+                                v-model="incidentForm.invigilator_id"
+                                :items="staffOptionalModalOptions"
+                                placeholder="Select Invigilator (Optional)"
+                                search-placeholder="Search staff..."
+                            />
                         </div>
                         <div class="space-y-1.5">
                             <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Incident Category</Label>
-                            <select v-model="incidentForm.incident_type" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs">
-                                <option value="malpractice">Exam Malpractice (Cheating)</option>
-                                <option value="contraband">Unauthorized Materials</option>
-                                <option value="impersonation">Impersonation</option>
-                                <option value="medical">Medical Emergency</option>
-                                <option value="absenteeism">Unexplained Absence</option>
-                                <option value="other">Other Misconduct</option>
-                            </select>
+                            <SearchableSelect
+                                v-model="incidentForm.incident_type"
+                                :items="incidentCategoryOptions"
+                                placeholder="Select Incident Category"
+                                search-placeholder="Search category..."
+                            />
                         </div>
                     </div>
 
@@ -1083,12 +1212,12 @@ const applyFilters = () => {
                     <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-1.5">
                             <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Status</Label>
-                            <select v-model="incidentForm.status" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs">
-                                <option value="logged">Logged</option>
-                                <option value="under_investigation">Under Investigation</option>
-                                <option value="resolved">Resolved</option>
-                                <option value="sanctioned">Sanctioned</option>
-                            </select>
+                            <SearchableSelect
+                                v-model="incidentForm.status"
+                                :items="incidentStatusOptions"
+                                placeholder="Select Status"
+                                search-placeholder="Search status..."
+                            />
                         </div>
                         <div class="space-y-1.5">
                             <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Action Taken / Penalty</Label>

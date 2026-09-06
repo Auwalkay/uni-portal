@@ -14,12 +14,14 @@ const props = withDefaults(defineProps<{
     emptyText?: string;
     disabled?: boolean;
     errorClass?: boolean;
+    triggerClass?: string;
 }>(), {
     placeholder: 'Select...',
     searchPlaceholder: 'Search...',
     emptyText: 'No results found.',
     disabled: false,
     errorClass: false,
+    triggerClass: '',
 });
 
 const emit = defineEmits<{
@@ -61,6 +63,7 @@ const selectItem = (value: string | number) => {
           'w-full justify-between text-left font-normal bg-background hover:bg-background border-input px-3 h-10',
           errorClass && 'border-red-500 text-red-500',
           !modelValue && 'text-muted-foreground',
+          triggerClass,
         )"
       >
         <span class="truncate">
