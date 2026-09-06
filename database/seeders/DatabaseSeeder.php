@@ -2,8 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -21,11 +19,10 @@ class DatabaseSeeder extends Seeder
             AcademicRecordsSeeder::class,
             FeeSeeder::class,
             AdminUserSeeder::class,
+            DesignationSeeder::class,
             NigeriaStateLgaSeeder::class,
             LibrarySeeder::class,
             SickbaySeeder::class,
-            ExpensePermissionSeeder::class,
-            InventoryPermissionsSeeder::class,
             InventoryCategorySeeder::class,
         ]);
     }
