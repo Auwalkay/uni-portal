@@ -36,6 +36,8 @@ class SystemSettingsController extends Controller
                 'hostel_booking_expiry_days' => intval(SystemSetting::get('hostel_booking_expiry_days', 2)),
                 'promote_pending_payments' => filter_var(SystemSetting::get('promote_pending_payments', false), FILTER_VALIDATE_BOOLEAN),
                 'late_fee_enabled' => filter_var(SystemSetting::get('late_fee_enabled', true), FILTER_VALIDATE_BOOLEAN),
+                'publish_class_timetable' => filter_var(SystemSetting::get('publish_class_timetable', false), FILTER_VALIDATE_BOOLEAN),
+                'publish_exam_timetable' => filter_var(SystemSetting::get('publish_exam_timetable', false), FILTER_VALIDATE_BOOLEAN),
             ]
         ]);
     }

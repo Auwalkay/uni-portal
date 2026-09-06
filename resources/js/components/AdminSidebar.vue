@@ -117,6 +117,12 @@ const academicsItems = computed(() => {
             show: hasPermission('manage_timetables'),
         },
         {
+            title: 'Examinations',
+            href: route().has('admin.exams.index') ? route('admin.exams.index') : '#',
+            icon: CalendarRange,
+            show: hasPermission('manage_exams') || hasPermission('manage_courses'),
+        },
+        {
             title: 'Course Management',
             href: '/admin/academics',
             icon: Folder,

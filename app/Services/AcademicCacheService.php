@@ -63,6 +63,13 @@ class AcademicCacheService
         });
     }
 
+    public static function getSemesters()
+    {
+        return Cache::remember('all_semesters_list', self::TTL, function () {
+            return \App\Models\Semester::orderBy('name', 'asc')->get();
+        });
+    }
+
     public static function getAllFaculties()
     {
         return Cache::remember('all_faculties', self::TTL, fn() => Faculty::orderBy('name')->get());
@@ -198,6 +205,7 @@ class AcademicCacheService
         Cache::forget('academic_sessions_list');
         Cache::forget('current_session');
         Cache::forget('current_semester');
+        Cache::forget('all_semesters_list');
         Cache::forget('all_faculties');
         Cache::forget('all_departments');
         Cache::forget('academic_departments');
