@@ -220,7 +220,7 @@ const administrationItems = computed(() => {
             title: 'Staff Management',
             href: route().has('admin.staff.index') ? route('admin.staff.index') : '#',
             icon: Users,
-            show: hasRole('admin') || hasPermission('manage_staff'),
+            show: hasRole('admin') || hasPermission('manage_staff') || hasPermission('view_staff'),
         },
         {
             title: 'Support Tickets',

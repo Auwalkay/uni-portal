@@ -234,7 +234,17 @@ class RolesAndPermissionsSeeder extends Seeder
         $dean->syncPermissions(['access_admin_dashboard', 'approve_results', 'view_results', 'manage_courses']);
 
         $hod = Role::firstOrCreate(['name' => 'hod']);
-        $hod->syncPermissions(['access_admin_dashboard', 'approve_results', 'view_results', 'manage_courses', 'assign_coordinators', 'perform_student_registration', 'manage_student_registrations']);
+        $hod->syncPermissions([
+            'access_admin_dashboard',
+            'approve_results',
+            'view_results',
+            'manage_courses',
+            'assign_coordinators',
+            'perform_student_registration',
+            'manage_student_registrations',
+            'view_staff',
+            'manage_timetables',
+        ]);
 
         $courseCoordinator = Role::firstOrCreate(['name' => 'course_coordinator']);
         $courseCoordinator->syncPermissions(['access_admin_dashboard', 'view_results']);

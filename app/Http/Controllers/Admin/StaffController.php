@@ -39,6 +39,19 @@ class StaffController extends Controller
         $query = User::role('staff')
             ->with(['staff.department.faculty', 'roles']);
 
+        // Scope to HOD department if user is HOD without global manage_staff permission
+        $authUser = auth()->user();
+        if ($authUser->hasRole('hod') && !$authUser->can('manage_staff') && !$authUser->hasRole('super_admin')) {
+            $hodDepartmentId = $authUser->staff?->department_id;
+            if ($hodDepartmentId) {
+                $query->whereHas('staff', function ($q) use ($hodDepartmentId) {
+                    $q->where('department_id', $hodDepartmentId);
+                });
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+
         // Search Filter
         if ($request->filled('search')) {
             $search = $request->search;
@@ -115,6 +128,16 @@ class StaffController extends Controller
         }
 
         $staff = $query->paginate($perPage)->withQueryString();
+
+        $canViewSalary = $authUser->can('view_salaries') || $authUser->can('run_payroll') || $authUser->hasRole('super_admin');
+        if (!$canViewSalary) {
+            $staff->getCollection()->transform(function ($user) {
+                if ($user->staff) {
+                    $user->staff->makeHidden(['basic_salary', 'allowances', 'deductions', 'bonuses', 'bank_name', 'account_number', 'account_name']);
+                }
+                return $user;
+            });
+        }
 
         return Inertia::render('Admin/Staff/Index', [
             'staff' => $staff,
@@ -323,6 +346,14 @@ class StaffController extends Controller
             abort(404);
         }
 
+        $authUser = auth()->user();
+        if ($authUser->hasRole('hod') && !$authUser->can('manage_staff') && !$authUser->hasRole('super_admin')) {
+            $hodDepartmentId = $authUser->staff?->department_id;
+            if (!$hodDepartmentId || $staff->staff?->department_id !== $hodDepartmentId) {
+                abort(403, 'Unauthorized access to staff profile outside your department.');
+            }
+        }
+
         $staff->load(['staff.department.faculty', 'roles', 'staff.allocations.course', 'staff.allocations.session']);
 
         $timetable = [];
@@ -333,8 +364,10 @@ class StaffController extends Controller
             }
         }
 
+        $canViewSalary = $authUser->can('view_salaries') || $authUser->can('run_payroll') || $authUser->hasRole('super_admin');
+
         $payslips = [];
-        if ($staff->staff) {
+        if ($staff->staff && $canViewSalary) {
             $payslips = \App\Models\PayrollItem::where('staff_id', $staff->staff->id)
                 ->with(['payroll'])
                 ->join('payrolls', 'payroll_items.payroll_id', '=', 'payrolls.id')
@@ -342,6 +375,10 @@ class StaffController extends Controller
                 ->orderBy('payrolls.year', 'desc')
                 ->select('payroll_items.*')
                 ->get();
+        }
+
+        if ($staff->staff && !$canViewSalary) {
+            $staff->staff->makeHidden(['basic_salary', 'allowances', 'deductions', 'bonuses', 'bank_name', 'account_number', 'account_name']);
         }
 
         // Attendance Data with Month & Year Filtering
@@ -407,6 +444,7 @@ class StaffController extends Controller
             'staff' => $staff,
             'timetable' => $timetable,
             'payslips' => $payslips,
+            'canViewSalary' => $canViewSalary,
             'attendanceData' => [
                 'weekly' => $weeklyAttendance,
                 'stats' => $attendanceStats,
