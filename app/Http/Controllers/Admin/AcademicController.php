@@ -15,103 +15,142 @@ use App\Services\AcademicCacheService;
 
 class AcademicController extends Controller
 {
-    public function index(Request $request)
+    public function faculties(Request $request)
+    {
+        $search = $request->input('search');
+
+        $faculties = Faculty::withCount('departments')
+            ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
+            ->orderBy('name')
+            ->paginate(15)
+            ->withQueryString();
+
+        return Inertia::render('Admin/Academic/Faculties/Index', [
+            'faculties' => $faculties,
+            'stats' => AcademicCacheService::getAcademicStats(),
+            'filters' => $request->only(['search']),
+        ]);
+    }
+
+    public function departments(Request $request)
+    {
+        $search = $request->input('search');
+        $facultyId = $request->input('faculty_id');
+
+        $departments = Department::with('faculty')
+            ->withCount(['programmes', 'units'])
+            ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
+            ->when($facultyId, function ($q) use ($facultyId) {
+                if ($facultyId === 'NON_ACADEMIC') {
+                    $q->whereNull('faculty_id');
+                } else {
+                    $q->where('faculty_id', $facultyId);
+                }
+            })
+            ->orderBy('name')
+            ->paginate(15)
+            ->withQueryString();
+
+        return Inertia::render('Admin/Academic/Departments/Index', [
+            'departments' => $departments,
+            'faculties' => AcademicCacheService::getAllFaculties(),
+            'stats' => AcademicCacheService::getAcademicStats(),
+            'filters' => $request->only(['search', 'faculty_id']),
+        ]);
+    }
+
+    public function programmes(Request $request)
     {
         $search = $request->input('search');
         $facultyId = $request->input('faculty_id');
         $departmentId = $request->input('department_id');
-        $tab = $request->input('tab', 'faculties'); // Default tab
+        $programType = $request->input('program_type');
 
-        $faculties = $departments = $programmes = $courses = $units = null;
+        $programmes = Programme::with('department.faculty')
+            ->withCount('courses')
+            ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%"))
+            ->when($facultyId, fn ($q) => $q->whereHas('department', fn ($d) => $d->where('faculty_id', $facultyId)))
+            ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId))
+            ->when($programType, fn ($q) => $q->where('type', $programType))
+            ->orderBy('name')
+            ->paginate(15)
+            ->withQueryString();
 
+        return Inertia::render('Admin/Academic/Programmes/Index', [
+            'programmes' => $programmes,
+            'faculties' => AcademicCacheService::getAllFaculties(),
+            'departments' => AcademicCacheService::getAllDepartments(),
+            'stats' => AcademicCacheService::getAcademicStats(),
+            'filters' => $request->only(['search', 'faculty_id', 'department_id', 'program_type']),
+        ]);
+    }
+
+    public function showProgrammeDetail(Programme $programme)
+    {
+        $programme->load(['department.faculty', 'courses']);
+
+        $allCourses = Course::select('id', 'code', 'title', 'units', 'level', 'semester')->orderBy('code')->get();
+        $allProgrammes = Programme::where('id', '!=', $programme->id)->orderBy('name')->get();
+
+        return Inertia::render('Admin/Academic/Programmes/Show', [
+            'programme' => $programme,
+            'allCourses' => $allCourses,
+            'allProgrammes' => $allProgrammes,
+            'stats' => AcademicCacheService::getAcademicStats(),
+        ]);
+    }
+
+    public function courses(Request $request)
+    {
         $user = $request->user();
+        $search = $request->input('search');
+        $facultyId = $request->input('faculty_id');
+        $departmentId = $request->input('department_id');
+        $level = $request->input('level');
+        $semester = $request->input('semester');
 
-        // Security check for tabs
-        if ($tab === 'faculties' && !$user->can('view_faculties') && !$user->can('manage_faculties') && !$user->can('manage_academic_sessions')) {
-            $tab = 'denied';
-        }
-        if ($tab === 'departments' && !$user->can('view_departments') && !$user->can('manage_departments') && !$user->can('manage_academic_sessions')) {
-            $tab = 'denied';
-        }
-        if ($tab === 'programmes' && !$user->can('view_programmes') && !$user->can('manage_programmes') && !$user->can('manage_academic_sessions')) {
-            $tab = 'denied';
-        }
-        if ($tab === 'units' && !$user->can('view_departments') && !$user->can('manage_departments') && !$user->can('manage_academic_sessions')) {
-            $tab = 'denied';
-        }
+        $courses = Course::with('department.faculty', 'programme')
+            ->when(!$user->can('manage_courses') && !$user->can('view_courses') && !$user->can('manage_academic_sessions'), function ($q) use ($user) {
+                $q->whereHas('allocations', function ($aq) use ($user) {
+                    $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
+                });
+            })
+            ->when($search, fn ($q) => $q->where('title', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
+            ->when($facultyId, fn ($q) => $q->whereHas('department', fn ($d) => $d->where('faculty_id', $facultyId)))
+            ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId))
+            ->when($level, fn ($q) => $q->where('level', $level))
+            ->when($semester, fn ($q) => $q->where('semester', (string) $semester))
+            ->orderBy('code')
+            ->paginate(20)
+            ->withQueryString();
 
-        if ($tab === 'faculties') {
-            $faculties = Faculty::withCount('departments')
-                ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
-                ->orderBy('name')
-                ->paginate(15, ['*'], 'page')
-                ->withQueryString();
-        }
+        return Inertia::render('Admin/Academic/Courses/Index', [
+            'courses' => $courses,
+            'faculties' => AcademicCacheService::getAllFaculties(),
+            'departments' => AcademicCacheService::getAllDepartments(),
+            'programmes' => AcademicCacheService::getAllProgrammes(),
+            'stats' => AcademicCacheService::getAcademicStats(),
+            'filters' => $request->only(['search', 'faculty_id', 'department_id', 'level', 'semester']),
+        ]);
+    }
 
-        if ($tab === 'departments') {
-            $departments = Department::with('faculty')
-                ->withCount(['programmes', 'units'])
-                ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
-                ->when($facultyId, function ($q) use ($facultyId) {
-                    if ($facultyId === 'NON_ACADEMIC') {
-                        $q->whereNull('faculty_id');
-                    } else {
-                        $q->where('faculty_id', $facultyId);
-                    }
-                })
-                ->orderBy('name')
-                ->paginate(15, ['*'], 'page')
-                ->withQueryString();
-        }
+    public function units(Request $request)
+    {
+        $search = $request->input('search');
+        $departmentId = $request->input('department_id');
 
-        if ($tab === 'programmes') {
-            $programmes = Programme::with('department.faculty')
-                ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%"))
-                ->when($facultyId, fn ($q) => $q->whereHas('department', fn ($d) => $d->where('faculty_id', $facultyId)))
-                ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId))
-                ->orderBy('name')
-                ->paginate(15, ['*'], 'page')
-                ->withQueryString();
-        }
+        $units = Unit::with('department')
+            ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
+            ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId))
+            ->orderBy('name')
+            ->paginate(15)
+            ->withQueryString();
 
-        if ($tab === 'units') {
-            $units = Unit::with('department')
-                ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
-                ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId))
-                ->orderBy('name')
-                ->paginate(15, ['*'], 'page')
-                ->withQueryString();
-        }
-
-        if ($tab === 'courses') {
-            $courses = Course::with('department', 'programme')
-                ->when(!$user->can('manage_courses') && !$user->can('view_courses') && !$user->can('manage_academic_sessions'), function ($q) use ($user) {
-                    $q->whereHas('allocations', function ($aq) use ($user) {
-                        $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
-                    });
-                })
-                ->when($search, fn ($q) => $q->where('title', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
-                ->when($facultyId, fn ($q) => $q->whereHas('department', fn ($d) => $d->where('faculty_id', $facultyId)))
-                ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId))
-                ->orderBy('code')
-                ->paginate(20, ['*'], 'page')
-                ->withQueryString();
-        }
-
-        // Helper to return empty pagination result if null
-        $empty = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 15);
-
-        return Inertia::render('Admin/Academic/Index', [
-            'faculties' => $faculties ?? $empty,
-            'departments' => $departments ?? $empty,
-            'programmes' => $programmes ?? $empty,
-            'courses' => $courses ?? $empty,
-            'units' => $units ?? $empty,
-            'allFaculties' => fn() => AcademicCacheService::getAllFaculties(),
-            'allDepartments' => fn() => AcademicCacheService::getAllDepartments(),
-            'allProgrammes' => fn() => AcademicCacheService::getAllProgrammes(),
-            'allCourses' => fn() => AcademicCacheService::getAllCourses(),
-            'filters' => $request->only(['search', 'faculty_id', 'department_id', 'tab']),
+        return Inertia::render('Admin/Academic/Units/Index', [
+            'units' => $units,
+            'departments' => AcademicCacheService::getAllDepartments(),
+            'stats' => AcademicCacheService::getAcademicStats(),
+            'filters' => $request->only(['search', 'department_id']),
         ]);
     }
 
@@ -515,6 +554,62 @@ class AcademicController extends Controller
         return \Maatwebsite\Excel\Facades\Excel::download(
             new \App\Exports\GlobalCourseTemplateExport,
             'global_course_import_template.xlsx',
+            \Maatwebsite\Excel\Excel::XLSX
+        );
+    }
+
+    public function exportProgrammeCourses(Programme $programme)
+    {
+        $fileName = \Illuminate\Support\Str::slug($programme->name) . '_curriculum.xlsx';
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\ProgrammeCurriculumExport($programme),
+            $fileName,
+            \Maatwebsite\Excel\Excel::XLSX
+        );
+    }
+
+    public function exportCourses(Request $request)
+    {
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\CoursesCatalogExport($request),
+            'course_catalog.xlsx',
+            \Maatwebsite\Excel\Excel::XLSX
+        );
+    }
+
+    public function exportFaculties(Request $request)
+    {
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\FacultiesExport($request),
+            'faculties_list.xlsx',
+            \Maatwebsite\Excel\Excel::XLSX
+        );
+    }
+
+    public function exportDepartments(Request $request)
+    {
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\DepartmentsExport($request),
+            'departments_list.xlsx',
+            \Maatwebsite\Excel\Excel::XLSX
+        );
+    }
+
+    public function exportProgrammes(Request $request)
+    {
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\ProgrammesExport($request),
+            'programmes_list.xlsx',
+            \Maatwebsite\Excel\Excel::XLSX
+        );
+    }
+
+    public function exportUnits(Request $request)
+    {
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\UnitsExport($request),
+            'units_list.xlsx',
             \Maatwebsite\Excel\Excel::XLSX
         );
     }

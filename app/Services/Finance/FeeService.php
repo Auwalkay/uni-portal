@@ -570,4 +570,73 @@ class FeeService
             return $invoice;
         });
     }
+
+    /**
+     * Generate per-course invoice for a student for a specific semester (e.g. Summer Semester).
+     */
+    public function generatePerCourseInvoice(Student $student, Session $session, \App\Models\Semester $semester, $courses)
+    {
+        if ($courses->isEmpty()) {
+            return null;
+        }
+
+        // Find per-course fee configuration for this session and semester (or session fallback)
+        $feeConfig = FeeConfiguration::where('session_id', $session->id)
+            ->where('is_per_course', true)
+            ->where(function ($q) use ($semester) {
+                $q->where('semester_id', $semester->id)
+                  ->orWhereNull('semester_id');
+            })
+            ->with('feeType')
+            ->orderByRaw('semester_id IS NOT NULL DESC')
+            ->first();
+
+        $ratePerCourse = $feeConfig ? $feeConfig->amount : 15000;
+        $totalAmount = $ratePerCourse * $courses->count();
+
+        // Check if invoice already exists for this semester
+        $invoice = Invoice::where('user_id', $student->user_id)
+            ->where('session_id', $session->id)
+            ->where('type', 'summer_fee')
+            ->first();
+
+        return DB::transaction(function () use ($student, $session, $semester, $courses, $ratePerCourse, $totalAmount, $feeConfig, $invoice) {
+            $studentSession = StudentSession::firstOrCreate(
+                ['student_id' => $student->id, 'session_id' => $session->id],
+                ['level' => $student->current_level, 'status' => 'active']
+            );
+
+            if (!$invoice) {
+                $invoice = Invoice::create([
+                    'user_id' => $student->user_id,
+                    'session_id' => $session->id,
+                    'student_session_id' => $studentSession->id,
+                    'type' => 'summer_fee',
+                    'reference' => 'SUM-' . strtoupper(uniqid()),
+                    'invoice_number' => 'INV-SUM-' . strtoupper(Str::random(8)),
+                    'amount' => $totalAmount,
+                    'status' => 'pending',
+                    'due_date' => now()->addDays(7),
+                ]);
+            } else {
+                if ($invoice->status === 'pending') {
+                    $invoice->update(['amount' => $totalAmount]);
+                    $invoice->items()->delete();
+                }
+            }
+
+            if ($invoice->status === 'pending') {
+                foreach ($courses as $course) {
+                    InvoiceItem::create([
+                        'invoice_id' => $invoice->id,
+                        'fee_type_id' => $feeConfig?->fee_type_id,
+                        'description' => "{$course->code} - {$course->title} ({$semester->name})",
+                        'amount' => $ratePerCourse,
+                    ]);
+                }
+            }
+
+            return $invoice;
+        });
+    }
 }

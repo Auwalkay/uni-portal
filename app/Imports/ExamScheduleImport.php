@@ -83,6 +83,54 @@ class ExamScheduleImport
                 $examType = 'final';
             }
 
+            $staffNumber = trim($data['staff_number'] ?? $data['staff_id'] ?? '');
+            $invigilatorRole = strtolower(trim($data['role'] ?? 'assistant'));
+            if (!in_array($invigilatorRole, ['chief', 'assistant'])) {
+                $invigilatorRole = 'assistant';
+            }
+
+            // Case A: Standalone Invigilator Assignment row (no exam_date provided)
+            if (!$examDate && $staffNumber) {
+                $scheduleQuery = ExamSchedule::where('session_id', $this->sessionId)
+                    ->where('semester_id', $this->semesterId)
+                    ->where('course_id', $course->id);
+
+                if (!empty($data['venue'])) {
+                    $scheduleQuery->where('venue', 'like', "%{$data['venue']}%");
+                }
+
+                $schedule = $scheduleQuery->first();
+
+                if (!$schedule) {
+                    $this->stats['skipped']++;
+                    $this->stats['errors'][] = "Row {$rowNum}: No scheduled exam found for course '{$courseCode}'" . (!empty($data['venue']) ? " at venue '{$data['venue']}'" : "") . ".";
+                    continue;
+                }
+
+                $staff = Staff::where('staff_number', $staffNumber)
+                    ->orWhereHas('user', fn ($uq) => $uq->where('email', $staffNumber)->orWhere('name', 'like', "%{$staffNumber}%"))
+                    ->first();
+
+                if (!$staff) {
+                    $this->stats['skipped']++;
+                    $this->stats['errors'][] = "Row {$rowNum}: Staff member '{$staffNumber}' not found.";
+                    continue;
+                }
+
+                ExamInvigilator::updateOrCreate(
+                    [
+                        'exam_schedule_id' => $schedule->id,
+                        'staff_id' => $staff->id,
+                    ],
+                    [
+                        'role' => $invigilatorRole,
+                        'status' => 'assigned',
+                    ]
+                );
+                $this->stats['invigilators_assigned']++;
+                continue;
+            }
+
             try {
                 $parsedDate = Carbon::parse($examDate)->format('Y-m-d');
             } catch (\Exception $e) {
@@ -118,7 +166,28 @@ class ExamScheduleImport
                 $this->stats['updated']++;
             }
 
-            // Assign Invigilators (Chief + Assistant 1 + Assistant 2)
+            // Assign direct staff_number column if present
+            if ($staffNumber) {
+                $staff = Staff::where('staff_number', $staffNumber)
+                    ->orWhereHas('user', fn ($uq) => $uq->where('email', $staffNumber)->orWhere('name', 'like', "%{$staffNumber}%"))
+                    ->first();
+
+                if ($staff) {
+                    ExamInvigilator::updateOrCreate(
+                        [
+                            'exam_schedule_id' => $schedule->id,
+                            'staff_id' => $staff->id,
+                        ],
+                        [
+                            'role' => $invigilatorRole,
+                            'status' => 'assigned',
+                        ]
+                    );
+                    $this->stats['invigilators_assigned']++;
+                }
+            }
+
+            // Assign Invigilators from multi-column CSV (Chief + Assistant 1 + Assistant 2)
             $invigilatorKeys = [
                 'chief' => ['chief_invigilator', 'chief_invigilator_staff_number', 'chief'],
                 'assistant_1' => ['assistant_invigilator_1', 'assistant_invigilator_1_staff_number', 'assistant_1'],

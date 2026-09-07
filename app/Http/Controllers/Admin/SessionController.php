@@ -29,13 +29,39 @@ class SessionController extends Controller
             'name' => 'required|string|unique:academic_sessions,name',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after:start_date',
-            'type' => 'required|string|in:regular,summer',
+            'type' => 'required|string|in:regular,summer,regular_with_summer',
+            'include_summer' => 'nullable|boolean',
         ]);
 
-        $session = Session::create($validated);
+        $sessionType = ($validated['type'] === 'regular_with_summer') ? 'regular' : $validated['type'];
 
-        // Auto-create Semesters based on Type
-        if ($session->type === 'summer') {
+        $session = Session::create([
+            'name' => $validated['name'],
+            'start_date' => $validated['start_date'],
+            'end_date' => $validated['end_date'],
+            'type' => $sessionType,
+        ]);
+
+        // Auto-create Semesters based on Selection
+        if ($validated['type'] === 'summer') {
+            Semester::create([
+                'session_id' => $session->id,
+                'name' => 'Summer Semester',
+                'is_current' => false,
+            ]);
+        } elseif ($validated['type'] === 'regular_with_summer' || !empty($validated['include_summer'])) {
+            Semester::create([
+                'session_id' => $session->id,
+                'name' => 'First Semester',
+                'is_current' => false,
+            ]);
+
+            Semester::create([
+                'session_id' => $session->id,
+                'name' => 'Second Semester',
+                'is_current' => false,
+            ]);
+
             Semester::create([
                 'session_id' => $session->id,
                 'name' => 'Summer Semester',
@@ -158,7 +184,7 @@ class SessionController extends Controller
         $session->load('semesters');
 
         // Fetch all global fee configurations for this session
-        $feeConfigurations = \App\Models\FeeConfiguration::with('feeType')
+        $feeConfigurations = \App\Models\FeeConfiguration::with(['feeType', 'semester'])
             ->where('session_id', $session->id)
             ->whereNull('faculty_id')
             ->whereNull('department_id')
@@ -195,12 +221,15 @@ class SessionController extends Controller
         $validated = $request->validate([
             'fee_type_id' => 'required|exists:fee_types,id',
             'amount' => 'required|numeric|min:0',
+            'semester_id' => 'nullable|exists:semesters,id',
+            'is_per_course' => 'nullable|boolean',
         ]);
 
         \App\Models\FeeConfiguration::updateOrCreate(
             [
                 'session_id' => $session->id,
                 'fee_type_id' => $validated['fee_type_id'],
+                'semester_id' => $validated['semester_id'] ?? null,
                 'faculty_id' => null,
                 'department_id' => null,
                 'program_id' => null,
@@ -208,6 +237,7 @@ class SessionController extends Controller
             [
                 'amount' => $validated['amount'],
                 'is_compulsory' => true,
+                'is_per_course' => $validated['is_per_course'] ?? false,
                 'level' => null, // All levels
             ]
         );
@@ -247,5 +277,51 @@ class SessionController extends Controller
         $semester->update($validated);
 
         return back()->with('success', "{$semester->name} registration dates updated.");
+    }
+
+    public function storeSemester(Request $request, Session $session)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'registration_starts_at' => 'nullable|date',
+            'registration_ends_at' => 'nullable|date|after_or_equal:registration_starts_at',
+        ]);
+
+        $exists = $session->semesters()->where('name', $validated['name'])->exists();
+        if ($exists) {
+            return back()->with('error', "{$validated['name']} already exists for this session.");
+        }
+
+        $semester = $session->semesters()->create([
+            'name' => $validated['name'],
+            'registration_starts_at' => $validated['registration_starts_at'] ?? null,
+            'registration_ends_at' => $validated['registration_ends_at'] ?? null,
+            'is_current' => false,
+        ]);
+
+        AcademicCacheService::clearAll();
+
+        return back()->with('success', "{$semester->name} added successfully.");
+    }
+
+    public function destroySemester(Session $session, Semester $semester)
+    {
+        if ($semester->session_id !== $session->id) {
+            abort(403, 'Semester does not belong to session');
+        }
+
+        if ($semester->is_current) {
+            return back()->with('error', 'Cannot delete the active current semester.');
+        }
+
+        $hasRegistrations = \App\Models\CourseRegistration::where('semester_id', $semester->id)->exists();
+        if ($hasRegistrations) {
+            return back()->with('error', 'Cannot delete semester because student course registrations are attached to it.');
+        }
+
+        $semester->delete();
+        AcademicCacheService::clearAll();
+
+        return back()->with('success', "{$semester->name} removed successfully.");
     }
 }

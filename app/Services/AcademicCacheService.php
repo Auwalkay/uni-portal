@@ -95,6 +95,20 @@ class AcademicCacheService
         return Cache::remember('all_courses_lookup', self::TTL, fn() => \App\Models\Course::select('id', 'code', 'title', 'units')->orderBy('code')->get());
     }
 
+    public static function getAcademicStats()
+    {
+        return Cache::remember('academic_stats_summary', 3600, function () {
+            return [
+                'faculties' => \App\Models\Faculty::count(),
+                'departments' => \App\Models\Department::count(),
+                'academic_departments' => \App\Models\Department::where('is_academic', true)->count(),
+                'programmes' => \App\Models\Programme::count(),
+                'courses' => \App\Models\Course::count(),
+                'units' => \App\Models\Unit::count(),
+            ];
+        });
+    }
+
     public static function getFacultiesFull()
     {
         return Cache::remember('faculties_with_departments_full', self::TTL, fn() => Faculty::with('departments.units')->get());
@@ -193,6 +207,24 @@ class AcademicCacheService
         });
     }
 
+    public static function getStaffList()
+    {
+        return Cache::remember('staff_list_for_dropdowns', self::TTL, function () {
+            return \App\Models\Staff::with('user:id,name')->select('id', 'user_id', 'staff_number')->get()->map(fn ($s) => [
+                'id' => $s->id,
+                'name' => $s->user?->name ?? 'Staff Member',
+                'staff_number' => $s->staff_number ?? 'N/A',
+            ])->toArray();
+        });
+    }
+
+    public static function getExamBuildings()
+    {
+        return Cache::remember('exam_buildings_active', self::TTL, function () {
+            return \App\Models\Building::usableForExams()->active()->orderBy('name')->get();
+        });
+    }
+
     public static function clearAll()
     {
         self::clearTimetableCache();
@@ -216,5 +248,8 @@ class AcademicCacheService
         Cache::forget('system_settings_array');
         Cache::forget('staff_designations_list');
         Cache::forget('all_courses_lookup');
+        Cache::forget('staff_list_for_dropdowns');
+        Cache::forget('exam_buildings_active');
+        Cache::forget('academic_stats_summary');
     }
 }

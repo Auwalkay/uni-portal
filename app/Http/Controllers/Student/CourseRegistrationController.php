@@ -71,14 +71,22 @@ class CourseRegistrationController extends Controller
             ];
         }
 
+        $currentSemester = Semester::current();
+        $isSecondSemActive = $currentSemester && (stripos($currentSemester->name, 'Second') !== false || $currentSemester->name == '2');
+
+        $pendingInvoicesCount = $isSecondSemActive
+            ? Invoice::where('user_id', Auth::id())->where('status', '!=', 'paid')->count()
+            : Invoice::where('user_id', Auth::id())->whereNotIn('status', ['paid', 'partial'])->where('paid_amount', '<=', 0)->count();
+
         return Inertia::render('Student/Courses/Index', [
             'history' => $formattedHistory,
             'student' => $student,
             'schoolFeeStatus' => Invoice::where('user_id', Auth::id())
                 ->where('type', 'school_fee')
-                ->where('session_id', Session::current()?->id)
+                ->where('session_id', $currentSession?->id)
                 ->first()?->status ?? 'unpaid',
-            'isSecondSemester' => Semester::current() ? (bool)(stripos(Semester::current()->name, 'Second') !== false || Semester::current()->name == '2') : false,
+            'hasPendingInvoices' => $pendingInvoicesCount > 0,
+            'isSecondSemester' => $isSecondSemActive,
         ]);
     }
 
@@ -223,6 +231,17 @@ class CourseRegistrationController extends Controller
 
         $registeredCourseIds = $registeredCourses->pluck('id');
 
+        $perCourseFeeConfig = \App\Models\FeeConfiguration::where('session_id', $currentSession->id)
+            ->where('is_per_course', true)
+            ->where(function ($q) use ($currentSemester) {
+                if ($currentSemester) {
+                    $q->where('semester_id', $currentSemester->id)
+                      ->orWhereNull('semester_id');
+                }
+            })
+            ->with('feeType')
+            ->first();
+
         return Inertia::render('Student/Courses/Form', [
             'student' => $student,
             'session' => $currentSession,
@@ -234,6 +253,11 @@ class CourseRegistrationController extends Controller
             'registeredCourses' => $registeredCourses,
             'registeredCourseIds' => $registeredCourseIds,
             'maxUnits' => $maxUnits,
+            'perCourseFeeConfig' => $perCourseFeeConfig ? [
+                'amount' => (float)$perCourseFeeConfig->amount,
+                'is_per_course' => true,
+                'fee_type' => $perCourseFeeConfig->feeType,
+            ] : null,
             'filters' => [
                 'level' => $level,
                 'faculty_id' => $request->input('faculty_id'),
@@ -398,6 +422,26 @@ class CourseRegistrationController extends Controller
 
         \App\Services\AcademicCacheService::clearTimetableCache();
 
+        if ($currentSemester) {
+            $perCourseFeeConfig = \App\Models\FeeConfiguration::where('session_id', $currentSession->id)
+                ->where('is_per_course', true)
+                ->where(function ($q) use ($currentSemester) {
+                    $q->where('semester_id', $currentSemester->id)
+                      ->orWhereNull('semester_id');
+                })
+                ->first();
+
+            if ($perCourseFeeConfig) {
+                $feeService = new \App\Services\Finance\FeeService();
+                $invoice = $feeService->generatePerCourseInvoice($student, $currentSession, $currentSemester, $selectedCourses);
+
+                if ($invoice && $invoice->status === 'pending') {
+                    return to_route('student.payments.index')
+                        ->with('info', "Course registration submitted! A per-course fee invoice of ₦" . number_format($invoice->amount, 2) . " (" . $selectedCourses->count() . " courses) has been generated. Please complete payment.");
+                }
+            }
+        }
+
         return to_route('student.courses.index')->with('success', 'Course registration updated successfully.');
     }
 
@@ -484,20 +528,24 @@ class CourseRegistrationController extends Controller
             return response("No registered courses found for {$semester->name} semester, {$session->name} session.", 404);
         }
 
-        // REQUIREMENT: 2nd Semester Exam Card requires FULL payment
+        // REQUIREMENT: 2nd Semester Exam Card requires FULL payment of all pending fees (including hostel & school fees)
         $currentSemester = Semester::current();
         $isSecondSemActive = $currentSemester && (stripos($currentSemester->name, 'Second') !== false || $currentSemester->name == '2');
         $isSecondSemRequested = str_contains(strtolower($semester->name), 'second') || $semester->name == '2';
 
         if ($isSecondSemActive || $isSecondSemRequested) {
-            $isFullyPaid = Invoice::where('user_id', Auth::id())
+            $hasSchoolFeePaid = Invoice::where('user_id', Auth::id())
                 ->where('type', 'school_fee')
                 ->where('session_id', $session->id)
                 ->where('status', 'paid')
                 ->exists();
 
-            if (! $isFullyPaid) {
-                return back()->with('error', 'Second Semester Exam Card is only available after full payment of school fees. Please clear your outstanding balance.');
+            $pendingInvoicesCount = Invoice::where('user_id', Auth::id())
+                ->where('status', '!=', 'paid')
+                ->count();
+
+            if (! $hasSchoolFeePaid || $pendingInvoicesCount > 0) {
+                return back()->with('error', 'Second Semester Exam Card is only available after full payment of all pending fees, including school fees and hostel fees. Please clear your outstanding balance.');
             }
         }
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
+import { markRaw } from 'vue';
 import { ChevronRight, type LucideIcon } from 'lucide-vue-next';
 import {
   Collapsible,
@@ -25,6 +26,7 @@ defineProps<{
 }>();
 
 const { urlIsActive } = useActiveUrl();
+const RawLink = markRaw(Link);
 </script>
 
 <template>
@@ -51,7 +53,7 @@ const { urlIsActive } = useActiveUrl();
                         <CollapsibleContent>
                             <SidebarMenuSub>
                                 <SidebarMenuSubItem v-for="subItem in item.items" :key="subItem.title">
-                                     <SidebarMenuSubButton :as="Link" :href="subItem.href || '#'" :is-active="subItem.href ? urlIsActive(subItem.href) : false">
+                                     <SidebarMenuSubButton :as="RawLink" :href="subItem.href || '#'" :is-active="subItem.href ? urlIsActive(subItem.href) : false">
                                         <span>{{ subItem.title }}</span>
                                         <div v-if="subItem.href && urlIsActive(subItem.href)" class="ml-auto w-1 h-3 bg-primary rounded-full" />
                                     </SidebarMenuSubButton>
@@ -61,7 +63,7 @@ const { urlIsActive } = useActiveUrl();
                     </template>
                     <!-- Item without submenu -->
                     <template v-else>
-                         <SidebarMenuButton :as="Link" :href="item.href || '#'" :is-active="item.href ? urlIsActive(item.href) : false" :tooltip="item.title">
+                         <SidebarMenuButton :as="RawLink" :href="item.href || '#'" :is-active="item.href ? urlIsActive(item.href) : false" :tooltip="item.title">
                             <component :is="item.icon" v-if="item.icon" />
                             <span>{{ item.title }}</span>
                             <div v-if="item.href && urlIsActive(item.href)" class="ml-auto w-1 h-3.5 bg-primary rounded-full" />

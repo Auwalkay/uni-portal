@@ -95,6 +95,12 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_audit_logs',
             'manage_system_settings',
             'manage_support',
+            'view_buildings',
+            'create_buildings',
+            'edit_buildings',
+            'disable_buildings',
+            'delete_buildings',
+            'manage_buildings',
 
             // Dashboard & Analytics
             'view_global_analytics',
@@ -271,6 +277,15 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_expenses',
             'create_expenses',
             'request_expenses_for_others',
+        ]);
+
+        $assign('exams_officer', [
+            'access_admin_dashboard',
+            'manage_exams',
+            'manage_courses',
+            'manage_timetables',
+            'view_expenses',
+            'create_expenses',
         ]);
 
         $assign('course_coordinator', [
