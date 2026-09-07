@@ -74,7 +74,16 @@ class PaystackService implements PaymentGatewayInterface
         ]);
 
         if ($response->successful()) {
-            return $response->json()['data'] ?? [];
+            $data = $response->json()['data'] ?? [];
+            if (isset($data['status'])) {
+                $rawStatus = strtolower((string) $data['status']);
+                if (in_array($rawStatus, ['success', 'successful', 'approved', 'completed', 'paid'])) {
+                    $data['status'] = 'success';
+                } else {
+                    $data['status'] = $rawStatus;
+                }
+            }
+            return $data;
         }
 
         $body = $response->json();
