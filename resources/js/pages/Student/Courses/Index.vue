@@ -14,6 +14,7 @@ const props = defineProps<{
     student: any;
     history: any[];
     schoolFeeStatus?: string;
+    hasPendingInvoices?: boolean;
     isSecondSemester?: boolean;
 }>();
 
@@ -94,18 +95,18 @@ const selectSession = (sessionId: number) => {
             </div>
 
             <div class="px-4 md:px-12 max-w-7xl mx-auto">
-                <!-- Second Semester Partial Payment Notice -->
-                <div v-if="isSecondSemester && schoolFeeStatus === 'partial'" class="rounded-xl border border-amber-200 bg-amber-55 p-4 shadow-sm flex items-start gap-4 text-amber-900 mb-6 mt-4">
+                <!-- Second Semester Payment Notice -->
+                <div v-if="isSecondSemester && (schoolFeeStatus !== 'paid' || hasPendingInvoices)" class="rounded-xl border border-amber-200 bg-amber-55 p-4 shadow-sm flex items-start gap-4 text-amber-900 mb-6 mt-4">
                     <div class="rounded-full bg-amber-100 p-2">
                         <ShieldAlert class="h-6 w-6 text-amber-600" />
                     </div>
                     <div class="flex-1">
-                        <h3 class="font-semibold text-amber-800 text-base">Second Semester Services Locked</h3>
+                        <h3 class="font-semibold text-amber-800 text-base">Second Semester Exam Clearance Required</h3>
                         <p class="mt-1 text-sm text-amber-700">
-                            Course registration/editing and exam card downloads for the Second Semester are locked because you have a remaining outstanding balance on your school fees. Please clear your payment to unlock these services.
+                            To be eligible for Second Semester exams and download your Exam Card, all pending fees including school fees and hostel fees must be fully cleared. Please complete your fee payments to unlock these services.
                         </p>
                         <Link :href="route('student.payments.index')" class="mt-3 inline-flex items-center text-sm font-medium text-amber-800 hover:text-amber-900 underline underline-offset-4">
-                            Clear Fees &rarr;
+                            Clear Pending Fees &rarr;
                         </Link>
                     </div>
                 </div>
@@ -220,7 +221,7 @@ const selectSession = (sessionId: number) => {
                                         </div>
                                         <div class="flex-shrink-0 relative z-10 flex gap-2">
                                              <a 
-                                                v-if="selectedSessionRecord.id && $page.props.settings?.enable_exam_card_download && !(isSecondSemester && schoolFeeStatus === 'partial')"
+                                                v-if="selectedSessionRecord.id && $page.props.settings?.enable_exam_card_download && !(isSecondSemester && (schoolFeeStatus !== 'paid' || hasPendingInvoices))"
                                                 :href="route('student.courses.exam_card', { session_id: selectedSessionRecord.id })" 
                                                 target="_blank"
                                              > 

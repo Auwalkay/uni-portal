@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building, Package, LifeBuoy, Library, Activity, Megaphone, UserCheck, FolderTree } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building, Package, LifeBuoy, Library, Activity, Megaphone, UserCheck, FolderTree, QrCode } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -18,11 +18,12 @@ import { type NavItem } from '@/types';
 
 import AppLogo from './AppLogo.vue';
 
-import { computed } from 'vue';
+import { computed, markRaw } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 
 const page = usePage();
+const RawLink = markRaw(Link);
 
 const hasRole = (roleOrRoles: string | string[]) => {
     const user = (page.props.auth?.user as any);
@@ -120,11 +121,23 @@ const academicsItems = computed(() => {
             title: 'Examinations',
             href: route().has('admin.exams.index') ? route('admin.exams.index') : '#',
             icon: CalendarRange,
-            show: hasPermission('manage_exams') || hasPermission('manage_courses'),
+            show: hasRole(['admin', 'lecturer', 'course_coordinator', 'dean', 'hod', 'staff']) || hasPermission('manage_exams') || hasPermission('manage_courses'),
         },
         {
-            title: 'Course Management',
-            href: '/admin/academics',
+            title: 'Exam QR Scanner',
+            href: route().has('admin.exams.scanner') ? route('admin.exams.scanner') : '#',
+            icon: QrCode,
+            show: hasRole(['admin', 'lecturer', 'course_coordinator', 'dean', 'hod', 'staff']) || hasPermission('manage_exams') || hasPermission('manage_courses'),
+        },
+        {
+            title: 'Campus Buildings',
+            href: route().has('admin.buildings.index') ? route('admin.buildings.index') : '/admin/buildings',
+            icon: Building,
+            show: hasRole('admin') || hasPermission('view_buildings') || hasPermission('manage_buildings'),
+        },
+        {
+            title: 'Academic Structure',
+            href: route().has('admin.academics.faculties') ? route('admin.academics.faculties') : '/admin/academics/faculties',
             icon: Folder,
             show: hasPermission('manage_courses') || hasPermission('manage_faculties') || hasPermission('manage_departments') || hasPermission('manage_programmes') || hasPermission('manage_academic_sessions'),
         },
@@ -413,7 +426,7 @@ const footerNavItems = computed(() => {
         <SidebarHeader>
             <SidebarMenu>
                 <SidebarMenuItem>
-                    <SidebarMenuButton size="lg" :as="Link" href="/dashboard">
+                    <SidebarMenuButton size="lg" :as="RawLink" href="/dashboard">
                         <AppLogo />
                     </SidebarMenuButton>
                 </SidebarMenuItem>

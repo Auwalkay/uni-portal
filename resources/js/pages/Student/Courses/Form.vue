@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import Swal from 'sweetalert2';
 import { route } from 'ziggy-js';
-import { Loader2, Search, X, Lock, ShieldAlert, CheckCircle2 } from 'lucide-vue-next';
+import { Loader2, Search, X, Lock, ShieldAlert, CheckCircle2, CreditCard } from 'lucide-vue-next';
 
 const props = defineProps<{
     student: any;
@@ -26,12 +26,22 @@ const props = defineProps<{
     faculties: any[];
     departments: any[];
     maxUnits: number; 
+    perCourseFeeConfig?: {
+        amount: number;
+        is_per_course: boolean;
+        fee_type?: any;
+    } | null;
     filters: {
         level: string;
         faculty_id: string;
         department_id: string;
     }
 }>();
+
+const totalPerCourseFee = computed(() => {
+    if (!props.perCourseFeeConfig || !props.perCourseFeeConfig.is_per_course) return 0;
+    return form.courses.length * Number(props.perCourseFeeConfig.amount || 0);
+});
 
 const form = useForm({
     courses: [...props.registeredCourseIds],
@@ -237,6 +247,25 @@ const getSemesterCourses = (semesterCode: string) => {
 
                 <!-- PREVIEW SECTION -->
                 <div v-show="selectedCourses.length > 0" class="mb-8 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+                    <!-- Summer / Per-Course Fee Calculation Banner -->
+                    <div v-if="perCourseFeeConfig?.is_per_course" class="p-4 bg-purple-900 text-white flex flex-wrap items-center justify-between gap-4 border-b border-purple-800">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 bg-purple-800 rounded-lg text-purple-200">
+                                <CreditCard class="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-sm text-purple-100">Per-Course Summer Fee Calculation</h4>
+                                <p class="text-xs text-purple-300">
+                                    Rate: ₦{{ Number(perCourseFeeConfig.amount).toLocaleString('en-NG', { minimumFractionDigits: 2 }) }} per course × {{ form.courses.length }} course(s) selected
+                                </p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-[10px] uppercase tracking-wider font-semibold text-purple-300 block">Total Summer Fee</span>
+                            <span class="text-2xl font-bold font-mono text-amber-300">₦{{ totalPerCourseFee.toLocaleString('en-NG', { minimumFractionDigits: 2 }) }}</span>
+                        </div>
+                    </div>
+
                     <div class="bg-gradient-to-r from-gray-50 to-white border-b border-gray-100 p-5 md:p-6 flex flex-wrap items-center justify-between gap-4">
                         <div class="flex items-center gap-3">
                             <div class="bg-emerald-100/50 p-2.5 rounded-xl text-emerald-600">

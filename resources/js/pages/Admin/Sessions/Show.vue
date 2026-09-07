@@ -78,6 +78,8 @@ const feeForm = useForm({
     id: null as number | null,
     fee_type_id: '' as string | number,
     amount: '' as string | number,
+    semester_id: '' as string,
+    is_per_course: false as boolean,
 });
 
 const isSemesterModalOpen = ref(false);
@@ -105,6 +107,47 @@ const saveSemester = () => {
     });
 };
 
+const isAddSemesterModalOpen = ref(false);
+const addSemesterForm = useForm({
+    name: 'Summer Semester',
+    registration_starts_at: '',
+    registration_ends_at: '',
+});
+
+const openAddSemesterModal = (presetName?: string) => {
+    addSemesterForm.reset();
+    if (presetName) {
+        addSemesterForm.name = presetName;
+    }
+    isAddSemesterModalOpen.value = true;
+};
+
+const saveNewSemester = () => {
+    addSemesterForm.post(route('admin.sessions.semesters.store', props.session.id), {
+        onSuccess: () => {
+            isAddSemesterModalOpen.value = false;
+            Swal.fire('Created', `${addSemesterForm.name} added to session.`, 'success');
+        }
+    });
+};
+
+const deleteSemester = (semester: any) => {
+    Swal.fire({
+        title: `Delete ${semester.name}?`,
+        text: 'Are you sure you want to remove this semester?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        confirmButtonText: 'Yes, Delete',
+    }).then((result) => {
+        if (result.isConfirmed) {
+            router.delete(route('admin.sessions.semesters.destroy', [props.session.id, semester.id]), {
+                onSuccess: () => Swal.fire('Deleted', 'Semester removed.', 'success'),
+            });
+        }
+    });
+};
+
 const openFeeModal = (config?: FeeConfiguration) => {
     feeForm.reset();
     feeForm.clearErrors();
@@ -112,6 +155,8 @@ const openFeeModal = (config?: FeeConfiguration) => {
         feeForm.id = config.id;
         feeForm.fee_type_id = config.fee_type_id;
         feeForm.amount = config.amount;
+        feeForm.semester_id = (config as any).semester_id || '';
+        feeForm.is_per_course = (config as any).is_per_course || false;
     }
     isFeeModalOpen.value = true;
 };
@@ -391,9 +436,14 @@ if (typeof route !== 'function') {
                 <!-- Academics Tab -->
                 <TabsContent value="academics">
                      <Card>
-                        <CardHeader>
-                            <CardTitle>Semesters Management</CardTitle>
-                            <CardDescription>Manage registration dates and status for semesters in this session.</CardDescription>
+                        <CardHeader class="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle>Semesters Management</CardTitle>
+                                <CardDescription>Manage registration dates, active status, or add additional semesters (e.g. Summer Semester) to this session.</CardDescription>
+                            </div>
+                            <Button @click="openAddSemesterModal('Summer Semester')" class="bg-purple-600 hover:bg-purple-700 text-white gap-2">
+                                <Plus class="h-4 w-4" /> Add Semester
+                            </Button>
                         </CardHeader>
                         <CardContent>
                             <div class="space-y-4">
@@ -433,6 +483,9 @@ if (typeof route !== 'function') {
                                         <Button variant="outline" size="sm" @click="openSemesterModal(semester)">
                                             <Edit class="h-4 w-4 mr-2" /> Edit Dates
                                         </Button>
+                                        <Button v-if="!semester.is_current" variant="ghost" size="sm" class="text-red-500 hover:text-red-700 hover:bg-red-50" @click="deleteSemester(semester)">
+                                            <Trash2 class="h-4 w-4" />
+                                        </Button>
                                     </div>
                                 </div>
                             </div>
@@ -464,6 +517,8 @@ if (typeof route !== 'function') {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Fee Type</TableHead>
+                                        <TableHead>Target Semester</TableHead>
+                                        <TableHead>Billing Mode</TableHead>
                                         <TableHead>Amount</TableHead>
                                         <TableHead class="text-right">Actions</TableHead>
                                     </TableRow>
@@ -478,7 +533,22 @@ if (typeof route !== 'function') {
                                                 {{ config.fee_type?.name }}
                                             </div>
                                         </TableCell>
-                                        <TableCell class="font-mono font-medium">{{ formatCurrency(config.amount) }}</TableCell>
+                                        <TableCell>
+                                            <Badge v-if="config.semester" variant="outline" class="bg-purple-50 text-purple-700 border-purple-200">
+                                                {{ config.semester.name }}
+                                            </Badge>
+                                            <span v-else class="text-xs text-muted-foreground">All Semesters</span>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge v-if="config.is_per_course" class="bg-amber-100 text-amber-800 border-amber-300">
+                                                Per Course
+                                            </Badge>
+                                            <span v-else class="text-xs text-muted-foreground">Flat / Session</span>
+                                        </TableCell>
+                                        <TableCell class="font-mono font-medium">
+                                            {{ formatCurrency(config.amount) }}
+                                            <span v-if="config.is_per_course" class="text-xs text-muted-foreground font-sans">/ course</span>
+                                        </TableCell>
                                         <TableCell class="text-right">
                                             <Button variant="ghost" size="icon" @click="openFeeModal(config)">
                                                 <Edit class="h-4 w-4 text-gray-500" />
@@ -489,7 +559,7 @@ if (typeof route !== 'function') {
                                         </TableCell>
                                     </TableRow>
                                     <TableRow v-if="feeConfigurations.length === 0">
-                                        <TableCell colspan="3" class="text-center text-muted-foreground py-8">
+                                        <TableCell colspan="5" class="text-center text-muted-foreground py-8">
                                             <div class="flex flex-col items-center gap-2">
                                                 <AlertCircle class="h-8 w-8 text-gray-300" />
                                                 <p>No fees configured for this session yet.</p>
@@ -511,7 +581,7 @@ if (typeof route !== 'function') {
                 <DialogHeader>
                     <DialogTitle>{{ feeForm.id ? 'Edit Fee' : 'Add Fee' }}</DialogTitle>
                     <DialogDescription>
-                        Configure a fee for this session. It will apply globally unless overridden.
+                        Configure a fee for this session. Target a specific semester (e.g. Summer Semester) or set as a per-course fee.
                     </DialogDescription>
                 </DialogHeader>
                 <div class="grid gap-4 py-4">
@@ -530,6 +600,18 @@ if (typeof route !== 'function') {
                         </div>
                         <p v-if="feeForm.errors.fee_type_id" class="text-sm text-red-500">{{ feeForm.errors.fee_type_id }}</p>
                     </div>
+
+                    <div class="grid gap-2">
+                        <Label for="semester_id">Target Semester (Optional)</Label>
+                        <select id="semester_id" v-model="feeForm.semester_id" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            <option value="">All Semesters (Global Session Fee)</option>
+                            <option v-for="sem in session.semesters" :key="sem.id" :value="sem.id">
+                                {{ sem.name }}
+                            </option>
+                        </select>
+                        <p class="text-xs text-muted-foreground">Select Summer Semester to apply specifically to summer course registrations.</p>
+                    </div>
+
                     <div class="grid gap-2">
                         <Label for="amount">Amount (₦)</Label>
                         <div class="relative">
@@ -537,9 +619,17 @@ if (typeof route !== 'function') {
                             <Input id="amount" type="number" step="0.01" v-model="feeForm.amount" placeholder="0.00" class="pl-8" />
                         </div> 
                         <div v-if="feeForm.amount" class="text-xs text-muted-foreground mt-1">
-                            Preview: {{ formatCurrency(Number(feeForm.amount)) }}
+                            Preview: {{ formatCurrency(Number(feeForm.amount)) }} {{ feeForm.is_per_course ? 'per registered course' : '' }}
                         </div>
                         <p v-if="feeForm.errors.amount" class="text-sm text-red-500">{{ feeForm.errors.amount }}</p>
+                    </div>
+
+                    <div class="flex items-center gap-3 border p-3 rounded-md bg-muted/20">
+                        <input type="checkbox" id="is_per_course" v-model="feeForm.is_per_course" class="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
+                        <div class="grid gap-0.5">
+                            <Label for="is_per_course" class="cursor-pointer font-medium text-sm">Charge Per Registered Course</Label>
+                            <p class="text-xs text-muted-foreground">Enable for Summer Semesters so fee = rate × number of courses selected by student.</p>
+                        </div>
                     </div>
                 </div>
                 <DialogFooter>
@@ -576,6 +666,38 @@ if (typeof route !== 'function') {
                     <Button variant="outline" @click="isSemesterModalOpen = false">Cancel</Button>
                     <Button @click="saveSemester" :disabled="semesterForm.processing">
                         {{ semesterForm.processing ? 'Saving...' : 'Save' }}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+        <!-- Add Semester Dialog -->
+        <Dialog :open="isAddSemesterModalOpen" @update:open="isAddSemesterModalOpen = $event">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Add Semester to {{ session.name }}</DialogTitle>
+                    <DialogDescription>
+                        Create an additional semester (such as Summer Semester, Third Semester, or Special Resit Semester) for this session.
+                    </DialogDescription>
+                </DialogHeader>
+                <div class="grid gap-4 py-4">
+                    <div class="grid gap-2">
+                        <Label for="add_semester_name">Semester Name</Label>
+                        <Input id="add_semester_name" v-model="addSemesterForm.name" placeholder="e.g. Summer Semester" />
+                        <p v-if="addSemesterForm.errors.name" class="text-sm text-red-500">{{ addSemesterForm.errors.name }}</p>
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="add_reg_start">Registration Opens (Optional)</Label>
+                        <Input id="add_reg_start" type="date" v-model="addSemesterForm.registration_starts_at" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="add_reg_end">Registration Closes (Optional)</Label>
+                        <Input id="add_reg_end" type="date" v-model="addSemesterForm.registration_ends_at" />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" @click="isAddSemesterModalOpen = false">Cancel</Button>
+                    <Button @click="saveNewSemester" :disabled="addSemesterForm.processing" class="bg-purple-600 hover:bg-purple-700 text-white">
+                        {{ addSemesterForm.processing ? 'Adding...' : 'Add Semester' }}
                     </Button>
                 </DialogFooter>
             </DialogContent>

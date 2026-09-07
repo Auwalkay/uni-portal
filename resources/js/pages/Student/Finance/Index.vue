@@ -222,10 +222,16 @@ onUnmounted(() => {
     if (timerInterval) clearInterval(timerInterval);
 });
 
-const getInvoiceCountdown = (dueDateStr: string | null | undefined) => {
-    if (!dueDateStr) return null;
+const getInvoiceCountdown = (invoice: any) => {
+    if (!invoice || !invoice.due_date) return null;
+
+    // School fee invoices and partial payments NEVER expire
+    if (invoice.type === 'school_fee' || invoice.status === 'partial' || Number(invoice.paid_amount || 0) > 0) {
+        return null;
+    }
+
     const _tick = currentTime.value;
-    const dueTime = new Date(dueDateStr).getTime();
+    const dueTime = new Date(invoice.due_date).getTime();
     const diff = dueTime - _tick;
 
     if (diff <= 0) {
@@ -338,19 +344,19 @@ const getInvoiceCountdown = (dueDateStr: string | null | undefined) => {
                                             <div class="text-xs">{{ invoice.due_date ? formatDate(new Date(invoice.due_date), 'MMM d, yyyy') : 'N/A' }}</div>
                                             <div v-if="invoice.status !== 'paid' && invoice.due_date" class="mt-1">
                                                 <Badge 
-                                                    v-if="getInvoiceCountdown(invoice.due_date)?.expired" 
+                                                    v-if="getInvoiceCountdown(invoice)?.expired" 
                                                     variant="destructive" 
                                                     class="font-mono text-[9px] px-1.5 py-0.2 uppercase"
                                                 >
                                                     Expired
                                                 </Badge>
                                                 <Badge 
-                                                    v-else 
+                                                    v-else-if="getInvoiceCountdown(invoice)?.text" 
                                                     variant="outline" 
                                                     class="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 font-mono font-bold text-[10px] px-2 py-0.5 inline-flex items-center gap-1"
                                                 >
                                                     <Clock class="w-3 h-3 animate-pulse text-amber-600" />
-                                                    {{ getInvoiceCountdown(invoice.due_date)?.text }}
+                                                    {{ getInvoiceCountdown(invoice)?.text }}
                                                 </Badge>
                                             </div>
                                         </div>
@@ -361,10 +367,10 @@ const getInvoiceCountdown = (dueDateStr: string | null | undefined) => {
                                             {{ invoice.status.toUpperCase() }}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell class="text-right">
-                                         <div v-if="invoice.status !== 'paid'">
+                                     <TableCell class="text-right">
+                                         <div v-if="invoice.status !== 'paid' && invoice.status !== 'cancelled'">
                                              <Button 
-                                                 v-if="invoice.type !== 'school_fee' || invoice.session?.school_fee_payment_enabled" 
+                                                 v-if="(invoice.type !== 'school_fee' || invoice.session?.school_fee_payment_enabled) && !getInvoiceCountdown(invoice)?.expired" 
                                                  :disabled="!hasDepartment"
                                                  @click.stop="openPaymentModal(invoice)"
                                                  size="sm"
@@ -372,12 +378,18 @@ const getInvoiceCountdown = (dueDateStr: string | null | undefined) => {
                                                  <CreditCard class="mr-2 h-4 w-4" />
                                                  Pay Now
                                              </Button>
+                                             <span v-else-if="getInvoiceCountdown(invoice)?.expired" class="text-red-600 dark:text-red-400 text-xs font-semibold flex items-center justify-end gap-1 px-2.5 py-1">
+                                                 Expired
+                                             </span>
                                              <span v-else class="text-amber-600 dark:text-amber-400 text-xs font-semibold flex items-center justify-end gap-1 px-2.5 py-1">
                                                  Suspended
                                              </span>
                                          </div>
+                                         <span v-else-if="invoice.status === 'cancelled'" class="text-red-600 dark:text-red-400 text-xs font-semibold flex items-center justify-end gap-1 px-2.5 py-1">
+                                             Cancelled
+                                         </span>
                                          <span v-else class="text-muted-foreground text-sm font-medium">Paid</span>
-                                    </TableCell>
+                                     </TableCell>
                                 </TableRow>
                                 <!-- Expanded Details Row -->
                                 <TableRow v-if="expandedInvoices.includes(invoice.id)" class="bg-muted/30">

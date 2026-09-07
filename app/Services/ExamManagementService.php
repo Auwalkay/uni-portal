@@ -12,30 +12,45 @@ use Illuminate\Support\Facades\DB;
 class ExamManagementService
 {
     /**
-     * Detect hall venue conflicts efficiently for a given academic session.
+     * Detect hall venue conflicts efficiently for a given academic session and semester.
      */
-    public function detectVenueConflicts(?string $sessionId = null): array
+    public function detectVenueConflicts(?string $sessionId = null, ?string $semesterId = null): array
     {
         $conflicts = [];
         
-        $conflictCandidates = DB::table('exam_schedules')
+        $conflictCandidateKeys = DB::table('exam_schedules')
             ->select('venue', 'exam_date')
             ->when($sessionId, fn ($q) => $q->where('session_id', $sessionId))
+            ->when($semesterId, fn ($q) => $q->where('semester_id', $semesterId))
             ->groupBy('venue', 'exam_date')
             ->havingRaw('COUNT(*) > 1')
             ->get();
 
-        foreach ($conflictCandidates as $cand) {
-            $schedulesAtVenue = ExamSchedule::where('venue', $cand->venue)
-                ->whereDate('exam_date', $cand->exam_date)
-                ->when($sessionId, fn ($q) => $q->where('session_id', $sessionId))
-                ->get();
+        if ($conflictCandidateKeys->isEmpty()) {
+            return $conflicts;
+        }
 
-            $count = count($schedulesAtVenue);
+        $venues = $conflictCandidateKeys->pluck('venue')->unique()->toArray();
+        $dates = $conflictCandidateKeys->pluck('exam_date')->unique()->toArray();
+
+        $candidateSchedules = ExamSchedule::select('id', 'reference_id', 'venue', 'exam_date', 'start_time', 'end_time', 'session_id', 'semester_id')
+            ->whereIn('venue', $venues)
+            ->whereIn('exam_date', $dates)
+            ->when($sessionId, fn ($q) => $q->where('session_id', $sessionId))
+            ->when($semesterId, fn ($q) => $q->where('semester_id', $semesterId))
+            ->get()
+            ->groupBy(fn ($item) => $item->venue . '|' . ($item->exam_date ? $item->exam_date->format('Y-m-d') : ''));
+
+        foreach ($candidateSchedules as $group) {
+            $count = $group->count();
+            if ($count < 2) {
+                continue;
+            }
+
             for ($i = 0; $i < $count; $i++) {
                 for ($j = $i + 1; $j < $count; $j++) {
-                    $s1 = $schedulesAtVenue[$i];
-                    $s2 = $schedulesAtVenue[$j];
+                    $s1 = $group[$i];
+                    $s2 = $group[$j];
                     if (($s1->start_time < $s2->end_time) && ($s1->end_time > $s2->start_time)) {
                         $conflicts[] = [
                             'venue' => $s1->venue,
@@ -70,9 +85,12 @@ class ExamManagementService
             return null;
         }
 
-        // Fetch student registered course IDs for the session
+        $currentSemester = AcademicCacheService::getCurrentSemester();
+
+        // Fetch student registered course IDs for the session and current semester
         $registeredCourseIds = CourseRegistration::where('student_id', $student->id)
             ->when($currentSession, fn ($q) => $q->where('session_id', $currentSession->id))
+            ->when($currentSemester, fn ($q) => $q->where('semester_id', $currentSemester->id))
             ->pluck('course_id');
 
         // Fetch exam schedules with attendance logs for this candidate
@@ -81,24 +99,60 @@ class ExamManagementService
         }])
             ->whereIn('course_id', $registeredCourseIds)
             ->when($currentSession, fn ($q) => $q->where('session_id', $currentSession->id))
+            ->when($currentSemester, fn ($q) => $q->where('semester_id', $currentSemester->id))
             ->orderBy('exam_date', 'asc')
             ->orderBy('start_time', 'asc')
             ->get();
 
-        // Fee clearance check (unpaid invoices check)
-        $pendingInvoices = Invoice::where('user_id', $student->user_id)
-            ->where('status', 'unpaid')
-            ->count();
-            
-        $isCleared = ($pendingInvoices === 0 && $registeredCourseIds->count() > 0);
+        // Fee clearance check
+        $isSecondSem = $currentSemester && (stripos($currentSemester->name, 'second') !== false || $currentSemester->name == '2');
+
+        // Auto-cancel 0-paid expired pending invoices
+        Invoice::where('user_id', $student->user_id)
+            ->where('status', 'pending')
+            ->where('paid_amount', '<=', 0)
+            ->where('due_date', '<', now())
+            ->update(['status' => 'cancelled']);
+
+        if ($isSecondSem) {
+            $pendingInvoices = Invoice::where('user_id', $student->user_id)
+                ->whereNotIn('status', ['paid', 'cancelled'])
+                ->count();
+
+            $hasSchoolFeePaid = Invoice::where('user_id', $student->user_id)
+                ->where('type', 'school_fee')
+                ->when($currentSession, fn ($q) => $q->where('session_id', $currentSession->id))
+                ->where('status', 'paid')
+                ->exists();
+
+            $isFeeCleared = ($pendingInvoices === 0 && $hasSchoolFeePaid);
+        } else {
+            $pendingInvoices = Invoice::where('user_id', $student->user_id)
+                ->whereNotIn('status', ['paid', 'partial', 'cancelled'])
+                ->where('paid_amount', '<=', 0)
+                ->where(function ($q) {
+                    $q->whereNull('due_date')->orWhere('due_date', '>=', now());
+                })
+                ->count();
+
+            $hasSchoolFeeCleared = Invoice::where('user_id', $student->user_id)
+                ->where('type', 'school_fee')
+                ->when($currentSession, fn ($q) => $q->where('session_id', $currentSession->id))
+                ->whereIn('status', ['paid', 'partial'])
+                ->exists();
+
+            $isFeeCleared = ($pendingInvoices === 0 && $hasSchoolFeeCleared);
+        }
+
+        $isCleared = ($isFeeCleared && $registeredCourseIds->count() > 0);
 
         return [
             'student' => [
                 'id' => $student->id,
                 'name' => $student->user?->name ?? 'Candidate',
-                'matric_number' => $student->matric_number ?? 'N/A',
-                'department' => $student->department?->name ?? 'N/A',
-                'programme' => $student->programme?->name ?? 'N/A',
+                'matric_number' => $student->matriculation_number ?? $student->matric_number ?? 'N/A',
+                'department' => $student->department?->name ?? $student->academicDepartment?->name ?? 'N/A',
+                'programme' => $student->programme?->name ?? $student->program?->name ?? 'N/A',
                 'level' => $student->current_level ?? '100',
                 'passport_photo' => $student->passport_photo_path ? asset('storage/' . $student->passport_photo_path) : null,
             ],
@@ -125,6 +179,23 @@ class ExamManagementService
 
         if (! $isRegistered) {
             throw new \InvalidArgumentException("Candidate is NOT registered for course {$schedule->course?->code}!");
+        }
+
+        // Cross-Hall Check: Check if candidate already marked present in another venue for the same course
+        $existingAttendance = ExamAttendance::whereHas('schedule', function ($q) use ($schedule) {
+                $q->where('course_id', $schedule->course_id)
+                  ->where('session_id', $schedule->session_id)
+                  ->whereDate('exam_date', $schedule->exam_date);
+            })
+            ->where('student_id', $studentId)
+            ->where('exam_schedule_id', '!=', $scheduleId)
+            ->with('schedule')
+            ->first();
+
+        if ($existingAttendance) {
+            $prevVenue = $existingAttendance->schedule?->venue ?? 'another venue';
+            $prevTime = $existingAttendance->verified_at ? $existingAttendance->verified_at->format('H:i') : '';
+            $notes = ($notes ? $notes . ' | ' : '') . "Note: Previously verified at {$prevVenue} ({$prevTime})";
         }
 
         return ExamAttendance::updateOrCreate(

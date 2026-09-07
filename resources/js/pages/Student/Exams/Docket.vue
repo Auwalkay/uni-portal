@@ -228,10 +228,10 @@ const printDocket = () => {
                                         {{ sched.course?.title }}
                                     </TableCell>
                                     <TableCell class="text-xs font-medium text-slate-700 dark:text-slate-300">
-                                        {{ format(new Date(sched.exam_date), 'MMM dd, yyyy') }} ({{ sched.start_time }} - {{ sched.end_time }})
+                                        {{ sched.exam_date ? (format(new Date(sched.exam_date), 'MMM dd, yyyy') + (sched.start_time ? ' (' + sched.start_time + ' - ' + sched.end_time + ')' : '')) : 'TBA' }}
                                     </TableCell>
                                     <TableCell class="text-xs font-bold text-slate-800 dark:text-slate-200">
-                                        {{ sched.venue }}
+                                        {{ sched.venue || 'TBA' }}
                                     </TableCell>
                                     <TableCell class="text-xs uppercase font-bold text-slate-600">
                                         {{ sched.exam_type }}

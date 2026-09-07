@@ -261,8 +261,9 @@ const activateSemester = (session: Session, semester: Semester) => {
                                 :disabled="!!editingSession"
                                 class="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                <option value="regular">Regular Session (2 Semesters)</option>
-                                <option value="summer">Summer Session (1 Semester)</option>
+                                <option value="regular">Regular Session (First & Second Semesters)</option>
+                                <option value="regular_with_summer">Regular Session + Summer (First, Second & Summer Semesters)</option>
+                                <option value="summer">Summer Session Only (1 Semester)</option>
                             </select>
                             <span v-if="form.errors.type" class="text-xs text-destructive">{{ form.errors.type }}</span>
                         </div>

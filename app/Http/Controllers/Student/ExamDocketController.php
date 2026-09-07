@@ -26,25 +26,84 @@ class ExamDocketController extends Controller
 
         $isExamPublished = filter_var(\App\Models\SystemSetting::get('publish_exam_timetable', false), FILTER_VALIDATE_BOOLEAN);
 
-        // 1. Registered Courses
-        $registeredCourseIds = CourseRegistration::where('student_id', $student->id)
+        // 1. Registered Courses for Student (Current Semester Only)
+        $registrations = CourseRegistration::where('student_id', $student->id)
             ->when($currentSession, fn ($q) => $q->where('session_id', $currentSession->id))
-            ->pluck('course_id');
+            ->when($currentSemester, fn ($q) => $q->where('semester_id', $currentSemester->id))
+            ->with(['course', 'semester'])
+            ->get();
 
-        // 2. Exam Schedules for Registered Courses (only if published by admin)
-        $schedules = $isExamPublished ? ExamSchedule::with(['course', 'department', 'session', 'semester'])
-            ->whereIn('course_id', $registeredCourseIds)
+        $registeredCourseIds = $registrations->pluck('course_id');
+
+        // 2. Exam Schedules for Registered Courses (Current Semester Only, Keyed by course_id)
+        $examSchedules = $isExamPublished ? ExamSchedule::whereIn('course_id', $registeredCourseIds)
             ->when($currentSession, fn ($q) => $q->where('session_id', $currentSession->id))
+            ->when($currentSemester, fn ($q) => $q->where('semester_id', $currentSemester->id))
             ->orderBy('exam_date', 'asc')
             ->orderBy('start_time', 'asc')
-            ->get() : collect([]);
+            ->get()
+            ->keyBy('course_id') : collect([]);
+
+        $schedules = $registrations->map(function ($reg) use ($examSchedules) {
+            $course = $reg->course;
+            $schedule = $course ? $examSchedules->get($course->id) : null;
+
+            return [
+                'id' => $reg->id,
+                'course_id' => $course?->id,
+                'course' => $course,
+                'exam_date' => $schedule?->exam_date ? $schedule->exam_date->format('Y-m-d') : null,
+                'start_time' => $schedule?->start_time,
+                'end_time' => $schedule?->end_time,
+                'venue' => $schedule?->venue ?? 'TBA',
+                'exam_type' => $schedule?->exam_type ?? 'FINAL',
+            ];
+        })->values();
 
         // 3. Fee Clearance Checks
-        $pendingInvoicesCount = Invoice::where('user_id', $user->id)
-            ->where('status', 'unpaid')
-            ->count();
-        
-        $isFeeCleared = ($pendingInvoicesCount === 0);
+        $isSecondSem = $currentSemester && (stripos($currentSemester->name, 'second') !== false || $currentSemester->name == '2');
+
+        // Auto-cancel 0-paid expired pending invoices so they don't block clearance
+        Invoice::where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->where('paid_amount', '<=', 0)
+            ->where('due_date', '<', now())
+            ->update(['status' => 'cancelled']);
+
+        if ($isSecondSem) {
+            // Second Semester: Require 100% FULL payment ('paid') for all fees.
+            // Partial payments trigger the pending fee warning.
+            $pendingInvoicesCount = Invoice::where('user_id', $user->id)
+                ->whereNotIn('status', ['paid', 'cancelled'])
+                ->count();
+
+            $hasSchoolFeePaid = Invoice::where('user_id', $user->id)
+                ->where('type', 'school_fee')
+                ->when($currentSession, fn ($q) => $q->where('session_id', $currentSession->id))
+                ->where('status', 'paid')
+                ->exists();
+
+            $isFeeCleared = ($pendingInvoicesCount === 0 && $hasSchoolFeePaid);
+        } else {
+            // First Semester: Invoices with status 'paid' or 'partial' (or paid_amount > 0) are Accepted & CLEARED.
+            // Partial payments do NOT trigger the fee warning in First Semester.
+            $pendingInvoicesCount = Invoice::where('user_id', $user->id)
+                ->whereNotIn('status', ['paid', 'partial', 'cancelled'])
+                ->where('paid_amount', '<=', 0)
+                ->where(function ($q) {
+                    $q->whereNull('due_date')->orWhere('due_date', '>=', now());
+                })
+                ->count();
+
+            $hasSchoolFeeCleared = Invoice::where('user_id', $user->id)
+                ->where('type', 'school_fee')
+                ->when($currentSession, fn ($q) => $q->where('session_id', $currentSession->id))
+                ->whereIn('status', ['paid', 'partial'])
+                ->exists();
+
+            $isFeeCleared = ($pendingInvoicesCount === 0 && $hasSchoolFeeCleared);
+        }
+
         $hasRegistrations = ($registeredCourseIds->count() > 0);
         $isCleared = $isFeeCleared && $hasRegistrations;
 

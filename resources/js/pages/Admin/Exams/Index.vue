@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
-    Calendar, Clock, Building, Plus, Search, Trash2, Edit3, ShieldAlert, 
+    Calendar, Clock, Building, Building2, Plus, Search, Trash2, Edit3, ShieldAlert, 
     UserCheck, AlertTriangle, FileText, CheckCircle, Info, Eye, EyeOff, Users, Sparkles, Upload, Download,
     LayoutList, Grid, Printer, CalendarRange, FileSpreadsheet, QrCode, ScanLine, ShieldCheck, CheckCircle2, XCircle
 } from 'lucide-vue-next';
@@ -53,11 +53,13 @@ interface Props {
         search?: string;
     };
     isPublished?: boolean;
+    canManageExams?: boolean;
+    buildings?: any[];
 }
 
 const props = defineProps<Props>();
 
-const viewMode = ref<'table' | 'grid' | 'printable'>('table');
+const viewMode = ref<'table' | 'venue' | 'grid' | 'printable'>('venue');
 
 const isScheduleModalOpen = ref(false);
 const isEditing = ref(false);
@@ -78,6 +80,9 @@ const page = usePage();
 const verifiedCandidate = computed(() => (page.props as any).flash?.verified_candidate || null);
 
 const selectedScheduleForAttendance = ref<string>('');
+const isVerifyModalOpen = ref(false);
+const verificationTokenInput = ref('');
+const isVerifying = ref(false);
 
 const openVerifyModal = (scheduleId?: string) => {
     verificationTokenInput.value = '';
@@ -96,10 +101,12 @@ const isCandidateRegisteredForActiveExam = computed(() => {
     return regCourseIds.includes(activeSelectedExam.value.course_id);
 });
 
-const handleVerifySubmit = () => {
-    if (!verificationTokenInput.value.trim()) return;
+const handleVerifySubmit = (token?: string) => {
+    const codeToVerify = typeof token === 'string' ? token.trim() : verificationTokenInput.value.trim();
+    if (!codeToVerify) return;
+    verificationTokenInput.value = codeToVerify;
     isVerifying.value = true;
-    router.get(route('admin.exams.verify_pass', verificationTokenInput.value.trim()), {}, {
+    router.get(route('admin.exams.verify_pass', codeToVerify), {}, {
         preserveState: true,
         preserveScroll: true,
         onFinish: () => {
@@ -140,11 +147,34 @@ const breadcrumbs = [
     { title: 'Examinations', href: route('admin.exams.index') },
 ];
 
+const currentUser = computed(() => (page.props as any).auth?.user);
+
+const isUserInvigilatorForExam = (exam: any) => {
+    if (!currentUser.value?.id || !exam?.invigilators || !Array.isArray(exam.invigilators)) return false;
+    return exam.invigilators.some((inv: any) => 
+        inv.staff?.user_id === currentUser.value.id || 
+        inv.staff?.user?.id === currentUser.value.id
+    );
+};
+
+const myInvigilatedCount = computed(() => {
+    return (props.schedules.data || []).filter(isUserInvigilatorForExam).length;
+});
+
+const filterMyInvigilationsOnly = ref(false);
+
+const displaySchedulesData = computed(() => {
+    if (filterMyInvigilationsOnly.value) {
+        return props.schedules.data.filter(isUserInvigilatorForExam);
+    }
+    return props.schedules.data;
+});
+
 // Computed: Group exam schedules by Date for Grid / Timetable View
 const groupedByDate = computed(() => {
     const groups: { [key: string]: { formattedDate: string; rawDate: string; items: any[] } } = {};
 
-    props.schedules.data.forEach((exam) => {
+    displaySchedulesData.value.forEach((exam) => {
         const rawDate = exam.exam_date ? exam.exam_date.substring(0, 10) : 'Unscheduled';
         const formattedDate = exam.exam_date ? format(new Date(exam.exam_date), 'EEEE, MMMM dd, yyyy') : 'Unscheduled';
 
@@ -159,6 +189,79 @@ const groupedByDate = computed(() => {
     });
 
     return Object.values(groups).sort((a, b) => a.rawDate.localeCompare(b.rawDate));
+});
+
+// Computed: Group exam schedules by Venue (Building) -> Date -> Time Slot -> Courses
+const groupedByVenue = computed(() => {
+    const groups: {
+        [key: string]: {
+            venueName: string;
+            capacity: number;
+            totalExams: number;
+            datesMap: {
+                [rawDate: string]: {
+                    rawDate: string;
+                    dateFormatted: string;
+                    timeSlotsMap: {
+                        [timeKey: string]: {
+                            startTime: string;
+                            endTime: string;
+                            exams: any[];
+                        };
+                    };
+                };
+            };
+        };
+    } = {};
+
+    displaySchedulesData.value.forEach((exam) => {
+        const venueName = exam.venue ? exam.venue.trim() : 'Unassigned Venue';
+        const rawDate = exam.exam_date ? exam.exam_date.substring(0, 10) : 'No Date';
+        const dateFormatted = exam.exam_date ? format(new Date(exam.exam_date), 'EEEE, MMM dd, yyyy') : 'Unscheduled Date';
+        const timeKey = `${exam.start_time || '00:00'}-${exam.end_time || '00:00'}`;
+
+        if (!groups[venueName]) {
+            groups[venueName] = {
+                venueName,
+                capacity: exam.max_capacity || 0,
+                totalExams: 0,
+                datesMap: {},
+            };
+        }
+
+        groups[venueName].totalExams++;
+
+        if (!groups[venueName].datesMap[rawDate]) {
+            groups[venueName].datesMap[rawDate] = {
+                rawDate,
+                dateFormatted,
+                timeSlotsMap: {},
+            };
+        }
+
+        if (!groups[venueName].datesMap[rawDate].timeSlotsMap[timeKey]) {
+            groups[venueName].datesMap[rawDate].timeSlotsMap[timeKey] = {
+                startTime: exam.start_time,
+                endTime: exam.end_time,
+                exams: [],
+            };
+        }
+
+        groups[venueName].datesMap[rawDate].timeSlotsMap[timeKey].exams.push(exam);
+    });
+
+    return Object.values(groups).map(g => ({
+        venueName: g.venueName,
+        capacity: g.capacity,
+        totalExams: g.totalExams,
+        dates: Object.values(g.datesMap)
+            .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
+            .map(d => ({
+                rawDate: d.rawDate,
+                dateFormatted: d.dateFormatted,
+                timeSlots: Object.values(d.timeSlotsMap).sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''))
+            }))
+    })).sort((a, b) => a.venueName.localeCompare(b.venueName));
 });
 
 // Current Active Session Name & Semester Name
@@ -250,9 +353,67 @@ const semesterModalOptions = computed(() => [
 ]);
 
 const courseModalOptions = computed(() => [
-    { value: '', label: 'Select Course' },
+    { value: '', label: '+ Add Course to Exam Schedule...' },
     ...(props.courses || []).map(c => ({ value: c.id, label: `${c.code} - ${c.title}` }))
 ]);
+
+const selectedCourseIds = ref<string[]>([]);
+const tempCourseSelect = ref<string>('');
+
+const addCoursePill = (val: string) => {
+    if (!val) return;
+    if (!selectedCourseIds.value.includes(val)) {
+        selectedCourseIds.value.push(val);
+    }
+    tempCourseSelect.value = '';
+};
+
+const removeCoursePill = (courseId: string) => {
+    selectedCourseIds.value = selectedCourseIds.value.filter(id => id !== courseId);
+};
+
+const getCourseLabel = (courseId: string) => {
+    const found = (props.courses || []).find(c => c.id === courseId);
+    return found ? `${found.code} - ${found.title}` : courseId;
+};
+
+const buildingSelectOptions = computed(() => [
+    { value: '', label: 'Quick Select Registered Building...' },
+    ...(props.buildings || []).map(b => ({
+        value: b.name,
+        label: `🏢 ${b.name} (${b.code}) — Cap: ${b.capacity}`
+    }))
+]);
+
+const venueList = ref<Array<{ name: string; capacity: number | string }>>([
+    { name: '', capacity: 100 }
+]);
+
+const addVenueRow = () => {
+    venueList.value.push({ name: '', capacity: 100 });
+};
+
+const removeVenueRow = (index: number) => {
+    if (venueList.value.length > 1) {
+        venueList.value.splice(index, 1);
+    }
+};
+
+const selectedBuildingQuick = ref('');
+const handleBuildingQuickSelect = (val: string) => {
+    if (!val) return;
+    const found = (props.buildings || []).find(b => b.name === val);
+    if (found) {
+        const lastIndex = venueList.value.length - 1;
+        if (venueList.value[lastIndex] && !venueList.value[lastIndex].name.trim()) {
+            venueList.value[lastIndex].name = found.name;
+            venueList.value[lastIndex].capacity = found.capacity;
+        } else {
+            venueList.value.push({ name: found.name, capacity: found.capacity });
+        }
+    }
+    selectedBuildingQuick.value = '';
+};
 
 const departmentModalOptions = computed(() => [
     { value: '', label: 'All Departments' },
@@ -296,33 +457,39 @@ const incidentStatusOptions = computed(() => [
 ]);
 
 const openCreateSchedule = () => {
-    isEditing.value = false;
-    editingScheduleId.value = null;
-    scheduleForm.reset();
-    scheduleForm.session_id = props.sessions[0]?.id || '';
-    scheduleForm.semester_id = props.semesters[0]?.id || '';
-    isScheduleModalOpen.value = true;
+    router.visit(route('admin.exams.create'));
 };
 
 const openEditSchedule = (exam: any) => {
-    isEditing.value = true;
-    editingScheduleId.value = exam.id;
-    scheduleForm.session_id = exam.session_id;
-    scheduleForm.semester_id = exam.semester_id;
-    scheduleForm.department_id = exam.department_id || '';
-    scheduleForm.level = exam.level || '100';
-    scheduleForm.course_id = exam.course_id;
-    scheduleForm.exam_date = exam.exam_date ? exam.exam_date.substring(0, 10) : '';
-    scheduleForm.start_time = exam.start_time;
-    scheduleForm.end_time = exam.end_time;
-    scheduleForm.venue = exam.venue;
-    scheduleForm.exam_type = exam.exam_type;
-    scheduleForm.max_capacity = exam.max_capacity;
-    scheduleForm.instructions = exam.instructions || '';
-    isScheduleModalOpen.value = true;
+    router.visit(route('admin.exams.edit', exam.id));
 };
 
 const submitSchedule = () => {
+    if (selectedCourseIds.value.length === 0) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Course Required',
+            text: 'Please select at least one course for the examination schedule.',
+        });
+        return;
+    }
+
+    const validVenues = venueList.value.filter(v => v.name.trim() !== '');
+    if (validVenues.length === 0) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Venue Required',
+            text: 'Please enter at least one venue or hall for this exam schedule.',
+        });
+        return;
+    }
+
+    scheduleForm.course_id = selectedCourseIds.value[0];
+    (scheduleForm as any).course_ids = selectedCourseIds.value;
+    scheduleForm.venue = validVenues.map(v => v.name.trim()).join(', ');
+    const totalCap = validVenues.reduce((acc, curr) => acc + (Number(curr.capacity) || 0), 0);
+    scheduleForm.max_capacity = totalCap > 0 ? totalCap : 100;
+
     if (isEditing.value && editingScheduleId.value) {
         scheduleForm.put(route('admin.exams.update', editingScheduleId.value), {
             onSuccess: () => {
@@ -346,17 +513,69 @@ const deleteExam = (id: string) => {
     }
 };
 
+const selectedInvigilatorHallScheduleId = ref<string>('');
+const selectedInvigilatorStaffIds = ref<string[]>([]);
+const tempStaffSelect = ref<string>('');
+
+const addInvigilatorStaffPill = (val: string) => {
+    if (!val) return;
+    if (!selectedInvigilatorStaffIds.value.includes(val)) {
+        selectedInvigilatorStaffIds.value.push(val);
+    }
+    tempStaffSelect.value = '';
+};
+
+const removeInvigilatorStaffPill = (stId: string) => {
+    selectedInvigilatorStaffIds.value = selectedInvigilatorStaffIds.value.filter(id => id !== stId);
+};
+
+const getStaffLabel = (stId: string) => {
+    const found = (props.staff || []).find(st => st.id === stId);
+    return found ? `${found.name} (${found.staff_number})` : stId;
+};
+
 const openInvigilatorModal = (exam: any) => {
     selectedExamForInvigilator.value = exam;
+    selectedInvigilatorHallScheduleId.value = exam.id;
     invigilatorForm.reset();
+    selectedInvigilatorStaffIds.value = [];
+    tempStaffSelect.value = '';
     isInvigilatorModalOpen.value = true;
 };
 
+const sameCourseHallOptions = computed(() => {
+    if (!selectedExamForInvigilator.value) return [];
+    const courseId = selectedExamForInvigilator.value.course_id;
+    const date = selectedExamForInvigilator.value.exam_date;
+
+    const matches = (props.schedules.data || []).filter(e => e.course_id === courseId && e.exam_date === date);
+    return matches.map(m => ({
+        value: m.id,
+        label: `📍 ${m.venue} (${m.max_capacity} seats) — ${m.start_time}`
+    }));
+});
+
 const submitInvigilator = () => {
-    invigilatorForm.post(route('admin.exams.invigilators.assign', selectedExamForInvigilator.value.id), {
+    if (selectedInvigilatorStaffIds.value.length === 0) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Staff Required',
+            text: 'Please select at least one staff member to assign as invigilator.',
+        });
+        return;
+    }
+
+    const targetScheduleId = selectedInvigilatorHallScheduleId.value || selectedExamForInvigilator.value.id;
+    
+    invigilatorForm.staff_id = selectedInvigilatorStaffIds.value[0];
+    (invigilatorForm as any).staff_ids = selectedInvigilatorStaffIds.value;
+
+    invigilatorForm.post(route('admin.exams.invigilators.assign', targetScheduleId), {
         onSuccess: () => {
             isInvigilatorModalOpen.value = false;
             invigilatorForm.reset();
+            selectedInvigilatorStaffIds.value = [];
+            tempStaffSelect.value = '';
         },
     });
 };
@@ -410,8 +629,8 @@ const submitImport = () => {
     });
 };
 
-const downloadTemplate = () => {
-    window.location.href = route('admin.exams.template');
+const downloadTemplate = (type = 'combined') => {
+    window.location.href = route('admin.exams.template', { type });
 };
 
 const printMasterTimetable = () => {
@@ -448,6 +667,17 @@ const applyFilters = () => {
         replace: true,
     });
 };
+
+const resetAllFilters = () => {
+    filterSessionId.value = '';
+    filterSemesterId.value = '';
+    filterDepartmentId.value = '';
+    filterLevel.value = '';
+    filterExamType.value = '';
+    search.value = '';
+    filterMyInvigilationsOnly.value = false;
+    applyFilters();
+};
 </script>
 
 <template>
@@ -457,29 +687,57 @@ const applyFilters = () => {
         <div class="p-6 space-y-6 w-full print:p-0 print:m-0">
             
             <!-- Hero Header & Actions (Hidden on Print) -->
-            <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4 print:hidden">
-                <div class="space-y-1">
-                    <div class="flex items-center gap-2">
-                        <div class="p-2 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                            <Calendar class="w-6 h-6" />
+            <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4 print:hidden">
+                <!-- Top Row: Title + Active Session Badge & Primary Actions -->
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2.5 flex-wrap">
+                            <div class="p-2 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                                <Calendar class="w-6 h-6" />
+                            </div>
+                            <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+                                Examination Management Hub
+                            </h1>
+                            <Badge class="bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border-purple-200 text-xs font-semibold px-2.5 py-0.5">
+                                {{ activeSessionName }} • {{ activeSemesterName }}
+                            </Badge>
                         </div>
-                        <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
-                            Examination Management Hub
-                        </h1>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            Schedule examinations, view semester timetables, assign staff invigilators, and track malpractice logs.
+                        </p>
                     </div>
-                    <p class="text-sm text-slate-500 dark:text-slate-400 sm:pl-10">
-                        Schedule examinations, view semester timetables, assign staff invigilators, and track malpractice logs.
-                    </p>
+
+                    <div class="flex flex-wrap items-center gap-2 shrink-0">
+                        <Button v-if="props.canManageExams" class="bg-purple-600 hover:bg-purple-700 text-white shadow-sm font-semibold gap-1.5 text-xs h-9 px-4 rounded-xl" @click="openCreateSchedule">
+                            <Plus class="w-4 h-4" />
+                            <span>Schedule Exam</span>
+                        </Button>
+
+                        <Button class="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm font-semibold gap-1.5 text-xs h-9 px-4 rounded-xl" @click="router.visit(route('admin.exams.scanner'))">
+                            <QrCode class="w-4 h-4" />
+                            <span>Mobile QR Scanner</span>
+                        </Button>
+                    </div>
                 </div>
-                
-                <div class="flex flex-wrap items-center gap-2.5">
-                    <!-- View Switcher Tabs -->
-                    <div class="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border w-full sm:w-auto justify-center">
+
+                <!-- Secondary Row: View Switcher Tabs & Tools Toolbar -->
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <!-- View Mode Switcher -->
+                    <div class="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60 overflow-x-auto">
+                        <button 
+                            @click="viewMode = 'venue'"
+                            :class="[
+                                'px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all whitespace-nowrap',
+                                viewMode === 'venue' ? 'bg-white dark:bg-slate-900 shadow-xs text-indigo-700 dark:text-indigo-300 font-bold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                            ]"
+                        >
+                            <Building class="w-3.5 h-3.5 text-indigo-600" /> By Venue
+                        </button>
                         <button 
                             @click="viewMode = 'table'"
                             :class="[
-                                'px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-all flex-1 sm:flex-none justify-center',
-                                viewMode === 'table' ? 'bg-white dark:bg-slate-900 shadow-sm text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                                'px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-all whitespace-nowrap',
+                                viewMode === 'table' ? 'bg-white dark:bg-slate-900 shadow-xs text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                             ]"
                         >
                             <LayoutList class="w-3.5 h-3.5" /> Table View
@@ -487,53 +745,54 @@ const applyFilters = () => {
                         <button 
                             @click="viewMode = 'grid'"
                             :class="[
-                                'px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-all flex-1 sm:flex-none justify-center',
-                                viewMode === 'grid' ? 'bg-white dark:bg-slate-900 shadow-sm text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                                'px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-all whitespace-nowrap',
+                                viewMode === 'grid' ? 'bg-white dark:bg-slate-900 shadow-xs text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                             ]"
                         >
-                            <Grid class="w-3.5 h-3.5" /> Timetable Grid
+                            <Grid class="w-3.5 h-3.5" /> By Date
                         </button>
                         <button 
                             @click="viewMode = 'printable'"
                             :class="[
-                                'px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-all flex-1 sm:flex-none justify-center',
-                                viewMode === 'printable' ? 'bg-white dark:bg-slate-900 shadow-sm text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                                'px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-all whitespace-nowrap',
+                                viewMode === 'printable' ? 'bg-white dark:bg-slate-900 shadow-xs text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                             ]"
                         >
                             <Printer class="w-3.5 h-3.5" /> Master Sheet
                         </button>
                     </div>
 
-                    <!-- Actions Row -->
-                    <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                    <!-- Management & Utilities Bar -->
+                    <div class="flex flex-wrap items-center gap-2">
                         <Button 
+                            v-if="props.canManageExams"
                             variant="outline" 
                             @click="togglePublish" 
                             :class="[
-                                'font-semibold gap-2 border transition-all text-xs h-9 flex-1 sm:flex-none justify-center',
+                                'font-semibold gap-1.5 border text-xs h-8 px-3 rounded-lg',
                                 isPublished 
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' 
-                                    : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300' 
+                                    : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300'
                             ]"
                         >
-                            <Eye v-if="isPublished" class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                            <EyeOff v-else class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                            <span>{{ isPublished ? 'Published' : 'Draft (Hidden)' }}</span>
+                            <Eye v-if="isPublished" class="w-3.5 h-3.5 text-emerald-600" />
+                            <EyeOff v-else class="w-3.5 h-3.5 text-amber-600" />
+                            <span>{{ isPublished ? 'Published' : 'Draft Mode' }}</span>
                         </Button>
 
-                        <Button variant="outline" class="border-purple-200 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40 font-semibold gap-1.5 text-xs h-9 flex-1 sm:flex-none justify-center" @click="openImportModal">
+                        <Button v-if="props.canManageExams" variant="outline" class="border-purple-200 text-purple-700 dark:text-purple-300 hover:bg-purple-50 font-semibold gap-1.5 text-xs h-8 px-3 rounded-lg" @click="openImportModal">
                             <Upload class="w-3.5 h-3.5" />
                             <span>Bulk Upload</span>
                         </Button>
 
-                        <Button class="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm font-semibold gap-1.5 text-xs h-9 flex-1 sm:flex-none justify-center" @click="openVerifyModal()">
-                            <QrCode class="w-3.5 h-3.5" />
-                            <span>Scan QR / Verify Candidate</span>
+                        <Button variant="outline" class="border-indigo-200 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 font-semibold gap-1.5 text-xs h-8 px-3 rounded-lg" @click="router.visit('/admin/buildings')">
+                            <Building2 class="w-3.5 h-3.5" />
+                            <span>Campus Buildings</span>
                         </Button>
 
-                        <Button class="bg-purple-600 hover:bg-purple-700 text-white shadow-sm font-semibold gap-1.5 text-xs h-9 flex-1 sm:flex-none justify-center" @click="openCreateSchedule">
-                            <Plus class="w-3.5 h-3.5" />
-                            <span>Schedule Exam</span>
+                        <Button variant="outline" class="border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 font-semibold gap-1.5 text-xs h-8 px-3 rounded-lg" @click="openVerifyModal()">
+                            <ScanLine class="w-3.5 h-3.5" />
+                            <span>Quick Verify</span>
                         </Button>
                     </div>
                 </div>
@@ -550,7 +809,7 @@ const applyFilters = () => {
 
             <!-- KPI Metric Summary Cards (Hidden on Print) -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 print:hidden">
-                <Card class="border shadow-sm bg-white dark:bg-slate-900 relative overflow-hidden">
+                <Card class="border shadow-xs bg-white dark:bg-slate-900 relative overflow-hidden">
                     <div class="p-5 flex items-center justify-between">
                         <div class="space-y-1">
                             <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Scheduled Exams</p>
@@ -562,7 +821,7 @@ const applyFilters = () => {
                     </div>
                 </Card>
 
-                <Card class="border shadow-sm bg-white dark:bg-slate-900 relative overflow-hidden">
+                <Card class="border shadow-xs bg-white dark:bg-slate-900 relative overflow-hidden">
                     <div class="p-5 flex items-center justify-between">
                         <div class="space-y-1">
                             <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Staff Invigilators</p>
@@ -574,7 +833,7 @@ const applyFilters = () => {
                     </div>
                 </Card>
 
-                <Card class="border shadow-sm bg-white dark:bg-slate-900 relative overflow-hidden">
+                <Card class="border shadow-xs bg-white dark:bg-slate-900 relative overflow-hidden">
                     <div class="p-5 flex items-center justify-between">
                         <div class="space-y-1">
                             <p class="text-xs font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">Malpractice & Incidents</p>
@@ -586,7 +845,7 @@ const applyFilters = () => {
                     </div>
                 </Card>
 
-                <Card class="border shadow-sm bg-white dark:bg-slate-900 relative overflow-hidden">
+                <Card class="border shadow-xs bg-white dark:bg-slate-900 relative overflow-hidden">
                     <div class="p-5 flex items-center justify-between">
                         <div class="space-y-1">
                             <p class="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Total Hall Capacity</p>
@@ -600,9 +859,9 @@ const applyFilters = () => {
             </div>
 
             <!-- Filter & Search Toolbar (Hidden on Print) -->
-            <Card class="border shadow-sm bg-white dark:bg-slate-900 p-4 print:hidden">
-                <div class="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 flex-1">
+            <Card class="border shadow-xs bg-white dark:bg-slate-900 p-4 print:hidden rounded-2xl">
+                <div class="space-y-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
                         <!-- Session Select -->
                         <SearchableSelect
                             v-model="filterSessionId"
@@ -652,24 +911,268 @@ const applyFilters = () => {
                             trigger-class="h-9 text-xs"
                             @update:model-value="applyFilters"
                         />
+
+                        <!-- Search Input -->
+                        <div class="relative w-full">
+                            <Input 
+                                v-model="search" 
+                                placeholder="Search Ref ID, course..." 
+                                @keyup.enter="applyFilters"
+                                class="pl-9 h-9 text-xs focus-visible:ring-purple-500 w-full"
+                            />
+                            <Search class="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                        </div>
                     </div>
 
-                    <!-- Search Input -->
-                    <div class="relative w-full lg:w-64 shrink-0">
-                        <Input 
-                            v-model="search" 
-                            placeholder="Search Ref ID, course, venue..." 
-                            @input="applyFilters"
-                            class="pl-9 h-9 text-xs focus-visible:ring-purple-500 w-full"
-                        />
-                        <Search class="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                    <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+                        <div class="flex items-center gap-2">
+                            <Button
+                                v-if="myInvigilatedCount > 0"
+                                variant="outline"
+                                :class="[
+                                    'h-7 text-xs font-semibold gap-1.5 transition-all rounded-lg',
+                                    filterMyInvigilationsOnly 
+                                        ? 'bg-amber-100 border-amber-400 text-amber-900 dark:bg-amber-950 dark:text-amber-200' 
+                                        : 'border-amber-300 text-amber-800 hover:bg-amber-50 dark:text-amber-300'
+                                ]"
+                                @click="filterMyInvigilationsOnly = !filterMyInvigilationsOnly"
+                            >
+                                <Sparkles class="w-3.5 h-3.5 text-amber-600" />
+                                <span>My Invigilations ({{ myInvigilatedCount }})</span>
+                            </Button>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <Button variant="ghost" size="sm" @click="resetAllFilters" class="h-7 text-xs text-slate-500 hover:text-slate-700">
+                                Reset Filters
+                            </Button>
+                            <Button size="sm" @click="applyFilters" class="h-7 text-xs bg-slate-900 dark:bg-slate-100 dark:text-slate-900 rounded-lg">
+                                Apply Filters
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </Card>
 
-            <!-- 1. TABLE VIEW MODE -->
-            <div v-if="viewMode === 'table'" class="space-y-4 print:hidden">
-                <Card class="border shadow-sm rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+            <!-- 1. VENUE GROUPED VIEW MODE -->
+            <div v-if="viewMode === 'venue'" class="space-y-6 print:hidden">
+                <div v-for="group in groupedByVenue" :key="group.venueName" class="space-y-4 bg-white dark:bg-slate-900/80 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+                    
+                    <!-- Venue Header -->
+                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 bg-purple-100 dark:bg-purple-950/50 text-purple-600 rounded-lg">
+                                <Building2 class="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h3 class="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                                    {{ group.venueName }}
+                                    <Badge variant="outline" class="text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono">
+                                        Capacity: {{ group.capacity }} Seats
+                                    </Badge>
+                                </h3>
+                                <p class="text-xs text-slate-500 font-medium">
+                                    {{ group.totalExams }} course exam paper(s) scheduled across {{ group.dates.length }} date(s)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dates within Venue -->
+                    <div class="space-y-5 pt-1">
+                        <div v-for="dateGroup in group.dates" :key="dateGroup.rawDate" class="space-y-3">
+                            
+                            <!-- Date Badge Header -->
+                            <div class="flex items-center gap-2">
+                                <div class="flex items-center gap-1.5 px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-md text-xs font-bold text-slate-700 dark:text-slate-300">
+                                    <Calendar class="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                                    {{ dateGroup.dateFormatted }}
+                                </div>
+                                <div class="h-px flex-1 bg-slate-200 dark:bg-slate-800"></div>
+                            </div>
+
+                            <!-- Time Slots within Date -->
+                            <div v-for="slot in dateGroup.timeSlots" :key="slot.startTime + '-' + slot.endTime" class="space-y-3 pl-2 sm:pl-4 border-l-2 border-purple-300 dark:border-purple-800">
+                                
+                                <div class="flex items-center justify-between gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <Badge class="bg-indigo-600 text-white dark:bg-indigo-500 font-mono text-xs px-2.5 py-0.5">
+                                            <Clock class="w-3 h-3 mr-1 inline" /> {{ slot.startTime }} - {{ slot.endTime }}
+                                        </Badge>
+                                        <span class="text-xs font-bold text-slate-600 dark:text-slate-400">
+                                            {{ slot.exams.length }} Course(s) scheduled in this venue at this time
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Courses Grid taking this venue at this date & time slot -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    <Card 
+                                        v-for="exam in slot.exams" 
+                                        :key="exam.id"
+                                        :class="[
+                                            'border shadow-xs bg-white dark:bg-slate-950/60 hover:border-purple-300 dark:hover:border-purple-800 transition-all flex flex-col justify-between',
+                                            isUserInvigilatorForExam(exam) ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-300' : ''
+                                        ]"
+                                    >
+                                        <CardContent class="p-3.5 space-y-2.5">
+                                            <div class="flex items-start justify-between gap-2 border-b pb-2">
+                                                <div>
+                                                    <span class="font-mono text-[10px] font-bold text-purple-600 dark:text-purple-400 block">{{ exam.reference_id }}</span>
+                                                    <h4 class="font-bold text-slate-900 dark:text-slate-100 text-sm leading-tight mt-0.5">
+                                                        {{ exam.course?.code }} - {{ exam.course?.title }}
+                                                    </h4>
+                                                    <span class="text-[11px] text-slate-500 block mt-0.5">
+                                                        {{ exam.department?.name || 'General Course' }} ({{ exam.level ? exam.level + 'L' : 'All Levels' }})
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div class="space-y-1 text-xs text-slate-600 dark:text-slate-400">
+                                                <div class="flex items-center justify-between">
+                                                    <span class="flex items-center gap-1.5 font-medium"><UserCheck class="w-3.5 h-3.5 text-emerald-500" /> Present:</span>
+                                                    <span class="font-bold text-emerald-600 dark:text-emerald-400">{{ exam.attendances_count || 0 }} Verified</span>
+                                                </div>
+                                            </div>
+
+                                            <div class="pt-1.5 border-t text-[11px] space-y-1">
+                                                <span class="font-bold text-slate-400 uppercase tracking-wider block text-[10px]">Invigilators</span>
+                                                <div v-if="exam.invigilators && exam.invigilators.length > 0" class="flex flex-wrap gap-1">
+                                                    <Badge 
+                                                        v-for="inv in exam.invigilators" 
+                                                        :key="inv.id" 
+                                                        variant="outline" 
+                                                        class="text-[9px] bg-slate-50 dark:bg-slate-800"
+                                                    >
+                                                        {{ inv.staff?.user?.name }} ({{ inv.role }})
+                                                    </Badge>
+                                                </div>
+                                                <span v-else class="text-slate-400 italic">None assigned</span>
+                                            </div>
+                                        </CardContent>
+
+                                        <div class="p-2.5 bg-slate-50 dark:bg-slate-950/60 border-t flex items-center justify-between text-xs">
+                                            <Button size="sm" variant="outline" class="h-7 text-[11px] border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100" @click="router.visit(route('admin.exams.scanner', { schedule_id: exam.id }))">
+                                                <QrCode class="w-3 h-3 mr-1 text-emerald-600" /> Scan
+                                            </Button>
+                                            <div class="flex items-center gap-1">
+                                                <Button size="sm" variant="outline" class="h-7 text-[11px]" @click="openDetailsModal(exam)">
+                                                    <Eye class="w-3 h-3 mr-1" /> View
+                                                </Button>
+                                                <Button v-if="props.canManageExams" size="sm" variant="outline" class="h-7 text-[11px] border-indigo-200 text-indigo-700" @click="openInvigilatorModal(exam)">
+                                                    + Staff
+                                                </Button>
+                                                <Button v-if="props.canManageExams" size="sm" variant="ghost" class="h-7 w-7 p-0 text-slate-500 hover:text-indigo-600" @click="openEditSchedule(exam)" title="Edit Exam Schedule">
+                                                    <Edit3 class="w-3.5 h-3.5" />
+                                                </Button>
+                                                <Button v-if="props.canManageExams" size="sm" variant="ghost" class="h-7 w-7 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40" @click="deleteExam(exam.id)" title="Delete Exam Schedule">
+                                                    <Trash2 class="w-3.5 h-3.5" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="groupedByVenue.length === 0" class="p-10 text-center bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 space-y-4">
+                    <div class="w-16 h-16 mx-auto rounded-2xl bg-purple-50 dark:bg-purple-950/50 flex items-center justify-center text-purple-600 dark:text-purple-400 p-4">
+                        <Building2 class="w-8 h-8" />
+                    </div>
+                    <div class="max-w-md mx-auto space-y-1">
+                        <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">
+                            No Exam Schedules Found
+                        </h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            There are currently no examination schedules registered for 
+                            <span class="font-semibold text-slate-700 dark:text-slate-300">{{ activeSessionName }}</span> 
+                            ({{ activeSemesterName }}).
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+                        <Button v-if="props.canManageExams" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs gap-1.5 rounded-xl" @click="openCreateSchedule">
+                            <Plus class="w-4 h-4" /> Schedule New Exam
+                        </Button>
+                        <Button v-if="props.canManageExams" variant="outline" class="border-purple-200 text-purple-700 dark:text-purple-300 hover:bg-purple-50 text-xs gap-1.5 rounded-xl" @click="openImportModal">
+                            <Upload class="w-4 h-4" /> Bulk CSV Upload
+                        </Button>
+                        <Button variant="outline" class="border-slate-200 text-slate-700 dark:text-slate-300 hover:bg-slate-50 text-xs gap-1.5 rounded-xl" @click="resetAllFilters">
+                            Clear Filters / View All
+                        </Button>
+                    </div>
+                </div>
+
+                <Pagination :links="schedules.links" />
+            </div>
+
+            <!-- 2. TABLE & MOBILE CARDS VIEW MODE -->
+            <div v-else-if="viewMode === 'table'" class="space-y-4 print:hidden">
+                <!-- Mobile Cards Layout (visible on phones/tablets below md breakpoint) -->
+                <div class="block md:hidden space-y-3">
+                    <div 
+                        v-for="exam in displaySchedulesData" 
+                        :key="'mobile-' + exam.id"
+                        :class="[
+                            'p-4 rounded-2xl border shadow-xs transition-all space-y-3',
+                            isUserInvigilatorForExam(exam) ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800 ring-1 ring-amber-400/30' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+                        ]"
+                    >
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <span class="font-black text-slate-900 dark:text-slate-100 text-base leading-tight block">
+                                    {{ exam.course?.code }} - {{ exam.course?.title }}
+                                </span>
+                                <span class="text-xs text-slate-500 font-medium mt-0.5 block">
+                                    {{ exam.department?.name || 'General Course' }} ({{ exam.level ? exam.level + 'L' : 'All Levels' }})
+                                </span>
+                            </div>
+                            <Badge v-if="isUserInvigilatorForExam(exam)" class="bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950 dark:text-amber-300 text-[10px] gap-1 px-2 py-0.5 font-bold shrink-0">
+                                <Sparkles class="w-3 h-3 text-amber-600" />
+                                <span>MY INVIGILATION</span>
+                            </Badge>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                            <div class="flex items-center gap-1.5">
+                                <Calendar class="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                                <span class="truncate">{{ format(new Date(exam.exam_date), 'MMM dd, yyyy') }}</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <Clock class="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                <span class="truncate">{{ exam.start_time }} - {{ exam.end_time }}</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 col-span-2">
+                                <Building class="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                <span class="font-bold text-slate-800 dark:text-slate-200">{{ exam.venue }}</span>
+                                <span class="text-[11px] text-slate-400 font-normal">({{ exam.max_capacity }} seats)</span>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
+                            <Badge variant="outline" class="text-[10px] bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 flex items-center gap-1 justify-center py-1">
+                                <UserCheck class="w-3 h-3 text-emerald-600" />
+                                <span>{{ exam.attendances_count || 0 }} Verified Present</span>
+                            </Badge>
+
+                            <Button 
+                                class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-11 px-4 gap-2 shadow-sm rounded-xl w-full sm:w-auto justify-center" 
+                                @click="router.visit(route('admin.exams.scanner', { schedule_id: exam.id }))"
+                            >
+                                <QrCode class="w-4 h-4" />
+                                <span>Scan Attendance</span>
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div v-if="displaySchedulesData.length === 0" class="p-8 text-center text-xs text-slate-400 bg-white dark:bg-slate-900 rounded-2xl border">
+                        No exam schedules found matching criteria.
+                    </div>
+                </div>
+
+                <!-- Desktop Table View (visible on medium screens and up) -->
+                <Card class="hidden md:block border shadow-sm rounded-xl overflow-hidden bg-white dark:bg-slate-900">
                     <CardContent class="p-0">
                         <Table>
                             <TableHeader class="bg-slate-50 dark:bg-slate-950/60">
@@ -685,12 +1188,21 @@ const applyFilters = () => {
                             </TableHeader>
                             <TableBody>
                                 <TableRow 
-                                    v-for="exam in schedules.data" 
+                                    v-for="exam in displaySchedulesData" 
                                     :key="exam.id"
-                                    class="hover:bg-slate-50/50 dark:hover:bg-slate-950/30 transition-all border-b"
+                                    :class="[
+                                        'hover:bg-slate-50/50 dark:hover:bg-slate-950/30 transition-all border-b',
+                                        isUserInvigilatorForExam(exam) ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''
+                                    ]"
                                 >
                                     <TableCell class="font-mono text-xs font-bold text-purple-700 dark:text-purple-400 pl-6">
-                                        {{ exam.reference_id }}
+                                        <div class="flex flex-col gap-1">
+                                            <span>{{ exam.reference_id }}</span>
+                                            <Badge v-if="isUserInvigilatorForExam(exam)" class="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 text-[9px] gap-1 px-1.5 py-0 w-max font-bold">
+                                                <Sparkles class="w-2.5 h-2.5 text-amber-600" />
+                                                <span>MY INVIGILATION</span>
+                                            </Badge>
+                                        </div>
                                     </TableCell>
                                     <TableCell>
                                         <span class="font-bold text-slate-800 dark:text-slate-100 text-sm block">
@@ -740,30 +1252,30 @@ const applyFilters = () => {
                                     </TableCell>
                                     <TableCell class="text-right pr-6">
                                         <div class="flex justify-end items-center gap-1.5">
-                                            <Button variant="outline" size="sm" class="h-8 text-xs border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 font-semibold" @click="openVerifyModal(exam.id)">
+                                            <Button variant="outline" size="sm" class="h-8 text-xs border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 font-semibold" @click="router.visit(route('admin.exams.scanner', { schedule_id: exam.id }))">
                                                 <QrCode class="w-3.5 h-3.5 mr-1 text-emerald-600" /> Attendance
                                             </Button>
                                             <Button variant="outline" size="sm" class="h-8 text-xs" @click="openDetailsModal(exam)">
                                                 <Eye class="w-3.5 h-3.5 mr-1" /> View
                                             </Button>
-                                            <Button variant="outline" size="sm" class="h-8 text-xs border-indigo-200 text-indigo-700 hover:bg-indigo-50" @click="openInvigilatorModal(exam)">
+                                            <Button v-if="props.canManageExams" variant="outline" size="sm" class="h-8 text-xs border-indigo-200 text-indigo-700 hover:bg-indigo-50" @click="openInvigilatorModal(exam)">
                                                 <UserCheck class="w-3.5 h-3.5 mr-1" /> Invigilator
                                             </Button>
                                             <Button variant="outline" size="sm" class="h-8 text-xs border-rose-200 text-rose-700 hover:bg-rose-50" @click="openIncidentModal(exam)">
                                                 <ShieldAlert class="w-3.5 h-3.5 mr-1" /> Incident
                                             </Button>
-                                            <Button variant="ghost" size="icon" class="h-8 w-8 text-slate-500 hover:bg-slate-100" @click="openEditSchedule(exam)">
+                                            <Button v-if="props.canManageExams" variant="ghost" size="icon" class="h-8 w-8 text-slate-500 hover:bg-slate-100" @click="openEditSchedule(exam)">
                                                 <Edit3 class="w-4 h-4" />
                                             </Button>
-                                            <Button variant="ghost" size="icon" class="h-8 w-8 text-rose-500 hover:bg-rose-50" @click="deleteExam(exam.id)">
+                                            <Button v-if="props.canManageExams" variant="ghost" size="icon" class="h-8 w-8 text-rose-500 hover:bg-rose-50" @click="deleteExam(exam.id)">
                                                 <Trash2 class="w-4 h-4" />
                                             </Button>
                                         </div>
                                     </TableCell>
                                 </TableRow>
-                                <TableRow v-if="schedules.data.length === 0">
+                                <TableRow v-if="displaySchedulesData.length === 0">
                                     <TableCell colspan="7" class="h-32 text-center text-slate-400">
-                                        No exam schedules recorded yet.
+                                        No exam schedules found matching criteria.
                                     </TableCell>
                                 </TableRow>
                             </TableBody>
@@ -848,8 +1360,11 @@ const applyFilters = () => {
                                     <Button size="sm" variant="outline" class="h-7 text-[11px] border-indigo-200 text-indigo-700" @click="openInvigilatorModal(exam)">
                                         + Invigilator
                                     </Button>
-                                    <Button size="sm" variant="ghost" class="h-7 w-7 p-0 text-slate-500" @click="openEditSchedule(exam)">
+                                    <Button v-if="props.canManageExams" size="sm" variant="ghost" class="h-7 w-7 p-0 text-slate-500 hover:text-indigo-600" @click="openEditSchedule(exam)" title="Edit Exam Schedule">
                                         <Edit3 class="w-3.5 h-3.5" />
+                                    </Button>
+                                    <Button v-if="props.canManageExams" size="sm" variant="ghost" class="h-7 w-7 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40" @click="deleteExam(exam.id)" title="Delete Exam Schedule">
+                                        <Trash2 class="w-3.5 h-3.5" />
                                     </Button>
                                 </div>
                             </div>
@@ -857,8 +1372,31 @@ const applyFilters = () => {
                     </div>
                 </div>
 
-                <div v-if="groupedByDate.length === 0" class="p-12 text-center text-slate-400 border border-dashed rounded-xl bg-white dark:bg-slate-900">
-                    No exam schedules found.
+                <div v-if="groupedByDate.length === 0" class="p-10 text-center bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 space-y-4">
+                    <div class="w-16 h-16 mx-auto rounded-2xl bg-purple-50 dark:bg-purple-950/50 flex items-center justify-center text-purple-600 dark:text-purple-400 p-4">
+                        <Calendar class="w-8 h-8" />
+                    </div>
+                    <div class="max-w-md mx-auto space-y-1">
+                        <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">
+                            No Examination Dates Found
+                        </h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            There are currently no examination schedules registered for 
+                            <span class="font-semibold text-slate-700 dark:text-slate-300">{{ activeSessionName }}</span> 
+                            ({{ activeSemesterName }}).
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+                        <Button v-if="props.canManageExams" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs gap-1.5 rounded-xl" @click="openCreateSchedule">
+                            <Plus class="w-4 h-4" /> Schedule New Exam
+                        </Button>
+                        <Button v-if="props.canManageExams" variant="outline" class="border-purple-200 text-purple-700 dark:text-purple-300 hover:bg-purple-50 text-xs gap-1.5 rounded-xl" @click="openImportModal">
+                            <Upload class="w-4 h-4" /> Bulk CSV Upload
+                        </Button>
+                        <Button variant="outline" class="border-slate-200 text-slate-700 dark:text-slate-300 hover:bg-slate-50 text-xs gap-1.5 rounded-xl" @click="resetAllFilters">
+                            Clear Filters / View All
+                        </Button>
+                    </div>
                 </div>
             </div>
 
@@ -984,15 +1522,20 @@ const applyFilters = () => {
                         </div>
                     </div>
 
-                    <div class="p-3 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-900/60 rounded-lg space-y-2">
-                        <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-purple-900 dark:text-purple-300">Need the CSV Template?</span>
-                            <Button type="button" size="sm" variant="outline" class="h-7 text-xs border-purple-300 text-purple-700 dark:text-purple-300" @click="downloadTemplate">
-                                <Download class="w-3.5 h-3.5 mr-1" /> Download CSV Template
-                            </Button>
+                    <div class="p-3.5 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-900/60 rounded-xl space-y-2.5">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <span class="text-xs font-bold text-purple-900 dark:text-purple-300">Download CSV Templates:</span>
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <Button type="button" size="sm" variant="outline" class="h-7 text-[11px] border-purple-300 text-purple-700 dark:text-purple-300 font-semibold" @click="downloadTemplate('combined')">
+                                    <Download class="w-3.5 h-3.5 mr-1" /> Timetable + Invigilators
+                                </Button>
+                                <Button type="button" size="sm" variant="outline" class="h-7 text-[11px] border-indigo-300 text-indigo-700 dark:text-indigo-300 font-semibold" @click="downloadTemplate('invigilators_only')">
+                                    <Download class="w-3.5 h-3.5 mr-1" /> Invigilators Only
+                                </Button>
+                            </div>
                         </div>
-                        <p class="text-[11px] text-slate-600 dark:text-slate-400">
-                            The template supports course code, date, start/end time, hall capacity, exam type, and staff numbers for Chief + Assistant Invigilators.
+                        <p class="text-[11px] text-slate-600 dark:text-slate-400 font-medium">
+                            Upload a <strong>Combined CSV</strong> (exam date, time, venue + chief/assistant invigilators) or an <strong>Invigilators Only CSV</strong> (course_code, venue, staff_number, role) to assign staff to existing exam schedules.
                         </p>
                     </div>
 
@@ -1043,14 +1586,40 @@ const applyFilters = () => {
                     </div>
 
                     <div class="space-y-1.5">
-                        <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Course</Label>
+                        <div class="flex items-center justify-between">
+                            <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Course(s) for this Exam</Label>
+                            <span v-if="selectedCourseIds.length > 0" class="text-[11px] text-purple-600 dark:text-purple-400 font-semibold">
+                                {{ selectedCourseIds.length }} course(s) selected
+                            </span>
+                        </div>
+                        
                         <SearchableSelect
-                            v-model="scheduleForm.course_id"
+                            v-model="tempCourseSelect"
                             :items="courseModalOptions"
-                            placeholder="Select Course"
-                            search-placeholder="Search courses..."
-                            :error-class="!!scheduleForm.errors.course_id"
+                            placeholder="+ Add course to exam schedule..."
+                            search-placeholder="Search course code or title..."
+                            @update:model-value="addCoursePill"
                         />
+
+                        <!-- Selected Course Badges -->
+                        <div v-if="selectedCourseIds.length > 0" class="flex flex-wrap gap-1.5 pt-1">
+                            <Badge
+                                v-for="cId in selectedCourseIds"
+                                :key="cId"
+                                class="bg-purple-100 text-purple-900 dark:bg-purple-950 dark:text-purple-200 border border-purple-300 dark:border-purple-800 text-xs py-1 px-2.5 flex items-center gap-1.5 shadow-2xs"
+                            >
+                                <span>{{ getCourseLabel(cId) }}</span>
+                                <button
+                                    type="button"
+                                    @click="removeCoursePill(cId)"
+                                    class="text-purple-600 hover:text-red-600 dark:text-purple-400 dark:hover:text-red-400 font-bold ml-1 rounded-full hover:bg-purple-200/60 dark:hover:bg-purple-900/60 w-4 h-4 inline-flex items-center justify-center transition-colors"
+                                    title="Remove course"
+                                >
+                                    &times;
+                                </button>
+                            </Badge>
+                        </div>
+                        <p v-else class="text-[11px] text-amber-600 dark:text-amber-400 font-medium">⚠️ Select one or more courses to schedule at this venue & date.</p>
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
@@ -1089,25 +1658,71 @@ const applyFilters = () => {
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-3 gap-3">
-                        <div class="col-span-2 space-y-1.5">
-                            <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Exam Venue / Hall</Label>
-                            <Input v-model="scheduleForm.venue" placeholder="E.g. Multipurpose Hall A" class="h-9 text-xs" required />
+                    <!-- Venues Dynamic Array List -->
+                    <div class="space-y-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3 bg-slate-50/50 dark:bg-slate-900/50">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <Label class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Exam Venues & Hall Capacities</Label>
+                                <p class="text-[11px] text-slate-500">Add one or multiple venues to schedule this exam across multiple halls.</p>
+                            </div>
+                            <Button type="button" variant="outline" size="sm" class="h-7 text-xs gap-1 border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-300" @click="addVenueRow">
+                                <Plus class="w-3.5 h-3.5" />
+                                Add Venue
+                            </Button>
                         </div>
-                        <div class="space-y-1.5">
-                            <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Max Capacity</Label>
-                            <Input v-model="scheduleForm.max_capacity" type="number" min="1" class="h-9 text-xs" required />
-                        </div>
-                    </div>
 
-                    <div class="space-y-1.5">
-                        <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Exam Type</Label>
-                        <SearchableSelect
-                            v-model="scheduleForm.exam_type"
-                            :items="examTypeFilterOptions.filter(o => o.value !== '')"
-                            placeholder="Select Exam Type"
-                            search-placeholder="Search exam types..."
-                        />
+                        <!-- Quick Select registered campus building -->
+                        <div v-if="buildingSelectOptions.length > 1" class="pt-1">
+                            <SearchableSelect
+                                v-model="selectedBuildingQuick"
+                                :items="buildingSelectOptions"
+                                placeholder="⚡ Quick select registered building to add..."
+                                search-placeholder="Search campus building..."
+                                @update:model-value="handleBuildingQuickSelect"
+                            />
+                        </div>
+
+                        <!-- Dynamic Venue Rows -->
+                        <div class="space-y-2 pt-1">
+                            <div v-for="(vItem, idx) in venueList" :key="idx" class="flex items-center gap-2 bg-white dark:bg-slate-950 p-2 rounded-md border border-slate-200 dark:border-slate-800">
+                                <span class="text-xs font-bold text-purple-600 dark:text-purple-400 w-5 text-center">#{{ idx + 1 }}</span>
+                                <div class="flex-1 min-w-0">
+                                    <Input
+                                        v-model="vItem.name"
+                                        placeholder="Hall / Building Name (e.g. Multipurpose Hall A)"
+                                        class="h-8 text-xs bg-transparent"
+                                        required
+                                    />
+                                </div>
+                                <div class="w-28">
+                                    <Input
+                                        v-model="vItem.capacity"
+                                        type="number"
+                                        min="1"
+                                        placeholder="Capacity"
+                                        class="h-8 text-xs bg-transparent"
+                                        title="Capacity for this hall"
+                                        required
+                                    />
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    class="h-8 w-8 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                                    :disabled="venueList.length <= 1"
+                                    @click="removeVenueRow(idx)"
+                                    title="Remove venue"
+                                >
+                                    <Trash2 class="w-4 h-4" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200 dark:border-slate-800">
+                            <span>Selected Halls: <strong class="text-slate-800 dark:text-slate-200">{{ venueList.filter(v => v.name.trim()).length }}</strong></span>
+                            <span>Total Seating Capacity: <strong class="text-purple-600 dark:text-purple-400 font-bold">{{ venueList.reduce((acc, curr) => acc + (Number(curr.capacity) || 0), 0) }} seats</strong></span>
+                        </div>
                     </div>
 
                     <div class="space-y-1.5">
@@ -1135,15 +1750,58 @@ const applyFilters = () => {
                     </DialogDescription>
                 </DialogHeader>
                 <form @submit.prevent="submitInvigilator" class="space-y-4 py-3">
-                    <div class="space-y-1.5">
-                        <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Staff Member</Label>
+                    <div v-if="sameCourseHallOptions.length > 1" class="space-y-1.5 p-3 bg-purple-50 dark:bg-purple-950/40 rounded-xl border border-purple-200 dark:border-purple-800">
+                        <Label class="text-xs font-bold uppercase tracking-wider text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                            <Building class="w-4 h-4 text-purple-600" />
+                            <span>Target Exam Hall Venue</span>
+                        </Label>
                         <SearchableSelect
-                            v-model="invigilatorForm.staff_id"
-                            :items="staffModalOptions"
-                            placeholder="Select Staff Member"
-                            search-placeholder="Search staff by name or number..."
-                            :error-class="!!invigilatorForm.errors.staff_id"
+                            v-model="selectedInvigilatorHallScheduleId"
+                            :items="sameCourseHallOptions"
+                            placeholder="Select Target Hall Venue"
+                            search-placeholder="Search hall venue..."
                         />
+                    </div>
+                    <div v-else-if="selectedExamForInvigilator" class="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border text-xs font-semibold text-slate-700 dark:text-slate-200">
+                        <Building class="w-4 h-4 text-purple-600 shrink-0" />
+                        <span>Assigned Hall Venue: <strong>{{ selectedExamForInvigilator.venue }}</strong> ({{ selectedExamForInvigilator.max_capacity }} seats)</span>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Staff Member(s)</Label>
+                            <span v-if="selectedInvigilatorStaffIds.length > 0" class="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold">
+                                {{ selectedInvigilatorStaffIds.length }} staff member(s) selected
+                            </span>
+                        </div>
+                        
+                        <SearchableSelect
+                            v-model="tempStaffSelect"
+                            :items="staffModalOptions"
+                            placeholder="+ Add staff member..."
+                            search-placeholder="Search staff by name or number..."
+                            @update:model-value="addInvigilatorStaffPill"
+                        />
+
+                        <!-- Selected Staff Badges -->
+                        <div v-if="selectedInvigilatorStaffIds.length > 0" class="flex flex-wrap gap-1.5 pt-1">
+                            <Badge
+                                v-for="stId in selectedInvigilatorStaffIds"
+                                :key="stId"
+                                class="bg-indigo-50 text-indigo-900 dark:bg-indigo-950 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-800 text-xs py-1 px-2.5 flex items-center gap-1.5 shadow-2xs"
+                            >
+                                <span>{{ getStaffLabel(stId) }}</span>
+                                <button
+                                    type="button"
+                                    @click="removeInvigilatorStaffPill(stId)"
+                                    class="text-indigo-600 hover:text-red-600 dark:text-indigo-400 dark:hover:text-red-400 font-bold ml-1 rounded-full hover:bg-indigo-200/60 dark:hover:bg-indigo-900/60 w-4 h-4 inline-flex items-center justify-center transition-colors"
+                                    title="Remove staff"
+                                >
+                                    &times;
+                                </button>
+                            </Badge>
+                        </div>
+                        <p v-else class="text-[11px] text-amber-600 dark:text-amber-400 font-medium">⚠️ Select one or more staff members to assign as invigilators.</p>
                     </div>
                     <div class="space-y-1.5">
                         <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Invigilator Role</Label>

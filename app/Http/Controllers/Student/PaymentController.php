@@ -165,18 +165,19 @@ class PaymentController extends Controller
             return back()->with('error', 'This invoice has been cancelled. Please generate or select a new reservation/invoice.');
         }
 
-        // Strict Due Date Check for Hostel Fee Invoices ONLY (School Fee and other invoices do NOT check due dates)
-        if ($invoice->type === 'hostel_fee') {
-            if ($invoice->due_date && $invoice->due_date->isPast()) {
-                \Illuminate\Support\Facades\DB::transaction(function () use ($invoice) {
-                    $invoice->update(['status' => 'cancelled']);
-                    if ($invoice->booking && $invoice->booking->status === 'pending') {
-                        $invoice->booking->update(['status' => 'cancelled']);
-                    }
-                });
+        // Strict Expiry Check: Only 0% paid non-school-fee pending invoices can expire
+        $isSchoolFee = ($invoice->type === 'school_fee');
+        $hasPartialPayment = ($invoice->status === 'partial' || (float) $invoice->paid_amount > 0);
 
-                return back()->with('error', 'The payment due date for this hostel reservation has expired. Please select an available room again.');
-            }
+        if (! $isSchoolFee && ! $hasPartialPayment && $invoice->due_date && $invoice->due_date->isPast()) {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($invoice) {
+                $invoice->update(['status' => 'cancelled']);
+                if ($invoice->booking && $invoice->booking->status === 'pending') {
+                    $invoice->booking->update(['status' => 'cancelled']);
+                }
+            });
+
+            return back()->with('error', 'This initial reservation invoice has expired and cannot be paid. Please generate or select a new room/reservation.');
         }
 
         if ($invoice->type === 'school_fee') {
@@ -217,14 +218,14 @@ class PaymentController extends Controller
         $isFullPayment = abs($amountToPay - $balance) < 0.01;
 
         // Disallow split payments for non-school and non-hostel fees (e.g. acceptance_fee, other_fee, application_fee)
-        if ($invoice->type !== 'school_fee' && $invoice->type !== 'hostel_fee') {
+        if ($invoice->type !== 'school_fee' && $invoice->type !== 'hostel_fee' && $invoice->type !== 'hostel') {
             if (! $isFullPayment) {
                 return back()->with('error', 'Split payments are not supported for this type of fee. The full remaining balance of '.number_format($balance, 2).' NGN must be paid.');
             }
         }
 
         // Enforce specific installment split rules for hostel fee (first payment >= 75%, second payment clears balance)
-        if ($invoice->type === 'hostel_fee') {
+        if ($invoice->type === 'hostel_fee' || $invoice->type === 'hostel') {
             if ($invoice->paid_amount <= 0.01) {
                 // First payment: must be >= 75% of total amount
                 $minFirstPayment = (float) $invoice->amount * 0.75;
@@ -245,7 +246,7 @@ class PaymentController extends Controller
         $netAcademicPortion = (float) $invoice->amount - $adminChargeItemAmount;
 
         $minUpfront = (float) $invoice->amount / 2; // Default 50%
-        if ($invoice->type === 'hostel_fee') {
+        if ($invoice->type === 'hostel_fee' || $invoice->type === 'hostel') {
             $minUpfront = (float) $invoice->amount * 0.75;
         } elseif (! $adminChargeSplittable && $adminChargeItemAmount > 0) {
             // Admin must be paid full, academic can be split
