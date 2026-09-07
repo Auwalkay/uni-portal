@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
+import { markRaw } from 'vue';
 import {
     SidebarGroup,
     SidebarGroupContent,
@@ -18,6 +19,7 @@ interface Props {
 
 const props = defineProps<Props>();
 const { urlIsActive } = useActiveUrl();
+const RawLink = markRaw(Link);
 </script>
 
 <template>
@@ -29,7 +31,7 @@ const { urlIsActive } = useActiveUrl();
                 <SidebarMenuItem v-for="item in items" :key="item.title">
                     <SidebarMenuButton
                         class="text-neutral-600 hover:text-neutral-800 dark:text-neutral-300 dark:hover:text-neutral-100"
-                        :as="item.href?.startsWith('http') ? 'a' : Link"
+                        :as="item.href?.startsWith('http') ? 'a' : RawLink"
                         :href="toUrl(item.href)"
                         :target="item.href?.startsWith('http') ? '_blank' : undefined"
                         :rel="item.href?.startsWith('http') ? 'noopener noreferrer' : undefined"

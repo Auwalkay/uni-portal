@@ -13,7 +13,7 @@ class RolesAndPermissionsSeeder extends Seeder
         // Reset cached roles and permissions
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
-        // 1. Define Permissions
+        // 1. All Application Permissions
         $permissions = [
             // General & Portal Access
             'access_admin_dashboard',
@@ -29,6 +29,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'assign_coordinators',
             'manage_academic_sessions',
             'manage_timetables',
+            'manage_exams',
             
             // Result Management
             'view_results',
@@ -78,6 +79,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_expenses',
             'create_expenses',
             'approve_expenses',
+            'request_expenses_for_others',
             'view_bursary_reports',
             
             // Infrastructure & Utilities
@@ -93,6 +95,13 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_audit_logs',
             'manage_system_settings',
             'manage_support',
+            'view_buildings',
+            'create_buildings',
+            'edit_buildings',
+            'disable_buildings',
+            'delete_buildings',
+            'manage_buildings',
+
             // Dashboard & Analytics
             'view_global_analytics',
             'view_revenue_stats',
@@ -109,7 +118,6 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage_student_clearance',
             'issue_official_transcripts',
             'manage_bulk_communications',
-            
             'perform_student_registration',
             'manage_student_registrations',
             
@@ -150,59 +158,70 @@ class RolesAndPermissionsSeeder extends Seeder
         ];
 
         foreach ($permissions as $permission) {
-            Permission::firstOrCreate(['name' => $permission]);
+            Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
         }
 
-        // 2. Define Roles and Assign Permissions
+        // 2. Define Roles and Assign Permissions Additively (givePermissionTo preserves existing permissions)
 
-        // --- ADMIN (Super User) ---
+        // Super Admin & Admin gets ALL permissions
         $admin = Role::firstOrCreate(['name' => 'admin']);
-        $admin->syncPermissions(Permission::all());
+        $admin->givePermissionTo(Permission::all());
 
-        // --- LIBRARIAN ---
-        $librarian = Role::firstOrCreate(['name' => 'librarian']);
-        $librarian->syncPermissions([
+        $superAdmin = Role::firstOrCreate(['name' => 'super_admin']);
+        $superAdmin->givePermissionTo(Permission::all());
+
+        // Helper function for non-destructive additive permission assignment
+        $assign = function(string $roleName, array $perms) {
+            $role = Role::firstOrCreate(['name' => $roleName]);
+            $role->givePermissionTo($perms);
+        };
+
+        // Librarian
+        $assign('librarian', [
             'access_admin_dashboard',
             'view_library',
             'manage_library_books',
             'manage_library_borrows',
+            'view_expenses',
+            'create_expenses',
         ]);
 
-        // --- SICKBAY NURSE ---
-        $sickbayNurse = Role::firstOrCreate(['name' => 'sickbay_nurse']);
-        $sickbayNurse->syncPermissions([
+        // Sickbay Nurse
+        $assign('sickbay_nurse', [
             'access_admin_dashboard',
             'view_sickbay_portal',
             'register_walk_in',
             'write_sickbay_medical_logs',
             'manage_observation_beds',
             'manage_sickbay_inventory',
+            'view_expenses',
+            'create_expenses',
         ]);
 
-        // --- HOSTEL SUPERVISORS ---
-        $maleHostelSupervisor = Role::firstOrCreate(['name' => 'male_hostel_supervisor']);
-        $maleHostelSupervisor->syncPermissions([
+        // Hostel Supervisors & Viewer
+        $assign('male_hostel_supervisor', [
             'access_admin_dashboard',
             'view_hostel_bookings',
             'view_male_hostel_bookings',
+            'view_expenses',
+            'create_expenses',
         ]);
 
-        $femaleHostelSupervisor = Role::firstOrCreate(['name' => 'female_hostel_supervisor']);
-        $femaleHostelSupervisor->syncPermissions([
+        $assign('female_hostel_supervisor', [
             'access_admin_dashboard',
             'view_hostel_bookings',
             'view_female_hostel_bookings',
+            'view_expenses',
+            'create_expenses',
         ]);
 
-        $hostelViewer = Role::firstOrCreate(['name' => 'hostel_viewer']);
-        $hostelViewer->syncPermissions([
+        $assign('hostel_viewer', [
             'access_admin_dashboard',
             'view_hostel_bookings',
         ]);
 
-        // --- ACADEMIC ROLES ---
-        $registrar = Role::firstOrCreate(['name' => 'registrar']);
-        $registrar->syncPermissions([
+        // Academic Roles
+        $assign('registrar', [
             'access_admin_dashboard',
             'manage_courses', 
             'assign_coordinators', 
@@ -213,28 +232,38 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage_staff',
             'manage_academic_sessions',
             'manage_hostels',
+            'view_hostel_bookings',
             'view_attendance',
             'manage_attendance',
             'perform_student_registration',
-            'manage_student_registrations'
+            'manage_student_registrations',
+            'view_expenses',
+            'create_expenses',
         ]);
-        
-        $hrManager = Role::firstOrCreate(['name' => 'hr_manager']);
-        $hrManager->syncPermissions([
+
+        $assign('hr_manager', [
             'access_admin_dashboard',
             'view_staff',
             'manage_staff',
             'view_attendance',
             'manage_attendance',
             'view_salaries',
-            'run_payroll'
+            'run_payroll',
+            'view_expenses',
+            'create_expenses',
+            'request_expenses_for_others',
         ]);
 
-        $dean = Role::firstOrCreate(['name' => 'dean']);
-        $dean->syncPermissions(['access_admin_dashboard', 'approve_results', 'view_results', 'manage_courses']);
+        $assign('dean', [
+            'access_admin_dashboard',
+            'approve_results',
+            'view_results',
+            'manage_courses',
+            'view_expenses',
+            'create_expenses',
+        ]);
 
-        $hod = Role::firstOrCreate(['name' => 'hod']);
-        $hod->syncPermissions([
+        $assign('hod', [
             'access_admin_dashboard',
             'approve_results',
             'view_results',
@@ -244,63 +273,172 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage_student_registrations',
             'view_staff',
             'manage_timetables',
+            'view_students',
+            'view_expenses',
+            'create_expenses',
+            'request_expenses_for_others',
         ]);
 
-        $courseCoordinator = Role::firstOrCreate(['name' => 'course_coordinator']);
-        $courseCoordinator->syncPermissions(['access_admin_dashboard', 'view_results']);
+        $assign('exams_officer', [
+            'access_admin_dashboard',
+            'manage_exams',
+            'manage_courses',
+            'manage_timetables',
+            'view_expenses',
+            'create_expenses',
+        ]);
 
-        $lecturer = Role::firstOrCreate(['name' => 'lecturer']);
-        $lecturer->syncPermissions(['access_admin_dashboard', 'view_results']);
+        $assign('course_coordinator', [
+            'access_admin_dashboard',
+            'view_results',
+            'view_expenses',
+            'create_expenses',
+        ]);
 
-        // --- ADMISSIONS ROLES ---
-        $admissionsManager = Role::firstOrCreate(['name' => 'admissions_manager']);
-        $admissionsManager->syncPermissions(['access_admin_dashboard', 'admit_students', 'review_applications', 'view_applications']);
+        $assign('lecturer', [
+            'access_admin_dashboard',
+            'view_results',
+            'view_expenses',
+            'create_expenses',
+        ]);
 
-        $admissionsOfficer = Role::firstOrCreate(['name' => 'admissions_officer']);
-        $admissionsOfficer->syncPermissions(['access_admin_dashboard', 'review_applications', 'view_applications']);
+        // Admissions Roles
+        $assign('admissions_manager', [
+            'access_admin_dashboard',
+            'admit_students',
+            'review_applications',
+            'view_applications',
+            'view_expenses',
+            'create_expenses',
+        ]);
 
-        $admissionsClerk = Role::firstOrCreate(['name' => 'admissions_clerk']);
-        $admissionsClerk->syncPermissions(['access_admin_dashboard', 'view_applications']);
+        $assign('admissions_officer', [
+            'access_admin_dashboard',
+            'review_applications',
+            'view_applications',
+            'view_expenses',
+            'create_expenses',
+        ]);
 
-        $admissionDirector = Role::firstOrCreate(['name' => 'admission_director']);
-        $admissionDirector->syncPermissions([
+        $assign('admissions_clerk', [
+            'access_admin_dashboard',
+            'view_applications',
+            'view_expenses',
+            'create_expenses',
+        ]);
+
+        $assign('admission_director', [
             'access_admin_dashboard',
             'view_applications',
             'review_applications',
             'admit_students',
             'view_students',
             'edit_students',
+            'view_expenses',
+            'create_expenses',
         ]);
 
-        // --- FINANCE ROLES ---
-        $bursar = Role::firstOrCreate(['name' => 'bursar']);
-        $bursar->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments', 'manual_payment_override', 'view_bursary_reports', 'manage_hostel_fees']);
+        // Finance & Inventory Roles
+        $assign('bursar', [
+            'access_admin_dashboard',
+            'manage_payments',
+            'verify_payments',
+            'view_payments',
+            'manual_payment_override',
+            'view_bursary_reports',
+            'manage_hostel_fees',
+            'edit_invoices',
+            'view_expenses',
+            'create_expenses',
+            'request_expenses_for_others',
+            'view_inventory',
+            'manage_inventory',
+            'create_inventory_items',
+            'edit_inventory_items',
+            'delete_inventory_items',
+            'restock_inventory_items',
+            'create_inventory_requisitions',
+            'approve_inventory_requisitions',
+            'view_inventory_requisitions',
+            'manage_inventory_requisitions',
+            'view_inventory_assignments',
+            'manage_inventory_assignments',
+            'view_inventory_categories',
+            'manage_inventory_categories',
+            'view_inventory_audit_logs',
+        ]);
 
-        $headOfFinance = Role::firstOrCreate(['name' => 'head_of_finance']);
-        $headOfFinance->syncPermissions(['access_admin_dashboard', 'manage_payments', 'verify_payments', 'view_payments', 'manual_payment_override', 'view_bursary_reports', 'manage_hostel_fees']);
+        $assign('head_of_finance', [
+            'access_admin_dashboard',
+            'manage_payments',
+            'verify_payments',
+            'view_payments',
+            'manual_payment_override',
+            'view_bursary_reports',
+            'manage_hostel_fees',
+            'edit_invoices',
+            'view_expenses',
+            'create_expenses',
+            'request_expenses_for_others',
+        ]);
 
-        $financeOfficer = Role::firstOrCreate(['name' => 'finance_officer']);
-        $financeOfficer->syncPermissions(['access_admin_dashboard', 'verify_payments', 'view_payments']);
+        $assign('finance_officer', [
+            'access_admin_dashboard',
+            'verify_payments',
+            'view_payments',
+            'edit_invoices',
+            'view_expenses',
+            'create_expenses',
+        ]);
 
-        $financeClerk = Role::firstOrCreate(['name' => 'finance_clerk']);
-        $financeClerk->syncPermissions(['access_admin_dashboard', 'view_payments']);
+        $assign('finance_clerk', [
+            'access_admin_dashboard',
+            'view_payments',
+            'view_expenses',
+            'create_expenses',
+        ]);
 
-        // --- HOSTEL ROLES ---
-        $warden = Role::firstOrCreate(['name' => 'hostel_warden']);
-        $warden->syncPermissions([
+        $assign('store_officer', [
+            'access_admin_dashboard',
+            'view_inventory',
+            'manage_inventory',
+            'create_inventory_items',
+            'edit_inventory_items',
+            'delete_inventory_items',
+            'restock_inventory_items',
+            'create_inventory_requisitions',
+            'approve_inventory_requisitions',
+            'view_inventory_requisitions',
+            'manage_inventory_requisitions',
+            'view_inventory_assignments',
+            'manage_inventory_assignments',
+            'view_inventory_categories',
+            'manage_inventory_categories',
+            'view_inventory_audit_logs',
+            'view_expenses',
+            'create_expenses',
+        ]);
+
+        // Hostel Roles
+        $assign('hostel_warden', [
             'access_admin_dashboard',
             'view_students',
             'manage_hostels',
             'manage_hostel_bookings',
             'toggle_hostels',
+            'view_expenses',
+            'create_expenses',
         ]);
 
-        // --- FRONT DESK & ICT & EXECUTIVE ---
-        $receptionist = Role::firstOrCreate(['name' => 'receptionist']);
-        $receptionist->syncPermissions(['access_admin_dashboard', 'manage_visitors']);
+        // Front Desk & ICT & Executive
+        $assign('receptionist', [
+            'access_admin_dashboard',
+            'manage_visitors',
+            'view_expenses',
+            'create_expenses',
+        ]);
 
-        $ictStaff = Role::firstOrCreate(['name' => 'ict_staff']);
-        $ictStaff->syncPermissions([
+        $assign('ict_staff', [
             'access_admin_dashboard',
             'view_staff',
             'edit_staff_profile',
@@ -310,15 +448,17 @@ class RolesAndPermissionsSeeder extends Seeder
             'fix_course_registration',
             'manage_users',
             'manage_system_settings',
+            'manage_support',
             'view_system_status',
             'view_audit_logs',
             'view_recent_activities',
             'impersonate_users',
             'manage_bulk_communications',
+            'view_expenses',
+            'create_expenses',
         ]);
 
-        $vc = Role::firstOrCreate(['name' => 'vice_chancellor']);
-        $vc->syncPermissions([
+        $assign('vice_chancellor', [
             'access_admin_dashboard',
             'view_staff',
             'view_students',
@@ -333,14 +473,13 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_bursary_reports',
             'view_salaries',
             'manage_hostels',
+            'view_expenses',
+            'create_expenses',
         ]);
 
-        // --- CORE ROLES ---
-        $staff = Role::firstOrCreate(['name' => 'staff']);
-        $staff->syncPermissions(['access_staff_portal', 'view_own_payslips', 'view_library', 'request_library_book', 'view_sickbay_portal']);
-
-        // --- NON-ACADEMIC SPECIFIC ROLES ---
-        $nonAcademicRoles = [
+        // Core Staff & Non-Academic Staff
+        $staffRoles = [
+            'staff',
             'cleaner',
             'driver',
             'carpenter',
@@ -349,15 +488,28 @@ class RolesAndPermissionsSeeder extends Seeder
             'maintenance_worker',
         ];
 
-        foreach ($nonAcademicRoles as $roleName) {
-            $role = Role::firstOrCreate(['name' => $roleName]);
-            $role->syncPermissions(['access_staff_portal', 'view_own_payslips', 'view_library', 'request_library_book', 'view_sickbay_portal']);
+        foreach ($staffRoles as $roleName) {
+            $assign($roleName, [
+                'access_staff_portal',
+                'view_own_payslips',
+                'view_library',
+                'request_library_book',
+                'view_sickbay_portal',
+                'view_expenses',
+                'create_expenses',
+            ]);
         }
 
-        $student = Role::firstOrCreate(['name' => 'student']);
-        $student->syncPermissions(['access_student_portal', 'view_library', 'request_library_book', 'view_sickbay_portal']);
+        // Student & Applicant
+        $assign('student', [
+            'access_student_portal',
+            'view_library',
+            'request_library_book',
+            'view_sickbay_portal',
+        ]);
 
-        $applicant = Role::firstOrCreate(['name' => 'applicant']);
-        $applicant->syncPermissions(['access_applicant_portal']);
+        $assign('applicant', [
+            'access_applicant_portal',
+        ]);
     }
 }

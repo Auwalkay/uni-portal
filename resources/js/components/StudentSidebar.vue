@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
+import { markRaw } from 'vue';
 import { LayoutGrid, BookOpen, CreditCard, FileText, User, GraduationCap, CalendarClock, Home, LifeBuoy, Library, Activity, Megaphone, HelpCircle } from 'lucide-vue-next';
+
+const RawLink = markRaw(Link);
 
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -54,6 +57,11 @@ const mainNavItems: NavItem[] = [
         icon: CalendarClock,
     },
     {
+        title: 'Exam Docket Pass',
+        href: '/student/exam-docket',
+        icon: FileText,
+    },
+    {
         title: 'Payments',
         href: '/student/payments',
         icon: CreditCard,
@@ -86,7 +94,7 @@ const mainNavItems: NavItem[] = [
         <SidebarHeader>
             <SidebarMenu>
                 <SidebarMenuItem>
-                    <SidebarMenuButton size="lg" :as="Link" href="/dashboard">
+                    <SidebarMenuButton size="lg" :as="RawLink" href="/dashboard">
                         <AppLogo />
                     </SidebarMenuButton>
                 </SidebarMenuItem>

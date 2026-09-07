@@ -61,11 +61,22 @@ class AccommodationController extends Controller
             });
         }
 
-        // Check for existing active booking
+        // Check for existing active booking or active payment
         $existingBooking = HostelBooking::with(['room.floor.block.hostel', 'invoice'])
             ->where('student_id', $student->id)
             ->where('session_id', $currentSession->id)
-            ->whereIn('status', ['pending', 'confirmed'])
+            ->where(function ($q) {
+                $q->where('status', 'confirmed')
+                  ->orWhereHas('invoice', function ($iq) {
+                      $iq->whereIn('status', ['paid', 'partial'])
+                         ->orWhere(function ($pendingQ) {
+                             $pendingQ->where('status', 'pending')
+                                      ->where(function ($d) {
+                                          $d->whereNull('due_date')->orWhere('due_date', '>=', now());
+                                      });
+                         });
+                  });
+            })
             ->first();
 
         // If they haven't met requirements or booking is disabled, pass correct statuses to the view
@@ -201,14 +212,25 @@ class AccommodationController extends Controller
             });
         }
 
-        // Check for existing active booking
+        // Check for existing active booking or active payment
         $existingBooking = HostelBooking::where('student_id', $student->id)
             ->where('session_id', $currentSession->id)
-            ->whereIn('status', ['pending', 'confirmed'])
+            ->where(function ($q) {
+                $q->where('status', 'confirmed')
+                  ->orWhereHas('invoice', function ($iq) {
+                      $iq->whereIn('status', ['paid', 'partial'])
+                         ->orWhere(function ($pendingQ) {
+                             $pendingQ->where('status', 'pending')
+                                      ->where(function ($d) {
+                                          $d->whereNull('due_date')->orWhere('due_date', '>=', now());
+                                      });
+                         });
+                  });
+            })
             ->first();
 
         if ($existingBooking) {
-            return back()->with('error', 'You already have an active accommodation booking for this session.');
+            return back()->with('error', 'You already have an active hostel booking or payment for this session. You cannot proceed to book another room.');
         }
 
         DB::beginTransaction();

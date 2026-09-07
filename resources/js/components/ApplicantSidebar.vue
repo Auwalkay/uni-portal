@@ -2,6 +2,7 @@
 import { Link } from '@inertiajs/vue3';
 import { LayoutGrid, FileText, Upload } from 'lucide-vue-next';
 
+import { computed, markRaw } from 'vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import {
@@ -16,6 +17,8 @@ import {
 import { type NavItem } from '@/types';
 
 import AppLogo from './AppLogo.vue';
+
+const RawLink = markRaw(Link);
 
 const mainNavItems: NavItem[] = [
     {
@@ -41,7 +44,7 @@ const mainNavItems: NavItem[] = [
         <SidebarHeader>
             <SidebarMenu>
                 <SidebarMenuItem>
-                    <SidebarMenuButton size="lg" :as="Link" href="/dashboard">
+                    <SidebarMenuButton size="lg" :as="RawLink" href="/dashboard">
                         <AppLogo />
                     </SidebarMenuButton>
                 </SidebarMenuItem>

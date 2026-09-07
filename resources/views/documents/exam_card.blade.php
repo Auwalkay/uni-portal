@@ -25,6 +25,7 @@
             /* Red for Exam */
             padding-bottom: 10px;
             margin-bottom: 15px;
+            min-height: 100px;
             position: relative;
         }
 
@@ -38,8 +39,8 @@
             position: absolute;
             right: 0;
             top: 0;
-            width: 90px;
-            height: 100px;
+            width: 85px;
+            height: 95px;
             border: 1px solid #ddd;
             padding: 2px;
             background: #fff;
@@ -202,10 +203,33 @@
 <body>
     <div class="watermark">EXAM ADMITTED</div>
 
+    @php
+        $logoPath = public_path('miu-logo.png');
+        if (!file_exists($logoPath)) {
+            $logoPath = public_path('miu-logo.jpeg');
+        }
+        $logoBase64 = file_exists($logoPath) ? base64_encode(file_get_contents($logoPath)) : null;
+
+        $passportBase64 = null;
+        if (!empty($student->passport_photo_path)) {
+            $pPath = public_path('storage/' . $student->passport_photo_path);
+            if (!file_exists($pPath)) {
+                $pPath = storage_path('app/public/' . $student->passport_photo_path);
+            }
+            if (file_exists($pPath)) {
+                $passportBase64 = base64_encode(file_get_contents($pPath));
+            }
+        }
+    @endphp
+
     <div class="header">
         <div class="logo-box">
-            <img src="{{ public_path('miu-logo.png') }}" alt="Logo"
-                style="height: 45px; width: auto; max-width: 150px; margin-top: -5px;">
+            @if($logoBase64)
+                <img src="data:image/png;base64,{{ $logoBase64 }}" alt="Logo"
+                    style="height: 45px; width: auto; max-width: 150px; margin-top: -5px;">
+            @else
+                <div style="font-weight: bold; color: #E31E24; font-size: 14px;">MIU</div>
+            @endif
         </div>
 
         <h1 class="uni-name">Mewar International University Nigeria</h1>
@@ -215,10 +239,10 @@
         </div>
 
         <div class="passport-box">
-            @if($student->passport_photo_path)
-                <img src="{{ public_path('storage/' . $student->passport_photo_path) }}" class="passport-photo">
+            @if($passportBase64)
+                <img src="data:image/jpeg;base64,{{ $passportBase64 }}" class="passport-photo">
             @else
-                <div style="text-align: center; padding-top: 35px; color: #ccc;">No Photo</div>
+                <div style="text-align: center; padding-top: 35px; color: #999; font-size: 9px; font-weight: bold;">NO PHOTO</div>
             @endif
         </div>
     </div>
@@ -252,20 +276,40 @@
         <table class="course-table">
             <thead>
                 <tr>
-                    <th width="5%">S/N</th>
-                    <th width="15%">Code</th>
-                    <th width="55%">Course Title</th>
-                    <th width="10%">Units</th>
-                    <th width="15%">Invigilator</th>
+                    <th width="4%">S/N</th>
+                    <th width="12%">Code</th>
+                    <th width="34%">Course Title</th>
+                    <th width="6%">Units</th>
+                    <th width="20%">Date & Time</th>
+                    <th width="12%">Venue</th>
+                    <th width="12%">Invigilator Sign</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach($registrations as $index => $reg)
+                    @php
+                        $sch = isset($examSchedules[$reg->course_id]) ? $examSchedules[$reg->course_id] : null;
+                    @endphp
                     <tr>
                         <td align="center">{{ $loop->iteration }}</td>
                         <td class="course-code">{{ $reg->course->code }}</td>
                         <td>{{ $reg->course->title }}</td>
                         <td align="center">{{ $reg->course->units }}</td>
+                        <td>
+                            @if($sch)
+                                <strong>{{ \Carbon\Carbon::parse($sch->exam_date)->format('D, d M Y') }}</strong><br>
+                                <span style="font-size: 8.5px; color: #555;">{{ \Carbon\Carbon::parse($sch->start_time)->format('g:i A') }} - {{ \Carbon\Carbon::parse($sch->end_time)->format('g:i A') }}</span>
+                            @else
+                                <span style="color: #888; font-style: italic;">Schedule Pending</span>
+                            @endif
+                        </td>
+                        <td>
+                            @if($sch)
+                                <strong>{{ $sch->venue }}</strong>
+                            @else
+                                <span style="color: #888;">TBA</span>
+                            @endif
+                        </td>
                         <td></td>
                     </tr>
                 @endforeach
@@ -286,23 +330,36 @@
         </ul>
     </div>
 
-    <div class="verification-row">
-        <table class="signature-grid">
+    <div class="verification-row" style="margin-top: 15px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
+        <table style="width: 100%; border-collapse: collapse;">
             <tr>
-                <td class="signature-cell">
-                    <div class="signature-line">Candidate's Signature</div>
+                <td style="width: 75%; vertical-align: bottom; padding-right: 15px;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td class="signature-cell" style="padding-right: 10px;">
+                                <div class="signature-line">Candidate's Signature</div>
+                            </td>
+                            <td class="signature-cell" style="padding-right: 10px;">
+                                <div class="signature-line">Registrar / Exams Officer</div>
+                            </td>
+                            <td class="signature-cell">
+                                <div class="signature-line">Faculty Officer's Stamp</div>
+                            </td>
+                        </tr>
+                    </table>
                 </td>
-                <td class="signature-cell">
-                    <div class="signature-line">Registrar / Exams Officer</div>
-                </td>
-                <td class="signature-cell">
-                    <div class="signature-line">Faculty Officer's Stamp</div>
+
+                <td style="width: 25%; text-align: center; vertical-align: middle;">
+                    <div class="qr-box" style="text-align: center;">
+                        <img src="{{ $qrCodeUrl ?? ('https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' . urlencode(url('/admin/exams/verify-pass/' . ($verificationToken ?? 'PERMIT')))) }}" alt="Verification QR" style="width: 80px; height: 80px; display: block; margin: 0 auto;">
+                        <span class="scan-text" style="display: block; font-size: 8px; font-weight: bold; color: #E31E24; margin-top: 4px; text-transform: uppercase;">Scan to Verify Student</span>
+                    </div>
                 </td>
             </tr>
             <tr>
-                <td colspan="3" style="padding-top: 20px; text-align: center; font-size: 8px; color: #999;">
-                    Generated on {{ now()->format('d/m/Y H:i:s') }} | Secure Verification Code:
-                    {{ strtoupper(substr(md5($student->id . now()), 0, 10)) }}
+                <td colspan="2" style="padding-top: 12px; text-align: center; font-size: 8px; color: #777;">
+                    Generated on {{ now()->format('d/m/Y H:i:s') }} | Official Invigilator Verification Token:
+                    <strong style="color: #333; font-family: monospace; font-size: 9px;">{{ $verificationToken ?? strtoupper(substr(md5($student->id . now()), 0, 10)) }}</strong>
                 </td>
             </tr>
         </table>

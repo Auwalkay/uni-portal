@@ -28,12 +28,15 @@ class StaffImport implements ToModel, WithChunkReading, WithHeadingRow, WithVali
             return null;
         }
 
+        // Determine staff number (auto-generate if null/empty)
+        $staffNumber = !empty($row['staff_number']) ? trim($row['staff_number']) : \App\Helpers\StaffNumberHelper::generate();
+
         // Skip if staff number already exists
-        if (Staff::where('staff_number', $row['staff_number'])->exists()) {
+        if (Staff::where('staff_number', $staffNumber)->exists()) {
             return null;
         }
 
-        return DB::transaction(function () use ($row) {
+        return DB::transaction(function () use ($row, $staffNumber) {
             $password = Str::random(10);
             $isNewUser = false;
 
@@ -108,7 +111,7 @@ class StaffImport implements ToModel, WithChunkReading, WithHeadingRow, WithVali
             $staff = Staff::updateOrCreate(
                 ['user_id' => $user->id],
                 [
-                    'staff_number' => $row['staff_number'],
+                    'staff_number' => $staffNumber,
                     'designation' => $row['designation'] ?? null,
                     'department_id' => $departmentId,
                     'is_academic' => filter_var($row['is_academic'] ?? true, FILTER_VALIDATE_BOOLEAN),
@@ -170,7 +173,7 @@ class StaffImport implements ToModel, WithChunkReading, WithHeadingRow, WithVali
                     }
                 }
             ],
-            'staff_number' => 'required|string',
+            'staff_number' => 'nullable|string',
             'department' => 'nullable|string',
         ];
     }

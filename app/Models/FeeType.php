@@ -14,10 +14,11 @@ class FeeType extends Model
     {
         return LogOptions::defaults()->logFillable()->logOnlyDirty()->dontLogEmptyChanges();
     }
-    protected $fillable = ['name', 'slug', 'description', 'is_one_time'];
+    protected $fillable = ['name', 'slug', 'description', 'is_one_time', 'is_per_course'];
 
     protected $casts = [
         'is_one_time' => 'boolean',
+        'is_per_course' => 'boolean',
     ];
 
     public function configurations()

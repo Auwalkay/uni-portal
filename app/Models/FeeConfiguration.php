@@ -17,13 +17,15 @@ class FeeConfiguration extends Model
     protected $fillable = [
         'fee_type_id',
         'session_id',
+        'semester_id',
         'faculty_id',
         'department_id',
         'program_id',
         'level',
         'entry_mode',
         'amount',
-        'is_compulsory'
+        'is_compulsory',
+        'is_per_course',
     ];
 
     public function feeType()
@@ -34,6 +36,11 @@ class FeeConfiguration extends Model
     public function session()
     {
         return $this->belongsTo(Session::class, 'session_id');
+    }
+
+    public function semester()
+    {
+        return $this->belongsTo(Semester::class, 'semester_id');
     }
 
     public function faculty()
