@@ -71,6 +71,7 @@ class CourseRegistrationController extends Controller
             ];
         }
 
+        $currentSession = Session::current();
         $currentSemester = Semester::current();
         $isSecondSemActive = $currentSemester && (stripos($currentSemester->name, 'Second') !== false || $currentSemester->name == '2');
 
