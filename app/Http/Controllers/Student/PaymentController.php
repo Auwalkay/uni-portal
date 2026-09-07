@@ -289,7 +289,10 @@ class PaymentController extends Controller
             $checkGateway = $this->getGatewayByName($lastPending->gateway ?? 'squadco');
             $verification = $checkGateway->verifyTransaction($lastPending->gateway_reference);
 
-            if ($verification && $verification['status'] === 'success') {
+            $rawStatus = strtolower((string) ($verification['status'] ?? ''));
+            $isSuccess = in_array($rawStatus, ['success', 'successful', 'approved', 'completed', 'paid']);
+
+            if ($verification && $isSuccess) {
                 app(PaymentHandler::class)->handleSuccessfulPayment($lastPending->gateway_reference, $verification);
 
                 return Inertia::render('Student/Finance/Success', [
@@ -297,8 +300,10 @@ class PaymentController extends Controller
                     'invoice' => $invoice,
                 ]);
             } else {
-                // If abandoned, failed, cancelled, expired, or non-successful, mark as failed so student can retry cleanly
-                $lastPending->update(['status' => 'failed']);
+                $isExplicitlyFailed = in_array($rawStatus, ['failed', 'cancelled', 'error', 'abandoned', 'declined', 'expired']);
+                if ($isExplicitlyFailed) {
+                    $lastPending->update(['status' => 'failed']);
+                }
             }
         }
 
@@ -351,14 +356,17 @@ class PaymentController extends Controller
         $data = $this->gateway->verifyTransaction($reference);
         $payment = Payment::where('gateway_reference', $reference)->first();
 
-        if ($data && $data['status'] === 'success') {
+        $rawStatus = strtolower((string) ($data['status'] ?? ''));
+        $isSuccess = in_array($rawStatus, ['success', 'successful', 'approved', 'completed', 'paid']);
+
+        if ($data && $isSuccess) {
             if ($payment) {
                 if ($payment->status !== 'success') {
                     app(PaymentHandler::class)->handleSuccessfulPayment($reference, $data);
                 }
 
                 return Inertia::render('Student/Finance/Success', [
-                    'payment' => $payment,
+                    'payment' => $payment->fresh(),
                     'invoice' => $payment->invoice,
                 ]);
             }
@@ -366,12 +374,14 @@ class PaymentController extends Controller
             return redirect()->route('student.payments.index')->with('success', 'Payment successful!');
         }
 
-        if ($payment) {
+        // Only mark payment as failed if explicitly reported failed/cancelled by gateway
+        $isExplicitlyFailed = in_array($rawStatus, ['failed', 'cancelled', 'error', 'abandoned', 'declined', 'expired']);
+        if ($payment && $payment->status !== 'success' && $isExplicitlyFailed) {
             $payment->update(['status' => 'failed']);
         }
 
         return Inertia::render('Student/Finance/Failure', [
-            'error' => $data['message'] ?? 'The payment gateway could not verify this transaction.',
+            'error' => $data['gateway_response'] ?? $data['message'] ?? 'The payment gateway could not verify this transaction at this time.',
             'reference' => $reference,
         ]);
     }

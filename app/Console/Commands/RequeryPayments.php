@@ -63,16 +63,19 @@ class RequeryPayments extends Command
                 $gateway = ($payment->gateway === 'paystack') ? $paystack : $squadco;
                 $data = $gateway->verifyTransaction($payment->gateway_reference);
 
-                if ($data && ($data['status'] ?? null) === 'success') {
+                $rawStatus = strtolower((string) ($data['status'] ?? ''));
+                $isSuccess = in_array($rawStatus, ['success', 'successful', 'approved', 'completed', 'paid']);
+
+                if ($data && $isSuccess) {
                     $handler->handleSuccessfulPayment($payment->gateway_reference, $data);
                     $this->info("✓ Payment {$payment->gateway_reference} verified as SUCCESS (was {$payment->status}).");
                     $successCount++;
                 } else {
-                    $status = $data['status'] ?? 'unknown';
+                    $status = $rawStatus ?: 'unknown';
                     
                     if ($payment->status === 'pending') {
                         // For pending payments: mark as failed if explicitly failed/abandoned on gateway or if > 24 hours old
-                        $isExplicitlyFailedOrVeryOld = !$data || in_array($status, ['failed', 'cancelled', 'error', 'abandoned', 'expired']) || $payment->created_at->lt(now()->subHours(24));
+                        $isExplicitlyFailedOrVeryOld = !$data || in_array($status, ['failed', 'cancelled', 'error', 'abandoned', 'expired', 'declined']) || $payment->created_at->lt(now()->subHours(24));
                         
                         if ($isExplicitlyFailedOrVeryOld) {
                             $payment->update(['status' => 'failed']);

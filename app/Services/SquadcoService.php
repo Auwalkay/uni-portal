@@ -94,8 +94,11 @@ class SquadcoService implements PaymentGatewayInterface
                 ? ($data['transaction_amount'] / 100) 
                 : ($data['amount'] ?? 0);
 
+            $rawStatus = strtolower((string) ($data['transaction_status'] ?? $data['status'] ?? 'pending'));
+            $normalizedStatus = in_array($rawStatus, ['success', 'successful', 'approved', 'completed', 'paid']) ? 'success' : $rawStatus;
+
             return [
-                'status' => $data['transaction_status'] ?? 'pending',
+                'status' => $normalizedStatus,
                 'reference' => $data['transaction_ref'] ?? $reference,
                 'amount' => $amountInNaira,
                 'channel' => $data['transaction_type'] ?? $data['payment_method'] ?? 'squadco',

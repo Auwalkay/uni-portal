@@ -100,7 +100,10 @@ class PaymentController extends Controller
 
         $payment = Payment::where('gateway_reference', $reference)->first();
 
-        if ($data && $data['status'] === 'success') {
+        $rawStatus = strtolower((string) ($data['status'] ?? ''));
+        $isSuccess = in_array($rawStatus, ['success', 'successful', 'approved', 'completed', 'paid']);
+
+        if ($data && $isSuccess) {
             if ($payment && $payment->status !== 'success') {
                 app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($reference, $data);
             }
@@ -108,10 +111,11 @@ class PaymentController extends Controller
             return redirect()->route('applicant.apply.show')->with('success', 'Payment successful! Application submitted.');
         }
 
-        if ($payment && $payment->status !== 'success') {
+        $isExplicitlyFailed = in_array($rawStatus, ['failed', 'cancelled', 'error', 'abandoned', 'declined', 'expired']);
+        if ($payment && $payment->status !== 'success' && $isExplicitlyFailed) {
             $payment->update(['status' => 'failed']);
         }
 
-        return redirect()->route('applicant.payment.index')->with('error', 'Payment verification failed or was abandoned.');
+        return redirect()->route('applicant.payment.index')->with('error', 'Payment verification failed or is pending confirmation.');
     }
 }
