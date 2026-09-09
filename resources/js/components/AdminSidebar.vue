@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building, Package, LifeBuoy, Library, Activity, Megaphone, UserCheck, FolderTree, QrCode } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building, Package, LifeBuoy, Library, Activity, Megaphone, UserCheck, FolderTree, QrCode, ShieldAlert } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -118,18 +118,6 @@ const academicsItems = computed(() => {
             show: hasPermission('manage_timetables'),
         },
         {
-            title: 'Examinations',
-            href: route().has('admin.exams.index') ? route('admin.exams.index') : '#',
-            icon: CalendarRange,
-            show: hasRole(['admin', 'lecturer', 'course_coordinator', 'dean', 'hod', 'staff']) || hasPermission('manage_exams') || hasPermission('manage_courses'),
-        },
-        {
-            title: 'Exam QR Scanner',
-            href: route().has('admin.exams.scanner') ? route('admin.exams.scanner') : '#',
-            icon: QrCode,
-            show: hasRole(['admin', 'lecturer', 'course_coordinator', 'dean', 'hod', 'staff']) || hasPermission('manage_exams') || hasPermission('manage_courses'),
-        },
-        {
             title: 'Campus Buildings',
             href: route().has('admin.buildings.index') ? route('admin.buildings.index') : '/admin/buildings',
             icon: Building,
@@ -164,6 +152,29 @@ const academicsItems = computed(() => {
             href: route('admin.course_registration.index'),
             icon: BookOpen,
             show: hasPermission('manage_student_registrations'),
+        },
+    ].filter(i => i.show);
+});
+
+const examinationsItems = computed(() => {
+    return [
+        {
+            title: 'Examinations Hub',
+            href: route().has('admin.exams.index') ? route('admin.exams.index') : '/admin/exams',
+            icon: CalendarRange,
+            show: hasRole(['admin', 'lecturer', 'course_coordinator', 'dean', 'hod', 'staff']) || hasPermission('manage_exams') || hasPermission('view_exams') || hasPermission('manage_courses'),
+        },
+        {
+            title: 'QR Attendance Scanner',
+            href: route().has('admin.exams.scanner') ? route('admin.exams.scanner') : '/admin/exams/scanner',
+            icon: QrCode,
+            show: hasRole(['admin', 'lecturer', 'course_coordinator', 'dean', 'hod', 'staff']) || hasPermission('manage_exams') || hasPermission('scan_exam_cards') || hasPermission('mark_exam_attendance') || hasPermission('manage_courses'),
+        },
+        {
+            title: 'Incident Registry',
+            href: route().has('admin.exams.incidents.index') ? route('admin.exams.incidents.index') : '/admin/exams/incidents',
+            icon: ShieldAlert,
+            show: hasRole(['admin', 'lecturer', 'course_coordinator', 'dean', 'hod', 'staff']) || hasPermission('manage_exams') || hasPermission('log_exam_incidents'),
         },
     ].filter(i => i.show);
 });
@@ -438,6 +449,7 @@ const footerNavItems = computed(() => {
             <NavMain v-if="frontDeskItems.length > 0" :items="frontDeskItems" label="Front Desk" />
             <NavMain v-if="personalItems.length > 0" :items="personalItems" label="Personal" />
             <NavMain v-if="academicsItems.length > 0" :items="academicsItems" label="Academics" />
+            <NavMain v-if="examinationsItems.length > 0" :items="examinationsItems" label="Examinations" />
             <NavMain v-if="financeItems.length > 0" :items="financeItems" label="Finance" />
             <NavMain v-if="administrationItems.length > 0" :items="administrationItems" label="Administration" />
             <NavMain v-if="inventoryItems.length > 0" :items="inventoryItems" label="Inventory" />

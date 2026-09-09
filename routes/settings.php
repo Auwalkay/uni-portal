@@ -305,23 +305,32 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::resource('timetables', \App\Http\Controllers\Admin\TimetableController::class)->only(['index', 'store', 'destroy']);
         });
 
-        // Exam Management
-        Route::middleware(['permission:manage_exams|access_admin_dashboard'])->group(function () {
-            Route::post('exams/toggle-publish', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'togglePublish'])->name('exams.toggle_publish');
-            Route::get('exams', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'index'])->name('exams.index');
-            Route::get('exams/create', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'create'])->name('exams.create');
-            Route::get('exams/scanner', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'scanner'])->name('exams.scanner');
-            Route::post('exams', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'store'])->name('exams.store');
-            Route::post('exams/import', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'import'])->name('exams.import');
+        // Exam Management (Granular Permissions)
+        Route::middleware(['permission:manage_exams|view_exams|create_exams|edit_exams|delete_exams|publish_exams|assign_invigilators|scan_exam_cards|mark_exam_attendance|log_exam_incidents|access_admin_dashboard'])->group(function () {
+            Route::post('exams/toggle-publish', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'togglePublish'])->name('exams.toggle_publish')->middleware('permission:manage_exams|publish_exams');
+            Route::get('exams', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'index'])->name('exams.index')->middleware('permission:manage_exams|view_exams');
+            Route::get('exams/exercises/{exam}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'showExam'])->name('exams.exercises.show')->middleware('permission:manage_exams|view_exams');
+            Route::post('exams/exercises', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'storeExam'])->name('exams.exercises.store')->middleware('permission:manage_exams|create_exams');
+            Route::put('exams/exercises/{exam}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'updateExam'])->name('exams.exercises.update')->middleware('permission:manage_exams|edit_exams');
+            Route::delete('exams/exercises/{exam}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'destroyExam'])->name('exams.exercises.destroy')->middleware('permission:manage_exams|delete_exams');
+            Route::post('exams/exercises/{exam}/toggle-publish', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'togglePublishExam'])->name('exams.exercises.toggle_publish')->middleware('permission:manage_exams|publish_exams');
+            Route::post('exams/exercises/{exam}/toggle-docket', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'toggleDocketExam'])->name('exams.exercises.toggle_docket')->middleware('permission:manage_exams|publish_exams');
+            Route::get('exams/create', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'create'])->name('exams.create')->middleware('permission:manage_exams|create_exams');
+            Route::get('exams/scanner', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'scanner'])->name('exams.scanner')->middleware('permission:manage_exams|scan_exam_cards|mark_exam_attendance');
+            Route::get('exams/incidents', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'incidentsIndex'])->name('exams.incidents.index')->middleware('permission:manage_exams|log_exam_incidents');
+            Route::post('exams/incidents', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'storeIncident'])->name('exams.incidents.general_store')->middleware('permission:manage_exams|log_exam_incidents');
+            Route::post('exams', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'store'])->name('exams.store')->middleware('permission:manage_exams|create_exams');
+            Route::post('exams/import', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'import'])->name('exams.import')->middleware('permission:manage_exams|create_exams');
             Route::get('exams/template', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'downloadTemplate'])->name('exams.template');
-            Route::get('exams/verify-pass/{token}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'verifyPass'])->name('exams.verify_pass');
-            Route::post('exams/mark-attendance', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'markAttendance'])->name('exams.mark_attendance');
-            Route::get('exams/{exam}/edit', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'edit'])->name('exams.edit');
-            Route::put('exams/{exam}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'update'])->name('exams.update');
-            Route::delete('exams/{exam}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'destroy'])->name('exams.destroy');
-            Route::post('exams/{exam}/invigilators', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'assignInvigilator'])->name('exams.invigilators.assign');
-            Route::delete('exam-invigilators/{invigilator}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'removeInvigilator'])->name('exams.invigilators.remove');
-            Route::post('exams/{exam}/incidents', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'logIncident'])->name('exams.incidents.store');
+            Route::get('exams/verify-pass/{token}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'verifyPass'])->name('exams.verify_pass')->middleware('permission:manage_exams|scan_exam_cards|mark_exam_attendance');
+            Route::post('exams/mark-attendance', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'markAttendance'])->name('exams.mark_attendance')->middleware('permission:manage_exams|mark_exam_attendance|scan_exam_cards');
+            Route::get('exams/{exam}/edit', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'edit'])->name('exams.edit')->middleware('permission:manage_exams|edit_exams');
+            Route::put('exams/{exam}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'update'])->name('exams.update')->middleware('permission:manage_exams|edit_exams');
+            Route::delete('exams/{exam}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'destroy'])->name('exams.destroy')->middleware('permission:manage_exams|delete_exams');
+            Route::post('exams/{exam}/invigilators', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'assignInvigilator'])->name('exams.invigilators.assign')->middleware('permission:manage_exams|assign_invigilators');
+            Route::delete('exam-invigilators/{invigilator}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'removeInvigilator'])->name('exams.invigilators.remove')->middleware('permission:manage_exams|assign_invigilators');
+            Route::post('exams/{exam}/incidents', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'logIncident'])->name('exams.incidents.store')->middleware('permission:manage_exams|log_exam_incidents');
+            Route::put('exam-incidents/{incident}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'updateIncident'])->name('exams.incidents.update')->middleware('permission:manage_exams|log_exam_incidents');
         });
 
         // Campus Buildings Management
