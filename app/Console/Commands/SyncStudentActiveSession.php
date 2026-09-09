@@ -111,7 +111,7 @@ class SyncStudentActiveSession extends Command
 
                 foreach ($wrongInvoices as $invoice) {
                     if ($invoice->paid_amount > 0 || in_array($invoice->status, ['paid', 'partial'])) {
-                        $this->line("<comment>[Paid Invoice Transfer]</comment> Invoice #{$invoice->reference_number} (Paid: ₦{$invoice->paid_amount}) re-assigned to session {$activeSession->name}");
+                        $this->line("<comment>[Paid Invoice Transfer]</comment> Invoice #{$invoice->reference} (Paid: ₦{$invoice->paid_amount}) re-assigned to session {$activeSession->name}");
                         
                         if (!$isDryRun) {
                             $invoice->update([
@@ -123,12 +123,12 @@ class SyncStudentActiveSession extends Command
                     } else {
                         // Unpaid / Initiated Pending Invoice
                         if ($existingActiveInvoice && $existingActiveInvoice->id !== $invoice->id) {
-                            $this->line("<comment>[Duplicate Invoice Cancelled]</comment> Pending Invoice #{$invoice->reference_number} cancelled because active session invoice exists.");
+                            $this->line("<comment>[Duplicate Invoice Cancelled]</comment> Pending Invoice #{$invoice->reference} cancelled because active session invoice exists.");
                             if (!$isDryRun) {
                                 $invoice->update(['status' => 'cancelled']);
                             }
                         } else {
-                            $this->line("<comment>[Initiated Invoice Converted]</comment> Pending Invoice #{$invoice->reference_number} converted to active session {$activeSession->name}");
+                            $this->line("<comment>[Initiated Invoice Converted]</comment> Pending Invoice #{$invoice->reference} converted to active session {$activeSession->name}");
                             if (!$isDryRun) {
                                 $invoice->update([
                                     'session_id'         => $activeSession->id,
