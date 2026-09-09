@@ -135,16 +135,16 @@ class StudentController extends Controller
                 'program_duration' => $duration,
             ]);
 
-            $currentSession = \App\Models\Session::find($validated['admitted_session_id']);
+            $currentSession = \App\Models\Session::current() ?? \App\Models\Session::find($validated['admitted_session_id']);
 
-            $currenSemester = $currentSession ? $currentSession->semesters()->where('is_current', true)->first() : null;
+            $currentSemester = $currentSession ? $currentSession->semesters()->where('is_current', true)->first() : null;
 
             StudentSession::create([
                 'student_id' => $student->id,
-                'session_id' => $validated['admitted_session_id'],
+                'session_id' => $currentSession->id,
                 'level' => $validated['current_level'],
                 'status' => 'active',
-                'semester' => $currenSemester?->name ?? 'First Semester',
+                'semester' => $currentSemester?->name ?? 'First Semester',
             ]);
 
             // Handle WAEC Result
@@ -160,7 +160,7 @@ class StudentController extends Controller
 
             Mail::to($user->email)->send(new StudentAccountCreated($user, $password));
 
-            // Auto-generate school fee invoice
+            // Auto-generate school fee invoice for current active session
             $feeService = app(\App\Services\Finance\FeeService::class);
             $feeService->generateSchoolFeeInvoice($student, $currentSession);
         });

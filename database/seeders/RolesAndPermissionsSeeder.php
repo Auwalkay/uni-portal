@@ -27,9 +27,17 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_programmes', 'manage_programmes',
             'view_courses', 'manage_courses',
             'assign_coordinators',
-            'manage_academic_sessions',
-            'manage_timetables',
-            'manage_exams',
+            // Exam Management (Granular)
+            'view_exams',
+            'create_exams',
+            'edit_exams',
+            'delete_exams',
+            'publish_exams',
+            'assign_invigilators',
+            'scan_exam_cards',
+            'mark_exam_attendance',
+            'log_exam_incidents',
+            'manage_exams', // Global Override
             
             // Result Management
             'view_results',
@@ -281,6 +289,15 @@ class RolesAndPermissionsSeeder extends Seeder
 
         $assign('exams_officer', [
             'access_admin_dashboard',
+            'view_exams',
+            'create_exams',
+            'edit_exams',
+            'delete_exams',
+            'publish_exams',
+            'assign_invigilators',
+            'scan_exam_cards',
+            'mark_exam_attendance',
+            'log_exam_incidents',
             'manage_exams',
             'manage_courses',
             'manage_timetables',
@@ -290,6 +307,10 @@ class RolesAndPermissionsSeeder extends Seeder
 
         $assign('course_coordinator', [
             'access_admin_dashboard',
+            'view_exams',
+            'scan_exam_cards',
+            'mark_exam_attendance',
+            'log_exam_incidents',
             'view_results',
             'view_expenses',
             'create_expenses',
@@ -297,6 +318,10 @@ class RolesAndPermissionsSeeder extends Seeder
 
         $assign('lecturer', [
             'access_admin_dashboard',
+            'view_exams',
+            'scan_exam_cards',
+            'mark_exam_attendance',
+            'log_exam_incidents',
             'view_results',
             'view_expenses',
             'create_expenses',
