@@ -208,29 +208,38 @@ class HostelBookingController extends Controller
 
         $sessions = Session::latest()->get(['id', 'name']);
         
-        // Scope Hostel Dropdown Options based on permission
-        $hostelsQuery = Hostel::with(['blocks.floors.rooms'])->orderBy('name');
+        // Scope Hostel Dropdown Options based on permission and visibility
+        $hostelsQuery = Hostel::with(['blocks.floors.rooms'])
+            ->where('is_visible', true)
+            ->orderBy('name');
         if ($gender === 'male' || $gender === 'female') {
             $hostelsQuery->where('gender_type', $gender);
         }
         $hostels = $hostelsQuery->get();
 
-        // Analytics Calculations (Independent of UI request search/filters, but strictly scoped if user has single-gender permission)
-        $statsQuery = HostelBooking::query();
-        if ($userPermittedGender) {
-            $statsQuery->whereHas('room.floor.block.hostel', fn($q) => $q->where('gender_type', $userPermittedGender));
-        }
+        // Analytics Calculations (Scoped to visible hostels and permitted gender)
+        $statsQuery = HostelBooking::query()
+            ->whereHas('room.floor.block.hostel', function ($q) use ($userPermittedGender) {
+                $q->where('is_visible', true);
+                if ($userPermittedGender) {
+                    $q->where('gender_type', $userPermittedGender);
+                }
+            });
 
         $totalBookingsCount = (clone $statsQuery)->count();
         $confirmedCount = (clone $statsQuery)->where('status', 'confirmed')->count();
         $pendingCount = (clone $statsQuery)->where('status', 'pending')->count();
         $cancelledCount = (clone $statsQuery)->where('status', 'cancelled')->count();
 
-        // Rooms and Capacity for hostels
-        $capacityQuery = HostelRoom::query();
-        if ($userPermittedGender) {
-            $capacityQuery->whereHas('floor.block.hostel', fn($q) => $q->where('gender_type', $userPermittedGender));
-        }
+        // Rooms and Capacity for visible hostels and active/visible rooms
+        $capacityQuery = HostelRoom::whereHas('floor.block.hostel', function ($q) use ($userPermittedGender) {
+            $q->where('is_visible', true);
+            if ($userPermittedGender) {
+                $q->where('gender_type', $userPermittedGender);
+            }
+        })
+        ->where('is_visible', true)
+        ->where('is_suspended', false);
 
         $totalRooms = (clone $capacityQuery)->count();
         $totalCapacity = (int) (clone $capacityQuery)->sum('capacity');
