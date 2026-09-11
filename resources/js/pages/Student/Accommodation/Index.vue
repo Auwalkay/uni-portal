@@ -58,9 +58,9 @@ const props = defineProps<{
 const canBook = computed(() => props.hasPaidFees && props.isBookingActive);
 
 const isPendingPaidOverbooked = computed(() => {
-    return props.existingBooking && 
-           props.existingBooking.status === 'pending' && 
-           (props.existingBooking.invoice?.status === 'paid' || props.existingBooking.invoice?.status === 'partial');
+    if (!props.existingBooking) return false;
+    const isPaidOrPartial = props.existingBooking.invoice?.status === 'paid' || props.existingBooking.invoice?.status === 'partial';
+    return isPaidOrPartial && props.existingBooking.status !== 'confirmed';
 });
 
 // Booking State
@@ -225,10 +225,17 @@ const cancelExpiredBooking = () => {
                     </div>
 
                     <div class="flex items-center gap-3">
-                        <div v-if="existingBooking" class="flex flex-col items-end text-right">
+                        <div v-if="existingBooking && existingBooking.status === 'confirmed'" class="flex flex-col items-end text-right">
                             <Badge variant="default" class="bg-primary hover:bg-primary shadow-lg px-4 py-1.5 gap-2 text-sm">
                                 <BadgeCheck class="h-4 w-4" />
                                 Booking Active
+                            </Badge>
+                            <p class="text-xs text-muted-foreground mt-2 font-medium">Reference: {{ existingBooking.invoice?.reference }}</p>
+                        </div>
+                        <div v-else-if="isPendingPaidOverbooked" class="flex flex-col items-end text-right">
+                            <Badge variant="outline" class="border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-500/10 shadow-lg px-4 py-1.5 gap-2 text-sm font-bold">
+                                <AlertCircle class="h-4 w-4" />
+                                Room Selection Required
                             </Badge>
                             <p class="text-xs text-muted-foreground mt-2 font-medium">Reference: {{ existingBooking.invoice?.reference }}</p>
                         </div>
@@ -314,8 +321,8 @@ const cancelExpiredBooking = () => {
                                     <div>
                                         <span class="text-white/60 block uppercase font-bold">Status</span>
                                         <div class="flex items-center gap-2 mt-1">
-                                            <Badge :class="(existingBooking.status === 'confirmed' || existingBooking.invoice?.status === 'paid' || existingBooking.invoice?.status === 'partial') ? 'bg-emerald-500' : 'bg-amber-500'" class="text-white font-bold uppercase">
-                                                {{ (existingBooking.status === 'confirmed' || existingBooking.invoice?.status === 'paid') ? 'CONFIRMED' : existingBooking.status }}
+                                            <Badge :class="existingBooking.status === 'confirmed' ? 'bg-emerald-500' : existingBooking.status === 'cancelled' ? 'bg-rose-600' : 'bg-amber-500'" class="text-white font-bold uppercase">
+                                                {{ existingBooking.status }}
                                             </Badge>
                                             <Badge v-if="existingBooking.status === 'pending' && existingBooking.invoice?.status !== 'paid' && existingBooking.invoice?.due_date" variant="outline" class="border-amber-400/40 text-amber-300 bg-amber-500/10 font-mono font-bold text-[11px] px-2 py-0.5">
                                                 ⏱️ {{ getInvoiceCountdown(existingBooking.invoice.due_date)?.text }}

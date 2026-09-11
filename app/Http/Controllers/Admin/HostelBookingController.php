@@ -244,6 +244,7 @@ class HostelBookingController extends Controller
         ];
 
         $canManageBookings = $user->can('manage_hostel_bookings') || $user->can('manage_hostels') || $user->hasRole('admin');
+        $canChangeRoom = $user->can('change_hostel_room') || $user->hasRole('admin') || $user->hasRole('super_admin');
 
         return Inertia::render('Admin/Hostels/Bookings', [
             'bookings' => $bookings,
@@ -285,6 +286,7 @@ class HostelBookingController extends Controller
                 'per_page' => $perPage,
             ],
             'canManageBookings' => $canManageBookings,
+            'canChangeRoom' => $canChangeRoom,
         ]);
     }
 
@@ -681,7 +683,7 @@ class HostelBookingController extends Controller
     public function changeRoom(HostelBooking $booking, Request $request)
     {
         $user = Auth::user();
-        if (!$user->can('manage_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
+        if (!$user->can('change_hostel_room') && !$user->hasRole('admin') && !$user->hasRole('super_admin')) {
             return back()->with('error', 'Unauthorized. You do not have permission to change hostel rooms.');
         }
 
