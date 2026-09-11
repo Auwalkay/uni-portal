@@ -57,6 +57,12 @@ const props = defineProps<{
 
 const canBook = computed(() => props.hasPaidFees && props.isBookingActive);
 
+const isPendingPaidOverbooked = computed(() => {
+    return props.existingBooking && 
+           props.existingBooking.status === 'pending' && 
+           (props.existingBooking.invoice?.status === 'paid' || props.existingBooking.invoice?.status === 'partial');
+});
+
 // Booking State
 const selectedHostelId = ref<string | null>(null);
 const selectedBlockId = ref<string | null>(null);
@@ -85,6 +91,10 @@ const activeRoom = computed(() => {
 });
 
 const selectHostel = (hostel: any) => {
+    if (isPendingPaidOverbooked.value && hostel.fee_matches_invoice === false) {
+        alert(`Fee Mismatch: You can only select hostels with the same fee as your paid invoice (${formatMoney(props.existingBooking?.invoice?.amount)}). This hostel fee is ${formatMoney(hostel.final_fee)}.`);
+        return;
+    }
     selectedHostelId.value = hostel.id;
     selectedBlockId.value = null;
     selectedFloorId.value = null;
@@ -230,6 +240,21 @@ const cancelExpiredBooking = () => {
             <main class="flex-1 px-6 py-12 md:px-12 max-w-[1600px] mx-auto w-full">
                 <!-- If student already has an active allocation -->
                 <div v-if="existingBooking" class="max-w-4xl mx-auto space-y-8">
+                    <!-- Overbooked Paid Room Banner Callout -->
+                    <div v-if="isPendingPaidOverbooked" class="bg-amber-500/10 border-2 border-amber-500/30 rounded-3xl p-6 text-foreground flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
+                        <div class="flex items-start gap-4">
+                            <div class="h-12 w-12 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/40">
+                                <AlertCircle class="h-6 w-6 animate-pulse" />
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-extrabold">Room Selection Required</h3>
+                                <p class="text-sm text-muted-foreground mt-1 font-medium">
+                                    Your accommodation payment has been received! However, Room {{ existingBooking.room?.room_number || 'N/A' }} reached full capacity before payment completed. Your payment is safely recorded. Please select any open room below to complete and confirm your room allocation immediately.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
                     <Card class="rounded-3xl border shadow-lg overflow-hidden">
                         <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-8 sm:p-10 space-y-6">
                             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -272,7 +297,7 @@ const cancelExpiredBooking = () => {
                                     >
                                         <Trash2 class="h-4 w-4" /> Clear & Book Another Room
                                     </Button>
-                                    <Link v-else :href="route('student.payments.index')" class="shrink-0 w-full sm:w-auto">
+                                    <Link v-else-if="!isPendingPaidOverbooked" :href="route('student.payments.index')" class="shrink-0 w-full sm:w-auto">
                                         <Button class="w-full sm:w-auto font-extrabold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-lg border-0 gap-2">
                                             <CreditCard class="h-4 w-4" /> Pay Accommodation Fee Now
                                         </Button>
@@ -303,15 +328,24 @@ const cancelExpiredBooking = () => {
                                     </div>
                                 </div>
 
-                                <!-- Download Slip Action Buttons for Paid/Confirmed Accommodation -->
-                                <div v-if="existingBooking.status === 'confirmed' || existingBooking.invoice?.status === 'paid' || existingBooking.invoice?.status === 'partial'" class="flex flex-wrap items-center gap-3">
+                                <!-- Download Slip Action Buttons for Confirmed Accommodation -->
+                                <div class="flex flex-wrap items-center gap-3">
                                     <a 
+                                        v-if="existingBooking.status === 'confirmed'"
                                         :href="route('student.accommodation.download-slip')" 
                                         target="_blank"
                                         class="inline-flex items-center px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-extrabold text-xs transition-all shadow-lg hover:shadow-xl gap-2 cursor-pointer"
                                     >
                                         <Download class="w-4 h-4" /> Download Accommodation Slip
                                     </a>
+                                    <Badge 
+                                        v-else-if="existingBooking.status === 'pending'"
+                                        variant="outline"
+                                        class="border-amber-400/40 text-amber-300 bg-amber-500/10 font-bold text-xs px-3 py-2 rounded-xl flex items-center gap-2"
+                                    >
+                                        <Clock class="w-4 h-4 text-amber-400" /> Room Allocation Pending Confirmation
+                                    </Badge>
+
                                     <a 
                                         v-if="existingBooking.invoice && (existingBooking.invoice.status === 'paid' || existingBooking.invoice.status === 'partial')"
                                         :href="route('student.accommodation.download-payment')" 
@@ -326,7 +360,7 @@ const cancelExpiredBooking = () => {
                     </Card>
                 </div>
 
-                <template v-else>
+                <div v-if="!existingBooking || isPendingPaidOverbooked" :class="existingBooking ? 'mt-12' : ''">
                     <!-- If booking is disabled or requirements not met -->
                     <div v-if="!canBook" class="max-w-2xl mx-auto space-y-6">
                         <Card class="rounded-3xl border shadow-sm p-8 text-center space-y-6">
@@ -367,7 +401,12 @@ const cancelExpiredBooking = () => {
                                 <div 
                                     v-for="hostel in hostels" 
                                     :key="hostel.id" 
-                                    class="group cursor-pointer rounded-3xl bg-card border shadow-sm hover:shadow-xl transition-all duration-500 overflow-hidden border-border/80 hover:border-primary/50 flex flex-col"
+                                    :class="[
+                                        'group cursor-pointer rounded-3xl bg-card border shadow-sm hover:shadow-xl transition-all duration-500 overflow-hidden flex flex-col',
+                                        (isPendingPaidOverbooked && hostel.fee_matches_invoice === false)
+                                            ? 'opacity-50 grayscale-[50%] border-destructive/30 hover:border-destructive' 
+                                            : 'border-border/80 hover:border-primary/50'
+                                    ]"
                                     @click="selectHostel(hostel)"
                                 >
                                     <!-- Hostel Cover Banner -->
@@ -412,7 +451,13 @@ const cancelExpiredBooking = () => {
                                                     </span>
                                                 </div>
                                             </div>
-                                            <Badge v-if="hostel.discount_amount > 0" class="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold">
+                                            <Badge v-if="isPendingPaidOverbooked && hostel.fee_matches_invoice" class="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold">
+                                                Matches Paid Fee
+                                            </Badge>
+                                            <Badge v-else-if="isPendingPaidOverbooked && hostel.fee_matches_invoice === false" class="bg-rose-500/10 text-rose-600 border-rose-500/20 text-[10px] font-bold">
+                                                Fee Mismatch
+                                            </Badge>
+                                            <Badge v-else-if="hostel.discount_amount > 0" class="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold">
                                                 Scholarship Applied
                                             </Badge>
                                         </div>
@@ -635,7 +680,7 @@ const cancelExpiredBooking = () => {
                             </div>
                         </div>
                     </div>
-                </template>
+                </div>
 
                 <!-- Successful Accommodation History -->
                 <div v-if="bookingHistory && bookingHistory.length > 0" class="mt-16 space-y-4 max-w-4xl mx-auto">

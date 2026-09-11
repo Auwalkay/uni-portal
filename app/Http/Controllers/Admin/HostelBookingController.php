@@ -327,6 +327,20 @@ class HostelBookingController extends Controller
         $currentSession = Session::current();
         $currentSessionId = $currentSession ? $currentSession->id : null;
 
+        $existingInvoice = Invoice::where('user_id', $student->user_id)
+            ->where('session_id', $currentSessionId)
+            ->where('type', 'hostel_fee')
+            ->whereIn('status', ['paid', 'partial', 'pending'])
+            ->first();
+
+        $existingInvoiceAmount = $existingInvoice ? (float) $existingInvoice->amount : null;
+
+        $hostelFees = HostelFee::where('session_id', $currentSessionId)->get();
+        $globalFee = $hostelFees->firstWhere('hostel_id', null);
+
+        $student->load('scholarship');
+        $hasHostelScholarship = $student->scholarship && $student->scholarship->covers_hostel_fees;
+
         $hostels = Hostel::with(['blocks.floors.rooms.bookings' => function ($q) use ($currentSessionId) {
             $q->where('session_id', $currentSessionId);
         }])
@@ -619,20 +633,22 @@ class HostelBookingController extends Controller
             return back()->with('error', 'No active academic session found.');
         }
 
-        // Room capacity check for current session
+        // Room capacity check for current session (excluding this booking)
         $bookedCount = $room->bookings()
             ->where('session_id', $currentSession->id)
             ->whereIn('status', ['pending', 'confirmed'])
+            ->where('id', '!=', $booking->id)
             ->count();
             
         if ($bookedCount >= $room->capacity) {
             return back()->with('error', 'Cannot re-allocate. This room is already fully booked.');
         }
 
-        // Check if student already has another active booking for this session
+        // Check if student already has another active booking for this session (excluding this booking)
         $activeBookingExists = HostelBooking::where('student_id', $booking->student_id)
             ->where('session_id', $currentSession->id)
             ->whereIn('status', ['pending', 'confirmed'])
+            ->where('id', '!=', $booking->id)
             ->exists();
 
         if ($activeBookingExists) {
@@ -660,6 +676,140 @@ class HostelBookingController extends Controller
             ->log("Re-allocated room {$booking->room?->room_number} to student {$booking->student?->user?->name}");
 
         return back()->with('success', 'Student room allocation reactivated successfully!');
+    }
+
+    public function changeRoom(HostelBooking $booking, Request $request)
+    {
+        $user = Auth::user();
+        if (!$user->can('manage_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
+            return back()->with('error', 'Unauthorized. You do not have permission to change hostel rooms.');
+        }
+
+        $request->validate([
+            'hostel_room_id' => 'required|exists:hostel_rooms,id',
+        ]);
+
+        $currentSession = Session::current();
+        if (!$currentSession) {
+            return back()->with('error', 'No active academic session found.');
+        }
+
+        DB::beginTransaction();
+        try {
+            $newRoom = HostelRoom::with('floor.block.hostel')->lockForUpdate()->findOrFail($request->hostel_room_id);
+
+            if ($newRoom->is_suspended || !$newRoom->is_visible || !$newRoom->floor->block->hostel->is_visible) {
+                DB::rollBack();
+                return back()->with('error', 'Selected room or hostel is not currently open for allocations.');
+            }
+
+            $bookedCount = $newRoom->bookings()
+                ->where('session_id', $currentSession->id)
+                ->whereIn('status', ['pending', 'confirmed'])
+                ->where('id', '!=', $booking->id)
+                ->count();
+
+            if ($bookedCount >= $newRoom->capacity) {
+                DB::rollBack();
+                return back()->with('error', 'The selected room is already fully booked. Please select another available unit.');
+            }
+
+            $oldRoomNumber = $booking->room?->room_number ?? 'N/A';
+
+            // Update booking room reference
+            $booking->hostel_room_id = $newRoom->id;
+            $booking->updated_by = Auth::id();
+
+            // Recalculate fee for new room and update invoice
+            if ($booking->invoice) {
+                $hostelId = $newRoom->floor->block->hostel->id;
+                $fee = HostelFee::where('session_id', $currentSession->id)
+                    ->where(function ($q) use ($hostelId) {
+                        $q->where('hostel_id', $hostelId)->orWhereNull('hostel_id');
+                    })
+                    ->orderBy('hostel_id', 'desc')
+                    ->first();
+
+                if (!$fee) {
+                    throw new \Exception('Accommodation fees have not been configured for this session.');
+                }
+
+                $discountAmount = 0;
+                $student = $booking->student;
+                $student?->load('scholarship');
+                if ($student?->scholarship && $student->scholarship->covers_hostel_fees) {
+                    if ($student->scholarship->type === 'fixed') {
+                        $discountAmount = min($student->scholarship->amount, $fee->amount);
+                    } else {
+                        $discountAmount = $fee->amount * ($student->scholarship->percentage / 100);
+                    }
+                }
+
+                $newFinalAmount = max(0, $fee->amount - $discountAmount);
+                $invoice = $booking->invoice;
+                $invoice->items()->delete();
+                
+                InvoiceItem::create([
+                    'invoice_id' => $invoice->id,
+                    'description' => "Hostel Accommodation Fee ({$newRoom->floor->block->hostel->name} - Block: {$newRoom->floor->block->name}, Room: {$newRoom->room_number})",
+                    'amount' => $fee->amount,
+                ]);
+
+                if ($discountAmount > 0) {
+                    $discountDesc = $student->scholarship->type === 'fixed'
+                        ? "Scholarship Discount ({$student->scholarship->name} - Fixed ₦" . number_format($student->scholarship->amount, 2) . ")"
+                        : "Scholarship Discount ({$student->scholarship->name} - " . floatval($student->scholarship->percentage) . "%)";
+                    InvoiceItem::create([
+                        'invoice_id' => $invoice->id,
+                        'description' => $discountDesc,
+                        'amount' => -$discountAmount,
+                    ]);
+                }
+
+                $totalPaid = (float) $invoice->payments()->whereIn('status', ['successful', 'success', 'paid'])->sum('amount');
+                if ($invoice->paid_amount > 0 && $totalPaid == 0) {
+                    $totalPaid = (float) $invoice->paid_amount;
+                }
+
+                if ($totalPaid >= $newFinalAmount && $newFinalAmount > 0) {
+                    $invoiceStatus = 'paid';
+                    $bookingStatus = 'confirmed';
+                } elseif ($totalPaid > 0) {
+                    $invoiceStatus = 'partial';
+                    $bookingStatus = 'confirmed';
+                } else {
+                    $invoiceStatus = 'pending';
+                    $bookingStatus = 'pending';
+                }
+
+                $invoice->update([
+                    'amount' => $newFinalAmount,
+                    'status' => $invoiceStatus,
+                ]);
+
+                $booking->status = $bookingStatus;
+            }
+
+            $booking->save();
+
+            activity('hostel')
+                ->performedOn($booking)
+                ->causedBy(Auth::user())
+                ->withProperties([
+                    'student_name' => $booking->student?->user?->name,
+                    'old_room' => $oldRoomNumber,
+                    'new_room' => $newRoom->room_number,
+                    'hostel' => $newRoom->floor->block->hostel->name,
+                    'status' => $booking->status,
+                ])
+                ->log("Reassigned room from {$oldRoomNumber} to {$newRoom->room_number} for student {$booking->student?->user?->name}");
+
+            DB::commit();
+            return back()->with('success', "Room changed to Room {$newRoom->room_number} successfully!");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Failed to change room: ' . $e->getMessage());
+        }
     }
 
     public function downloadSlip(HostelBooking $booking)
