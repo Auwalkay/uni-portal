@@ -37,6 +37,8 @@ class HostelBookingController extends Controller
 
         $currentSession = Session::current();
         
+        $search = trim($request->input('search', ''));
+
         $sessionId = $request->input('session_id');
         if ($sessionId === 'all') {
             $sessionId = null;
@@ -97,6 +99,30 @@ class HostelBookingController extends Controller
         ]);
 
         // Filters
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('student', function ($sq) use ($search) {
+                    $sq->where('matriculation_number', 'like', "%{$search}%")
+                       ->orWhere('matric_no', 'like', "%{$search}%")
+                       ->orWhere('registration_number', 'like', "%{$search}%")
+                       ->orWhere('application_number', 'like', "%{$search}%")
+                       ->orWhereHas('user', function ($uq) use ($search) {
+                           $uq->where('name', 'like', "%{$search}%")
+                              ->orWhere('email', 'like', "%{$search}%");
+                       });
+                })
+                ->orWhereHas('room', function ($rq) use ($search) {
+                    $rq->where('room_number', 'like', "%{$search}%")
+                       ->orWhereHas('floor.block.hostel', function ($hq) use ($search) {
+                           $hq->where('name', 'like', "%{$search}%");
+                       });
+                })
+                ->orWhereHas('invoice', function ($iq) use ($search) {
+                    $iq->where('reference', 'like', "%{$search}%");
+                });
+            });
+        }
+
         if ($sessionId) {
             $query->where('session_id', $sessionId);
         }
@@ -270,6 +296,7 @@ class HostelBookingController extends Controller
                 'gender_breakdown' => $genderBreakdown,
             ],
             'filters' => [
+                'search' => $search,
                 'session_id' => $sessionId,
                 'level' => $level,
                 'hostel_id' => $hostelId,
@@ -850,6 +877,8 @@ class HostelBookingController extends Controller
 
         $currentSession = Session::current();
         
+        $search = trim($request->input('search', ''));
+
         $sessionId = $request->input('session_id');
         if ($sessionId === 'all') {
             $sessionId = null;
@@ -899,6 +928,30 @@ class HostelBookingController extends Controller
             'session',
             'invoice.payments',
         ]);
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('student', function ($sq) use ($search) {
+                    $sq->where('matriculation_number', 'like', "%{$search}%")
+                       ->orWhere('matric_no', 'like', "%{$search}%")
+                       ->orWhere('registration_number', 'like', "%{$search}%")
+                       ->orWhere('application_number', 'like', "%{$search}%")
+                       ->orWhereHas('user', function ($uq) use ($search) {
+                           $uq->where('name', 'like', "%{$search}%")
+                              ->orWhere('email', 'like', "%{$search}%");
+                       });
+                })
+                ->orWhereHas('room', function ($rq) use ($search) {
+                    $rq->where('room_number', 'like', "%{$search}%")
+                       ->orWhereHas('floor.block.hostel', function ($hq) use ($search) {
+                           $hq->where('name', 'like', "%{$search}%");
+                       });
+                })
+                ->orWhereHas('invoice', function ($iq) use ($search) {
+                    $iq->where('reference', 'like', "%{$search}%");
+                });
+            });
+        }
 
         if ($sessionId) $query->where('session_id', $sessionId);
         if ($level) $query->whereHas('student', fn($q) => $q->where('current_level', $level));
