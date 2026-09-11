@@ -93,6 +93,7 @@ class RolesAndPermissionsSeeder extends Seeder
             // Infrastructure & Utilities
             'manage_hostels',
             'manage_hostel_bookings',
+            'change_hostel_room',
             'view_hostel_bookings',
             'view_male_hostel_bookings',
             'view_female_hostel_bookings',
@@ -211,6 +212,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'access_admin_dashboard',
             'view_hostel_bookings',
             'view_male_hostel_bookings',
+            'change_hostel_room',
             'view_expenses',
             'create_expenses',
         ]);
@@ -219,6 +221,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'access_admin_dashboard',
             'view_hostel_bookings',
             'view_female_hostel_bookings',
+            'change_hostel_room',
             'view_expenses',
             'create_expenses',
         ]);
@@ -240,6 +243,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage_staff',
             'manage_academic_sessions',
             'manage_hostels',
+            'manage_hostel_bookings',
+            'change_hostel_room',
             'view_hostel_bookings',
             'view_attendance',
             'manage_attendance',

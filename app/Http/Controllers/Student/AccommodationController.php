@@ -65,6 +65,7 @@ class AccommodationController extends Controller
         $existingBooking = HostelBooking::with(['room.floor.block.hostel', 'invoice'])
             ->where('student_id', $student->id)
             ->where('session_id', $currentSession->id)
+            ->where('status', '!=', 'cancelled')
             ->where(function ($q) {
                 $q->where('status', 'confirmed')
                   ->orWhereHas('invoice', function ($iq) {
@@ -78,6 +79,18 @@ class AccommodationController extends Controller
                   });
             })
             ->first();
+
+        // If no active non-cancelled booking, check if student has a paid/partial invoice on a cancelled booking so they can select a room
+        if (! $existingBooking) {
+            $existingBooking = HostelBooking::with(['room.floor.block.hostel', 'invoice'])
+                ->where('student_id', $student->id)
+                ->where('session_id', $currentSession->id)
+                ->whereHas('invoice', function ($iq) {
+                    $iq->whereIn('status', ['paid', 'partial']);
+                })
+                ->latest()
+                ->first();
+        }
 
         // If they haven't met requirements or booking is disabled, pass correct statuses to the view
         if (! $hasPaidFees || ! $isBookingActive) {

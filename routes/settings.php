@@ -343,13 +343,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 
         // Hostel Management
-        Route::middleware(['permission:manage_hostels|manage_hostel_fees|manage_hostel_bookings|view_hostel_bookings|view_male_hostel_bookings|view_female_hostel_bookings'])->group(function () {
+        Route::middleware(['permission:manage_hostels|manage_hostel_fees|manage_hostel_bookings|view_hostel_bookings|view_male_hostel_bookings|view_female_hostel_bookings|change_hostel_room'])->group(function () {
             Route::get('hostels/bookings', [HostelBookingController::class, 'index'])->name('hostels.bookings.index');
             Route::get('hostels/bookings/export', [HostelBookingController::class, 'export'])->name('hostels.bookings.export');
             Route::post('hostels/bookings', [HostelBookingController::class, 'store'])->name('hostels.bookings.store');
             Route::post('hostels/bookings/{booking}/unbook', [HostelBookingController::class, 'unbook'])->name('hostels.bookings.unbook');
             Route::post('hostels/bookings/{booking}/reallocate', [HostelBookingController::class, 'reallocate'])->name('hostels.bookings.reallocate');
-            Route::post('hostels/bookings/{booking}/change-room', [HostelBookingController::class, 'changeRoom'])->name('hostels.bookings.change-room');
+            Route::post('hostels/bookings/{booking}/change-room', [HostelBookingController::class, 'changeRoom'])->name('hostels.bookings.change-room')->middleware('permission:change_hostel_room');
             Route::get('hostels/bookings/{booking}/download-slip', [HostelBookingController::class, 'downloadSlip'])->name('hostels.bookings.download-slip');
             Route::get('hostels/search-students', [HostelBookingController::class, 'searchStudents'])->name('hostels.search-students');
             Route::get('hostels/rooms/available', [HostelBookingController::class, 'getAvailableRooms'])->name('hostels.rooms.available');

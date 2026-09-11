@@ -90,6 +90,7 @@ const props = defineProps<{
         per_page?: number;
     };
     canManageBookings?: boolean;
+    canChangeRoom?: boolean;
 }>();
 
 const searchTerm = ref('');
@@ -906,7 +907,7 @@ const getInvoiceBalance = (invoice: any) => {
                                 <td class="px-6 py-4 text-right">
                                     <div v-if="canManageBookings" class="flex items-center justify-end gap-2">
                                         <Button 
-                                            v-if="booking.status !== 'cancelled'"
+                                            v-if="booking.status !== 'cancelled' && (canChangeRoom ?? canManageBookings)"
                                             variant="outline" 
                                             size="sm" 
                                             class="text-xs text-indigo-600 border-indigo-200 hover:bg-indigo-50 hover:border-indigo-500 h-8 rounded-lg font-semibold"
