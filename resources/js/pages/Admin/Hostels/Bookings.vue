@@ -74,6 +74,7 @@ const props = defineProps<{
         };
     };
     filters: {
+        search?: string;
         session_id?: string;
         level?: string;
         hostel_id?: string;
@@ -93,7 +94,7 @@ const props = defineProps<{
     canChangeRoom?: boolean;
 }>();
 
-const searchTerm = ref('');
+const searchTerm = ref(props.filters.search || '');
 const filterSessionId = ref(props.filters.session_id || props.currentSession?.id || 'all');
 const filterLevel = ref(props.filters.level || 'all');
 const filterHostelId = ref(props.filters.hostel_id || 'all');
@@ -260,8 +261,13 @@ const submitBooking = () => {
     });
 };
 
+watch(searchTerm, debounce(() => {
+    applyFilters();
+}, 300));
+
 const applyFilters = () => {
     router.get(route('admin.hostels.bookings.index'), {
+        search: searchTerm.value || '',
         session_id: filterSessionId.value === 'all' ? 'all' : filterSessionId.value,
         level: filterLevel.value === 'all' ? '' : filterLevel.value,
         hostel_id: filterHostelId.value === 'all' ? '' : filterHostelId.value,
@@ -283,6 +289,7 @@ const applyFilters = () => {
 
 const exportCsv = () => {
     const params = new URLSearchParams();
+    if (searchTerm.value) params.append('search', searchTerm.value);
     if (filterSessionId.value) params.append('session_id', filterSessionId.value);
     if (filterLevel.value && filterLevel.value !== 'all') params.append('level', filterLevel.value);
     if (filterHostelId.value && filterHostelId.value !== 'all') params.append('hostel_id', filterHostelId.value);
@@ -328,6 +335,27 @@ const handleLevelChange = (val: string) => {
 
 const handleHostelChange = (val: string) => {
     filterHostelId.value = val;
+    filterBlockId.value = 'all';
+    filterFloorId.value = 'all';
+    filterRoomId.value = 'all';
+    applyFilters();
+};
+
+const handleBlockChange = (val: string) => {
+    filterBlockId.value = val;
+    filterFloorId.value = 'all';
+    filterRoomId.value = 'all';
+    applyFilters();
+};
+
+const handleFloorChange = (val: string) => {
+    filterFloorId.value = val;
+    filterRoomId.value = 'all';
+    applyFilters();
+};
+
+const handleRoomFilterChange = (val: string) => {
+    filterRoomId.value = val;
     applyFilters();
 };
 
@@ -385,10 +413,14 @@ const filteredBookings = computed(() => {
         return list;
     }
     
-    const term = searchTerm.value.toLowerCase();
+    const term = searchTerm.value.toLowerCase().trim();
     return list.filter((b: any) => 
         b.student?.user?.name?.toLowerCase().includes(term) ||
         b.student?.matriculation_number?.toLowerCase().includes(term) ||
+        b.student?.matric_no?.toLowerCase().includes(term) ||
+        b.student?.registration_number?.toLowerCase().includes(term) ||
+        b.student?.application_number?.toLowerCase().includes(term) ||
+        b.room?.room_number?.toString().toLowerCase().includes(term) ||
         b.invoice?.reference?.toLowerCase().includes(term) ||
         b.room?.floor?.block?.hostel?.name?.toLowerCase().includes(term)
     );
