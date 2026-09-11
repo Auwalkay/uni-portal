@@ -349,6 +349,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('hostels/bookings', [HostelBookingController::class, 'store'])->name('hostels.bookings.store');
             Route::post('hostels/bookings/{booking}/unbook', [HostelBookingController::class, 'unbook'])->name('hostels.bookings.unbook');
             Route::post('hostels/bookings/{booking}/reallocate', [HostelBookingController::class, 'reallocate'])->name('hostels.bookings.reallocate');
+            Route::post('hostels/bookings/{booking}/change-room', [HostelBookingController::class, 'changeRoom'])->name('hostels.bookings.change-room');
             Route::get('hostels/bookings/{booking}/download-slip', [HostelBookingController::class, 'downloadSlip'])->name('hostels.bookings.download-slip');
             Route::get('hostels/search-students', [HostelBookingController::class, 'searchStudents'])->name('hostels.search-students');
             Route::get('hostels/rooms/available', [HostelBookingController::class, 'getAvailableRooms'])->name('hostels.rooms.available');
