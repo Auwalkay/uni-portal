@@ -103,9 +103,7 @@ class HostelBookingController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->whereHas('student', function ($sq) use ($search) {
                     $sq->where('matriculation_number', 'like', "%{$search}%")
-                       ->orWhere('matric_no', 'like', "%{$search}%")
-                       ->orWhere('registration_number', 'like', "%{$search}%")
-                       ->orWhere('application_number', 'like', "%{$search}%")
+                       ->orWhere('jamb_registration_number', 'like', "%{$search}%")
                        ->orWhereHas('user', function ($uq) use ($search) {
                            $uq->where('name', 'like', "%{$search}%")
                               ->orWhere('email', 'like', "%{$search}%");
@@ -933,9 +931,7 @@ class HostelBookingController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->whereHas('student', function ($sq) use ($search) {
                     $sq->where('matriculation_number', 'like', "%{$search}%")
-                       ->orWhere('matric_no', 'like', "%{$search}%")
-                       ->orWhere('registration_number', 'like', "%{$search}%")
-                       ->orWhere('application_number', 'like', "%{$search}%")
+                       ->orWhere('jamb_registration_number', 'like', "%{$search}%")
                        ->orWhereHas('user', function ($uq) use ($search) {
                            $uq->where('name', 'like', "%{$search}%")
                               ->orWhere('email', 'like', "%{$search}%");
