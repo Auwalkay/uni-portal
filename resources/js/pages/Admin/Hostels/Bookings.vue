@@ -415,14 +415,12 @@ const filteredBookings = computed(() => {
     
     const term = searchTerm.value.toLowerCase().trim();
     return list.filter((b: any) => 
-        b.student?.user?.name?.toLowerCase().includes(term) ||
-        b.student?.matriculation_number?.toLowerCase().includes(term) ||
-        b.student?.matric_no?.toLowerCase().includes(term) ||
-        b.student?.registration_number?.toLowerCase().includes(term) ||
-        b.student?.application_number?.toLowerCase().includes(term) ||
-        b.room?.room_number?.toString().toLowerCase().includes(term) ||
-        b.invoice?.reference?.toLowerCase().includes(term) ||
-        b.room?.floor?.block?.hostel?.name?.toLowerCase().includes(term)
+        (b.student?.user?.name && b.student.user.name.toLowerCase().includes(term)) ||
+        (b.student?.matriculation_number && b.student.matriculation_number.toLowerCase().includes(term)) ||
+        (b.student?.jamb_registration_number && b.student.jamb_registration_number.toLowerCase().includes(term)) ||
+        (b.room?.room_number && b.room.room_number.toString().toLowerCase().includes(term)) ||
+        (b.invoice?.reference && b.invoice.reference.toLowerCase().includes(term)) ||
+        (b.room?.floor?.block?.hostel?.name && b.room.floor.block.hostel.name.toLowerCase().includes(term))
     );
 });
 
