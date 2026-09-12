@@ -867,7 +867,10 @@ class HostelBookingController extends Controller
             'isFontSubsettingEnabled' => true,
         ]);
 
-        return $pdf->download("Accommodation_Slip_{$booking->student->matric_no}.pdf");
+        $matricNo = $booking->student->matriculation_number ?? $booking->student->matric_no ?? $booking->student->matric_number ?? $booking->student->id;
+        $safeMatric = str_replace(['/', '\\', ' '], '_', $matricNo);
+
+        return $pdf->download("Accommodation_Slip_{$safeMatric}.pdf");
     }
 
     public function export(Request $request)
