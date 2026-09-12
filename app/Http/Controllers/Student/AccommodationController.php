@@ -454,7 +454,18 @@ class AccommodationController extends Controller
         $booking = HostelBooking::with(['room.floor.block.hostel', 'invoice'])
             ->where('student_id', $student->id)
             ->where('session_id', $currentSession->id)
+            ->where('status', 'confirmed')
+            ->latest()
             ->first();
+
+        if (! $booking) {
+            $booking = HostelBooking::with(['room.floor.block.hostel', 'invoice'])
+                ->where('student_id', $student->id)
+                ->where('session_id', $currentSession->id)
+                ->where('status', '!=', 'cancelled')
+                ->latest()
+                ->first();
+        }
 
         if (! $booking || ! $booking->invoice) {
             return back()->with('error', 'No accommodation booking found.');
@@ -472,13 +483,21 @@ class AccommodationController extends Controller
             return back()->with('error', 'Accommodation slip can only be downloaded once the accommodation payment is confirmed.');
         }
 
+        $matricNo = $student->matriculation_number ?? $student->matric_no ?? $student->matric_number ?? $student->id;
+        $safeMatric = str_replace(['/', '\\', ' '], '_', $matricNo);
+
         $pdf = Pdf::loadView('documents.accommodation_slip', [
             'student' => $student,
             'booking' => $booking,
             'session' => $currentSession,
+        ])->setOptions([
+            'defaultFont' => 'DejaVu Sans',
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled' => true,
+            'isFontSubsettingEnabled' => true,
         ]);
 
-        return $pdf->download("Accommodation_Slip_{$student->matriculation_number}.pdf");
+        return $pdf->download("Accommodation_Slip_{$safeMatric}.pdf");
     }
 
     public function downloadPaymentSlip()
