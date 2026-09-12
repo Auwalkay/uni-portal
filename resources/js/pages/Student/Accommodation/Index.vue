@@ -338,7 +338,7 @@ const cancelExpiredBooking = () => {
                                 <!-- Download Slip Action Buttons for Confirmed Accommodation -->
                                 <div class="flex flex-wrap items-center gap-3">
                                     <a 
-                                        v-if="existingBooking.status === 'confirmed'"
+                                        v-if="existingBooking.status === 'confirmed' && existingBooking.invoice && (existingBooking.invoice.status === 'paid' || existingBooking.invoice.status === 'partial')"
                                         :href="route('student.accommodation.download-slip')" 
                                         target="_blank"
                                         class="inline-flex items-center px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-extrabold text-xs transition-all shadow-lg hover:shadow-xl gap-2 cursor-pointer"
