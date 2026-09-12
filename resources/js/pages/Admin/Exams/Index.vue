@@ -24,6 +24,7 @@ interface Props {
     departments: any[];
     courses: any[];
     canManageExams?: boolean;
+    canCreateExams?: boolean;
 }
 
 const props = defineProps<Props>();
@@ -179,7 +180,7 @@ const breadcrumbs = [
 
                 <div class="flex items-center gap-3 shrink-0">
                     <Button 
-                        v-if="props.canManageExams" 
+                        v-if="props.canCreateExams" 
                         class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold gap-2 text-xs h-10 px-5 rounded-xl shadow-sm transition-all" 
                         @click="openCreateExerciseModal"
                     >
@@ -296,7 +297,7 @@ const breadcrumbs = [
                             @click="router.visit(route('admin.exams.exercises.show', exam.id))"
                         >
                             <Eye class="w-3.5 h-3.5" />
-                            <span>Manage Exercise</span>
+                            <span>{{ props.canManageExams ? 'Manage Exercise' : 'View Timetable' }}</span>
                             <ArrowRight class="w-3 h-3 ml-0.5 opacity-70" />
                         </Button>
 
@@ -339,7 +340,7 @@ const breadcrumbs = [
                     </p>
                 </div>
                 <div class="pt-2">
-                    <Button v-if="props.canManageExams" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs gap-2 rounded-xl h-9 px-4" @click="openCreateExerciseModal">
+                    <Button v-if="props.canCreateExams" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs gap-2 rounded-xl h-9 px-4" @click="openCreateExerciseModal">
                         <Plus class="w-4 h-4" /> Create First Exercise
                     </Button>
                 </div>
