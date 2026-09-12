@@ -55,7 +55,9 @@ const props = defineProps<{
                                 name: string;
                                 email: string;
                             };
+                            matriculation_number?: string;
                             matric_number?: string;
+                            matric_no?: string;
                             department?: {
                                 name: string;
                             };
@@ -789,10 +791,10 @@ const getGenderBadgeClass = (gender: string) => {
                                             {{ booking.student?.user?.name || 'Unknown Student' }}
                                         </p>
                                         <div class="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                                            <span class="font-mono font-bold">{{ booking.student?.matric_number || 'N/A' }}</span>
+                                            <span class="font-mono font-bold">{{ booking.student?.matriculation_number || booking.student?.matric_number || 'N/A' }}</span>
                                             <span>•</span>
                                             <span>{{ booking.student?.department?.name || 'Department N/A' }}</span>
-                                            <span v-if="booking.student?.level">• {{ booking.student.level }}L</span>
+                                            <span v-if="booking.student?.current_level || booking.student?.level">• {{ booking.student?.current_level || booking.student?.level }}L</span>
                                         </div>
                                     </div>
                                 </div>

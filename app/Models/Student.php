@@ -73,6 +73,11 @@ class Student extends Model
         );
     }
 
+    protected $appends = [
+        'matric_no',
+        'matric_number',
+    ];
+
     protected $fillable = [
         'user_id',
         'matriculation_number',
