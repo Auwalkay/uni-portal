@@ -98,11 +98,22 @@ class ExamScheduleController extends Controller
 
         return $user->hasRole(['admin', 'super_admin', 'exams_officer', 'academic_admin']) ||
                $user->can('manage_exams') ||
-               $user->can('view_exams') ||
                $user->can('create_exams') ||
                $user->can('edit_exams') ||
                $user->can('publish_exams') ||
                $user->can('assign_invigilators');
+    }
+
+    protected function canCreateExams(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasRole(['admin', 'super_admin', 'exams_officer', 'academic_admin']) ||
+               $user->can('manage_exams') ||
+               $user->can('create_exams');
     }
 
     public function index(Request $request)
@@ -131,8 +142,11 @@ class ExamScheduleController extends Controller
             ])
             ->withCount(['attendances'])
             ->when(! $canManageExams, function ($q) use ($staff) {
-                // Normal staff should ONLY see courses they are invigilating
-                $q->whereHas('invigilators', fn ($iq) => $iq->where('staff_id', $staff?->id ?? '00000000-0000-0000-0000-000000000000'));
+                // Lecturers / normal staff should ONLY see courses they are invigilating OR allocated to teach
+                $q->where(function ($subQ) use ($staff) {
+                    $subQ->whereHas('invigilators', fn ($iq) => $iq->where('staff_id', $staff?->id ?? '00000000-0000-0000-0000-000000000000'))
+                         ->orWhereHas('course.allocations', fn ($aq) => $aq->where('staff_id', $staff?->id ?? '00000000-0000-0000-0000-000000000000'));
+                });
             })
             ->when($selectedSessionId, fn ($q) => $q->where('session_id', $selectedSessionId))
             ->when($selectedSemesterId, fn ($q) => $q->where('semester_id', $selectedSemesterId))
@@ -237,6 +251,7 @@ class ExamScheduleController extends Controller
             ],
             'isPublished' => filter_var(\App\Models\SystemSetting::get('publish_exam_timetable', false), FILTER_VALIDATE_BOOLEAN),
             'canManageExams' => $canManageExams,
+            'canCreateExams' => $this->canCreateExams(),
         ]);
     }
 
@@ -244,6 +259,7 @@ class ExamScheduleController extends Controller
     {
         $user = auth()->user();
         $canManageExams = $this->canManageExams();
+        $canCreateExams = $this->canCreateExams();
         $staff = Staff::where('user_id', $user?->id)->first();
 
         $exam->load(['session', 'semester']);
@@ -267,7 +283,10 @@ class ExamScheduleController extends Controller
                   });
             })
             ->when(! $canManageExams, function ($q) use ($staff) {
-                $q->whereHas('invigilators', fn ($iq) => $iq->where('staff_id', $staff?->id ?? '00000000-0000-0000-0000-000000000000'));
+                $q->where(function ($subQ) use ($staff) {
+                    $subQ->whereHas('invigilators', fn ($iq) => $iq->where('staff_id', $staff?->id ?? '00000000-0000-0000-0000-000000000000'))
+                         ->orWhereHas('course.allocations', fn ($aq) => $aq->where('staff_id', $staff?->id ?? '00000000-0000-0000-0000-000000000000'));
+                });
             });
 
         $schedules = (clone $schedulesQuery)->orderBy('exam_date', 'asc')->orderBy('start_time', 'asc')->get();
@@ -303,13 +322,14 @@ class ExamScheduleController extends Controller
             ]),
             'buildings' => AcademicCacheService::getExamBuildings(),
             'canManageExams' => $canManageExams,
+            'canCreateExams' => $canCreateExams,
         ]);
     }
 
     public function storeExam(Request $request)
     {
-        if (! $this->canManageExams()) {
-            abort(403, 'Unauthorized: Only Exams Office can create examination exercises.');
+        if (! $this->canCreateExams()) {
+            abort(403, 'Unauthorized: You do not have permission to create examination exercises.');
         }
 
         $validated = $request->validate([
