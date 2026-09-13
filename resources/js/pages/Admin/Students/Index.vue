@@ -82,6 +82,10 @@ const props = defineProps<{
         gender?: string;
         status?: string;
         entry_mode?: string;
+        age_range?: string;
+        min_age?: string;
+        max_age?: string;
+        age?: string;
         per_page?: string;
     };
     sessions: Array<{ id: string; name: string }>;
@@ -131,6 +135,9 @@ const dateTo = ref(props.filters.date_to || '');
 const selectedGender = ref(props.filters.gender || '');
 const selectedStatus = ref(props.filters.status || '');
 const selectedEntryMode = ref(props.filters.entry_mode || '');
+const selectedAgeRange = ref(props.filters.age_range || '');
+const minAge = ref(props.filters.min_age || '');
+const maxAge = ref(props.filters.max_age || '');
 const selectedPerPage = ref(props.filters.per_page || '15');
 
 // Sorting states
@@ -233,6 +240,9 @@ const updateFilters = debounce(() => {
         gender: selectedGender.value,
         status: selectedStatus.value,
         entry_mode: selectedEntryMode.value,
+        age_range: selectedAgeRange.value,
+        min_age: minAge.value,
+        max_age: maxAge.value,
         sort_by: sortBy.value,
         sort_order: sortOrder.value,
         per_page: selectedPerPage.value,
@@ -256,6 +266,9 @@ watch([
     selectedGender,
     selectedStatus,
     selectedEntryMode,
+    selectedAgeRange,
+    minAge,
+    maxAge,
     sortBy,
     sortOrder,
     selectedPerPage
@@ -282,6 +295,9 @@ const clearFilters = () => {
     selectedGender.value = '';
     selectedStatus.value = '';
     selectedEntryMode.value = '';
+    selectedAgeRange.value = '';
+    minAge.value = '';
+    maxAge.value = '';
     sortBy.value = 'created_at';
     sortOrder.value = 'desc';
     selectedPerPage.value = '15';
@@ -319,7 +335,7 @@ const submitImport = () => {
 };
 
 const handleExport = () => {
-    const params = {
+    const params: Record<string, string> = {
         search: search.value,
         session_id: selectedSession.value,
         faculty_id: selectedFaculty.value,
@@ -329,9 +345,20 @@ const handleExport = () => {
         scholarship_id: selectedScholarship.value,
         date_from: dateFrom.value,
         date_to: dateTo.value,
+        gender: selectedGender.value,
+        status: selectedStatus.value,
+        entry_mode: selectedEntryMode.value,
+        age_range: selectedAgeRange.value,
+        min_age: minAge.value,
+        max_age: maxAge.value,
     };
     
-    const queryString = new URLSearchParams(params).toString();
+    // Filter out empty params
+    const filteredParams = Object.fromEntries(
+        Object.entries(params).filter(([_, v]) => v !== '' && v !== null && v !== undefined)
+    );
+    
+    const queryString = new URLSearchParams(filteredParams).toString();
     window.open(route('admin.students.export') + '?' + queryString, '_blank');
 };
 </script>
@@ -684,6 +711,19 @@ const handleExport = () => {
                             </SelectContent>
                         </Select>
 
+                        <!-- Age Filter -->
+                        <Select v-model="selectedAgeRange">
+                            <SelectTrigger class="w-[150px]">
+                                <SelectValue placeholder="Filter Age" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL_AGES">All Ages</SelectItem>
+                                <SelectItem value="15-19">15 - 19</SelectItem>
+                                <SelectItem value="20-30">20 - 30</SelectItem>
+                                <SelectItem value="30_above">30 Above</SelectItem>
+                            </SelectContent>
+                        </Select>
+
                         <!-- Per Page -->
                         <Select v-model="selectedPerPage">
                             <SelectTrigger class="w-[120px]">
@@ -701,7 +741,7 @@ const handleExport = () => {
                 </div>
 
                 <Button 
-                    v-if="search || selectedSession || selectedFaculty || selectedDepartment || selectedLevel || selectedProgram || selectedScholarship || dateFrom || dateTo || selectedGender || selectedStatus || selectedEntryMode || sortBy !== 'created_at' || sortOrder !== 'desc'" 
+                    v-if="search || selectedSession || selectedFaculty || selectedDepartment || selectedLevel || selectedProgram || selectedScholarship || dateFrom || dateTo || selectedGender || selectedStatus || selectedEntryMode || selectedAgeRange || minAge || maxAge || sortBy !== 'created_at' || sortOrder !== 'desc'" 
                     variant="ghost" 
                     @click="clearFilters"
                     class="text-destructive hover:text-destructive hover:bg-destructive/10"
@@ -739,7 +779,12 @@ const handleExport = () => {
                                         <AvatarFallback>{{ student.user.name.charAt(0) }}</AvatarFallback>
                                    </Avatar>
                                    <div>
-                                       <div class="font-medium">{{ student.user.name }}</div>
+                                       <div class="font-medium flex items-center gap-1.5">
+                                           <span>{{ student.user.name }}</span>
+                                           <Badge v-if="student.age !== null && student.age !== undefined" variant="outline" class="text-[10px] font-normal px-1.5 py-0">
+                                               {{ student.age }} yrs
+                                           </Badge>
+                                       </div>
                                        <div class="text-xs text-muted-foreground font-mono">{{ student.matriculation_number || 'NO MATRIC' }}</div>
                                        <div class="text-[10px] text-muted-foreground">{{ student.user.email }}</div>
                                    </div>

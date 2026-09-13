@@ -99,6 +99,51 @@ class StudentsExport implements FromQuery, WithHeadings, WithMapping
             $query->whereDate('created_at', '<=', $this->filters['date_to']);
         }
 
+        if (!empty($this->filters['gender']) && $this->filters['gender'] !== 'ALL_GENDERS' && $this->filters['gender'] !== 'all') {
+            $query->where('gender', strtolower($this->filters['gender']));
+        }
+
+        if (!empty($this->filters['status']) && $this->filters['status'] !== 'ALL_STATUS' && $this->filters['status'] !== 'all') {
+            $query->whereHas('user', function ($q) {
+                $q->where('is_active', $this->filters['status'] === 'active');
+            });
+        }
+
+        if (!empty($this->filters['entry_mode']) && $this->filters['entry_mode'] !== 'ALL_MODES' && $this->filters['entry_mode'] !== 'all') {
+            $query->where('entry_mode', $this->filters['entry_mode']);
+        }
+
+        if (!empty($this->filters['age_range']) && $this->filters['age_range'] !== 'ALL_AGES' && $this->filters['age_range'] !== 'all') {
+            $range = $this->filters['age_range'];
+            if ($range === '15-19') {
+                $query->whereNotNull('dob')
+                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) >= 15')
+                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) <= 19');
+            } elseif ($range === '20-30') {
+                $query->whereNotNull('dob')
+                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) >= 20')
+                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) <= 30');
+            } elseif ($range === '30_above' || $range === '30+') {
+                $query->whereNotNull('dob')
+                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) >= 30');
+            }
+        } else {
+            if (!empty($this->filters['min_age'])) {
+                $query->whereNotNull('dob')
+                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) >= ?', [(int) $this->filters['min_age']]);
+            }
+
+            if (!empty($this->filters['max_age'])) {
+                $query->whereNotNull('dob')
+                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) <= ?', [(int) $this->filters['max_age']]);
+            }
+
+            if (!empty($this->filters['age']) && empty($this->filters['min_age']) && empty($this->filters['max_age'])) {
+                $query->whereNotNull('dob')
+                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) = ?', [(int) $this->filters['age']]);
+            }
+        }
+
         return $query->orderBy('matriculation_number', 'asc');
     }
 
@@ -110,6 +155,8 @@ class StudentsExport implements FromQuery, WithHeadings, WithMapping
             'Email',
             'Phone',
             'Gender',
+            'Date of Birth',
+            'Age',
             'Level',
             'Faculty',
             'Department',
@@ -128,7 +175,9 @@ class StudentsExport implements FromQuery, WithHeadings, WithMapping
             $student->user->name,
             $student->user->email,
             $student->phone_number,
-            ucfirst($student->gender),
+            ucfirst($student->gender ?? ''),
+            $student->dob ?? 'N/A',
+            $student->age ?? 'N/A',
             $student->current_level,
             $student->academicDepartment?->faculty?->name ?? 'N/A',
             $student->academicDepartment?->name ?? 'N/A',
