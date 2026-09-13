@@ -107,11 +107,19 @@ class AccommodationController extends Controller
         $studentGender = strtolower($student->gender ?? '');
 
         $hostels = Hostel::where('is_visible', true)
-            ->with(['blocks.floors.rooms' => function ($q) use ($currentSession) {
-                $q->where('is_visible', true)->with(['bookings' => function ($bq) use ($currentSession) {
-                    $bq->where('session_id', $currentSession->id);
-                }]);
-            }])
+            ->with([
+                'blocks' => function ($bq) {
+                    $bq->where('is_visible', true);
+                },
+                'blocks.floors' => function ($fq) {
+                    $fq->where('is_visible', true);
+                },
+                'blocks.floors.rooms' => function ($q) use ($currentSession) {
+                    $q->where('is_visible', true)->with(['bookings' => function ($bq) use ($currentSession) {
+                        $bq->where('session_id', $currentSession->id);
+                    }]);
+                }
+            ])
             ->when($studentGender, function ($q) use ($studentGender) {
                 $q->whereIn('gender_type', [$studentGender, 'mixed']);
             }, function ($q) {
@@ -277,6 +285,16 @@ class AccommodationController extends Controller
             if (! $room->is_visible) {
                 DB::rollBack();
                 return back()->with('error', 'This room is not currently open for bookings.');
+            }
+
+            if (! $room->floor->is_visible) {
+                DB::rollBack();
+                return back()->with('error', 'This floor is not currently open for bookings.');
+            }
+
+            if (! $room->floor->block->is_visible) {
+                DB::rollBack();
+                return back()->with('error', 'This block is not currently open for bookings.');
             }
 
             if (! $room->floor->block->hostel->is_visible) {

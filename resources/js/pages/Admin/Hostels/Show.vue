@@ -35,9 +35,11 @@ const props = defineProps<{
         blocks: Array<{
             id: string;
             name: string;
+            is_visible?: boolean;
             floors: Array<{
                 id: string;
                 name: string;
+                is_visible?: boolean;
                 rooms: Array<{
                     id: string;
                     room_number: string;
@@ -240,11 +242,20 @@ const deleteBlock = (blockId: string) => {
     }
 };
 
+const toggleBlockVisibility = (blockId: string) => {
+    router.post(route('admin.hostels.blocks.toggle-visibility', [props.hostel.id, blockId]));
+};
+
 const deleteFloor = (floorId: string) => {
     if(!activeBlockId.value) return;
     if(confirm('Are you sure you want to delete this floor?')) {
         router.delete(route('admin.hostels.floors.destroy', [props.hostel.id, activeBlockId.value, floorId]));
     }
+};
+
+const toggleFloorVisibility = (floorId: string) => {
+    if(!activeBlockId.value) return;
+    router.post(route('admin.hostels.blocks.floors.toggle-visibility', [props.hostel.id, activeBlockId.value, floorId]));
 };
 
 const deleteRoom = (floorId: string, roomId: string) => {
@@ -482,12 +493,14 @@ const getGenderBadgeClass = (gender: string) => {
                                     'px-5 py-2.5 rounded-2xl font-extrabold text-sm transition-all whitespace-nowrap border flex items-center gap-2',
                                     activeBlockId === block.id 
                                         ? 'bg-primary text-primary-foreground border-primary shadow-md' 
-                                        : 'bg-background text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+                                        : block.is_visible === false ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30' : 'bg-background text-muted-foreground border-border hover:bg-muted hover:text-foreground'
                                 ]"
                             >
                                 <Building class="h-4 w-4" />
                                 <span>{{ block.name }}</span>
+                                <Badge v-if="block.is_visible === false" variant="destructive" class="text-[9px] px-1 py-0 uppercase">Hidden</Badge>
                                 <Badge 
+                                    v-else
                                     :variant="activeBlockId === block.id ? 'secondary' : 'outline'" 
                                     class="ml-1 text-[10px] px-1.5 py-0"
                                 >
@@ -541,11 +554,25 @@ const getGenderBadgeClass = (gender: string) => {
                             <Badge variant="outline" class="font-bold text-xs">
                                 {{ currentBlock.floors.length }} Floors Configured
                             </Badge>
+                            <Badge 
+                                :class="currentBlock.is_visible !== false ? 'bg-emerald-100 text-emerald-800 border-emerald-200 font-bold text-xs' : 'bg-rose-100 text-rose-800 border-rose-200 font-bold text-xs'"
+                            >
+                                {{ currentBlock.is_visible !== false ? 'Visible to Students' : 'Hidden from Students' }}
+                            </Badge>
                         </div>
-                        <p class="text-xs text-muted-foreground">Configure floors and inspect real-time unit occupancy.</p>
+                        <p class="text-xs text-muted-foreground">Configure floors, toggle visibility, and inspect real-time unit occupancy.</p>
                     </div>
 
                     <div class="flex items-center space-x-3 shrink-0">
+                        <Button 
+                            variant="outline" 
+                            :class="currentBlock.is_visible !== false ? 'rounded-xl font-bold h-10 border-rose-200 text-rose-700 hover:bg-rose-50' : 'rounded-xl font-bold h-10 border-emerald-200 text-emerald-700 hover:bg-emerald-50'"
+                            @click="toggleBlockVisibility(currentBlock.id)"
+                        >
+                            <EyeOff v-if="currentBlock.is_visible !== false" class="h-4 w-4 mr-2" />
+                            <Eye v-else class="h-4 w-4 mr-2" />
+                            {{ currentBlock.is_visible !== false ? 'Hide Block' : 'Make Block Visible' }}
+                        </Button>
                         <Button @click="openFloorModal" class="rounded-xl font-bold px-5 h-10 shadow-sm">
                             <Plus class="h-4 w-4 mr-2" /> Add Floor Level
                         </Button>
@@ -577,7 +604,14 @@ const getGenderBadgeClass = (gender: string) => {
                                     {{ index + 1 }}
                                 </div>
                                 <div>
-                                    <h3 class="font-extrabold text-xl text-foreground tracking-tight">{{ floor.name }}</h3>
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="font-extrabold text-xl text-foreground tracking-tight">{{ floor.name }}</h3>
+                                        <Badge 
+                                            :class="floor.is_visible !== false ? 'bg-emerald-100 text-emerald-800 border-emerald-200 font-bold text-[10px]' : 'bg-rose-100 text-rose-800 border-rose-200 font-bold text-[10px]'"
+                                        >
+                                            {{ floor.is_visible !== false ? 'Visible' : 'Hidden' }}
+                                        </Badge>
+                                    </div>
                                     <div class="flex items-center gap-3 text-xs text-muted-foreground font-medium mt-0.5">
                                         <span>{{ floor.rooms.length }} Units Configured</span>
                                         <span>•</span>
@@ -589,7 +623,18 @@ const getGenderBadgeClass = (gender: string) => {
                             </div>
 
                             <div class="flex items-center space-x-3">
-                                <Button size="sm" @click="openRoomModal(floor.id)" class="rounded-xl font-bold gap-1.5 shadow-sm">
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    :class="floor.is_visible !== false ? 'rounded-xl font-bold gap-1.5 text-rose-700 border-rose-200 hover:bg-rose-50 h-9' : 'rounded-xl font-bold gap-1.5 text-emerald-700 border-emerald-200 hover:bg-emerald-50 h-9'"
+                                    @click="toggleFloorVisibility(floor.id)"
+                                    :title="floor.is_visible !== false ? 'Hide floor from students' : 'Make floor visible to students'"
+                                >
+                                    <EyeOff v-if="floor.is_visible !== false" class="h-3.5 w-3.5" />
+                                    <Eye v-else class="h-3.5 w-3.5" />
+                                    <span>{{ floor.is_visible !== false ? 'Hide Floor' : 'Make Visible' }}</span>
+                                </Button>
+                                <Button size="sm" @click="openRoomModal(floor.id)" class="rounded-xl font-bold gap-1.5 shadow-sm h-9">
                                     <Plus class="h-4 w-4" /> Add Room Unit
                                 </Button>
                                 <Button variant="ghost" size="icon" class="h-9 w-9 rounded-xl text-destructive hover:bg-destructive/10" @click="deleteFloor(floor.id)" title="Delete Floor">

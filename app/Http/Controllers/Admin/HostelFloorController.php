@@ -37,4 +37,19 @@ class HostelFloorController extends Controller
 
         return back()->with('success', 'Floor removed successfully.');
     }
+
+    public function toggleVisibility(Hostel $hostel, HostelBlock $block, HostelFloor $floor)
+    {
+        if ($floor->hostel_block_id !== $block->id || $block->hostel_id !== $hostel->id) {
+            abort(404);
+        }
+
+        $floor->update([
+            'is_visible' => !$floor->is_visible,
+        ]);
+
+        $statusText = $floor->is_visible ? 'made visible' : 'hidden';
+
+        return back()->with('success', "Floor '{$floor->name}' is now {$statusText}.");
+    }
 }

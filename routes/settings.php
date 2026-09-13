@@ -368,9 +368,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('hostels/{hostel}/toggle-visibility', [HostelController::class, 'toggleVisibility'])->name('hostels.toggle-visibility')->middleware('permission:toggle_hostels');
 
             Route::post('hostels/{hostel}/blocks', [HostelBlockController::class, 'store'])->name('hostels.blocks.store')->middleware('permission:create_hostels');
+            Route::post('hostels/{hostel}/blocks/{block}/toggle-visibility', [HostelBlockController::class, 'toggleVisibility'])->name('hostels.blocks.toggle-visibility')->middleware('permission:toggle_hostels');
             Route::delete('hostels/{hostel}/blocks/{block}', [HostelBlockController::class, 'destroy'])->name('hostels.blocks.destroy')->middleware('permission:create_hostels');
 
             Route::post('hostels/{hostel}/blocks/{block}/floors', [HostelFloorController::class, 'store'])->name('hostels.floors.store')->middleware('permission:create_hostels');
+            Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/toggle-visibility', [HostelFloorController::class, 'toggleVisibility'])->name('hostels.floors.toggle-visibility')->middleware('permission:toggle_hostels');
             Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}', [HostelFloorController::class, 'destroy'])->name('hostels.floors.destroy')->middleware('permission:create_hostels');
 
             Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms', [HostelRoomController::class, 'store'])->name('hostels.rooms.store')->middleware('permission:create_hostels');
