@@ -76,6 +76,7 @@ class Student extends Model
     protected $appends = [
         'matric_no',
         'matric_number',
+        'age',
     ];
 
     protected $fillable = [
@@ -273,5 +274,10 @@ class Student extends Model
                 }
             }
         }
+    }
+
+    public function getAgeAttribute(): ?int
+    {
+        return $this->dob ? \Carbon\Carbon::parse($this->dob)->age : null;
     }
 }
