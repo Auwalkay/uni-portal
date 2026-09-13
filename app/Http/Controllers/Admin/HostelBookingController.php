@@ -187,15 +187,7 @@ class HostelBookingController extends Controller
             });
         }
 
-        if ($hostelVisibility === 'visible') {
-            $query->whereHas('room.floor.block.hostel', function ($q) {
-                $q->where('is_visible', true);
-            });
-        } elseif ($hostelVisibility === 'hidden') {
-            $query->whereHas('room.floor.block.hostel', function ($q) {
-                $q->where('is_visible', false);
-            });
-        }
+        $this->applyVisibilityFilter($query, $hostelVisibility);
 
         // Sorting
         if ($sortBy === 'student_name') {
@@ -237,44 +229,90 @@ class HostelBookingController extends Controller
         }
         $hostels = $hostelsQuery->get();
 
-        // Analytics Calculations (Scoped to hostel visibility filter and permitted gender)
-        $statsQuery = HostelBooking::query()
-            ->whereHas('room.floor.block.hostel', function ($q) use ($userPermittedGender, $hostelVisibility) {
-                if ($hostelVisibility === 'visible') {
-                    $q->where('is_visible', true);
-                } elseif ($hostelVisibility === 'hidden') {
-                    $q->where('is_visible', false);
-                }
-                if ($userPermittedGender) {
-                    $q->where('gender_type', $userPermittedGender);
-                }
-            });
+        // Analytics Calculations (Scoped to visibility filter across rooms, blocks, hostels, permitted gender, and active filter selections)
+        $statsQuery = HostelBooking::query();
+        $this->applyVisibilityFilter($statsQuery, $hostelVisibility);
+
+        if ($userPermittedGender) {
+            $statsQuery->whereHas('room.floor.block.hostel', fn($q) => $q->where('gender_type', $userPermittedGender));
+        } elseif ($gender === 'male' || $gender === 'female') {
+            $statsQuery->whereHas('room.floor.block.hostel', fn($q) => $q->where('gender_type', $gender));
+        }
+
+        if ($sessionId) {
+            $statsQuery->where('session_id', $sessionId);
+        }
+        if ($level) {
+            $statsQuery->whereHas('student', fn($q) => $q->where('current_level', $level));
+        }
+        if ($hostelId) {
+            $statsQuery->whereHas('room.floor.block', fn($q) => $q->where('hostel_id', $hostelId));
+        }
+        if ($blockId) {
+            $statsQuery->whereHas('room.floor', fn($q) => $q->where('hostel_block_id', $blockId));
+        }
+        if ($floorId) {
+            $statsQuery->whereHas('room', fn($q) => $q->where('hostel_floor_id', $floorId));
+        }
+        if ($roomId) {
+            $statsQuery->where('hostel_room_id', $roomId);
+        }
+        if ($status === 'expired') {
+            if ($currentSession) {
+                $statsQuery->where('session_id', '!=', $currentSession->id)->whereIn('status', ['pending', 'confirmed']);
+            } else {
+                $statsQuery->whereRaw('1 = 0');
+            }
+        } elseif ($status) {
+            $statsQuery->where('status', $status);
+        }
+        if ($date) {
+            $statsQuery->whereDate('hostel_bookings.created_at', $date);
+        }
+        if ($startDate) {
+            $statsQuery->whereDate('hostel_bookings.created_at', '>=', Carbon::parse($startDate)->startOfDay());
+        }
+        if ($endDate) {
+            $statsQuery->whereDate('hostel_bookings.created_at', '<=', Carbon::parse($endDate)->endOfDay());
+        }
 
         $totalBookingsCount = (clone $statsQuery)->count();
         $confirmedCount = (clone $statsQuery)->where('status', 'confirmed')->count();
         $pendingCount = (clone $statsQuery)->where('status', 'pending')->count();
         $cancelledCount = (clone $statsQuery)->where('status', 'cancelled')->count();
 
-        // Rooms and Capacity for visible/hidden/all hostels and active/visible rooms
-        $capacityQuery = HostelRoom::whereHas('floor.block.hostel', function ($q) use ($userPermittedGender, $hostelVisibility) {
-            if ($hostelVisibility === 'visible') {
-                $q->where('is_visible', true);
-            } elseif ($hostelVisibility === 'hidden') {
-                $q->where('is_visible', false);
-            }
-            if ($userPermittedGender) {
-                $q->where('gender_type', $userPermittedGender);
-            }
-        })
-        ->where('is_visible', true)
-        ->where('is_suspended', false);
+        // Rooms and Capacity Analytics (Scoped to visibility filter across rooms, blocks, hostels, and active scope)
+        $capacityQuery = HostelRoom::query();
+        $this->applyRoomVisibilityFilter($capacityQuery, $hostelVisibility);
+
+        if ($userPermittedGender) {
+            $capacityQuery->whereHas('floor.block.hostel', fn($q) => $q->where('gender_type', $userPermittedGender));
+        } elseif ($gender === 'male' || $gender === 'female') {
+            $capacityQuery->whereHas('floor.block.hostel', fn($q) => $q->where('gender_type', $gender));
+        }
+
+        if ($hostelId) {
+            $capacityQuery->whereHas('floor.block', fn($q) => $q->where('hostel_id', $hostelId));
+        }
+        if ($blockId) {
+            $capacityQuery->whereHas('floor', fn($q) => $q->where('hostel_block_id', $blockId));
+        }
+        if ($floorId) {
+            $capacityQuery->where('hostel_floor_id', $floorId);
+        }
+        if ($roomId) {
+            $capacityQuery->where('id', $roomId);
+        }
 
         $totalRooms = (clone $capacityQuery)->count();
         $totalCapacity = (int) (clone $capacityQuery)->sum('capacity');
 
-        // Occupied Rooms: Rooms with at least 1 active booking (pending or confirmed)
-        $occupiedRooms = (clone $capacityQuery)->whereHas('bookings', function ($q) {
+        // Occupied Rooms: Rooms matching capacityQuery with at least 1 active booking (pending or confirmed)
+        $occupiedRooms = (clone $capacityQuery)->whereHas('bookings', function ($q) use ($sessionId) {
             $q->whereIn('status', ['pending', 'confirmed']);
+            if ($sessionId) {
+                $q->where('session_id', $sessionId);
+            }
         })->count();
 
         $vacantRooms = max(0, $totalRooms - $occupiedRooms);
@@ -948,6 +986,11 @@ class HostelBookingController extends Controller
         $endDate = $request->input('end_date');
         $gender = $request->input('gender', 'all');
 
+        $hostelVisibility = $request->input('hostel_visibility', 'visible');
+        if (!in_array($hostelVisibility, ['visible', 'hidden', 'all'])) {
+            $hostelVisibility = 'visible';
+        }
+
         $isMaleSupervisor = ($user->can('view_male_hostel_bookings') || $user->hasRole('male_hostel_supervisor')) &&
                             !($user->can('view_female_hostel_bookings') || $user->hasRole('female_hostel_supervisor'));
         $isFemaleSupervisor = ($user->can('view_female_hostel_bookings') || $user->hasRole('female_hostel_supervisor')) &&
@@ -967,6 +1010,8 @@ class HostelBookingController extends Controller
             'session',
             'invoice.payments',
         ]);
+
+        $this->applyVisibilityFilter($query, $hostelVisibility);
 
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
@@ -1083,5 +1128,67 @@ class HostelBookingController extends Controller
             'Content-Type' => 'text/csv',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ]);
+    }
+
+    /**
+     * Apply visibility filter (visible, hidden, all) to HostelBooking query checking room, floor, block, and hostel.
+     */
+    private function applyVisibilityFilter($query, string $visibility)
+    {
+        if ($visibility === 'visible') {
+            $query->whereHas('room', function ($rq) {
+                $rq->where('is_visible', true)
+                   ->whereHas('floor', function ($fq) {
+                       $fq->where('is_visible', true)
+                          ->whereHas('block', function ($bq) {
+                              $bq->where('is_visible', true)
+                                 ->whereHas('hostel', function ($hq) {
+                                     $hq->where('is_visible', true);
+                                 });
+                          });
+                   });
+            });
+        } elseif ($visibility === 'hidden') {
+            $query->where(function ($q) {
+                $q->whereHas('room', fn($rq) => $rq->where('is_visible', false))
+                  ->orWhereHas('room.floor', fn($fq) => $fq->where('is_visible', false))
+                  ->orWhereHas('room.floor.block', fn($bq) => $bq->where('is_visible', false))
+                  ->orWhereHas('room.floor.block.hostel', fn($hq) => $hq->where('is_visible', false));
+            });
+        }
+
+        return $query;
+    }
+
+    /**
+     * Apply visibility filter (visible, hidden, all) to HostelRoom capacity query checking room, floor, block, and hostel.
+     */
+    private function applyRoomVisibilityFilter($query, string $visibility)
+    {
+        if ($visibility === 'visible') {
+            $query->where('is_visible', true)
+                  ->where('is_suspended', false)
+                  ->whereHas('floor', function ($fq) {
+                      $fq->where('is_visible', true)
+                         ->whereHas('block', function ($bq) {
+                             $bq->where('is_visible', true)
+                                ->whereHas('hostel', function ($hq) {
+                                    $hq->where('is_visible', true);
+                                });
+                         });
+                  });
+        } elseif ($visibility === 'hidden') {
+            $query->where('is_suspended', false)
+                  ->where(function ($q) {
+                      $q->where('is_visible', false)
+                        ->orWhereHas('floor', fn($fq) => $fq->where('is_visible', false))
+                        ->orWhereHas('floor.block', fn($bq) => $bq->where('is_visible', false))
+                        ->orWhereHas('floor.block.hostel', fn($hq) => $hq->where('is_visible', false));
+                  });
+        } else {
+            $query->where('is_suspended', false);
+        }
+
+        return $query;
     }
 }
