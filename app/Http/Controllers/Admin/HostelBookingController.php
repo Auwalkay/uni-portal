@@ -69,6 +69,11 @@ class HostelBookingController extends Controller
         $endDate = $request->input('end_date');
         $gender = $request->input('gender', 'all');
 
+        $hostelVisibility = $request->input('hostel_visibility', 'visible');
+        if (!in_array($hostelVisibility, ['visible', 'hidden', 'all'])) {
+            $hostelVisibility = 'visible';
+        }
+
         // Force gender scope if user has specific male/female supervisor permissions
         $userPermittedGender = null;
         $isMaleSupervisor = ($user->can('view_male_hostel_bookings') || $user->hasRole('male_hostel_supervisor')) &&
@@ -182,6 +187,16 @@ class HostelBookingController extends Controller
             });
         }
 
+        if ($hostelVisibility === 'visible') {
+            $query->whereHas('room.floor.block.hostel', function ($q) {
+                $q->where('is_visible', true);
+            });
+        } elseif ($hostelVisibility === 'hidden') {
+            $query->whereHas('room.floor.block.hostel', function ($q) {
+                $q->where('is_visible', false);
+            });
+        }
+
         // Sorting
         if ($sortBy === 'student_name') {
             $query->join('students', 'hostel_bookings.student_id', '=', 'students.id')
@@ -208,19 +223,28 @@ class HostelBookingController extends Controller
 
         $sessions = Session::latest()->get(['id', 'name']);
         
-        // Scope Hostel Dropdown Options based on permission and visibility
+        // Scope Hostel Dropdown Options based on permission and visibility filter
         $hostelsQuery = Hostel::with(['blocks.floors.rooms'])
-            ->where('is_visible', true)
             ->orderBy('name');
+        if ($hostelVisibility === 'visible') {
+            $hostelsQuery->where('is_visible', true);
+        } elseif ($hostelVisibility === 'hidden') {
+            $hostelsQuery->where('is_visible', false);
+        }
+
         if ($gender === 'male' || $gender === 'female') {
             $hostelsQuery->where('gender_type', $gender);
         }
         $hostels = $hostelsQuery->get();
 
-        // Analytics Calculations (Scoped to visible hostels and permitted gender)
+        // Analytics Calculations (Scoped to hostel visibility filter and permitted gender)
         $statsQuery = HostelBooking::query()
-            ->whereHas('room.floor.block.hostel', function ($q) use ($userPermittedGender) {
-                $q->where('is_visible', true);
+            ->whereHas('room.floor.block.hostel', function ($q) use ($userPermittedGender, $hostelVisibility) {
+                if ($hostelVisibility === 'visible') {
+                    $q->where('is_visible', true);
+                } elseif ($hostelVisibility === 'hidden') {
+                    $q->where('is_visible', false);
+                }
                 if ($userPermittedGender) {
                     $q->where('gender_type', $userPermittedGender);
                 }
@@ -231,9 +255,13 @@ class HostelBookingController extends Controller
         $pendingCount = (clone $statsQuery)->where('status', 'pending')->count();
         $cancelledCount = (clone $statsQuery)->where('status', 'cancelled')->count();
 
-        // Rooms and Capacity for visible hostels and active/visible rooms
-        $capacityQuery = HostelRoom::whereHas('floor.block.hostel', function ($q) use ($userPermittedGender) {
-            $q->where('is_visible', true);
+        // Rooms and Capacity for visible/hidden/all hostels and active/visible rooms
+        $capacityQuery = HostelRoom::whereHas('floor.block.hostel', function ($q) use ($userPermittedGender, $hostelVisibility) {
+            if ($hostelVisibility === 'visible') {
+                $q->where('is_visible', true);
+            } elseif ($hostelVisibility === 'hidden') {
+                $q->where('is_visible', false);
+            }
             if ($userPermittedGender) {
                 $q->where('gender_type', $userPermittedGender);
             }
@@ -315,6 +343,7 @@ class HostelBookingController extends Controller
                 'start_date' => $startDate,
                 'end_date' => $endDate,
                 'gender' => $gender,
+                'hostel_visibility' => $hostelVisibility,
                 'sort_by' => $sortBy,
                 'sort_direction' => $sortDirection,
                 'per_page' => $perPage,
