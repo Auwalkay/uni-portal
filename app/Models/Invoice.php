@@ -18,6 +18,19 @@ class Invoice extends Model
         return LogOptions::defaults()->logFillable()->logOnlyDirty()->dontLogEmptyChanges();
     }
 
+    protected static function booted(): void
+    {
+        static::saving(function (Invoice $invoice) {
+            if ($invoice->amount > 0 && $invoice->paid_amount > $invoice->amount) {
+                $invoice->paid_amount = (float) $invoice->amount;
+            }
+
+            if ($invoice->amount > 0 && $invoice->paid_amount >= $invoice->amount) {
+                $invoice->status = 'paid';
+            }
+        });
+    }
+
     protected $guarded = [];
 
     protected $casts = [

@@ -532,8 +532,12 @@ class InvoiceController extends Controller
             return back()->with('error', 'Invoice is already marked as paid.');
         }
 
-        $balance = $invoice->amount - $invoice->paid_amount;
-        $amountToRecord = $request->amount ?? $balance;
+        $balance = max(0, (float) $invoice->amount - (float) $invoice->paid_amount);
+        if ($balance <= 0) {
+            return back()->with('error', 'Invoice is already fully paid.');
+        }
+
+        $amountToRecord = min($balance, (float) ($request->amount ?? $balance));
 
         if ($amountToRecord <= 0) {
             return back()->with('error', 'Invalid amount.');
@@ -551,8 +555,8 @@ class InvoiceController extends Controller
             'paid_at' => $request->paid_at,
         ]);
 
-        $newTotalPaid = $invoice->paid_amount + $amountToRecord;
-        $newStatus = $newTotalPaid >= $invoice->amount ? 'paid' : 'partial';
+        $newTotalPaid = min((float) $invoice->amount, (float) $invoice->paid_amount + $amountToRecord);
+        $newStatus = $newTotalPaid >= (float) $invoice->amount ? 'paid' : 'partial';
 
         $invoice->update([
             'status' => $newStatus,

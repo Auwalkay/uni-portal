@@ -377,10 +377,12 @@ class AccommodationController extends Controller
                     $totalPaid = (float) $invoice->paid_amount;
                 }
 
-                if ($totalPaid >= $finalAmount && $finalAmount > 0) {
+                $cappedPaidAmount = min($finalAmount, $totalPaid);
+
+                if ($cappedPaidAmount >= $finalAmount && $finalAmount > 0) {
                     $invoiceStatus = 'paid';
                     $bookingStatus = 'confirmed';
-                } elseif ($totalPaid > 0) {
+                } elseif ($cappedPaidAmount > 0) {
                     $invoiceStatus = 'partial';
                     $bookingStatus = 'confirmed';
                 } else {
@@ -390,6 +392,7 @@ class AccommodationController extends Controller
 
                 $invoice->update([
                     'amount' => $finalAmount,
+                    'paid_amount' => $cappedPaidAmount,
                     'status' => $invoiceStatus,
                     'due_date' => $invoiceStatus === 'paid' ? null : $dueDate,
                 ]);
