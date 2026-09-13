@@ -67,6 +67,8 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
         Route::middleware(['permission:run_payroll'])->group(function () {
             Route::post('payroll/generate', [PayrollController::class, 'generate'])->name('payroll.generate');
             Route::post('payroll/{payroll}/mark-as-paid', [PayrollController::class, 'markAsPaid'])->name('payroll.mark-as-paid');
+            Route::put('payroll/{payroll}/items/{payrollItem}', [PayrollController::class, 'updateItem'])->name('payroll.items.update');
+            Route::post('payroll/{payroll}/items/{payrollItem}/toggle-exclusion', [PayrollController::class, 'toggleExclusion'])->name('payroll.items.toggle-exclusion');
             Route::get('payroll/{payroll}/payslip/{payrollItem}/download', [PayrollController::class, 'downloadPayslip'])->name('payroll.payslip.download');
             Route::resource('payroll', PayrollController::class)->only(['index', 'show', 'destroy']);
         });

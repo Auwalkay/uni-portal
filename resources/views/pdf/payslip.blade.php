@@ -266,11 +266,24 @@
         </tbody>
     </table>
 
+    @if($item->remarks)
+        <div style="margin-bottom: 20px; padding: 10px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px;">
+            <div class="info-label">Payroll Notes / Adjustments</div>
+            <div style="font-size: 11px; color: #334155; margin-top: 4px;">{{ $item->remarks }}</div>
+        </div>
+    @endif
+
     <div style="margin-bottom: 40px;">
         <div class="info-label" style="display:inline-block">Status:</div>
-        <div class="badge {{ $item->payroll->paid_at ? 'badge-paid' : 'badge-pending' }}" style="display:inline-block">
-            {{ $item->payroll->paid_at ? 'Electronic Funds Transferred' : 'Payment Processing' }}
-        </div>
+        @if($item->status === 'excluded')
+            <div class="badge" style="background-color: #fee2e2; color: #991b1b; display:inline-block">
+                Excluded / Unpaid
+            </div>
+        @else
+            <div class="badge {{ $item->payroll->paid_at ? 'badge-paid' : 'badge-pending' }}" style="display:inline-block">
+                {{ $item->payroll->paid_at ? 'Electronic Funds Transferred' : 'Payment Processing' }}
+            </div>
+        @endif
 
         <div class="qr-placeholder">
             <!-- Simulated QR code for verification -->
