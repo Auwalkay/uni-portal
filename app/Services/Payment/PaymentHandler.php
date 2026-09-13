@@ -36,17 +36,18 @@ class PaymentHandler
             'raw_gateway_data' => $data,
         ]);
 
-        // Increment paid amount safely
+        // Increment paid amount safely, ensuring total paid never exceeds invoice total amount
         if ($payment->invoice) {
-            $payment->invoice->increment('paid_amount', $payment->amount);
-            $payment->invoice->refresh();
+            $invoice = $payment->invoice;
+            $currentPaid = (float) $invoice->paid_amount;
+            $invoiceAmount = (float) $invoice->amount;
+            $newPaid = min($invoiceAmount, $currentPaid + (float) $payment->amount);
 
-            // Update invoice status
-            if ($payment->invoice->paid_amount >= $payment->invoice->amount) {
-                $payment->invoice->update(['status' => 'paid']);
-            } else {
-                $payment->invoice->update(['status' => 'partial']);
-            }
+            $invoice->update([
+                'paid_amount' => $newPaid,
+                'status' => ($newPaid >= $invoiceAmount && $invoiceAmount > 0) ? 'paid' : ($newPaid > 0 ? 'partial' : 'pending'),
+            ]);
+            $invoice->refresh();
 
             // Specific Logic based on Invoice Type
             $this->handleInvoiceTypeSideEffects($payment);

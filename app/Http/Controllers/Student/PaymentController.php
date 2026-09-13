@@ -212,9 +212,12 @@ class PaymentController extends Controller
             'amount' => 'required|numeric|min:1',
         ]);
 
-        $balance = (float) $invoice->amount - (float) $invoice->paid_amount;
-        $amountToPay = (float) $request->input('amount');
+        $balance = max(0, (float) $invoice->amount - (float) $invoice->paid_amount);
+        if ($balance <= 0.01) {
+            return back()->with('error', 'This invoice is already fully paid.');
+        }
 
+        $amountToPay = (float) $request->input('amount');
         $isFullPayment = abs($amountToPay - $balance) < 0.01;
 
         // Disallow split payments for non-school and non-hostel fees (e.g. acceptance_fee, other_fee, application_fee)

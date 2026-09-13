@@ -86,6 +86,7 @@ const props = defineProps<{
         start_date?: string;
         end_date?: string;
         gender?: string;
+        hostel_visibility?: string;
         sort_by?: string;
         sort_direction?: string;
         per_page?: number;
@@ -106,6 +107,7 @@ const filterDate = ref(props.filters.date || '');
 const filterStartDate = ref(props.filters.start_date || '');
 const filterEndDate = ref(props.filters.end_date || '');
 const filterGender = ref(props.filters.gender || 'all');
+const filterHostelVisibility = ref(props.filters.hostel_visibility || 'visible');
 
 const filterSortBy = ref(props.filters.sort_by || 'created_at');
 const filterSortDirection = ref(props.filters.sort_direction || 'desc');
@@ -279,6 +281,7 @@ const applyFilters = () => {
         start_date: filterStartDate.value,
         end_date: filterEndDate.value,
         gender: filterGender.value === 'all' ? '' : filterGender.value,
+        hostel_visibility: filterHostelVisibility.value,
         sort_by: filterSortBy.value,
         sort_direction: filterSortDirection.value,
     }, {
@@ -301,6 +304,7 @@ const exportCsv = () => {
     if (filterStartDate.value) params.append('start_date', filterStartDate.value);
     if (filterEndDate.value) params.append('end_date', filterEndDate.value);
     if (filterGender.value && filterGender.value !== 'all') params.append('gender', filterGender.value);
+    if (filterHostelVisibility.value) params.append('hostel_visibility', filterHostelVisibility.value);
 
     window.location.href = `${route('admin.hostels.bookings.export')}?${params.toString()}`;
 };
@@ -317,6 +321,7 @@ const resetFilters = () => {
     filterDate.value = '';
     filterStartDate.value = '';
     filterEndDate.value = '';
+    filterHostelVisibility.value = 'visible';
     if (props.canManageBookings) {
         filterGender.value = 'all';
     }
@@ -330,6 +335,15 @@ const handleSessionChange = (val: string) => {
 
 const handleLevelChange = (val: string) => {
     filterLevel.value = val;
+    applyFilters();
+};
+
+const handleHostelVisibilityChange = (val: string) => {
+    filterHostelVisibility.value = val;
+    filterHostelId.value = 'all';
+    filterBlockId.value = 'all';
+    filterFloorId.value = 'all';
+    filterRoomId.value = 'all';
     applyFilters();
 };
 
@@ -663,6 +677,23 @@ const getInvoiceBalance = (invoice: any) => {
                         </Select>
                     </div>
 
+                    <!-- Hostel Visibility Selector -->
+                    <div>
+                        <Select v-model="filterHostelVisibility" @update:modelValue="handleHostelVisibilityChange">
+                            <SelectTrigger class="h-10 bg-muted/30 w-full text-left">
+                                <div class="flex items-center gap-2">
+                                    <Eye class="h-4 w-4 text-muted-foreground" />
+                                    <SelectValue placeholder="Hostel Visibility" />
+                                </div>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="visible">Visible Hostels Only</SelectItem>
+                                <SelectItem value="hidden">Hidden Hostels Only</SelectItem>
+                                <SelectItem value="all">All Hostels (Visible & Hidden)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
                     <!-- Hostel Selector -->
                     <div>
                         <Select v-model="filterHostelId" @update:modelValue="handleHostelChange">
@@ -675,7 +706,10 @@ const getInvoiceBalance = (invoice: any) => {
                             <SelectContent>
                                 <SelectItem value="all">-- All Hostels --</SelectItem>
                                 <SelectItem v-for="hostel in hostels" :key="hostel.id" :value="hostel.id">
-                                    {{ hostel.name }}
+                                    <div class="flex items-center justify-between w-full gap-2">
+                                        <span>{{ hostel.name }}</span>
+                                        <span v-if="hostel.is_visible === false" class="text-[10px] text-rose-600 font-bold uppercase">(Hidden)</span>
+                                    </div>
                                 </SelectItem>
                             </SelectContent>
                         </Select>
@@ -881,7 +915,8 @@ const getInvoiceBalance = (invoice: any) => {
                                     <div class="space-y-1">
                                         <div class="flex items-center gap-1.5 text-foreground font-semibold">
                                             <Hotel class="h-3.5 w-3.5 text-primary" />
-                                            {{ booking.room?.floor?.block?.hostel?.name }}
+                                            <span>{{ booking.room?.floor?.block?.hostel?.name }}</span>
+                                            <span v-if="booking.room?.floor?.block?.hostel?.is_visible === false" class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 uppercase">Hidden</span>
                                         </div>
                                         <p class="text-[11px] text-muted-foreground font-medium pl-5">
                                             {{ booking.room?.floor?.block?.name }} • {{ booking.room?.floor?.name }} • Room {{ booking.room?.room_number }}
