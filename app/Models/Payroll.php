@@ -34,4 +34,16 @@ class Payroll extends Model
     {
         return $this->belongsTo(User::class, 'generated_by');
     }
+
+    /**
+     * Recalculate the overall total amount of this payroll based on active items.
+     */
+    public function recalculateTotal(): void
+    {
+        $total = (float) $this->items()
+            ->where('status', '!=', 'excluded')
+            ->sum('net_salary');
+
+        $this->update(['total_amount' => $total]);
+    }
 }
