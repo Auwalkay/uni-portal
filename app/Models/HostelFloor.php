@@ -13,6 +13,11 @@ class HostelFloor extends Model
     protected $fillable = [
         'hostel_block_id',
         'name',
+        'is_visible',
+    ];
+
+    protected $casts = [
+        'is_visible' => 'boolean',
     ];
 
     public function block()
