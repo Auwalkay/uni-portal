@@ -21,14 +21,8 @@ class BursaryController extends Controller
         }
 
         $query = Student::query()
-            ->select('students.*', 'users.name as user_name')
-            ->distinct()
-            ->join('users', 'users.id', '=', 'students.user_id')
-            ->leftJoin('invoices', function ($join) use ($sessionId, $feeType) {
-                $join->on('invoices.user_id', '=', 'students.user_id')
-                    ->where('invoices.session_id', '=', $sessionId)
-                    ->where('invoices.type', '=', $feeType);
-            });
+            ->select('students.*')
+            ->join('users', 'users.id', '=', 'students.user_id');
 
         // Faculty filter
         if ($request->filled('faculty_id') && $request->faculty_id !== 'ALL') {
@@ -85,9 +79,23 @@ class BursaryController extends Controller
         if ($sortBy === 'reg_number') {
             $query->orderBy('students.matriculation_number', $sortOrder);
         } elseif ($sortBy === 'status') {
-            $query->orderByRaw("COALESCE(invoices.status, 'unpaid') " . $sortOrder);
+            $query->orderBy(
+                Invoice::select('status')
+                    ->whereColumn('invoices.user_id', 'students.user_id')
+                    ->where('session_id', $sessionId)
+                    ->where('type', $feeType)
+                    ->limit(1),
+                $sortOrder
+            );
         } elseif ($sortBy === 'balance') {
-            $query->orderByRaw("(COALESCE(invoices.amount, 0) - COALESCE(invoices.paid_amount, 0)) " . $sortOrder);
+            $query->orderBy(
+                Invoice::selectRaw('(COALESCE(amount, 0) - COALESCE(paid_amount, 0))')
+                    ->whereColumn('invoices.user_id', 'students.user_id')
+                    ->where('session_id', $sessionId)
+                    ->where('type', $feeType)
+                    ->limit(1),
+                $sortOrder
+            );
         } else {
             $query->orderBy('users.name', $sortOrder);
         }
@@ -139,7 +147,7 @@ class BursaryController extends Controller
         $perPage = $request->query('per_page', 20);
         $students = $query->paginate($perPage)->withQueryString();
 
-        // High-performance stats calculation across matching dataset using chunking (5K+ scaling)
+        // Calculate Stats across matching dataset using chunking (5K+ scaling)
         $totalStatsQuery = $this->getFilteredStudentsQuery($request, $sessionId, $feeType);
         
         $stats = [
@@ -156,13 +164,34 @@ class BursaryController extends Controller
             'collection_rate' => 0,
         ];
 
+        $scholarshipsMap = \App\Models\Scholarship::all()->keyBy('id');
+        $scholarshipStatsMap = [];
+
+        foreach ($scholarshipsMap as $sId => $sch) {
+            $scholarshipStatsMap[$sId] = [
+                'id' => $sch->id,
+                'name' => $sch->name,
+                'type' => $sch->type,
+                'percentage' => (float)$sch->percentage,
+                'amount' => (float)$sch->amount,
+                'value_display' => $sch->type === 'percentage' ? $sch->percentage . '% Discount' : '₦' . number_format($sch->amount, 2),
+                'student_count' => 0,
+                'total_discount' => 0,
+                'total_billed' => 0,
+                'total_paid' => 0,
+                'total_balance' => 0,
+                'paid_count' => 0,
+                'unpaid_count' => 0,
+            ];
+        }
+
         $totalStatsQuery->with([
             'invoices' => function($q) use ($sessionId, $feeType) {
                 $q->where('session_id', $sessionId)->where('type', $feeType);
             }, 
             'scholarship', 
             'program:id,name,scholarship_eligible'
-        ])->chunkById(1000, function ($studentsChunk) use ($feeType, $session, $feeService, $allConfigsBySession, $adminChargeEnabled, $adminChargeAmount, &$stats) {
+        ])->chunkById(1000, function ($studentsChunk) use ($feeType, $session, $feeService, $allConfigsBySession, $adminChargeEnabled, $adminChargeAmount, $scholarshipsMap, &$scholarshipStatsMap, &$stats) {
             foreach ($studentsChunk as $student) {
                 $stats['student_count']++;
 
@@ -186,6 +215,30 @@ class BursaryController extends Controller
 
                 if ($student->scholarship_id) {
                     $stats['scholarship_count']++;
+
+                    if (isset($scholarshipStatsMap[$student->scholarship_id])) {
+                        $sId = $student->scholarship_id;
+                        $scholarshipStatsMap[$sId]['student_count']++;
+                        $scholarshipStatsMap[$sId]['total_billed'] += $billed;
+                        $scholarshipStatsMap[$sId]['total_paid'] += $paid;
+                        $scholarshipStatsMap[$sId]['total_balance'] += max(0, $billed - $paid);
+                        if ($status === 'paid') {
+                            $scholarshipStatsMap[$sId]['paid_count']++;
+                        } else {
+                            $scholarshipStatsMap[$sId]['unpaid_count']++;
+                        }
+
+                        $schObj = $scholarshipsMap->get($sId);
+                        if ($schObj) {
+                            if ($schObj->type === 'percentage' && $schObj->percentage > 0) {
+                                $pctDecimal = ($schObj->percentage / 100);
+                                $discountVal = $pctDecimal < 1 ? ($billed / (1 - $pctDecimal)) * $pctDecimal : $billed;
+                            } else {
+                                $discountVal = (float)$schObj->amount;
+                            }
+                            $scholarshipStatsMap[$sId]['total_discount'] += round($discountVal, 2);
+                        }
+                    }
                 }
 
                 if ($status === 'paid') $stats['paid_count']++;
@@ -243,6 +296,7 @@ class BursaryController extends Controller
         return Inertia::render('Admin/Finance/StudentFees', [
             'students' => $students,
             'summaryStats' => $stats,
+            'scholarships' => array_values($scholarshipStatsMap),
             'sessions' => \App\Services\AcademicCacheService::getSessions(),
             'currentSession' => Session::find($sessionId),
             'faculties' => \App\Services\AcademicCacheService::getAllFaculties(),

@@ -33,6 +33,22 @@ const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
 };
 
+const formatCompactCurrency = (amount: number) => {
+    if (!amount || isNaN(amount)) return '₦0';
+    const abs = Math.abs(amount);
+    if (abs >= 1_000_000_000) {
+        const val = amount / 1_000_000_000;
+        return '₦' + (val % 1 === 0 ? val.toFixed(0) : val.toFixed(2).replace(/\.?0+$/, '')) + 'B';
+    } else if (abs >= 1_000_000) {
+        const val = amount / 1_000_000;
+        return '₦' + (val % 1 === 0 ? val.toFixed(0) : val.toFixed(2).replace(/\.?0+$/, '')) + 'M';
+    } else if (abs >= 100_000) {
+        const val = amount / 1_000;
+        return '₦' + (val % 1 === 0 ? val.toFixed(0) : val.toFixed(1).replace(/\.?0+$/, '')) + 'K';
+    }
+    return formatCurrency(amount);
+};
+
 const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
 };
@@ -62,7 +78,7 @@ const formatDate = (dateString: string) => {
                         <ArrowDownRight class="h-4 w-4 text-emerald-500" />
                     </CardHeader>
                     <CardContent>
-                        <div class="text-2xl font-bold text-emerald-600">{{ formatCurrency(stats.totalInflow) }}</div>
+                        <div class="text-2xl font-bold text-emerald-600 cursor-help" :title="formatCurrency(stats.totalInflow)">{{ formatCompactCurrency(stats.totalInflow) }}</div>
                         <p class="text-xs text-muted-foreground">From student fees</p>
                     </CardContent>
                 </Card>
@@ -72,7 +88,7 @@ const formatDate = (dateString: string) => {
                         <ArrowUpRight class="h-4 w-4 text-rose-500" />
                     </CardHeader>
                     <CardContent>
-                        <div class="text-2xl font-bold text-rose-600">{{ formatCurrency(stats.totalOutflow) }}</div>
+                        <div class="text-2xl font-bold text-rose-600 cursor-help" :title="formatCurrency(stats.totalOutflow)">{{ formatCompactCurrency(stats.totalOutflow) }}</div>
                         <p class="text-xs text-muted-foreground">Expenses + Payroll</p>
                     </CardContent>
                 </Card>
@@ -82,8 +98,8 @@ const formatDate = (dateString: string) => {
                         <Wallet class="h-4 w-4 text-primary" />
                     </CardHeader>
                     <CardContent>
-                        <div class="text-2xl font-bold" :class="stats.netBalance >= 0 ? 'text-primary' : 'text-rose-600'">
-                             {{ formatCurrency(stats.netBalance) }}
+                        <div class="text-2xl font-bold cursor-help" :class="stats.netBalance >= 0 ? 'text-primary' : 'text-rose-600'" :title="formatCurrency(stats.netBalance)">
+                             {{ formatCompactCurrency(stats.netBalance) }}
                         </div>
                         <p class="text-xs text-muted-foreground">Available funds</p>
                     </CardContent>

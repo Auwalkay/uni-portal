@@ -16,7 +16,11 @@ import {
     TrendingUp,
     CheckCircle2,
     Building2,
-    CalendarDays
+    CalendarDays,
+    Award,
+    Sparkles,
+    PieChart,
+    BarChart3
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
 import { Button } from '@/components/ui/button';
@@ -57,7 +61,24 @@ const props = defineProps<{
         paid_count: number;
         partial_count: number;
         unpaid_count: number;
+        scholarship_count?: number;
+        avg_fee_per_student?: number;
+        avg_outstanding?: number;
+        collection_rate?: number;
     };
+    scholarships?: Array<{
+        id: number;
+        name: string;
+        type: string;
+        value_display: string;
+        student_count: number;
+        total_discount: number;
+        total_billed: number;
+        total_paid: number;
+        total_balance: number;
+        paid_count: number;
+        unpaid_count: number;
+    }>;
     sessions: Array<any>;
     currentSession: any;
     faculties: Array<any>;
@@ -124,6 +145,22 @@ const formatCurrency = (amount: number) => {
     }).format(amount);
 };
 
+const formatCompactCurrency = (amount: number) => {
+    if (!amount || isNaN(amount)) return '₦0';
+    const abs = Math.abs(amount);
+    if (abs >= 1_000_000_000) {
+        const val = amount / 1_000_000_000;
+        return '₦' + (val % 1 === 0 ? val.toFixed(0) : val.toFixed(2).replace(/\.?0+$/, '')) + 'B';
+    } else if (abs >= 1_000_000) {
+        const val = amount / 1_000_000;
+        return '₦' + (val % 1 === 0 ? val.toFixed(0) : val.toFixed(2).replace(/\.?0+$/, '')) + 'M';
+    } else if (abs >= 100_000) {
+        const val = amount / 1_000;
+        return '₦' + (val % 1 === 0 ? val.toFixed(0) : val.toFixed(1).replace(/\.?0+$/, '')) + 'K';
+    }
+    return formatCurrency(amount);
+};
+
 const getStatusBadge = (status: string) => {
     switch (status) {
         case 'paid': return 'bg-green-100 text-green-700 border-green-200';
@@ -177,7 +214,7 @@ const getStatusBadge = (status: string) => {
                     </div>
                     <CardContent class="p-5 space-y-2">
                         <p class="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Expected Revenue</p>
-                        <h2 class="text-2xl font-black">{{ formatCurrency(summaryStats.total_billed) }}</h2>
+                        <h2 class="text-2xl font-black cursor-help" :title="formatCurrency(summaryStats.total_billed)">{{ formatCompactCurrency(summaryStats.total_billed) }}</h2>
                         <p class="text-[10px] text-slate-400 font-bold uppercase tracking-tight flex items-center gap-1">
                             <TrendingUp class="w-3 h-3 text-blue-400" /> Total Billed Fees
                         </p>
@@ -191,7 +228,7 @@ const getStatusBadge = (status: string) => {
                             <p class="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Collected</p>
                             <div class="p-1.5 bg-green-50 rounded-lg"><Wallet class="w-3.5 h-3.5 text-green-600" /></div>
                         </div>
-                        <h2 class="text-2xl font-black text-green-600">{{ formatCurrency(summaryStats.total_paid) }}</h2>
+                        <h2 class="text-2xl font-black text-green-600 cursor-help" :title="formatCurrency(summaryStats.total_paid)">{{ formatCompactCurrency(summaryStats.total_paid) }}</h2>
                         <div class="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                             <div 
                                 class="h-full bg-green-500 rounded-full transition-all duration-1000" 
@@ -211,9 +248,9 @@ const getStatusBadge = (status: string) => {
                             <p class="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Outstanding</p>
                             <div class="p-1.5 bg-amber-50 rounded-lg"><AlertCircle class="w-3.5 h-3.5 text-amber-600" /></div>
                         </div>
-                        <h2 class="text-2xl font-black text-red-600">{{ formatCurrency(summaryStats.total_balance) }}</h2>
+                        <h2 class="text-2xl font-black text-red-600 cursor-help" :title="formatCurrency(summaryStats.total_balance)">{{ formatCompactCurrency(summaryStats.total_balance) }}</h2>
                         <p class="text-[10px] text-amber-600 font-bold uppercase tracking-tight">
-                            Avg: {{ formatCurrency(summaryStats.avg_outstanding || 0) }} / debtor
+                            Avg: {{ formatCompactCurrency(summaryStats.avg_outstanding || 0) }} / debtor
                         </p>
                     </CardContent>
                 </Card>
@@ -256,7 +293,7 @@ const getStatusBadge = (status: string) => {
                             <p class="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Avg Fee & Aid</p>
                             <div class="p-1.5 bg-purple-50 rounded-lg"><CreditCard class="w-3.5 h-3.5 text-purple-600" /></div>
                         </div>
-                        <h2 class="text-xl font-black text-slate-900">{{ formatCurrency(summaryStats.avg_fee_per_student || 0) }}</h2>
+                        <h2 class="text-xl font-black text-slate-900 cursor-help" :title="formatCurrency(summaryStats.avg_fee_per_student || 0)">{{ formatCompactCurrency(summaryStats.avg_fee_per_student || 0) }}</h2>
                         <p class="text-[10px] text-purple-600 font-bold uppercase tracking-tight">
                             {{ summaryStats.scholarship_count || 0 }} Students on Scholarship
                         </p>
