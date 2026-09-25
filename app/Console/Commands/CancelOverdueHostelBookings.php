@@ -53,8 +53,6 @@ class CancelOverdueHostelBookings extends Command
         }
 
         $handler = app(PaymentHandler::class);
-        $squadco = new SquadcoService();
-        $paystack = new PaystackService();
         $cancelledCount = 0;
 
         foreach ($overdueBookings as $booking) {
@@ -71,7 +69,8 @@ class CancelOverdueHostelBookings extends Command
                 if ($payment->gateway_reference && strpos($payment->gateway_reference, 'TEMP-') !== 0) {
                     try {
                         $this->comment("Verifying pending payment: {$payment->gateway_reference} for student booking...");
-                        $gateway = ($payment->gateway === 'paystack') ? $paystack : $squadco;
+                        $gatewayName = $payment->gateway ?: 'squadco';
+                        $gateway = \App\Services\Payment\PaymentGatewayFactory::resolveForInvoice($invoice, $gatewayName);
                         $data = $gateway->verifyTransaction($payment->gateway_reference);
 
                         if ($data && $data['status'] === 'success') {

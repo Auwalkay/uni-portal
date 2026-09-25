@@ -52,14 +52,42 @@ class AcademicCacheService
     public static function getCurrentSession()
     {
         return Cache::remember('current_session', self::TTL, function () {
-            return Session::where('is_current', true)->first();
+            $session = Session::where('is_current', true)->first();
+            if (!$session) {
+                $session = Session::orderBy('start_date', 'desc')->first() ?? Session::latest('id')->first();
+                if ($session) {
+                    Session::where('id', $session->id)->update(['is_current' => true]);
+                    $session->is_current = true;
+                }
+            }
+            return $session;
         });
     }
 
     public static function getCurrentSemester()
     {
         return Cache::remember('current_semester', self::TTL, function () {
-            return \App\Models\Semester::where('is_current', true)->with('session')->first();
+            $session = self::getCurrentSession();
+            if (!$session) return null;
+
+            $semester = \App\Models\Semester::where('session_id', $session->id)
+                ->where('is_current', true)
+                ->with('session')
+                ->first();
+
+            if (!$semester) {
+                $semester = \App\Models\Semester::where('session_id', $session->id)
+                    ->orderBy('name', 'asc')
+                    ->with('session')
+                    ->first();
+
+                if ($semester) {
+                    \App\Models\Semester::where('id', $semester->id)->update(['is_current' => true]);
+                    $semester->is_current = true;
+                }
+            }
+
+            return $semester;
         });
     }
 

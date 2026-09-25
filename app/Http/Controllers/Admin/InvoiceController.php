@@ -555,6 +555,10 @@ class InvoiceController extends Controller
             'paid_at' => $request->paid_at,
         ]);
 
+        // Remove late fine if manual payment date is on or before the late payment deadline
+        app(\App\Services\Payment\PaymentHandler::class)->checkAndRemoveLateFineIfPaidBeforeDeadline($invoice, $request->paid_at);
+        $invoice->refresh();
+
         $newTotalPaid = min((float) $invoice->amount, (float) $invoice->paid_amount + $amountToRecord);
         $newStatus = $newTotalPaid >= (float) $invoice->amount ? 'paid' : 'partial';
 
@@ -614,14 +618,9 @@ class InvoiceController extends Controller
                 return back()->with('error', 'Cannot requery payment: No gateway reference exists for this transaction.');
             }
 
-            // Resolve the correct gateway service based on the payment's gateway field
+            // Resolve the correct gateway service based on the payment's gateway field and associated hostel keys
             $gatewayName = strtolower($payment->gateway ?? 'squadco');
-
-            if ($gatewayName === 'paystack') {
-                $gatewayService = app(\App\Services\PaystackService::class);
-            } else {
-                $gatewayService = app(\App\Services\SquadcoService::class);
-            }
+            $gatewayService = \App\Services\Payment\PaymentGatewayFactory::resolveForInvoice($payment->invoice, $gatewayName);
 
             // 1. Verify with the gateway
             $paymentData = $gatewayService->verifyTransaction($payment->gateway_reference);

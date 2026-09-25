@@ -194,7 +194,7 @@ const passportUrl = computed(() => {
                                         <SelectValue placeholder="None" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="">No Scholarship</SelectItem>
+                                        <SelectItem value="none">No Scholarship</SelectItem>
                                         <SelectItem v-for="s in scholarships" :key="s.id" :value="s.id">
                                             {{ s.name }}
                                         </SelectItem>

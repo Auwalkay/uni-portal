@@ -95,71 +95,149 @@ class BursaryController extends Controller
         return $query;
     }
 
+    private function prepareBatchFeeConfigs(?Session $session)
+    {
+        $sessionIds = \App\Models\FeeConfiguration::distinct()->pluck('session_id')->filter()->toArray();
+        if ($session && !in_array($session->id, $sessionIds)) {
+            $sessionIds[] = $session->id;
+        }
+
+        $allConfigs = \App\Models\FeeConfiguration::whereIn('session_id', $sessionIds)
+            ->where('is_compulsory', true)
+            ->with('feeType')
+            ->get()
+            ->groupBy('session_id');
+
+        $adminChargeEnabled = \App\Models\SystemSetting::get('admin_charge_enabled', true);
+        $adminChargeAmount = \App\Models\SystemSetting::get('admin_charge_amount', 250000);
+
+        return [$allConfigs, $adminChargeEnabled, $adminChargeAmount];
+    }
+
     public function studentFeesReport(Request $request)
     {
         $sessionId = null;
         $feeType = 'school_fee';
         $query = $this->getFilteredStudentsQuery($request, $sessionId, $feeType);
+        $session = Session::find($sessionId) ?? Session::current();
+        $feeService = app(\App\Services\Finance\FeeService::class);
 
-        $query->with(['user', 'faculty', 'department', 'program', 'academicDepartment', 'scholarship', 'invoices']);
+        [$allConfigsBySession, $adminChargeEnabled, $adminChargeAmount] = $this->prepareBatchFeeConfigs($session);
+
+        $query->with([
+            'user:id,name', 
+            'faculty:id,name', 
+            'department:id,name', 
+            'program:id,name,scholarship_eligible', 
+            'academicDepartment:id,name', 
+            'scholarship', 
+            'invoices' => function($q) use ($sessionId, $feeType) {
+                $q->where('session_id', $sessionId)->where('type', $feeType);
+            }
+        ]);
 
         $perPage = $request->query('per_page', 20);
         $students = $query->paginate($perPage)->withQueryString();
 
-        // Calculate Stats for the whole filtered set (not just paginated)
+        // High-performance stats calculation across matching dataset using chunking (5K+ scaling)
         $totalStatsQuery = $this->getFilteredStudentsQuery($request, $sessionId, $feeType);
-        $allMatchingStudents = $totalStatsQuery->with(['invoices'])->get();
         
         $stats = [
             'total_billed' => 0,
             'total_paid' => 0,
             'total_balance' => 0,
-            'student_count' => $allMatchingStudents->count(),
+            'student_count' => 0,
             'paid_count' => 0,
             'partial_count' => 0,
             'unpaid_count' => 0,
+            'scholarship_count' => 0,
+            'avg_fee_per_student' => 0,
+            'avg_outstanding' => 0,
+            'collection_rate' => 0,
         ];
 
-        $allMatchingStudents->each(function ($student) use ($sessionId, $feeType, &$stats) {
-            $invoice = $student->invoices
-                ->where('session_id', $sessionId)
-                ->where('type', $feeType)
-                ->first();
+        $totalStatsQuery->with([
+            'invoices' => function($q) use ($sessionId, $feeType) {
+                $q->where('session_id', $sessionId)->where('type', $feeType);
+            }, 
+            'scholarship', 
+            'program:id,name,scholarship_eligible'
+        ])->chunkById(1000, function ($studentsChunk) use ($feeType, $session, $feeService, $allConfigsBySession, $adminChargeEnabled, $adminChargeAmount, &$stats) {
+            foreach ($studentsChunk as $student) {
+                $stats['student_count']++;
 
-            $billed = $invoice ? (float)$invoice->amount : 0;
-            $paid = $invoice ? (float)$invoice->paid_amount : 0;
-            
-            $stats['total_billed'] += $billed;
-            $stats['total_paid'] += $paid;
-            $stats['total_balance'] += ($billed - $paid);
+                $invoice = $student->invoices->first();
 
-            $status = $invoice ? $invoice->status : 'unpaid';
-            if ($status === 'paid') $stats['paid_count']++;
-            elseif ($status === 'partial') $stats['partial_count']++;
-            else $stats['unpaid_count']++;
-        });
+                if ($invoice) {
+                    $billed = (float)$invoice->amount;
+                    $paid = (float)$invoice->paid_amount;
+                    $status = $invoice->status;
+                } else {
+                    $billed = ($feeType === 'school_fee' && $session) 
+                        ? $feeService->calculateExpectedSchoolFeeWithConfigs($student, $session, $allConfigsBySession, $adminChargeEnabled, $adminChargeAmount) 
+                        : 0;
+                    $paid = 0;
+                    $status = 'unpaid';
+                }
+                
+                $stats['total_billed'] += $billed;
+                $stats['total_paid'] += $paid;
+                $stats['total_balance'] += max(0, $billed - $paid);
 
-        // Load invoices for the selected session with their payments to avoid N+1 for paginated list
-        $students->getCollection()->each(function ($student) use ($sessionId, $feeType) {
-            $invoice = $student->invoices
-                ->where('session_id', $sessionId)
-                ->where('type', $feeType)
-                ->first();
+                if ($student->scholarship_id) {
+                    $stats['scholarship_count']++;
+                }
 
-            $lastPayment = null;
+                if ($status === 'paid') $stats['paid_count']++;
+                elseif ($status === 'partial') $stats['partial_count']++;
+                else $stats['unpaid_count']++;
+            }
+        }, 'students.id', 'id');
+
+        $stats['collection_rate'] = $stats['total_billed'] > 0 
+            ? round(($stats['total_paid'] / $stats['total_billed']) * 100, 1) 
+            : 0;
+        $stats['avg_fee_per_student'] = $stats['student_count'] > 0 
+            ? round($stats['total_billed'] / $stats['student_count'], 2) 
+            : 0;
+        $unpaidOrPartialCount = $stats['unpaid_count'] + $stats['partial_count'];
+        $stats['avg_outstanding'] = $unpaidOrPartialCount > 0 
+            ? round($stats['total_balance'] / $unpaidOrPartialCount, 2) 
+            : 0;
+
+        // Load invoices for the selected session with their payments to avoid N+1 for paginated list (1 single query)
+        $invoiceIds = $students->pluck('invoices')->flatten()->pluck('id')->filter()->values();
+        $latestPaymentByInvoice = Payment::whereIn('invoice_id', $invoiceIds)
+            ->where('status', 'success')
+            ->orderByDesc('paid_at')
+            ->get()
+            ->groupBy('invoice_id')
+            ->map(fn ($payments) => $payments->first());
+
+        $students->getCollection()->transform(function ($student) use ($feeType, $session, $feeService, $allConfigsBySession, $adminChargeEnabled, $adminChargeAmount, $latestPaymentByInvoice) {
+            $invoice = $student->invoices->first();
+            $lastPayment = $invoice ? $latestPaymentByInvoice->get($invoice->id) : null;
+
             if ($invoice) {
-                $lastPayment = Payment::where('invoice_id', $invoice->id)
-                    ->where('status', 'success')
-                    ->latest('paid_at')
-                    ->first();
+                $billed = (float)$invoice->amount;
+                $paid = (float)$invoice->paid_amount;
+                $status = $invoice->status;
+            } else {
+                $billed = ($feeType === 'school_fee' && $session) 
+                    ? $feeService->calculateExpectedSchoolFeeWithConfigs($student, $session, $allConfigsBySession, $adminChargeEnabled, $adminChargeAmount) 
+                    : 0;
+                $paid = 0;
+                $status = 'unpaid';
             }
 
-            $student->fee_status = $invoice ? $invoice->status : 'unpaid';
+            $student->fee_status = $status;
             $student->fee_type = $feeType;
-            $student->total_billed = $invoice ? (float)$invoice->amount : 0;
-            $student->total_paid = $invoice ? (float)$invoice->paid_amount : 0;
-            $student->balance = $invoice ? ((float)$invoice->amount - (float)$invoice->paid_amount) : 0;
+            $student->total_billed = $billed;
+            $student->total_paid = $paid;
+            $student->balance = max(0, $billed - $paid);
             $student->last_payment_date = $lastPayment ? $lastPayment->paid_at : null;
+
+            return $student;
         });
 
         return Inertia::render('Admin/Finance/StudentFees', [
@@ -191,25 +269,41 @@ class BursaryController extends Controller
         $sessionId = null;
         $feeType = 'school_fee';
         $query = $this->getFilteredStudentsQuery($request, $sessionId, $feeType);
-        $session = Session::find($sessionId);
+        $session = Session::find($sessionId) ?? Session::current();
+        $feeService = app(\App\Services\Finance\FeeService::class);
+
+        [$allConfigsBySession, $adminChargeEnabled, $adminChargeAmount] = $this->prepareBatchFeeConfigs($session);
 
         $students = $query->with([
-            'user', 
-            'faculty', 
-            'department', 
-            'program', 
+            'user:id,name', 
+            'faculty:id,name', 
+            'department:id,name', 
+            'program:id,name,scholarship_eligible', 
+            'scholarship',
             'invoices' => function($q) use ($sessionId, $feeType) {
                 $q->where('session_id', $sessionId)->where('type', $feeType);
             }
         ])->get();
 
-        $students->transform(function ($student) use ($feeType) {
+        $students->transform(function ($student) use ($feeType, $session, $feeService, $allConfigsBySession, $adminChargeEnabled, $adminChargeAmount) {
             $invoice = $student->invoices->first();
-            $student->fee_status = $invoice ? $invoice->status : 'unpaid';
+            if ($invoice) {
+                $billed = (float)$invoice->amount;
+                $paid = (float)$invoice->paid_amount;
+                $status = $invoice->status;
+            } else {
+                $billed = ($feeType === 'school_fee' && $session) 
+                    ? $feeService->calculateExpectedSchoolFeeWithConfigs($student, $session, $allConfigsBySession, $adminChargeEnabled, $adminChargeAmount) 
+                    : 0;
+                $paid = 0;
+                $status = 'unpaid';
+            }
+
+            $student->fee_status = $status;
             $student->fee_type = $feeType;
-            $student->total_billed = $invoice ? (float)$invoice->amount : 0;
-            $student->total_paid = $invoice ? (float)$invoice->paid_amount : 0;
-            $student->balance = $invoice ? ((float)$invoice->amount - (float)$invoice->paid_amount) : 0;
+            $student->total_billed = $billed;
+            $student->total_paid = $paid;
+            $student->balance = max(0, $billed - $paid);
             return $student;
         });
 
@@ -228,12 +322,16 @@ class BursaryController extends Controller
         $sessionId = null;
         $feeType = 'school_fee';
         $query = $this->getFilteredStudentsQuery($request, $sessionId, $feeType);
+        $session = Session::find($sessionId) ?? Session::current();
+        $feeService = app(\App\Services\Finance\FeeService::class);
+
+        [$allConfigsBySession, $adminChargeEnabled, $adminChargeAmount] = $this->prepareBatchFeeConfigs($session);
 
         $students = $query->with([
-            'user', 
-            'faculty', 
-            'department', 
-            'program', 
+            'user:id,name', 
+            'faculty:id,name', 
+            'department:id,name', 
+            'program:id,name,scholarship_eligible', 
             'scholarship',
             'invoices' => function($q) use ($sessionId, $feeType) {
                 $q->where('session_id', $sessionId)->where('type', $feeType);
@@ -249,15 +347,27 @@ class BursaryController extends Controller
             ->groupBy('invoice_id')
             ->map(fn ($payments) => $payments->first());
 
-        $students->transform(function ($student) use ($latestPaymentByInvoice, $feeType) {
+        $students->transform(function ($student) use ($latestPaymentByInvoice, $feeType, $session, $feeService, $allConfigsBySession, $adminChargeEnabled, $adminChargeAmount) {
             $invoice = $student->invoices->first();
             $lastPayment = $invoice ? $latestPaymentByInvoice->get($invoice->id) : null;
 
-            $student->fee_status = $invoice ? $invoice->status : 'unpaid';
+            if ($invoice) {
+                $billed = (float)$invoice->amount;
+                $paid = (float)$invoice->paid_amount;
+                $status = $invoice->status;
+            } else {
+                $billed = ($feeType === 'school_fee' && $session) 
+                    ? $feeService->calculateExpectedSchoolFeeWithConfigs($student, $session, $allConfigsBySession, $adminChargeEnabled, $adminChargeAmount) 
+                    : 0;
+                $paid = 0;
+                $status = 'unpaid';
+            }
+
+            $student->fee_status = $status;
             $student->fee_type = $feeType;
-            $student->total_billed = $invoice ? (float)$invoice->amount : 0;
-            $student->total_paid = $invoice ? (float)$invoice->paid_amount : 0;
-            $student->balance = $invoice ? ((float)$invoice->amount - (float)$invoice->paid_amount) : 0;
+            $student->total_billed = $billed;
+            $student->total_paid = $paid;
+            $student->balance = max(0, $billed - $paid);
             $student->last_payment_date = $lastPayment ? $lastPayment->paid_at : null;
 
             return $student;

@@ -81,4 +81,15 @@ class Invoice extends Model
     {
         return $this->belongsTo(User::class, 'updated_by');
     }
+
+    public function getHostel(): ?Hostel
+    {
+        $booking = $this->relationLoaded('booking') ? $this->booking : $this->booking()->first();
+        if ($booking) {
+            $booking->loadMissing('room.floor.block.hostel');
+            return $booking->room?->floor?->block?->hostel;
+        }
+
+        return null;
+    }
 }

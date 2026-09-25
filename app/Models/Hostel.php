@@ -15,6 +15,11 @@ class Hostel extends Model
         'name',
         'gender_type',
         'description',
+        'payment_gateway',
+        'squadco_secret_key',
+        'squadco_public_key',
+        'paystack_secret_key',
+        'paystack_public_key',
         'is_visible',
     ];
 
@@ -40,5 +45,30 @@ class Hostel extends Model
     public function fees()
     {
         return $this->hasMany(HostelFee::class);
+    }
+
+    public function getSecretKeyForGateway(string $gateway): ?string
+    {
+        return match (strtolower($gateway)) {
+            'paystack' => $this->paystack_secret_key,
+            'squadco' => $this->squadco_secret_key,
+            default => null,
+        };
+    }
+
+    public function getPublicKeyForGateway(string $gateway): ?string
+    {
+        return match (strtolower($gateway)) {
+            'paystack' => $this->paystack_public_key,
+            'squadco' => $this->squadco_public_key,
+            default => null,
+        };
+    }
+
+    public function hasCustomGatewayConfig(): bool
+    {
+        return !empty($this->payment_gateway) ||
+            !empty($this->squadco_secret_key) ||
+            !empty($this->paystack_secret_key);
     }
 }

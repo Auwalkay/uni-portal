@@ -291,7 +291,7 @@ const toggleStatus = (id: string, currentStatus: boolean) => {
                                     <SelectValue placeholder="Select Parent Faculty" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="">None (Non-Academic Unit)</SelectItem>
+                                    <SelectItem value="none">None (Non-Academic Unit)</SelectItem>
                                     <SelectItem v-for="f in faculties" :key="f.id" :value="f.id">
                                         {{ f.name }}
                                     </SelectItem>

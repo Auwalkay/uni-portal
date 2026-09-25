@@ -20,6 +20,7 @@ const props = defineProps<{
     session: any;
     semesters: any[]; 
     locks: { [key: string]: boolean };
+    isPartialPayment?: boolean;
     courses: any[];
     registeredCourseIds: number[];
     registeredCourses: any[]; 
@@ -472,6 +473,11 @@ const getSemesterCourses = (semesterCode: string) => {
                                     </span>
                                     <span class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Units Selected</span>
                                 </div>
+                            </div>
+
+                            <div v-if="semCode === '2' && isPartialPayment" class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-center gap-2 font-medium">
+                                <Lock class="w-4 h-4 text-amber-600 shrink-0" />
+                                <span>Second Semester course registration is locked because you have made a partial school fee payment. Full school fee payment is required to register for Second Semester courses.</span>
                             </div>
 
                             <!-- Course Table Card -->

@@ -29,9 +29,12 @@ class TimetableController extends Controller
         }
 
         $currentSession = AcademicCacheService::getCurrentSession();
-        $currentSemester = $student->current_semester_id ? Semester::find($student->current_semester_id) : AcademicCacheService::getCurrentSemester();
+        $currentSemester = AcademicCacheService::getCurrentSemester() 
+            ?? ($student->current_semester_id ? Semester::find($student->current_semester_id) : Semester::where('is_current', true)->first());
 
-        $isExamPublished = filter_var(\App\Models\SystemSetting::get('publish_exam_timetable', false), FILTER_VALIDATE_BOOLEAN);
+        $globalPublished = filter_var(\App\Models\SystemSetting::get('publish_exam_timetable', false), FILTER_VALIDATE_BOOLEAN);
+        $hasPublishedExercise = \App\Models\Exam::where('is_published', true)->exists();
+        $isExamPublished = $globalPublished || $hasPublishedExercise;
 
         $timetables = [];
         $examSchedules = [];

@@ -168,59 +168,134 @@ const getStatusBadge = (status: string) => {
                 </div>
             </div>
 
-            <!-- Smart Summary Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <!-- Smart Summary & Analytical Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-5">
+                <!-- Card 1: Total Billed -->
                 <Card class="border-none shadow-xl shadow-slate-200/40 bg-gradient-to-br from-slate-900 to-slate-800 text-white overflow-hidden relative group">
                     <div class="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
-                        <Wallet class="w-32 h-32" />
+                        <Wallet class="w-24 h-24" />
                     </div>
-                    <CardContent class="p-6 space-y-4">
-                        <p class="text-slate-400 font-bold text-xs uppercase tracking-widest">Total Collected</p>
-                        <h2 class="text-3xl font-black">{{ formatCurrency(summaryStats.total_paid) }}</h2>
-                        <div class="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                            <div 
-                                class="h-full bg-green-500 animate-in slide-in-from-left duration-1000" 
-                                :style="{ width: (summaryStats.total_paid / (summaryStats.total_billed || 1) * 100) + '%' }"
-                            ></div>
-                        </div>
-                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
-                            {{ Math.round(summaryStats.total_paid / (summaryStats.total_billed || 1) * 100) }}% of total billing
+                    <CardContent class="p-5 space-y-2">
+                        <p class="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Expected Revenue</p>
+                        <h2 class="text-2xl font-black">{{ formatCurrency(summaryStats.total_billed) }}</h2>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-tight flex items-center gap-1">
+                            <TrendingUp class="w-3 h-3 text-blue-400" /> Total Billed Fees
                         </p>
                     </CardContent>
                 </Card>
 
+                <!-- Card 2: Total Collected -->
                 <Card class="border-none shadow-lg shadow-slate-200/50 bg-white">
-                    <CardContent class="p-6 space-y-4">
+                    <CardContent class="p-5 space-y-2">
                         <div class="flex justify-between items-start">
-                            <p class="text-slate-400 font-bold text-xs uppercase tracking-widest">Outstanding</p>
-                            <div class="p-2 bg-amber-50 rounded-lg"><AlertCircle class="w-4 h-4 text-amber-600" /></div>
+                            <p class="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Collected</p>
+                            <div class="p-1.5 bg-green-50 rounded-lg"><Wallet class="w-3.5 h-3.5 text-green-600" /></div>
                         </div>
-                        <h2 class="text-3xl font-black text-slate-900">{{ formatCurrency(summaryStats.total_balance) }}</h2>
-                        <p class="text-[10px] text-amber-600 font-bold uppercase tracking-tight">Pending Revenue</p>
+                        <h2 class="text-2xl font-black text-green-600">{{ formatCurrency(summaryStats.total_paid) }}</h2>
+                        <div class="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div 
+                                class="h-full bg-green-500 rounded-full transition-all duration-1000" 
+                                :style="{ width: (summaryStats.collection_rate || Math.round(summaryStats.total_paid / (summaryStats.total_billed || 1) * 100)) + '%' }"
+                            ></div>
+                        </div>
+                        <p class="text-[10px] text-slate-500 font-bold uppercase tracking-tight">
+                            {{ summaryStats.collection_rate || Math.round(summaryStats.total_paid / (summaryStats.total_billed || 1) * 100) }}% Collected
+                        </p>
                     </CardContent>
                 </Card>
 
+                <!-- Card 3: Outstanding -->
                 <Card class="border-none shadow-lg shadow-slate-200/50 bg-white">
-                    <CardContent class="p-6 space-y-4">
+                    <CardContent class="p-5 space-y-2">
                         <div class="flex justify-between items-start">
-                            <p class="text-slate-400 font-bold text-xs uppercase tracking-widest">Fully Paid</p>
-                            <div class="p-2 bg-green-50 rounded-lg"><CheckCircle2 class="w-4 h-4 text-green-600" /></div>
+                            <p class="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Outstanding</p>
+                            <div class="p-1.5 bg-amber-50 rounded-lg"><AlertCircle class="w-3.5 h-3.5 text-amber-600" /></div>
                         </div>
-                        <h2 class="text-3xl font-black text-slate-900">{{ summaryStats.paid_count }}</h2>
-                        <p class="text-[10px] text-green-600 font-bold uppercase tracking-tight">{{ summaryStats.student_count }} Total Students</p>
+                        <h2 class="text-2xl font-black text-red-600">{{ formatCurrency(summaryStats.total_balance) }}</h2>
+                        <p class="text-[10px] text-amber-600 font-bold uppercase tracking-tight">
+                            Avg: {{ formatCurrency(summaryStats.avg_outstanding || 0) }} / debtor
+                        </p>
                     </CardContent>
                 </Card>
 
+                <!-- Card 4: Collection Realization Rate -->
                 <Card class="border-none shadow-lg shadow-slate-200/50 bg-white">
-                    <CardContent class="p-6 space-y-4">
+                    <CardContent class="p-5 space-y-2">
                         <div class="flex justify-between items-start">
-                            <p class="text-slate-400 font-bold text-xs uppercase tracking-widest">Total Billing</p>
-                            <div class="p-2 bg-blue-50 rounded-lg"><TrendingUp class="w-4 h-4 text-blue-600" /></div>
+                            <p class="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Realization Rate</p>
+                            <div class="p-1.5 bg-blue-50 rounded-lg"><TrendingUp class="w-3.5 h-3.5 text-blue-600" /></div>
                         </div>
-                        <h2 class="text-3xl font-black text-slate-900">{{ formatCurrency(summaryStats.total_billed) }}</h2>
-                        <p class="text-[10px] text-blue-600 font-bold uppercase tracking-tight">Current Session Billing</p>
+                        <h2 class="text-2xl font-black text-slate-900">{{ summaryStats.collection_rate || 0 }}%</h2>
+                        <p class="text-[10px] text-blue-600 font-bold uppercase tracking-tight">Fee Collection Performance</p>
                     </CardContent>
                 </Card>
+
+                <!-- Card 5: Payment Clearance Distribution -->
+                <Card class="border-none shadow-lg shadow-slate-200/50 bg-white">
+                    <CardContent class="p-5 space-y-2">
+                        <div class="flex justify-between items-start">
+                            <p class="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Student Clearance</p>
+                            <div class="p-1.5 bg-indigo-50 rounded-lg"><Users class="w-3.5 h-3.5 text-indigo-600" /></div>
+                        </div>
+                        <div class="flex items-baseline gap-1">
+                            <span class="text-2xl font-black text-slate-900">{{ summaryStats.paid_count }}</span>
+                            <span class="text-xs text-slate-400 font-bold">/ {{ summaryStats.student_count }} paid</span>
+                        </div>
+                        <div class="flex gap-1 text-[9px] font-black uppercase">
+                            <span class="px-1.5 py-0.5 bg-green-100 text-green-700 rounded">{{ summaryStats.paid_count }} Paid</span>
+                            <span class="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded">{{ summaryStats.partial_count }} Part</span>
+                            <span class="px-1.5 py-0.5 bg-red-100 text-red-700 rounded">{{ summaryStats.unpaid_count }} Unpaid</span>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <!-- Card 6: Average Fee & Scholarships -->
+                <Card class="border-none shadow-lg shadow-slate-200/50 bg-white">
+                    <CardContent class="p-5 space-y-2">
+                        <div class="flex justify-between items-start">
+                            <p class="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Avg Fee & Aid</p>
+                            <div class="p-1.5 bg-purple-50 rounded-lg"><CreditCard class="w-3.5 h-3.5 text-purple-600" /></div>
+                        </div>
+                        <h2 class="text-xl font-black text-slate-900">{{ formatCurrency(summaryStats.avg_fee_per_student || 0) }}</h2>
+                        <p class="text-[10px] text-purple-600 font-bold uppercase tracking-tight">
+                            {{ summaryStats.scholarship_count || 0 }} Students on Scholarship
+                        </p>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <!-- Revenue & Student Clearance Visual Health Bar -->
+            <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-3">
+                <div class="flex justify-between items-center text-xs font-bold">
+                    <div class="flex items-center gap-2">
+                        <Building2 class="w-4 h-4 text-slate-400" />
+                        <span class="text-slate-900 font-black">Fee Clearance Health Breakdown</span>
+                        <span class="text-slate-400">({{ summaryStats.student_count }} Enrolled Students)</span>
+                    </div>
+                    <div class="flex items-center gap-4 text-[10px] font-black uppercase">
+                        <span class="flex items-center gap-1 text-green-600"><span class="w-2 h-2 rounded-full bg-green-500"></span> Fully Paid ({{ Math.round((summaryStats.paid_count / (summaryStats.student_count || 1)) * 100) }}%)</span>
+                        <span class="flex items-center gap-1 text-amber-600"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Partially Paid ({{ Math.round((summaryStats.partial_count / (summaryStats.student_count || 1)) * 100) }}%)</span>
+                        <span class="flex items-center gap-1 text-red-600"><span class="w-2 h-2 rounded-full bg-red-500"></span> Unpaid ({{ Math.round((summaryStats.unpaid_count / (summaryStats.student_count || 1)) * 100) }}%)</span>
+                    </div>
+                </div>
+
+                <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden flex">
+                    <div 
+                        class="h-full bg-green-500 transition-all duration-700" 
+                        :style="{ width: ((summaryStats.paid_count / (summaryStats.student_count || 1)) * 100) + '%' }"
+                        :title="summaryStats.paid_count + ' Paid Students'"
+                    ></div>
+                    <div 
+                        class="h-full bg-amber-400 transition-all duration-700" 
+                        :style="{ width: ((summaryStats.partial_count / (summaryStats.student_count || 1)) * 100) + '%' }"
+                        :title="summaryStats.partial_count + ' Partially Paid Students'"
+                    ></div>
+                    <div 
+                        class="h-full bg-red-500 transition-all duration-700" 
+                        :style="{ width: ((summaryStats.unpaid_count / (summaryStats.student_count || 1)) * 100) + '%' }"
+                        :title="summaryStats.unpaid_count + ' Unpaid Students'"
+                    ></div>
+                </div>
             </div>
 
             <!-- Filter Controls -->
