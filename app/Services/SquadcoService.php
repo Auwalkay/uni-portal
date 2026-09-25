@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Contracts\PaymentGatewayInterface;
+use App\Models\Hostel;
+use App\Models\Invoice;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -11,10 +13,37 @@ class SquadcoService implements PaymentGatewayInterface
     protected $baseUrl;
     protected $secretKey;
 
-    public function __construct()
+    public function __construct(?string $secretKey = null)
     {
         $this->baseUrl = config('services.squadco.base_url', env('SQUADCO_BASE_URL', 'https://sandbox-api-d.squadco.com'));
-        $this->secretKey = config('services.squadco.secret_key', env('SQUADCO_SECRET_KEY'));
+        $this->secretKey = $secretKey ?: config('services.squadco.secret_key', env('SQUADCO_SECRET_KEY'));
+    }
+
+    public function setSecretKey(?string $secretKey): self
+    {
+        if (!empty($secretKey)) {
+            $this->secretKey = trim($secretKey);
+        }
+        return $this;
+    }
+
+    public function getSecretKey(): ?string
+    {
+        return $this->secretKey;
+    }
+
+    public static function forHostel(?Hostel $hostel): self
+    {
+        /** @var self $service */
+        $service = \App\Services\Payment\PaymentGatewayFactory::resolveForHostel($hostel, 'squadco');
+        return $service;
+    }
+
+    public static function forInvoice(?Invoice $invoice): self
+    {
+        /** @var self $service */
+        $service = \App\Services\Payment\PaymentGatewayFactory::resolveForInvoice($invoice, 'squadco');
+        return $service;
     }
 
     public function initializeTransaction($email, $amount, $reference, $callbackUrl = null, array $metadata = [])
@@ -35,6 +64,7 @@ class SquadcoService implements PaymentGatewayInterface
         Log::info('[PAYMENT_INITIATE_REQUEST] [Squadco]', [
             'url' => "{$this->baseUrl}/transaction/initiate",
             'method' => 'POST',
+            'secret_key_used' => substr($this->secretKey ?? '', 0, 8) . '***',
             'exact_payload' => $payload,
         ]);
 
@@ -74,6 +104,7 @@ class SquadcoService implements PaymentGatewayInterface
         Log::info('[PAYMENT_REQUERY_REQUEST] [Squadco]', [
             'url' => $url,
             'method' => 'GET',
+            'secret_key_used' => substr($this->secretKey ?? '', 0, 8) . '***',
             'reference' => $reference,
         ]);
 
@@ -102,6 +133,7 @@ class SquadcoService implements PaymentGatewayInterface
                 'reference' => $data['transaction_ref'] ?? $reference,
                 'amount' => $amountInNaira,
                 'channel' => $data['transaction_type'] ?? $data['payment_method'] ?? 'squadco',
+                'paid_at' => $data['created_at'] ?? $data['transaction_date'] ?? $data['paid_at'] ?? null,
                 'gateway_response' => $data['transaction_status'] ?? 'Success',
                 'original_data' => $data
             ];

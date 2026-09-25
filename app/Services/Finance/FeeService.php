@@ -222,23 +222,47 @@ class FeeService
      */
     public function calculateExpectedSchoolFee(Student $student, Session $session): float
     {
+        $adminChargeEnabled = SystemSetting::get('admin_charge_enabled', true);
+        $adminChargeAmount = SystemSetting::get('admin_charge_amount', 250000);
+
         $targetSessionId = ($student->fee_policy === 'admission_session' && $student->admitted_session_id) 
             ? $student->admitted_session_id 
             : $session->id;
 
         $allConfigs = FeeConfiguration::where('session_id', $targetSessionId)
-            ->where(function ($q) use ($student) {
-                $q->where('level', $student->current_level)->orWhereNull('level');
-            })
-            ->where(function ($q) use ($student) {
-                $q->where('entry_mode', $student->entry_mode)->orWhereNull('entry_mode');
-            })
             ->where('is_compulsory', true)
             ->with('feeType')
             ->get();
 
+        $allConfigsGrouped = collect([$targetSessionId => $allConfigs]);
+
+        return $this->calculateExpectedSchoolFeeWithConfigs($student, $session, $allConfigsGrouped, $adminChargeEnabled, $adminChargeAmount);
+    }
+
+    /**
+     * High-performance calculation using pre-loaded fee configurations and settings in memory.
+     */
+    public function calculateExpectedSchoolFeeWithConfigs(
+        Student $student, 
+        Session $session, 
+        $allConfigsBySession, 
+        bool $adminChargeEnabled = true, 
+        float $adminChargeAmount = 250000
+    ): float {
+        $targetSessionId = ($student->fee_policy === 'admission_session' && $student->admitted_session_id) 
+            ? $student->admitted_session_id 
+            : $session->id;
+
+        $sessionConfigs = $allConfigsBySession->get($targetSessionId, collect());
+
+        $matchingConfigs = $sessionConfigs->filter(function ($config) use ($student) {
+            $levelMatch = is_null($config->level) || (string)$config->level === (string)$student->current_level;
+            $entryMatch = is_null($config->entry_mode) || $config->entry_mode === $student->entry_mode;
+            return $levelMatch && $entryMatch;
+        });
+
         $resolvedConfigs = collect();
-        $groupedConfigs = $allConfigs->groupBy('fee_type_id');
+        $groupedConfigs = $matchingConfigs->groupBy('fee_type_id');
 
         foreach ($groupedConfigs as $feeTypeId => $configs) {
             $resolved = null;
@@ -252,8 +276,6 @@ class FeeService
         }
 
         $academicTotal = $resolvedConfigs->sum('amount');
-        $adminChargeEnabled = SystemSetting::get('admin_charge_enabled', true);
-        $adminChargeAmount = SystemSetting::get('admin_charge_amount', 250000);
         
         $totalAmountBeforeDiscount = $academicTotal;
         if ($adminChargeEnabled) {
@@ -355,24 +377,12 @@ class FeeService
         return DB::transaction(function () use ($invoice, $student, $resolvedConfigs) {
             $academicTotal = $resolvedConfigs->sum('amount');
 
-            $tuition = 0;
-            foreach ($resolvedConfigs as $config) {
-                if (!$config->feeType || !$config->feeType->is_one_time) {
-                    $tuition += $config->amount;
-                }
-            }
-
-            $adminChargeEnabled = SystemSetting::get('admin_charge_enabled', true);
-            $adminChargeAmount = SystemSetting::get('admin_charge_amount', 250000);
-            
-            $totalAmountBeforeDiscount = $academicTotal;
-            if ($adminChargeEnabled) $totalAmountBeforeDiscount += $adminChargeAmount;
+            $adminChargeEnabled = filter_var(SystemSetting::get('admin_charge_enabled', true), FILTER_VALIDATE_BOOLEAN);
+            $adminChargeAmount = (float) SystemSetting::get('admin_charge_amount', 250000);
 
             $discountAmount = 0;
             if ($student->scholarship && ($student->program?->scholarship_eligible ?? true)) {
                 $scholarship = $student->scholarship;
-                
-                // Exclude "Drug Test" fee type from scholarship discount calculations
                 $baseForDiscount = 0;
                 foreach ($resolvedConfigs as $config) {
                     if (!$config->feeType || !$config->feeType->is_one_time) {
@@ -393,7 +403,10 @@ class FeeService
                     }
                 }
 
-                if ($adminChargeEnabled && $scholarship->covers_admin_charges) $baseForDiscount += $adminChargeAmount;
+                if ($adminChargeEnabled && $scholarship->covers_admin_charges) {
+                    $baseForDiscount += $adminChargeAmount;
+                }
+
                 if ($scholarship->type === 'fixed') {
                     $discountAmount = max(0, $baseForDiscount - $scholarship->amount);
                 } else {
@@ -401,11 +414,30 @@ class FeeService
                 }
             }
 
+            // Check if late payment fine should be included
+            $session = $invoice->session;
+            $lateFineAmount = 0;
+            $applyLateFine = false;
+            if ($session && $session->late_payment_deadline && $session->late_payment_deadline->isPast() && $session->late_fee_amount > 0) {
+                $isEnabled = filter_var(SystemSetting::get('late_fee_enabled', true), FILTER_VALIDATE_BOOLEAN);
+                if ($isEnabled) {
+                    $lateFineAmount = (float) $session->late_fee_amount;
+                    $applyLateFine = true;
+                }
+            }
+
+            $totalAmountBeforeDiscount = $academicTotal;
+            if ($adminChargeEnabled) $totalAmountBeforeDiscount += $adminChargeAmount;
+            if ($applyLateFine) $totalAmountBeforeDiscount += $lateFineAmount;
+
             $finalAmount = $totalAmountBeforeDiscount - $discountAmount;
 
             // Only update if the amount actually changed
-            if (abs($invoice->amount - $finalAmount) > 0.01) {
-                $invoice->update(['amount' => $finalAmount]);
+            if (abs($invoice->amount - $finalAmount) > 0.01 || $invoice->late_fine_applied !== $applyLateFine) {
+                $invoice->update([
+                    'amount' => $finalAmount,
+                    'late_fine_applied' => $applyLateFine,
+                ]);
 
                 // Sync items
                 $invoice->items()->delete();
@@ -434,9 +466,16 @@ class FeeService
                         'amount' => -$discountAmount,
                     ]);
                 }
+                if ($applyLateFine && $session) {
+                    InvoiceItem::create([
+                        'invoice_id' => $invoice->id,
+                        'description' => 'Late Payment Fine (' . $session->name . ')',
+                        'amount' => $lateFineAmount,
+                    ]);
+                }
             }
 
-            return $invoice->fresh();
+            return $invoice->fresh(['items', 'session']);
         });
     }
 

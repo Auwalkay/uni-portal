@@ -94,8 +94,8 @@ const isMessageFromAdmin = (msg: Message) => {
                         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div>
                                 <div class="flex items-center gap-3 mb-2 flex-wrap">
-                                    <span :class="['px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider', getStatusColor(ticket.status)]">
-                                        {{ ticket.status.replace('_', ' ') }}
+                                    <span :class="['px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider', getStatusColor(ticket.status || 'open')]">
+                                        {{ (ticket.status || 'open').replace('_', ' ') }}
                                     </span>
                                     <span :class="['text-xs font-medium flex items-center gap-1', getPriorityColor(ticket.priority)]">
                                         <span class="h-1.5 w-1.5 rounded-full bg-current"></span>

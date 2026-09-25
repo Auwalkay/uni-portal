@@ -12,10 +12,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
     Calendar, Clock, Plus, Search, Trash2, Edit3, ShieldAlert, 
-    FileText, CheckCircle, Eye, CalendarRange, QrCode, Sparkles, ArrowRight, Layers
+    FileText, CheckCircle, Eye, CalendarRange, QrCode, Sparkles, ArrowRight, Layers,
+    Upload, Download
 } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { ref, computed } from 'vue';
+import Swal from 'sweetalert2';
 
 interface Props {
     exams?: any[];
@@ -154,6 +156,47 @@ const deleteExercise = (examId: string) => {
     }
 };
 
+// Import Timetable Modal State & Handlers
+const isImportModalOpen = ref(false);
+const importForm = useForm({
+    session_id: '',
+    semester_id: '',
+    file: null as File | null,
+});
+
+const openImportModal = () => {
+    importForm.session_id = filterSessionId.value || props.sessions?.[0]?.id || '';
+    importForm.semester_id = filterSemesterId.value || props.semesters?.[0]?.id || '';
+    importForm.file = null;
+    isImportModalOpen.value = true;
+};
+
+const submitImport = () => {
+    if (!importForm.session_id || !importForm.semester_id || !importForm.file) {
+        Swal.fire({ icon: 'warning', title: 'Missing Data', text: 'Please select session, semester, and a schedule file.' });
+        return;
+    }
+    importForm.post(route('admin.exams.import'), {
+        onSuccess: (page) => {
+            isImportModalOpen.value = false;
+            importForm.reset();
+            const flash = (page.props as any).flash;
+            if (flash?.warning) {
+                Swal.fire({ title: 'Import Warning', html: flash.warning, icon: 'warning', confirmButtonColor: '#F59E0B' });
+            } else {
+                Swal.fire({ title: 'Import Complete', text: flash?.success || 'Exam timetable imported successfully.', icon: 'success', confirmButtonColor: '#10B981' });
+            }
+        },
+        onError: (err) => {
+            Swal.fire({ title: 'Import Failed', text: Object.values(err).flat().join('\n') || 'Please check the file and try again.', icon: 'error', confirmButtonColor: '#EF4444' });
+        }
+    });
+};
+
+const downloadTemplate = () => {
+    window.location.href = route('admin.exams.template');
+};
+
 const breadcrumbs = [
     { title: 'Academic Management', href: '#' },
     { title: 'Examination Exercises', href: route('admin.exams.index') },
@@ -186,6 +229,16 @@ const breadcrumbs = [
                     >
                         <Plus class="w-4 h-4" />
                         <span>Create Exercise</span>
+                    </Button>
+
+                    <Button 
+                        v-if="props.canCreateExams"
+                        variant="outline"
+                        class="border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-700 dark:text-slate-200 font-medium gap-2 text-xs h-10 px-4 rounded-xl transition-all"
+                        @click="openImportModal"
+                    >
+                        <Upload class="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                        <span>Import Schedule</span>
                     </Button>
 
                     <Button 
@@ -427,6 +480,77 @@ const breadcrumbs = [
                         <Button type="button" variant="ghost" class="h-9 text-xs rounded-lg" @click="isExerciseModalOpen = false">Cancel</Button>
                         <Button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold h-9 text-xs rounded-lg px-4" :disabled="exerciseForm.processing">
                             {{ isEditingExercise ? 'Save Changes' : 'Create Exercise' }}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+
+        <!-- Bulk Import Exam Timetable Modal -->
+        <Dialog v-model:open="isImportModalOpen">
+            <DialogContent class="max-w-md rounded-2xl">
+                <DialogHeader>
+                    <DialogTitle class="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                        <Upload class="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                        Import Exam Timetable (Excel/CSV)
+                    </DialogTitle>
+                    <DialogDescription class="text-xs text-slate-500">
+                        Upload exam paper schedules and invigilators from a CSV or Excel file.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <form @submit.prevent="submitImport" class="space-y-4 pt-2">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="space-y-1.5">
+                            <Label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Session *</Label>
+                            <SearchableSelect
+                                v-model="importForm.session_id"
+                                :items="sessionModalOptions"
+                                placeholder="Select Session"
+                                search-placeholder="Search session..."
+                                trigger-class="h-9 text-xs rounded-lg border-slate-200 dark:border-slate-800"
+                            />
+                            <p v-if="importForm.errors.session_id" class="text-red-500 text-[11px]">{{ importForm.errors.session_id }}</p>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <Label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Semester *</Label>
+                            <SearchableSelect
+                                v-model="importForm.semester_id"
+                                :items="exerciseSemesterOptions"
+                                placeholder="Select Semester"
+                                search-placeholder="Search semester..."
+                                trigger-class="h-9 text-xs rounded-lg border-slate-200 dark:border-slate-800"
+                            />
+                            <p v-if="importForm.errors.semester_id" class="text-red-500 text-[11px]">{{ importForm.errors.semester_id }}</p>
+                        </div>
+                    </div>
+
+                    <div class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                        <div class="text-xs">
+                            <span class="font-bold text-slate-800 dark:text-slate-200 block">CSV Template Format</span>
+                            <span class="text-[10px] text-slate-500">Download sample schedule template</span>
+                        </div>
+                        <Button type="button" variant="outline" size="sm" @click="downloadTemplate" class="text-xs font-bold gap-1.5 h-8">
+                            <Download class="w-3.5 h-3.5 text-indigo-600" /> Template
+                        </Button>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <Label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Schedule File (.csv, .xlsx, .xls) *</Label>
+                        <Input 
+                            type="file" 
+                            accept=".csv,.xlsx,.xls"
+                            @change="(e: any) => importForm.file = e.target.files[0]"
+                            class="text-xs h-9 rounded-lg border-slate-200 dark:border-slate-800"
+                        />
+                        <p v-if="importForm.errors.file" class="text-red-500 text-[11px]">{{ importForm.errors.file }}</p>
+                    </div>
+
+                    <DialogFooter class="pt-3 border-t gap-2">
+                        <Button type="button" variant="ghost" class="h-9 text-xs rounded-lg" @click="isImportModalOpen = false">Cancel</Button>
+                        <Button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold h-9 text-xs rounded-lg px-4 gap-1.5" :disabled="importForm.processing">
+                            <Upload class="w-4 h-4" /> Upload & Import
                         </Button>
                     </DialogFooter>
                 </form>

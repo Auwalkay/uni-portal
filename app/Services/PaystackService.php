@@ -2,10 +2,11 @@
 
 namespace App\Services;
 
+use App\Contracts\PaymentGatewayInterface;
+use App\Models\Hostel;
+use App\Models\Invoice;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-
-use App\Contracts\PaymentGatewayInterface;
 
 class PaystackService implements PaymentGatewayInterface
 {
@@ -13,9 +14,36 @@ class PaystackService implements PaymentGatewayInterface
 
     protected $secretKey;
 
-    public function __construct()
+    public function __construct(?string $secretKey = null)
     {
-        $this->secretKey = config('services.paystack.secret_key', env('PAYSTACK_SECRET_KEY'));
+        $this->secretKey = $secretKey ?: config('services.paystack.secret_key', env('PAYSTACK_SECRET_KEY'));
+    }
+
+    public function setSecretKey(?string $secretKey): self
+    {
+        if (!empty($secretKey)) {
+            $this->secretKey = trim($secretKey);
+        }
+        return $this;
+    }
+
+    public function getSecretKey(): ?string
+    {
+        return $this->secretKey;
+    }
+
+    public static function forHostel(?Hostel $hostel): self
+    {
+        /** @var self $service */
+        $service = \App\Services\Payment\PaymentGatewayFactory::resolveForHostel($hostel, 'paystack');
+        return $service;
+    }
+
+    public static function forInvoice(?Invoice $invoice): self
+    {
+        /** @var self $service */
+        $service = \App\Services\Payment\PaymentGatewayFactory::resolveForInvoice($invoice, 'paystack');
+        return $service;
     }
 
     public function initializeTransaction($email, $amount, $reference, $callbackUrl = null, array $metadata = [])
@@ -31,6 +59,7 @@ class PaystackService implements PaymentGatewayInterface
         Log::info('[PAYMENT_INITIATE_REQUEST] [Paystack]', [
             'url' => "{$this->baseUrl}/transaction/initialize",
             'method' => 'POST',
+            'secret_key_used' => substr($this->secretKey ?? '', 0, 8) . '***',
             'exact_payload' => $payload,
         ]);
 
@@ -59,6 +88,7 @@ class PaystackService implements PaymentGatewayInterface
         Log::info('[PAYMENT_REQUERY_REQUEST] [Paystack]', [
             'url' => $url,
             'method' => 'GET',
+            'secret_key_used' => substr($this->secretKey ?? '', 0, 8) . '***',
             'reference' => $reference,
         ]);
 

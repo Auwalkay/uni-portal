@@ -360,6 +360,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('hostels/{hostel}/rooms/import', [HostelController::class, 'importRooms'])->name('hostels.specific-rooms.import');
 
             // Hostels CRUD
+            Route::get('hostels/create', [HostelController::class, 'create'])->name('hostels.create')->middleware('permission:create_hostels');
+            Route::get('hostels/{hostel}/edit', [HostelController::class, 'edit'])->name('hostels.edit')->middleware('permission:create_hostels');
             Route::resource('hostels', HostelController::class)->only(['index', 'show']);
             Route::post('hostels', [HostelController::class, 'store'])->name('hostels.store')->middleware('permission:create_hostels');
             Route::put('hostels/{hostel}', [HostelController::class, 'update'])->name('hostels.update')->middleware('permission:create_hostels');

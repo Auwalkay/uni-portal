@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\CourseRegistration;
+use App\Models\FeeConfiguration;
 use App\Models\Invoice;
 use App\Models\Semester;
 use App\Models\Session;
 use App\Models\Student;
 use App\Models\StudentSession;
+use App\Services\AcademicCacheService;
+use App\Services\Finance\FeeService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,32 +21,28 @@ use Inertia\Inertia;
 
 class CourseRegistrationController extends Controller
 {
+    /**
+     * Display student course registration history.
+     */
     public function index()
     {
         $student = Student::where('user_id', Auth::id())->with('program')->firstOrFail();
 
-        // Fetch all registrations
         $registrations = CourseRegistration::where('student_id', $student->id)
             ->with(['session', 'semester', 'course'])
             ->get();
 
         $programme = $student->program;
-        $overrides = collect();
-        if ($programme) {
-            $overrides = DB::table('course_programme')
-                ->where('programme_id', $programme->id)
-                ->pluck('is_compulsory', 'course_id');
-        }
-
-        // Group by Session (ID)
-        $groupedBySession = $registrations->groupBy('session_id');
+        $overrides = $programme
+            ? DB::table('course_programme')->where('programme_id', $programme->id)->pluck('is_compulsory', 'course_id')
+            : collect();
 
         $formattedHistory = [];
+        $groupedBySession = $registrations->groupBy('session_id');
 
         foreach ($groupedBySession as $sessionId => $sessionRegistrations) {
             $session = $sessionRegistrations->first()->session;
 
-            // Within Session, Group by Semester
             $semesters = $sessionRegistrations->groupBy('semester_id')->map(function ($semesterRegs) use ($overrides) {
                 $semester = $semesterRegs->first()->semester;
 
@@ -57,7 +56,6 @@ class CourseRegistrationController extends Controller
                         if ($course) {
                             $course->is_compulsory = $overrides->has($course->id) ? (bool) $overrides->get($course->id) : false;
                         }
-
                         return $course;
                     }),
                 ];
@@ -79,151 +77,68 @@ class CourseRegistrationController extends Controller
             ? Invoice::where('user_id', Auth::id())->where('status', '!=', 'paid')->count()
             : Invoice::where('user_id', Auth::id())->whereNotIn('status', ['paid', 'partial'])->where('paid_amount', '<=', 0)->count();
 
+        $schoolFeeStatus = Invoice::where('user_id', Auth::id())
+            ->where('type', 'school_fee')
+            ->where('session_id', $currentSession?->id)
+            ->first()?->status ?? 'unpaid';
+
         return Inertia::render('Student/Courses/Index', [
             'history' => $formattedHistory,
             'student' => $student,
-            'schoolFeeStatus' => Invoice::where('user_id', Auth::id())
-                ->where('type', 'school_fee')
-                ->where('session_id', $currentSession?->id)
-                ->first()?->status ?? 'unpaid',
+            'schoolFeeStatus' => $schoolFeeStatus,
             'hasPendingInvoices' => $pendingInvoicesCount > 0,
             'isSecondSemester' => $isSecondSemActive,
         ]);
     }
 
+    /**
+     * Show course registration form.
+     */
     public function create(Request $request)
     {
         $student = Student::where('user_id', Auth::id())->with('academicDepartment')->first();
 
-        if (! $student) {
+        if (!$student) {
             return redirect()->route('dashboard')->with('error', 'You are not yet a matriculated student.');
         }
 
         $currentSession = Session::current();
-        if (! $currentSession) {
+        if (!$currentSession) {
             return back()->with('error', 'No active academic session found.');
         }
 
-        if (! $currentSession->registration_enabled) {
+        if (!$currentSession->registration_enabled) {
             return back()->with('error', 'Course registration is currently closed for this session.');
         }
 
-        // Fee Enforcement
-        $currentSemester = Semester::current();
-        $isSecondSemActive = $currentSemester && (stripos($currentSemester->name, 'Second') !== false || $currentSemester->name == '2');
-        $allowedStatuses = $isSecondSemActive ? ['paid'] : ['paid', 'partial'];
+        $paymentInfo = $this->resolveSchoolFeePayment((string) Auth::id(), (string) $currentSession->id);
 
-        $hasPaid = Invoice::where('user_id', Auth::id())
-            ->where('type', 'school_fee')
-            ->whereIn('status', $allowedStatuses)
-            ->where('session_id', $currentSession->id)
-            ->exists();
-
-        if (! $hasPaid) {
-            $errorMessage = $isSecondSemActive
-                ? 'You must fully clear your School Fees before registering or editing courses for the Second Semester.'
-                : 'You must pay the School Fees for the current session before registering courses.';
+        if (!$paymentInfo['hasPaid']) {
             return redirect()->route('student.payments.index')
-                ->with('error', $errorMessage);
+                ->with('error', 'You must pay your School Fees for the current session before registering courses.');
         }
 
-        // Get Semesters
+        $currentSemester = Semester::current();
         $semesters = Semester::where('session_id', $currentSession->id)->orderBy('name')->get();
-
-        $firstSemester = $semesters->filter(fn ($s) => stripos($s->name, 'First') !== false || $s->name == '1')->first();
-        $secondSemester = $semesters->filter(fn ($s) => stripos($s->name, 'Second') !== false || $s->name == '2')->first();
-
-        // Check Locks (Registration Dates)
-        $now = now();
-        $locks = [
-            '1' => false,
-            '2' => false,
-        ];
-
-        if ($firstSemester) {
-            if ($firstSemester->registration_starts_at && $now->lt($firstSemester->registration_starts_at)) {
-                $locks['1'] = true;
-            }
-            if ($firstSemester->registration_ends_at && $now->gt($firstSemester->registration_ends_at)) {
-                $locks['1'] = true;
-            }
-        }
-
-        // LOCK 1st Semester if 2nd Semester is CURRENT
-        if ($secondSemester && $secondSemester->is_current) {
-            $locks['1'] = true;
-        }
-
-        if ($secondSemester) {
-            if ($secondSemester->registration_starts_at && $now->lt($secondSemester->registration_starts_at)) {
-                $locks['2'] = true;
-            }
-            if ($secondSemester->registration_ends_at && $now->gt($secondSemester->registration_ends_at)) {
-                $locks['2'] = true;
-            }
-        }
+        $locks = $this->getSemesterRegistrationLocks($semesters, $paymentInfo['isPartial']);
 
         $department = $student->academicDepartment;
-        if (! $department && ! empty($student->department)) {
+        if (!$department && !empty($student->department)) {
             $department = \App\Models\Department::where('name', $student->department)->first();
         }
 
-        if (! $department) {
+        if (!$department) {
             return back()->with('error', 'No department assigned to your student profile.');
         }
 
-        // Programme Limits
         $programme = $student->program;
         $maxUnits = $programme ? $programme->max_credit_units : 24;
 
-        // Dropdown Data
-        $faculties = \App\Services\AcademicCacheService::getAllFaculties();
-        $departments = \App\Services\AcademicCacheService::getAcademicDepartments();
+        $faculties = AcademicCacheService::getAllFaculties();
+        $departments = AcademicCacheService::getAcademicDepartments();
 
-        // 1. Fetch ALL Courses for Session (Both Semesters)
-        $query = Course::query();
+        $availableCourses = $this->getAvailableCourses($student, $currentSession, $department, $request);
 
-        // Filter by Level
-        $level = $request->input('level', $student->current_level);
-        if ($level) {
-            $query->where('level', $level);
-        }
-
-        // Department Logic (Same as before)
-        if ($request->filled('department_id')) {
-            $query->where('department_id', $request->department_id);
-        } elseif ($request->filled('faculty_id')) {
-            $deptIds = \App\Models\Department::where('faculty_id', $request->faculty_id)->pluck('id');
-            $query->whereIn('department_id', $deptIds);
-        } else {
-            if ($department) {
-                $query->where('department_id', $department->id);
-            }
-        }
-
-        $availableCourses = $query->with([
-            'department',
-            'allocations' => function ($q) use ($currentSession) {
-                $q->where('session_id', $currentSession->id)->with('staff.user');
-            },
-        ])->orderBy('semester')->orderBy('code')->get();
-
-        // Apply Programme Overrides (Compulsory)
-        if ($programme) {
-            $overrides = DB::table('course_programme')
-                ->where('programme_id', $programme->id)
-                ->pluck('is_compulsory', 'course_id');
-
-            $availableCourses->transform(function ($course) use ($overrides) {
-                if ($overrides->has($course->id)) {
-                    $course->is_compulsory = (bool) $overrides->get($course->id);
-                }
-
-                return $course;
-            });
-        }
-
-        // Fetch Existing Registrations for Session
         $registeredCourses = CourseRegistration::where('student_id', $student->id)
             ->where('session_id', $currentSession->id)
             ->with('course')
@@ -232,12 +147,11 @@ class CourseRegistrationController extends Controller
 
         $registeredCourseIds = $registeredCourses->pluck('id');
 
-        $perCourseFeeConfig = \App\Models\FeeConfiguration::where('session_id', $currentSession->id)
+        $perCourseFeeConfig = FeeConfiguration::where('session_id', $currentSession->id)
             ->where('is_per_course', true)
             ->where(function ($q) use ($currentSemester) {
                 if ($currentSemester) {
-                    $q->where('semester_id', $currentSemester->id)
-                      ->orWhereNull('semester_id');
+                    $q->where('semester_id', $currentSemester->id)->orWhereNull('semester_id');
                 }
             })
             ->with('feeType')
@@ -248,6 +162,7 @@ class CourseRegistrationController extends Controller
             'session' => $currentSession,
             'semesters' => $semesters,
             'locks' => $locks,
+            'isPartialPayment' => $paymentInfo['isPartial'],
             'faculties' => $faculties,
             'departments' => $departments,
             'courses' => $availableCourses,
@@ -255,18 +170,21 @@ class CourseRegistrationController extends Controller
             'registeredCourseIds' => $registeredCourseIds,
             'maxUnits' => $maxUnits,
             'perCourseFeeConfig' => $perCourseFeeConfig ? [
-                'amount' => (float)$perCourseFeeConfig->amount,
+                'amount' => (float) $perCourseFeeConfig->amount,
                 'is_per_course' => true,
                 'fee_type' => $perCourseFeeConfig->feeType,
             ] : null,
             'filters' => [
-                'level' => $level,
+                'level' => $request->input('level', $student->current_level),
                 'faculty_id' => $request->input('faculty_id'),
                 'department_id' => $request->input('department_id'),
             ],
         ]);
     }
 
+    /**
+     * Store student course registration choices.
+     */
     public function store(Request $request)
     {
         $request->validate([
@@ -276,42 +194,27 @@ class CourseRegistrationController extends Controller
 
         $student = Student::where('user_id', Auth::id())->firstOrFail();
         $currentSession = Session::current();
-        if (! $currentSession) {
+        if (!$currentSession) {
             abort(404, 'No active session.');
         }
 
-        // Fee Enforcement
-        $currentSemester = Semester::current();
-        $isSecondSemActive = $currentSemester && (stripos($currentSemester->name, 'Second') !== false || $currentSemester->name == '2');
-        $allowedStatuses = $isSecondSemActive ? ['paid'] : ['paid', 'partial'];
+        $paymentInfo = $this->resolveSchoolFeePayment((string) Auth::id(), (string) $currentSession->id);
 
-        $hasPaid = Invoice::where('user_id', Auth::id())
-            ->where('type', 'school_fee')
-            ->whereIn('status', $allowedStatuses)
-            ->where('session_id', $currentSession->id)
-            ->exists();
-
-        if (! $hasPaid) {
-            $errorMessage = $isSecondSemActive
-                ? 'You must fully clear your School Fees before registering or editing courses for the Second Semester.'
-                : 'You must pay the School Fees for the current session before registering courses.';
+        if (!$paymentInfo['hasPaid']) {
             return redirect()->route('student.payments.index')
-                ->with('error', $errorMessage);
+                ->with('error', 'You must pay your School Fees for the current session before registering courses.');
         }
 
-        // Resolve Semesters
+        $currentSemester = Semester::current();
         $semesters = Semester::where('session_id', $currentSession->id)->get();
         $firstSemester = $semesters->filter(fn ($s) => stripos($s->name, 'First') !== false || $s->name == '1')->first();
         $secondSemester = $semesters->filter(fn ($s) => stripos($s->name, 'Second') !== false || $s->name == '2')->first();
 
-        // Check if 1st Semester is locked
-        $isFirstSemLocked = false;
         $now = now();
+        $isFirstSemLocked = false;
         if ($firstSemester) {
-            if ($firstSemester->registration_starts_at && $now->lt($firstSemester->registration_starts_at)) {
-                $isFirstSemLocked = true;
-            }
-            if ($firstSemester->registration_ends_at && $now->gt($firstSemester->registration_ends_at)) {
+            if (($firstSemester->registration_starts_at && $now->lt($firstSemester->registration_starts_at)) ||
+                ($firstSemester->registration_ends_at && $now->gt($firstSemester->registration_ends_at))) {
                 $isFirstSemLocked = true;
             }
         }
@@ -319,31 +222,27 @@ class CourseRegistrationController extends Controller
             $isFirstSemLocked = true;
         }
 
-        // Check if 2nd Semester is locked
         $isSecondSemLocked = false;
         if ($secondSemester) {
-            if ($secondSemester->registration_starts_at && $now->lt($secondSemester->registration_starts_at)) {
-                $isSecondSemLocked = true;
-            }
-            if ($secondSemester->registration_ends_at && $now->gt($secondSemester->registration_ends_at)) {
+            if (($secondSemester->registration_starts_at && $now->lt($secondSemester->registration_starts_at)) ||
+                ($secondSemester->registration_ends_at && $now->gt($secondSemester->registration_ends_at))) {
                 $isSecondSemLocked = true;
             }
         }
+        if ($paymentInfo['isPartial']) {
+            $isSecondSemLocked = true;
+        }
 
-        // Max Units Check (Global or Per Semester? Usually Per Semester, but let's assume Global for simplicity requested, or Per Semester)
-        // User request was simple "select and show".
-        // Let's implement Per Semester Unit Cap if possible, but for now stick to global maxUnits provided in create.
         $programme = $student->program;
         $maxUnits = $programme ? $programme->max_credit_units : 24;
 
-        // Ensure total units don't exceed max * 2 (if max is per semester) or just max?
-        // Usually max is PER SEMESTER.
-        // Let's check max units per semester.
-
         $selectedCourses = Course::whereIn('id', $request->courses)->get();
-
         $firstSemCourses = $selectedCourses->where('semester', '1');
         $secondSemCourses = $selectedCourses->where('semester', '2');
+
+        if ($paymentInfo['isPartial'] && $secondSemCourses->isNotEmpty()) {
+            return back()->with('error', 'Because you made a partial school fee payment, you are only allowed to register for First Semester courses. Full payment of school fees is required to register for Second Semester courses.');
+        }
 
         if ($firstSemCourses->sum('units') > $maxUnits) {
             return back()->with('error', "Maximum of {$maxUnits} units allowed for First Semester.");
@@ -358,82 +257,32 @@ class CourseRegistrationController extends Controller
             ->with('course')
             ->get();
 
-        $existingFirstSemIds = $existingRegistrations->filter(fn ($r) => $r->course->semester === '1')->pluck('course_id')->toArray();
+        $existingFirstSemIds = $existingRegistrations->filter(fn ($r) => $r->course?->semester === '1')->pluck('course_id')->toArray();
         $newFirstSemIds = $firstSemCourses->pluck('id')->toArray();
 
         if ($isFirstSemLocked && (array_diff($existingFirstSemIds, $newFirstSemIds) || array_diff($newFirstSemIds, $existingFirstSemIds))) {
             return back()->with('error', 'First Semester registration is locked and cannot be modified.');
         }
 
-        $existingSecondSemIds = $existingRegistrations->filter(fn ($r) => $r->course->semester === '2')->pluck('course_id')->toArray();
+        $existingSecondSemIds = $existingRegistrations->filter(fn ($r) => $r->course?->semester === '2')->pluck('course_id')->toArray();
         $newSecondSemIds = $secondSemCourses->pluck('id')->toArray();
 
         if ($isSecondSemLocked && (array_diff($existingSecondSemIds, $newSecondSemIds) || array_diff($newSecondSemIds, $existingSecondSemIds))) {
             return back()->with('error', 'Second Semester registration is locked and cannot be modified.');
         }
 
-        // DB Transaction
-        DB::transaction(function () use ($student, $currentSession, $firstSemester, $secondSemester, $firstSemCourses, $secondSemCourses) {
-
-            // Find or Create StudentSession
-            $studentSession = StudentSession::firstOrCreate(
-                [
-                    'student_id' => $student->id,
-                    'session_id' => $currentSession->id,
-                ],
-                [
-                    'level' => $student->current_level,
-                    'status' => 'active',
-                ]
-            );
-
-            // Delete ALL registrations for this session to handle updates (unchecking courses)
-            // Or better: Delete for First Sem if we are updating First Sem?
-            // Since we submit ALL, we can sync ALL.
-            CourseRegistration::where('student_id', $student->id)
-                ->where('session_id', $currentSession->id)
-                ->delete();
-
-            // Insert First Semester
-            if ($firstSemester) {
-                foreach ($firstSemCourses as $course) {
-                    CourseRegistration::create([
-                        'student_id' => $student->id,
-                        'course_id' => $course->id,
-                        'session_id' => $currentSession->id,
-                        'semester_id' => $firstSemester->id,
-                        'student_session_id' => $studentSession->id,
-                    ]);
-                }
-            }
-
-            // Insert Second Semester
-            if ($secondSemester) {
-                foreach ($secondSemCourses as $course) {
-                    CourseRegistration::create([
-                        'student_id' => $student->id,
-                        'course_id' => $course->id,
-                        'session_id' => $currentSession->id,
-                        'semester_id' => $secondSemester->id,
-                        'student_session_id' => $studentSession->id,
-                    ]);
-                }
-            }
-        });
-
-        \App\Services\AcademicCacheService::clearTimetableCache();
+        $this->syncCourseRegistrations($student, $currentSession, $firstSemester, $secondSemester, $firstSemCourses, $secondSemCourses);
 
         if ($currentSemester) {
-            $perCourseFeeConfig = \App\Models\FeeConfiguration::where('session_id', $currentSession->id)
+            $perCourseFeeConfig = FeeConfiguration::where('session_id', $currentSession->id)
                 ->where('is_per_course', true)
                 ->where(function ($q) use ($currentSemester) {
-                    $q->where('semester_id', $currentSemester->id)
-                      ->orWhereNull('semester_id');
+                    $q->where('semester_id', $currentSemester->id)->orWhereNull('semester_id');
                 })
                 ->first();
 
             if ($perCourseFeeConfig) {
-                $feeService = new \App\Services\Finance\FeeService();
+                $feeService = app(FeeService::class);
                 $invoice = $feeService->generatePerCourseInvoice($student, $currentSession, $currentSemester, $selectedCourses);
 
                 if ($invoice && $invoice->status === 'pending') {
@@ -446,6 +295,9 @@ class CourseRegistrationController extends Controller
         return to_route('student.courses.index')->with('success', 'Course registration updated successfully.');
     }
 
+    /**
+     * Download course form PDF.
+     */
     public function downloadForm(Request $request)
     {
         $student = Student::where('user_id', Auth::id())
@@ -453,20 +305,12 @@ class CourseRegistrationController extends Controller
             ->firstOrFail();
 
         $sessionId = $request->query('session_id');
-
-        if ($sessionId) {
-            $session = Session::findOrFail($sessionId);
-        } else {
-            $session = Session::where('is_current', true)->firstOrFail();
-        }
+        $session = $sessionId ? Session::findOrFail($sessionId) : Session::where('is_current', true)->firstOrFail();
 
         $programme = $student->program;
-        $overrides = collect();
-        if ($programme) {
-            $overrides = DB::table('course_programme')
-                ->where('programme_id', $programme->id)
-                ->pluck('is_compulsory', 'course_id');
-        }
+        $overrides = $programme
+            ? DB::table('course_programme')->where('programme_id', $programme->id)->pluck('is_compulsory', 'course_id')
+            : collect();
 
         $registrations = CourseRegistration::where('student_id', $student->id)
             ->where('session_id', $session->id)
@@ -479,7 +323,7 @@ class CourseRegistrationController extends Controller
             }
         }
 
-        $groupedRegistrations = $registrations->groupBy(fn ($reg) => $reg->semester->name);
+        $groupedRegistrations = $registrations->groupBy(fn ($reg) => $reg->semester?->name ?? 'Semester');
 
         if ($registrations->isEmpty()) {
             return response("No course registration records found for this session ({$session->name}). Please ensure you have registered courses.", 404);
@@ -489,17 +333,20 @@ class CourseRegistrationController extends Controller
             'student' => $student,
             'registrations' => $groupedRegistrations,
             'session' => $session,
-            'semester' => null, // Generic form for session
+            'semester' => null,
             'total_units' => $registrations->sum('course.units'),
         ]);
 
         return $pdf->download('Course_Form.pdf');
     }
 
+    /**
+     * Download exam docket card PDF.
+     */
     public function downloadExamCard(Request $request)
     {
         $examCardEnabled = filter_var(\App\Models\SystemSetting::get('enable_exam_card_download', true), FILTER_VALIDATE_BOOLEAN);
-        if (! $examCardEnabled) {
+        if (!$examCardEnabled) {
             return back()->with('error', 'Exam card downloading is currently disabled by the administration.');
         }
 
@@ -514,9 +361,9 @@ class CourseRegistrationController extends Controller
             $semester = Semester::findOrFail($semesterId);
             $session = $semester->session;
         } else {
-            $session = $sessionId ? Session::findOrFail($sessionId) : Session::query()->where('is_current', true)->firstOrFail();
-            $semester = Semester::query()->where('session_id', $session->id)->where('is_current', true)->first()
-                ?? Semester::query()->where('session_id', $session->id)->firstOrFail();
+            $session = $sessionId ? Session::findOrFail($sessionId) : Session::where('is_current', true)->firstOrFail();
+            $semester = Semester::where('session_id', $session->id)->where('is_current', true)->first()
+                ?? Semester::where('session_id', $session->id)->firstOrFail();
         }
 
         $registrations = CourseRegistration::where('student_id', $student->id)
@@ -529,7 +376,6 @@ class CourseRegistrationController extends Controller
             return response("No registered courses found for {$semester->name} semester, {$session->name} session.", 404);
         }
 
-        // REQUIREMENT: 2nd Semester Exam Card requires FULL payment of all pending fees (including hostel & school fees)
         $currentSemester = Semester::current();
         $isSecondSemActive = $currentSemester && (stripos($currentSemester->name, 'Second') !== false || $currentSemester->name == '2');
         $isSecondSemRequested = str_contains(strtolower($semester->name), 'second') || $semester->name == '2';
@@ -545,12 +391,14 @@ class CourseRegistrationController extends Controller
                 ->where('status', '!=', 'paid')
                 ->count();
 
-            if (! $hasSchoolFeePaid || $pendingInvoicesCount > 0) {
+            if (!$hasSchoolFeePaid || $pendingInvoicesCount > 0) {
                 return back()->with('error', 'Second Semester Exam Card is only available after full payment of all pending fees, including school fees and hostel fees. Please clear your outstanding balance.');
             }
         }
 
-        $isExamPublished = filter_var(\App\Models\SystemSetting::get('publish_exam_timetable', false), FILTER_VALIDATE_BOOLEAN);
+        $globalPublished = filter_var(\App\Models\SystemSetting::get('publish_exam_timetable', false), FILTER_VALIDATE_BOOLEAN);
+        $hasPublishedExercise = \App\Models\Exam::where('is_published', true)->exists();
+        $isExamPublished = $globalPublished || $hasPublishedExercise;
         $registeredCourseIds = $registrations->pluck('course_id');
         $examSchedules = collect([]);
 
@@ -592,5 +440,156 @@ class CourseRegistrationController extends Controller
         ]);
 
         return $pdf->download("Exam_Card_{$semester->name}.pdf");
+    }
+
+    // ==========================================
+    // HELPER METHODS
+    // ==========================================
+
+    private function resolveSchoolFeePayment(string $userId, string $sessionId): array
+    {
+        $schoolFeeInvoice = Invoice::where('user_id', $userId)
+            ->where('type', 'school_fee')
+            ->where('session_id', $sessionId)
+            ->first();
+
+        $hasPaid = $schoolFeeInvoice && (
+            $schoolFeeInvoice->status === 'paid' ||
+            $schoolFeeInvoice->status === 'partial' ||
+            (float) $schoolFeeInvoice->paid_amount > 0
+        );
+
+        $isPartial = $schoolFeeInvoice && (
+            $schoolFeeInvoice->status === 'partial' ||
+            ((float) $schoolFeeInvoice->paid_amount > 0 && (float) $schoolFeeInvoice->paid_amount < (float) $schoolFeeInvoice->amount)
+        );
+
+        return [
+            'invoice' => $schoolFeeInvoice,
+            'hasPaid' => $hasPaid,
+            'isPartial' => $isPartial,
+            'status' => $schoolFeeInvoice?->status ?? 'unpaid',
+        ];
+    }
+
+    private function getSemesterRegistrationLocks($semesters, bool $isPartialPayment): array
+    {
+        $firstSemester = $semesters->filter(fn ($s) => stripos($s->name, 'First') !== false || $s->name == '1')->first();
+        $secondSemester = $semesters->filter(fn ($s) => stripos($s->name, 'Second') !== false || $s->name == '2')->first();
+
+        $now = now();
+        $locks = ['1' => false, '2' => false];
+
+        if ($firstSemester) {
+            if (($firstSemester->registration_starts_at && $now->lt($firstSemester->registration_starts_at)) ||
+                ($firstSemester->registration_ends_at && $now->gt($firstSemester->registration_ends_at))) {
+                $locks['1'] = true;
+            }
+        }
+        if ($secondSemester && $secondSemester->is_current) {
+            $locks['1'] = true;
+        }
+
+        if ($secondSemester) {
+            if (($secondSemester->registration_starts_at && $now->lt($secondSemester->registration_starts_at)) ||
+                ($secondSemester->registration_ends_at && $now->gt($secondSemester->registration_ends_at))) {
+                $locks['2'] = true;
+            }
+        }
+
+        if ($isPartialPayment) {
+            $locks['2'] = true;
+        }
+
+        return $locks;
+    }
+
+    private function getAvailableCourses(Student $student, Session $session, $department, Request $request)
+    {
+        $query = Course::query();
+
+        $level = $request->input('level', $student->current_level);
+        if ($level) {
+            $query->where('level', $level);
+        }
+
+        if ($request->filled('department_id')) {
+            $query->where('department_id', $request->department_id);
+        } elseif ($request->filled('faculty_id')) {
+            $deptIds = \App\Models\Department::where('faculty_id', $request->faculty_id)->pluck('id');
+            $query->whereIn('department_id', $deptIds);
+        } else {
+            if ($department) {
+                $query->where('department_id', $department->id);
+            }
+        }
+
+        $courses = $query->with([
+            'department',
+            'allocations' => function ($q) use ($session) {
+                $q->where('session_id', $session->id)->with('staff.user');
+            },
+        ])->orderBy('semester')->orderBy('code')->get();
+
+        if ($student->program) {
+            $overrides = DB::table('course_programme')
+                ->where('programme_id', $student->program->id)
+                ->pluck('is_compulsory', 'course_id');
+
+            $courses->transform(function ($course) use ($overrides) {
+                if ($overrides->has($course->id)) {
+                    $course->is_compulsory = (bool) $overrides->get($course->id);
+                }
+                return $course;
+            });
+        }
+
+        return $courses;
+    }
+
+    private function syncCourseRegistrations(Student $student, Session $session, ?Semester $firstSemester, ?Semester $secondSemester, $firstSemCourses, $secondSemCourses): void
+    {
+        DB::transaction(function () use ($student, $session, $firstSemester, $secondSemester, $firstSemCourses, $secondSemCourses) {
+            $studentSession = StudentSession::firstOrCreate(
+                [
+                    'student_id' => $student->id,
+                    'session_id' => $session->id,
+                ],
+                [
+                    'level' => $student->current_level,
+                    'status' => 'active',
+                ]
+            );
+
+            CourseRegistration::where('student_id', $student->id)
+                ->where('session_id', $session->id)
+                ->delete();
+
+            if ($firstSemester) {
+                foreach ($firstSemCourses as $course) {
+                    CourseRegistration::create([
+                        'student_id' => $student->id,
+                        'course_id' => $course->id,
+                        'session_id' => $session->id,
+                        'semester_id' => $firstSemester->id,
+                        'student_session_id' => $studentSession->id,
+                    ]);
+                }
+            }
+
+            if ($secondSemester) {
+                foreach ($secondSemCourses as $course) {
+                    CourseRegistration::create([
+                        'student_id' => $student->id,
+                        'course_id' => $course->id,
+                        'session_id' => $session->id,
+                        'semester_id' => $secondSemester->id,
+                        'student_session_id' => $studentSession->id,
+                    ]);
+                }
+            }
+        });
+
+        AcademicCacheService::clearTimetableCache();
     }
 }

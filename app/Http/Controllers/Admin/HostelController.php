@@ -54,13 +54,27 @@ class HostelController extends Controller
         ]);
     }
 
+    public function create()
+    {
+        return Inertia::render('Admin/Hostels/Create');
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:hostels,name',
             'gender_type' => 'required|in:male,female,mixed',
             'description' => 'nullable|string',
+            'payment_gateway' => 'nullable|string|in:squadco,paystack,none',
+            'squadco_secret_key' => 'nullable|string|max:255',
+            'squadco_public_key' => 'nullable|string|max:255',
+            'paystack_secret_key' => 'nullable|string|max:255',
+            'paystack_public_key' => 'nullable|string|max:255',
         ]);
+
+        if (($validated['payment_gateway'] ?? null) === 'none') {
+            $validated['payment_gateway'] = null;
+        }
 
         $hostel = Hostel::create($validated);
 
@@ -69,7 +83,7 @@ class HostelController extends Controller
             ->causedBy(auth()->user())
             ->log("Hostel '{$hostel->name}' created");
 
-        return back()->with('success', 'Hostel created successfully.');
+        return redirect()->route('admin.hostels.index')->with('success', 'Hostel created successfully.');
     }
 
     public function show(Hostel $hostel)
@@ -95,13 +109,29 @@ class HostelController extends Controller
         ]);
     }
 
+    public function edit(Hostel $hostel)
+    {
+        return Inertia::render('Admin/Hostels/Edit', [
+            'hostel' => $hostel,
+        ]);
+    }
+
     public function update(Request $request, Hostel $hostel)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:hostels,name,' . $hostel->id,
             'gender_type' => 'required|in:male,female,mixed',
             'description' => 'nullable|string',
+            'payment_gateway' => 'nullable|string|in:squadco,paystack,none',
+            'squadco_secret_key' => 'nullable|string|max:255',
+            'squadco_public_key' => 'nullable|string|max:255',
+            'paystack_secret_key' => 'nullable|string|max:255',
+            'paystack_public_key' => 'nullable|string|max:255',
         ]);
+
+        if (($validated['payment_gateway'] ?? null) === 'none') {
+            $validated['payment_gateway'] = null;
+        }
 
         $hostel->update($validated);
 
@@ -110,7 +140,7 @@ class HostelController extends Controller
             ->causedBy(auth()->user())
             ->log("Hostel '{$hostel->name}' details updated");
 
-        return back()->with('success', 'Hostel updated successfully.');
+        return redirect()->route('admin.hostels.index')->with('success', 'Hostel updated successfully.');
     }
 
     public function destroy(Hostel $hostel)

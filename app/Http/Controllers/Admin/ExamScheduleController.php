@@ -209,8 +209,8 @@ class ExamScheduleController extends Controller
 
         $examsList = Exam::with(['session', 'semester'])
             ->withCount('schedules')
-            ->when($selectedSessionId, fn ($q) => $q->where('session_id', $selectedSessionId))
-            ->when($selectedSemesterId, fn ($q) => $q->where('semester_id', $selectedSemesterId))
+            ->when($request->filled('session_id'), fn ($q) => $q->where('session_id', $request->session_id))
+            ->when($request->filled('semester_id'), fn ($q) => $q->where('semester_id', $request->semester_id))
             ->latest()
             ->get();
 
@@ -391,6 +391,10 @@ class ExamScheduleController extends Controller
         }
 
         $exam->update(['is_published' => ! $exam->is_published]);
+
+        $anyPublished = Exam::where('is_published', true)->exists();
+        \App\Models\SystemSetting::set('publish_exam_timetable', $anyPublished ? '1' : '0');
+        AcademicCacheService::clearAll();
 
         $msg = $exam->is_published ? 'Examination exercise published.' : 'Examination exercise un-published.';
         return back()->with('success', $msg);

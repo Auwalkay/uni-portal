@@ -24,13 +24,9 @@ class PaymentController extends Controller
         $this->gateway = $gateway;
     }
 
-    private function getGatewayByName($name)
+    private function resolveGatewayForInvoice(?Invoice $invoice, ?string $fallbackGateway = null): array
     {
-        if ($name === 'squadco') {
-            return new \App\Services\SquadcoService;
-        }
-
-        return new \App\Services\PaystackService;
+        return \App\Services\Payment\PaymentGatewayFactory::resolveWithGatewayName($invoice, $fallbackGateway);
     }
 
     public function downloadReceipt(Payment $payment)
@@ -280,6 +276,8 @@ class PaymentController extends Controller
             return back()->with('error', 'Amount exceeds remaining balance of '.number_format($balance, 2));
         }
 
+        $paymentHandler = app(PaymentHandler::class);
+
         // Check for the last pending payment and verify its status before proceeding
         $lastPending = Payment::where('invoice_id', $invoice->id)
             ->where('user_id', Auth::id())
@@ -288,60 +286,25 @@ class PaymentController extends Controller
             ->first();
 
         if ($lastPending && ! str_starts_with($lastPending->gateway_reference, 'TEMP-')) {
-            // Verify using the gateway that was actually used for this payment
-            $checkGateway = $this->getGatewayByName($lastPending->gateway ?? 'squadco');
-            $verification = $checkGateway->verifyTransaction($lastPending->gateway_reference);
+            $verificationResult = $paymentHandler->verifyAndProcessPayment($lastPending->gateway_reference, $invoice, $lastPending->gateway);
 
-            $rawStatus = strtolower((string) ($verification['status'] ?? ''));
-            $isSuccess = in_array($rawStatus, ['success', 'successful', 'approved', 'completed', 'paid']);
-
-            if ($verification && $isSuccess) {
-                app(PaymentHandler::class)->handleSuccessfulPayment($lastPending->gateway_reference, $verification);
-
+            if ($verificationResult['status'] === 'success') {
                 return Inertia::render('Student/Finance/Success', [
-                    'payment' => $lastPending->fresh(),
+                    'payment' => $verificationResult['payment'],
                     'invoice' => $invoice,
                 ]);
-            } else {
-                $isExplicitlyFailed = in_array($rawStatus, ['failed', 'cancelled', 'error', 'abandoned', 'declined', 'expired']);
-                if ($isExplicitlyFailed) {
-                    $lastPending->update(['status' => 'failed']);
-                }
             }
         }
 
-        $activeGateway = \App\Models\SystemSetting::get('payment_gateway', env('PAYMENT_GATEWAY', 'squadco'));
-
-        $payment = Payment::create([
-            'invoice_id' => $invoice->id,
-            'user_id' => Auth::id(),
-            'transaction_id' => 'MIUPAY'.date('Y').strtoupper(Str::random(8)),
-            'gateway' => $activeGateway,
-            'gateway_reference' => 'TEMP-'.uniqid(), // Temporary ref
-            'amount' => $amountToPay,
-            'status' => 'pending',
-        ]);
-
-        // We actually use the Paystack Reference as gateway_reference if initializing.
-        // Paystack generates one or acts on ours.
-        // Let's generate ours: "PAY-" . uniqid()
-        $reference = 'PAY-'.strtoupper(uniqid());
-        $payment->update(['gateway_reference' => $reference]);
-
-        $data = $this->gateway->initializeTransaction(
-            Auth::user()->email,
+        $initiation = $paymentHandler->initiatePayment(
+            $invoice,
+            Auth::user(),
             $amountToPay,
-            $reference,
-            route('student.payments.callback'),
-            [
-                'customer_name' => Auth::user()->name,
-                'payment_type' => $invoice->type,
-                'invoice_id' => $invoice->id,
-            ]
+            route('student.payments.callback')
         );
 
-        if ($data && isset($data['authorization_url'])) {
-            return Inertia::location($data['authorization_url']);
+        if ($initiation && ! empty($initiation['authorization_url'])) {
+            return Inertia::location($initiation['authorization_url']);
         }
 
         return back()->with('error', 'Payment initialization failed.');
@@ -356,32 +319,20 @@ class PaymentController extends Controller
             ]);
         }
 
-        $data = $this->gateway->verifyTransaction($reference);
-        $payment = Payment::where('gateway_reference', $reference)->first();
+        $result = app(PaymentHandler::class)->verifyAndProcessPayment($reference);
 
-        $rawStatus = strtolower((string) ($data['status'] ?? ''));
-        $isSuccess = in_array($rawStatus, ['success', 'successful', 'approved', 'completed', 'paid']);
-
-        if ($data && $isSuccess) {
-            if ($payment) {
-                if ($payment->status !== 'success') {
-                    app(PaymentHandler::class)->handleSuccessfulPayment($reference, $data);
-                }
-
+        if ($result['status'] === 'success') {
+            if ($result['payment']) {
                 return Inertia::render('Student/Finance/Success', [
-                    'payment' => $payment->fresh(),
-                    'invoice' => $payment->invoice,
+                    'payment' => $result['payment'],
+                    'invoice' => $result['payment']->invoice,
                 ]);
             }
 
             return redirect()->route('student.payments.index')->with('success', 'Payment successful!');
         }
 
-        // Only mark payment as failed if explicitly reported failed/cancelled by gateway
-        $isExplicitlyFailed = in_array($rawStatus, ['failed', 'cancelled', 'error', 'abandoned', 'declined', 'expired']);
-        if ($payment && $payment->status !== 'success' && $isExplicitlyFailed) {
-            $payment->update(['status' => 'failed']);
-        }
+        $data = $result['data'] ?? [];
 
         return Inertia::render('Student/Finance/Failure', [
             'error' => $data['gateway_response'] ?? $data['message'] ?? 'The payment gateway could not verify this transaction at this time.',

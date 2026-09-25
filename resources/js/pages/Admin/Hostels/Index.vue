@@ -31,6 +31,11 @@ const props = defineProps<{
         name: string;
         gender_type: string;
         description: string;
+        payment_gateway?: string;
+        squadco_secret_key?: string;
+        squadco_public_key?: string;
+        paystack_secret_key?: string;
+        paystack_public_key?: string;
         is_visible: boolean;
         floors_count: number;
         fees_count: number;
@@ -82,16 +87,7 @@ const currentPage = ref(1);
 const perPage = ref('10');
 const perPageNum = computed(() => Number(perPage.value) || 10);
 
-// Modals State
-const isCreateModalOpen = ref(false);
-const isEditModalOpen = ref(false);
-const editingHostel = ref<any>(null);
-
-const form = useForm({
-    name: '',
-    gender_type: 'mixed',
-    description: '',
-});
+// Pagination State
 
 // Capacity and Vacancy helper calculations
 const getHostelTotalCapacity = (hostel: any) => {
@@ -218,36 +214,7 @@ const handleSortChange = (newSort: string) => {
     currentPage.value = 1;
 };
 
-const openCreateModal = () => {
-    form.reset();
-    form.clearErrors();
-    isCreateModalOpen.value = true;
-};
 
-const openEditModal = (hostel: any) => {
-    editingHostel.value = hostel;
-    form.name = hostel.name;
-    form.gender_type = hostel.gender_type;
-    form.description = hostel.description;
-    form.clearErrors();
-    isEditModalOpen.value = true;
-};
-
-const submitCreate = () => {
-    form.post(route('admin.hostels.store'), {
-        onSuccess: () => {
-            isCreateModalOpen.value = false;
-        },
-    });
-};
-
-const submitEdit = () => {
-    form.put(route('admin.hostels.update', editingHostel.value.id), {
-        onSuccess: () => {
-            isEditModalOpen.value = false;
-        },
-    });
-};
 
 const deleteHostel = (id: string) => {
     if (confirm('Are you sure you want to delete this hostel? All floors and rooms will be removed.')) {
@@ -359,7 +326,7 @@ const submitRoomImport = () => {
                     <Button v-if="hasPermission('create_hostels')" @click="openRoomImportModal" variant="outline" class="rounded-xl px-5 h-12 border-emerald-300 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 font-bold">
                         <FileSpreadsheet class="mr-2 h-5 w-5 text-emerald-600" /> Import Rooms (Excel)
                     </Button>
-                    <Button v-if="hasPermission('create_hostels')" @click="openCreateModal" class="rounded-xl shadow-md font-semibold px-6 h-12 text-base">
+                    <Button v-if="hasPermission('create_hostels')" @click="router.visit(route('admin.hostels.create'))" class="rounded-xl shadow-md font-semibold px-6 h-12 text-base">
                         <Plus class="mr-2 h-5 w-5" /> Add New Hostel
                     </Button>
                 </div>
@@ -581,9 +548,20 @@ const submitRoomImport = () => {
 
                                 <!-- Status Badge -->
                                 <td class="py-4 px-6">
-                                    <Badge :variant="hostel.is_visible ? 'default' : 'secondary'" class="font-bold text-xs">
-                                        {{ hostel.is_visible ? 'VISIBLE' : 'HIDDEN' }}
-                                    </Badge>
+                                    <div class="flex flex-col gap-1 items-start">
+                                        <Badge :variant="hostel.is_visible ? 'default' : 'secondary'" class="font-bold text-xs">
+                                            {{ hostel.is_visible ? 'VISIBLE' : 'HIDDEN' }}
+                                        </Badge>
+                                        <Badge v-if="hostel.payment_gateway" variant="outline" class="font-bold text-[10px] bg-blue-50 text-blue-700 border-blue-200 uppercase">
+                                            {{ hostel.payment_gateway }}
+                                        </Badge>
+                                        <Badge v-if="hostel.squadco_secret_key" variant="outline" class="font-bold text-[10px] bg-purple-50 text-purple-700 border-purple-200">
+                                            Custom Squadco
+                                        </Badge>
+                                        <Badge v-if="hostel.paystack_secret_key" variant="outline" class="font-bold text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                                            Custom Paystack
+                                        </Badge>
+                                    </div>
                                 </td>
 
                                 <!-- Structure -->
@@ -650,7 +628,7 @@ const submitRoomImport = () => {
                                             variant="ghost" 
                                             size="icon" 
                                             class="h-8 w-8 rounded-lg"
-                                            @click="openEditModal(hostel)"
+                                            @click="router.visit(route('admin.hostels.edit', hostel.id))"
                                             title="Edit Hostel"
                                         >
                                             <Edit class="h-4 w-4" />
@@ -823,7 +801,7 @@ const submitRoomImport = () => {
                                     variant="ghost" 
                                     size="sm" 
                                     class="rounded-xl font-bold text-xs"
-                                    @click="openEditModal(hostel)"
+                                    @click="router.visit(route('admin.hostels.edit', hostel.id))"
                                 >
                                     <Edit class="h-4 w-4 mr-1.5" /> Edit
                                 </Button>
@@ -870,93 +848,7 @@ const submitRoomImport = () => {
             </div>
         </div>
 
-        <!-- Create Hostel Modal -->
-        <Dialog :open="isCreateModalOpen" @update:open="isCreateModalOpen = $event">
-            <DialogContent class="sm:max-w-[450px] rounded-3xl p-6">
-                <DialogHeader>
-                    <DialogTitle class="text-2xl font-black">Add New Hostel</DialogTitle>
-                    <DialogDescription>
-                        Register a new campus residential building in the system.
-                    </DialogDescription>
-                </DialogHeader>
-                <form @submit.prevent="submitCreate">
-                    <div class="grid gap-5 py-5">
-                        <div class="space-y-2">
-                            <Label for="name" class="font-bold text-slate-700">Hostel Name</Label>
-                            <Input id="name" v-model="form.name" placeholder="e.g. Block A, Mandela Hall" class="h-12 rounded-xl" />
-                            <p v-if="form.errors.name" class="text-sm text-destructive font-medium">{{ form.errors.name }}</p>
-                        </div>
-                        <div class="space-y-2">
-                            <Label for="gender_type" class="font-bold text-slate-700">Gender Allocation</Label>
-                            <Select v-model="form.gender_type">
-                                <SelectTrigger class="h-12 rounded-xl">
-                                    <SelectValue placeholder="Select type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="mixed">Mixed Residence</SelectItem>
-                                    <SelectItem value="male">Male Only</SelectItem>
-                                    <SelectItem value="female">Female Only</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <p v-if="form.errors.gender_type" class="text-sm text-destructive font-medium">{{ form.errors.gender_type }}</p>
-                        </div>
-                        <div class="space-y-2">
-                            <Label for="description" class="font-bold text-slate-700">Description (Optional)</Label>
-                            <Textarea id="description" v-model="form.description" placeholder="Short details about the hostel structure..." rows="3" class="rounded-xl" />
-                            <p v-if="form.errors.description" class="text-sm text-destructive font-medium">{{ form.errors.description }}</p>
-                        </div>
-                    </div>
-                    <DialogFooter class="gap-2">
-                        <Button type="button" variant="outline" @click="isCreateModalOpen = false" class="rounded-full">Cancel</Button>
-                        <Button type="submit" :disabled="form.processing" class="rounded-full px-8 font-bold shadow-md">Save Hostel</Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
 
-        <!-- Edit Hostel Modal -->
-        <Dialog :open="isEditModalOpen" @update:open="isEditModalOpen = $event">
-            <DialogContent class="sm:max-w-[450px] rounded-3xl p-6">
-                <DialogHeader>
-                    <DialogTitle class="text-2xl font-black">Edit Hostel</DialogTitle>
-                    <DialogDescription>
-                        Modify hostel details and gender allocation.
-                    </DialogDescription>
-                </DialogHeader>
-                <form @submit.prevent="submitEdit">
-                    <div class="grid gap-5 py-5">
-                        <div class="space-y-2">
-                            <Label for="edit_name" class="font-bold text-slate-700">Hostel Name</Label>
-                            <Input id="edit_name" v-model="form.name" class="h-12 rounded-xl" />
-                            <p v-if="form.errors.name" class="text-sm text-destructive font-medium">{{ form.errors.name }}</p>
-                        </div>
-                        <div class="space-y-2">
-                            <Label for="edit_gender_type" class="font-bold text-slate-700">Gender Allocation</Label>
-                            <Select v-model="form.gender_type">
-                                <SelectTrigger class="h-12 rounded-xl">
-                                    <SelectValue placeholder="Select type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="mixed">Mixed Residence</SelectItem>
-                                    <SelectItem value="male">Male Only</SelectItem>
-                                    <SelectItem value="female">Female Only</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <p v-if="form.errors.gender_type" class="text-sm text-destructive font-medium">{{ form.errors.gender_type }}</p>
-                        </div>
-                        <div class="space-y-2">
-                            <Label for="edit_description" class="font-bold text-slate-700">Description</Label>
-                            <Textarea id="edit_description" v-model="form.description" rows="3" class="rounded-xl" />
-                            <p v-if="form.errors.description" class="text-sm text-destructive font-medium">{{ form.errors.description }}</p>
-                        </div>
-                    </div>
-                    <DialogFooter class="gap-2">
-                        <Button type="button" variant="outline" @click="isEditModalOpen = false" class="rounded-full">Cancel</Button>
-                        <Button type="submit" :disabled="form.processing" class="rounded-full px-8 font-bold shadow-md">Update Hostel</Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
 
         <!-- Room Excel Import Modal -->
         <Dialog v-model:open="roomImportModalOpen">

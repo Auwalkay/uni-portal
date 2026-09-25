@@ -58,32 +58,16 @@ class PaymentController extends Controller
             ->where('status', '!=', 'paid')
             ->firstOrFail();
 
-        $payment = Payment::create([
-            'transaction_id' => 'TRX-' . strtoupper(uniqid()),
-            'invoice_id' => $invoice->id,
-            'user_id' => $user->id,
-            'gateway_reference' => 'TEMP-' . uniqid(),
-            'amount' => $invoice->amount,
-            'status' => 'pending',
-        ]);
-
-        $reference = 'PAY-' . strtoupper(uniqid());
-        $payment->update(['gateway_reference' => $reference]);
-
-        $data = $this->gateway->initializeTransaction(
-            $user->email,
-            $invoice->amount,
-            $reference,
-            route('applicant.payment.callback'),
-            [
-                'customer_name' => $user->name,
-                'payment_type' => 'application_fee',
-                'invoice_id' => $invoice->id,
-            ]
+        $paymentHandler = app(\App\Services\Payment\PaymentHandler::class);
+        $initiation = $paymentHandler->initiatePayment(
+            $invoice,
+            $user,
+            (float) $invoice->amount,
+            route('applicant.payment.callback')
         );
 
-        if ($data && isset($data['authorization_url'])) {
-            return Inertia::location($data['authorization_url']);
+        if ($initiation && !empty($initiation['authorization_url'])) {
+            return Inertia::location($initiation['authorization_url']);
         }
 
         return back()->with('error', 'Payment initialization failed.');
@@ -96,24 +80,10 @@ class PaymentController extends Controller
             return redirect()->route('applicant.payment.index')->with('error', 'No reference supplied.');
         }
 
-        $data = $this->gateway->verifyTransaction($reference);
+        $result = app(\App\Services\Payment\PaymentHandler::class)->verifyAndProcessPayment($reference);
 
-        $payment = Payment::where('gateway_reference', $reference)->first();
-
-        $rawStatus = strtolower((string) ($data['status'] ?? ''));
-        $isSuccess = in_array($rawStatus, ['success', 'successful', 'approved', 'completed', 'paid']);
-
-        if ($data && $isSuccess) {
-            if ($payment && $payment->status !== 'success') {
-                app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($reference, $data);
-            }
-
+        if ($result['status'] === 'success') {
             return redirect()->route('applicant.apply.show')->with('success', 'Payment successful! Application submitted.');
-        }
-
-        $isExplicitlyFailed = in_array($rawStatus, ['failed', 'cancelled', 'error', 'abandoned', 'declined', 'expired']);
-        if ($payment && $payment->status !== 'success' && $isExplicitlyFailed) {
-            $payment->update(['status' => 'failed']);
         }
 
         return redirect()->route('applicant.payment.index')->with('error', 'Payment verification failed or is pending confirmation.');

@@ -50,8 +50,6 @@ class RequeryPayments extends Command
         }
 
         $handler = app(PaymentHandler::class);
-        $squadco = app(SquadcoService::class);
-        $paystack = app(PaystackService::class);
 
         $successCount = 0;
         $failedCount = 0;
@@ -59,32 +57,21 @@ class RequeryPayments extends Command
         foreach ($payments as $payment) {
             try {
                 $this->comment("Checking reference: {$payment->gateway_reference} (Gateway: {$payment->gateway})");
-                
-                $gateway = ($payment->gateway === 'paystack') ? $paystack : $squadco;
-                $data = $gateway->verifyTransaction($payment->gateway_reference);
 
-                $rawStatus = strtolower((string) ($data['status'] ?? ''));
-                $isSuccess = in_array($rawStatus, ['success', 'successful', 'approved', 'completed', 'paid']);
+                $result = $handler->verifyAndProcessPayment($payment->gateway_reference, $payment->invoice, $payment->gateway);
 
-                if ($data && $isSuccess) {
-                    $handler->handleSuccessfulPayment($payment->gateway_reference, $data);
+                if ($result['status'] === 'success') {
                     $this->info("✓ Payment {$payment->gateway_reference} verified as SUCCESS.");
                     $successCount++;
-                } else {
-                    $status = $rawStatus ?: 'unknown';
-                    
-                    // Mark as failed if explicitly failed/abandoned on gateway or if > 24 hours old
-                    $isExplicitlyFailedOrVeryOld = !$data 
-                        || in_array($status, ['failed', 'cancelled', 'error', 'abandoned', 'expired', 'declined']) 
-                        || $payment->created_at->lt(now()->subHours(24));
-                    
-                    if ($isExplicitlyFailedOrVeryOld) {
+                } elseif ($result['status'] === 'failed' || $payment->created_at->lt(now()->subHours(24))) {
+                    if ($payment->status !== 'failed') {
                         $payment->update(['status' => 'failed']);
-                        $this->warn("✗ Pending payment {$payment->gateway_reference} (Gateway status: {$status}) marked as FAILED.");
-                        $failedCount++;
-                    } else {
-                        $this->line("- Payment {$payment->gateway_reference} remains pending on gateway.");
                     }
+                    $status = $result['data']['status'] ?? 'failed';
+                    $this->warn("✗ Pending payment {$payment->gateway_reference} (Gateway status: {$status}) marked as FAILED.");
+                    $failedCount++;
+                } else {
+                    $this->line("- Payment {$payment->gateway_reference} remains pending on gateway.");
                 }
 
             } catch (\Exception $e) {

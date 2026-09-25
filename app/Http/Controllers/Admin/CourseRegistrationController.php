@@ -204,8 +204,10 @@ class CourseRegistrationController extends Controller
                 ->delete();
 
             foreach ($selectedCourses as $course) {
-                $semesterId = $course->semester == '1' ? $firstSemester?->id : $secondSemester?->id;
-                
+                $semesterId = ($course->semester == '1' || $course->semester == 1)
+                    ? $firstSemester?->id
+                    : ($secondSemester?->id ?? $firstSemester?->id);
+
                 CourseRegistration::create([
                     'student_id' => $student->id,
                     'course_id' => $course->id,
@@ -216,7 +218,7 @@ class CourseRegistrationController extends Controller
             }
         });
 
-        \App\Services\AcademicCacheService::clearTimetableCache();
+        AcademicCacheService::clearTimetableCache();
 
         return to_route('admin.course_registration.manage', $student->id)->with('success', 'Course registration processed successfully.');
     }

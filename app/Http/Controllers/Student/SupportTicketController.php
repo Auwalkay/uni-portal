@@ -58,7 +58,7 @@ class SupportTicketController extends Controller
             abort(403);
         }
 
-        $ticket->load(['messages.user']);
+        $ticket->load(['messages.user.roles']);
 
         return Inertia::render('Student/Support/Show', [
             'ticket' => $ticket,
