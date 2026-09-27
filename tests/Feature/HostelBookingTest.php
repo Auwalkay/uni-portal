@@ -552,4 +552,70 @@ class HostelBookingTest extends TestCase
         $this->assertEquals(75000.00, $maleHostelProp['fee']);
         $this->assertEquals(75000.00, $maleHostelProp['final_fee']);
     }
+
+    public function test_admin_can_toggle_floor_visibility()
+    {
+        $this->actingAs($this->admin);
+
+        $floor = $this->maleRoom->floor;
+        $this->assertTrue($floor->is_visible);
+
+        $response = $this->post(route('admin.hostels.floors.toggle-visibility', [
+            'hostel' => $this->maleHostel->id,
+            'block' => $floor->hostel_block_id,
+            'floor' => $floor->id,
+        ]));
+
+        $response->assertStatus(302);
+        $floor->refresh();
+        $this->assertFalse($floor->is_visible);
+
+        $response = $this->post(route('admin.hostels.floors.toggle-visibility', [
+            'hostel' => $this->maleHostel->id,
+            'block' => $floor->hostel_block_id,
+            'floor' => $floor->id,
+        ]));
+
+        $response->assertStatus(302);
+        $floor->refresh();
+        $this->assertTrue($floor->is_visible);
+    }
+
+    public function test_hidden_floor_prevents_student_and_admin_booking()
+    {
+        Invoice::create([
+            'user_id' => $this->studentUser->id,
+            'session_id' => $this->session->id,
+            'reference' => 'SCH-FEES-1',
+            'type' => 'school_fee',
+            'amount' => 100000.00,
+            'status' => 'paid',
+            'due_date' => now()->addDays(7),
+        ]);
+
+        HostelFee::create([
+            'session_id' => $this->session->id,
+            'amount' => 50000.00,
+        ]);
+
+        $floor = $this->maleRoom->floor;
+        $floor->update(['is_visible' => false]);
+
+        // Student attempt
+        $this->actingAs($this->studentUser);
+        $response = $this->post(route('student.accommodation.store'), [
+            'hostel_room_id' => $this->maleRoom->id,
+        ]);
+        $response->assertStatus(302);
+        $response->assertSessionHas('error', 'This floor is not currently open for bookings.');
+
+        // Admin attempt
+        $this->actingAs($this->admin);
+        $adminResponse = $this->post(route('admin.hostels.bookings.store'), [
+            'student_id' => $this->student->id,
+            'hostel_room_id' => $this->maleRoom->id,
+        ]);
+        $adminResponse->assertStatus(302);
+        $adminResponse->assertSessionHas('error');
+    }
 }

@@ -255,7 +255,7 @@ const deleteFloor = (floorId: string) => {
 
 const toggleFloorVisibility = (floorId: string) => {
     if(!activeBlockId.value) return;
-    router.post(route('admin.hostels.blocks.floors.toggle-visibility', [props.hostel.id, activeBlockId.value, floorId]));
+    router.post(route('admin.hostels.floors.toggle-visibility', [props.hostel.id, activeBlockId.value, floorId]));
 };
 
 const deleteRoom = (floorId: string, roomId: string) => {
