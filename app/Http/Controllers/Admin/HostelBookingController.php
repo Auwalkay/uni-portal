@@ -562,7 +562,7 @@ class HostelBookingController extends Controller
                 }
             }
             $finalAmount = $fee->amount - $discountAmount;
-            $isPaidInput = false;
+            $isPaidInput = filter_var($request->input('confirm_immediately') ?? $request->input('direct_confirmation') ?? $request->input('mark_as_paid') ?? $request->input('is_paid'), FILTER_VALIDATE_BOOLEAN);
 
             // Check if there is an existing hostel fee invoice for this session
             $invoice = Invoice::where('user_id', $student->user_id)

@@ -50,8 +50,21 @@ test('squadco service resolves custom secret key for specific hostel invoice', f
         'is_visible' => true,
     ]);
 
+    $user1 = \App\Models\User::factory()->create();
+    $student1 = \App\Models\Student::create([
+        'user_id' => $user1->id,
+        'matriculation_number' => 'MAT-' . rand(1000, 9999),
+        'status' => 'active',
+    ]);
+    $session1 = \App\Models\Session::create([
+        'name' => '2025/2026',
+        'start_date' => now(),
+        'end_date' => now()->addYear(),
+        'is_current' => true,
+    ]);
+
     $invoice = Invoice::create([
-        'user_id' => (string) Illuminate\Support\Str::uuid(),
+        'user_id' => $user1->id,
         'reference' => 'HST-TEST-1001',
         'type' => 'hostel_fee',
         'amount' => 50000,
@@ -59,8 +72,8 @@ test('squadco service resolves custom secret key for specific hostel invoice', f
     ]);
 
     $booking = HostelBooking::create([
-        'student_id' => (string) Illuminate\Support\Str::uuid(),
-        'session_id' => (string) Illuminate\Support\Str::uuid(),
+        'student_id' => $student1->id,
+        'session_id' => $session1->id,
         'hostel_room_id' => $room->id,
         'invoice_id' => $invoice->id,
         'status' => 'pending',
@@ -102,8 +115,21 @@ test('paystack service resolves custom secret key for specific hostel invoice', 
         'is_visible' => true,
     ]);
 
+    $user2 = \App\Models\User::factory()->create();
+    $student2 = \App\Models\Student::create([
+        'user_id' => $user2->id,
+        'matriculation_number' => 'MAT-' . rand(1000, 9999),
+        'status' => 'active',
+    ]);
+    $session2 = \App\Models\Session::create([
+        'name' => '2025/2026-B',
+        'start_date' => now(),
+        'end_date' => now()->addYear(),
+        'is_current' => false,
+    ]);
+
     $invoice = Invoice::create([
-        'user_id' => (string) Illuminate\Support\Str::uuid(),
+        'user_id' => $user2->id,
         'reference' => 'HST-TEST-2001',
         'type' => 'hostel_fee',
         'amount' => 60000,
@@ -111,8 +137,8 @@ test('paystack service resolves custom secret key for specific hostel invoice', 
     ]);
 
     $booking = HostelBooking::create([
-        'student_id' => (string) Illuminate\Support\Str::uuid(),
-        'session_id' => (string) Illuminate\Support\Str::uuid(),
+        'student_id' => $student2->id,
+        'session_id' => $session2->id,
         'hostel_room_id' => $room->id,
         'invoice_id' => $invoice->id,
         'status' => 'pending',

@@ -72,7 +72,7 @@ class PaymentController extends Controller
                 'items',
                 'session',
                 'payments' => function ($query) {
-                    $query->where('status', 'success');
+                    $query->latest();
                 },
             ])
             ->latest()
@@ -97,6 +97,31 @@ class PaymentController extends Controller
             'invoices' => $invoices,
             'canGenerateInvoice' => $canGenerateInvoice,
             'optionalFees' => $optionalFees,
+            'admin_charge_splittable' => (bool) \App\Models\SystemSetting::get('admin_charge_splittable', true),
+        ]);
+    }
+
+    public function showInvoice(Invoice $invoice)
+    {
+        if ($invoice->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        $feeService = app(FeeService::class);
+        if ($invoice->status !== 'paid' && $invoice->type === 'school_fee') {
+            $invoice = $feeService->refreshInvoiceIfUnpaid($invoice);
+        }
+
+        $invoice->load([
+            'items',
+            'session',
+            'payments' => function ($query) {
+                $query->latest();
+            },
+        ]);
+
+        return Inertia::render('Student/Finance/ShowInvoice', [
+            'invoice' => $invoice,
             'admin_charge_splittable' => (bool) \App\Models\SystemSetting::get('admin_charge_splittable', true),
         ]);
     }
@@ -333,9 +358,16 @@ class PaymentController extends Controller
         }
 
         $data = $result['data'] ?? [];
+        $rawError = $data['gateway_response'] ?? $data['message'] ?? null;
+
+        if ($result['status'] === 'pending' || strtolower((string)$rawError) === 'transaction is pending' || empty($rawError)) {
+            $errorMessage = 'Payment was not completed at checkout. If you cancelled or closed the payment window, please try again.';
+        } else {
+            $errorMessage = $rawError;
+        }
 
         return Inertia::render('Student/Finance/Failure', [
-            'error' => $data['gateway_response'] ?? $data['message'] ?? 'The payment gateway could not verify this transaction at this time.',
+            'error' => $errorMessage,
             'reference' => $reference,
         ]);
     }
@@ -358,5 +390,54 @@ class PaymentController extends Controller
         }
 
         return redirect()->route('student.payments.index')->with('success', 'School Fee invoice generated successfully.');
+    }
+
+    public function requery(Payment $payment)
+    {
+        if ($payment->user_id !== Auth::id()) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        if ($payment->status === 'success') {
+            return back()->with('info', 'This payment has already been verified and marked as successful.');
+        }
+
+        $paymentHandler = app(PaymentHandler::class);
+        $result = $paymentHandler->verifyAndProcessPayment(
+            $payment->gateway_reference,
+            $payment->invoice,
+            $payment->gateway
+        );
+
+        if ($result['status'] === 'success') {
+            return back()->with('success', 'Payment verified successfully! Your transaction has been marked as completed.');
+        }
+
+        if ($result['status'] === 'failed') {
+            return back()->with('error', 'Payment verification failed: Gateway confirmed transaction was uncompleted or failed.');
+        }
+
+        return back()->with('warning', 'Payment status is still pending on the gateway. If you have been debited, please check back in a few minutes or contact support.');
+    }
+
+    public function requeryReference(Request $request)
+    {
+        $request->validate([
+            'reference' => 'required|string',
+        ]);
+
+        $reference = trim($request->input('reference'));
+        $payment = Payment::where('user_id', Auth::id())
+            ->where(function ($q) use ($reference) {
+                $q->where('gateway_reference', $reference)
+                    ->orWhere('transaction_id', $reference);
+            })
+            ->first();
+
+        if (! $payment) {
+            return back()->with('error', 'No matching transaction record found for reference: ' . $reference);
+        }
+
+        return $this->requery($payment);
     }
 }

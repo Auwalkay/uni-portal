@@ -26,6 +26,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_departments', 'manage_departments',
             'view_programmes', 'manage_programmes',
             'view_courses', 'manage_courses',
+            'manage_academic_sessions',
+            'manage_timetables', 'view_timetables', 'create_timetables', 'edit_timetables', 'delete_timetables',
             'assign_coordinators',
             // Exam Management (Granular)
             'view_exams',

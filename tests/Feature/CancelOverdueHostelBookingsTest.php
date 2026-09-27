@@ -162,12 +162,13 @@ class CancelOverdueHostelBookingsTest extends TestCase
         $payment = Payment::create([
             'invoice_id' => $invoice->id,
             'user_id' => $this->studentUser->id,
+            'transaction_id' => 'MIUPAY-TEST-123',
+            'gateway' => 'paystack',
             'gateway_reference' => 'PAYSTACK-123',
             'amount' => 15000,
             'status' => 'pending',
             'channel' => 'card',
         ]);
-        $payment->update(['gateway' => 'paystack']);
 
         // 4. Mock the Paystack verifyTransaction API endpoint
         Http::fake([

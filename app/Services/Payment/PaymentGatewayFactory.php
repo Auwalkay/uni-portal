@@ -7,6 +7,7 @@ use App\Models\Hostel;
 use App\Models\Invoice;
 use App\Models\SystemSetting;
 use App\Services\PaystackService;
+use App\Services\SeerbitService;
 use App\Services\SquadcoService;
 
 class PaymentGatewayFactory
@@ -57,7 +58,16 @@ class PaymentGatewayFactory
     public static function resolveForHostel(?Hostel $hostel = null, ?string $fallbackGateway = null): PaymentGatewayInterface
     {
         $systemDefault = SystemSetting::get('payment_gateway', env('PAYMENT_GATEWAY', 'squadco'));
-        $gatewayName = $fallbackGateway ?: ($hostel?->payment_gateway ?: $systemDefault);
+        $gatewayName = strtolower((string) ($fallbackGateway ?: ($hostel?->payment_gateway ?: $systemDefault)));
+
+        if ($gatewayName === 'seerbit') {
+            $service = new SeerbitService();
+            $secretKey = $hostel?->getSecretKeyForGateway('seerbit');
+            if ($secretKey) {
+                $service->setSecretKey($secretKey);
+            }
+            return $service;
+        }
 
         if ($gatewayName === 'paystack') {
             $service = new PaystackService();

@@ -41,4 +41,16 @@ return [
         'base_url' => env('SQUADCO_BASE_URL', 'https://sandbox-api-d.squadco.com'),
     ],
 
+    'paystack' => [
+        'public_key' => env('PAYSTACK_PUBLIC_KEY'),
+        'secret_key' => env('PAYSTACK_SECRET_KEY'),
+        'base_url' => env('PAYSTACK_BASE_URL', 'https://api.paystack.co'),
+    ],
+
+    'seerbit' => [
+        'public_key' => env('SEERBIT_PUBLIC_KEY'),
+        'secret_key' => env('SEERBIT_SECRET_KEY'),
+        'base_url' => env('SEERBIT_BASE_URL', 'https://seerbitapi.com/api/v2'),
+    ],
+
 ];

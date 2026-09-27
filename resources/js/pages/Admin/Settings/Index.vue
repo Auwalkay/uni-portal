@@ -661,7 +661,19 @@ const settingsModules = [
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <div class="grid grid-cols-2 gap-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <button 
+                                @click="updateGateway('seerbit')"
+                                :class="[
+                                    'p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2',
+                                    gatewayForm.gateway === 'seerbit' 
+                                        ? 'border-primary bg-primary/10 text-primary shadow-inner' 
+                                        : 'border-slate-200 bg-white hover:border-primary/50'
+                                ]"
+                            >
+                                <span class="font-bold">SeerBit</span>
+                                <Badge v-if="gatewayForm.gateway === 'seerbit'" variant="default" class="scale-75">Active</Badge>
+                            </button>
                             <button 
                                 @click="updateGateway('paystack')"
                                 :class="[
