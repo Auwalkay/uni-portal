@@ -216,7 +216,23 @@ class HostelBookingController extends Controller
         $sessions = Session::latest()->get(['id', 'name']);
         
         // Scope Hostel Dropdown Options based on permission and visibility filter
-        $hostelsQuery = Hostel::with(['blocks.floors.rooms'])
+        $hostelsQuery = Hostel::with([
+            'blocks' => function ($bq) use ($hostelVisibility) {
+                if ($hostelVisibility === 'visible') {
+                    $bq->where('is_visible', true);
+                }
+            },
+            'blocks.floors' => function ($fq) use ($hostelVisibility) {
+                if ($hostelVisibility === 'visible') {
+                    $fq->where('is_visible', true);
+                }
+            },
+            'blocks.floors.rooms' => function ($rq) use ($hostelVisibility) {
+                if ($hostelVisibility === 'visible') {
+                    $rq->where('is_visible', true);
+                }
+            }
+        ])
             ->orderBy('name');
         if ($hostelVisibility === 'visible') {
             $hostelsQuery->where('is_visible', true);
@@ -506,6 +522,14 @@ class HostelBookingController extends Controller
 
         if (!$currentSession) {
             return back()->with('error', 'No active academic session found.');
+        }
+
+        if (!$room->is_visible || !$room->floor->is_visible || !$room->floor->block->is_visible || !$room->floor->block->hostel->is_visible) {
+            return back()->with('error', 'Cannot allocate room. The selected room or its floor/block/hostel is hidden or not open for bookings.');
+        }
+
+        if ($room->is_suspended) {
+            return back()->with('error', 'Cannot allocate room. This room is currently suspended.');
         }
 
         // 1. School fee check
@@ -801,9 +825,9 @@ class HostelBookingController extends Controller
         try {
             $newRoom = HostelRoom::with('floor.block.hostel')->lockForUpdate()->findOrFail($request->hostel_room_id);
 
-            if ($newRoom->is_suspended || !$newRoom->is_visible || !$newRoom->floor->block->hostel->is_visible) {
+            if ($newRoom->is_suspended || !$newRoom->is_visible || !$newRoom->floor->is_visible || !$newRoom->floor->block->is_visible || !$newRoom->floor->block->hostel->is_visible) {
                 DB::rollBack();
-                return back()->with('error', 'Selected room or hostel is not currently open for allocations.');
+                return back()->with('error', 'Selected room or its floor/block/hostel is not currently open for allocations.');
             }
 
             $bookedCount = $newRoom->bookings()
