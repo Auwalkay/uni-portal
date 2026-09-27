@@ -36,6 +36,8 @@ const props = defineProps<{
         squadco_public_key?: string;
         paystack_secret_key?: string;
         paystack_public_key?: string;
+        seerbit_secret_key?: string;
+        seerbit_public_key?: string;
         is_visible: boolean;
         floors_count: number;
         fees_count: number;

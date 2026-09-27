@@ -418,6 +418,7 @@ const requeryPayment = (paymentId: string) => {
                                 <SelectItem value="ALL">All Methods</SelectItem>
                                 <SelectItem value="card">Card Payment</SelectItem>
                                 <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                                <SelectItem value="seerbit">SeerBit Gateway</SelectItem>
                                 <SelectItem value="squadco">Squadco Gateway</SelectItem>
                                 <SelectItem value="manual">Manual Register</SelectItem>
                             </SelectContent>

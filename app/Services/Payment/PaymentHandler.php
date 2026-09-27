@@ -146,11 +146,21 @@ class PaymentHandler
         }
 
         $rawPaidAt = $data['paid_at'] 
-            ?? $data['created_at'] 
+            ?? $data['transactionProcessedTime']
+            ?? $data['transaction_processed_time']
             ?? $data['paidAt'] 
+            ?? $data['transactionStartDate'] 
             ?? $data['transaction_date'] 
-            ?? $data['original_data']['created_at'] 
+            ?? $data['created_at'] 
+            ?? $data['createdAt'] 
+            ?? $data['original_data']['transactionProcessedTime']
+            ?? $data['original_data']['transaction_processed_time']
+            ?? $data['original_data']['paid_at'] 
+            ?? $data['original_data']['paidAt'] 
+            ?? $data['original_data']['transactionStartDate'] 
             ?? $data['original_data']['transaction_date'] 
+            ?? $data['original_data']['created_at'] 
+            ?? $payment->created_at
             ?? null;
 
         $paidAt = null;
@@ -158,10 +168,10 @@ class PaymentHandler
             try {
                 $paidAt = \Carbon\Carbon::parse($rawPaidAt);
             } catch (\Throwable $e) {
-                $paidAt = now();
+                $paidAt = $payment->created_at ?? now();
             }
         } else {
-            $paidAt = now();
+            $paidAt = $payment->created_at ?? now();
         }
 
         $payment->update([
@@ -220,8 +230,14 @@ class PaymentHandler
         $paymentDate = \Carbon\Carbon::parse($paidAt);
         $deadlineDate = \Carbon\Carbon::parse($deadline);
 
-        // If payment was made on or before the late payment deadline
-        if ($paymentDate->lte($deadlineDate)) {
+        // Fetch payment attempt creation timestamp if available
+        $paymentAttempt = Payment::where('invoice_id', $invoice->id)->where('status', 'success')->latest()->first();
+        $attemptCreatedAt = $paymentAttempt?->created_at ? \Carbon\Carbon::parse($paymentAttempt->created_at) : null;
+
+        $isInitiatedBeforeDeadline = $paymentDate->lte($deadlineDate) || ($attemptCreatedAt && $attemptCreatedAt->lte($deadlineDate));
+
+        // If payment was initiated or completed on or before the late payment deadline
+        if ($isInitiatedBeforeDeadline) {
             $lateFineItems = \App\Models\InvoiceItem::where('invoice_id', $invoice->id)
                 ->where(function ($query) {
                     $query->where('description', 'LIKE', '%Late Payment Fine%')

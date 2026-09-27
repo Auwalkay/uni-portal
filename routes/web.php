@@ -20,6 +20,7 @@ use App\Http\Controllers\Staff\StaffFinanceController;
 use App\Http\Controllers\Staff\StaffProfileController;
 use App\Http\Controllers\SupportTicketController;
 use App\Http\Controllers\Webhooks\PaystackWebhookController;
+use App\Http\Controllers\Webhooks\SeerbitWebhookController;
 use App\Http\Controllers\Webhooks\SquadcoWebhookController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -293,6 +294,7 @@ require __DIR__.'/settings.php';
 Route::middleware('throttle:webhooks')->group(function () {
     Route::post('webhooks/squadco', [SquadcoWebhookController::class, 'handle'])->name('webhooks.squadco');
     Route::post('webhooks/paystack', [PaystackWebhookController::class, 'handle'])->name('webhooks.paystack');
+    Route::post('webhooks/seerbit', [SeerbitWebhookController::class, 'handle'])->name('webhooks.seerbit');
 });
 
 // Public Verification

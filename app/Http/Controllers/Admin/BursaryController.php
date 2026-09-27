@@ -185,7 +185,7 @@ class BursaryController extends Controller
             ];
         }
 
-        $totalStatsQuery->with([
+        $totalStatsQuery->reorder('students.id', 'asc')->with([
             'invoices' => function($q) use ($sessionId, $feeType) {
                 $q->where('session_id', $sessionId)->where('type', $feeType);
             }, 

@@ -88,12 +88,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/dashboard', [\App\Http\Controllers\Student\ProfileController::class, 'dashboard'])->name('dashboard');
 
             Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
+            Route::get('/payments/invoices/{invoice}', [PaymentController::class, 'showInvoice'])->name('payments.invoice.show');
             Route::post('/payments/create-school-fee', [PaymentController::class, 'createSchoolFeeInvoice'])->name('payments.create_school_fee');
             Route::get('/payments/optional-fees', [PaymentController::class, 'getOptionalFees'])->name('payments.optional_fees');
             Route::post('/payments/initiate-optional/{config}', [PaymentController::class, 'initiateOptionalFee'])->name('payments.initiate_optional');
             Route::post('/payments/{invoice}/pay', [PaymentController::class, 'pay'])->name('payments.pay');
             Route::get('/payments/callback', [PaymentController::class, 'callback'])->name('payments.callback');
             Route::get('/payments/{payment}/download', [PaymentController::class, 'downloadReceipt'])->name('payments.download');
+            Route::post('/payments/{payment}/requery', [PaymentController::class, 'requery'])->name('payments.requery');
+            Route::post('/payments/requery-reference', [PaymentController::class, 'requeryReference'])->name('payments.requery_reference');
 
             Route::get('/courses', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'index'])->name('courses.index');
             Route::get('/courses/register', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'create'])->name('courses.create');

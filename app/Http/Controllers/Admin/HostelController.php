@@ -3,14 +3,19 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-
+use App\Http\Requests\Admin\HostelRequest;
 use App\Models\Hostel;
 use App\Models\Session;
+use App\Services\HostelService;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class HostelController extends Controller
 {
+    public function __construct(
+        protected HostelService $hostelService
+    ) {}
+
     public function index()
     {
         $user = auth()->user();
@@ -25,26 +30,7 @@ class HostelController extends Controller
         }
 
         $currentSession = Session::current();
-        $sessionId = $currentSession?->id;
-
-        $query = Hostel::withCount(['floors', 'fees'])
-            ->with(['blocks.floors.rooms' => function ($q) use ($sessionId) {
-                $q->with(['bookings' => function ($bq) use ($sessionId) {
-                    if ($sessionId) {
-                        $bq->where('session_id', $sessionId);
-                    }
-                    $bq->whereIn('status', ['pending', 'confirmed']);
-                }]);
-            }]);
-
-        if ($user->can('view_male_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
-            $query->whereIn('gender_type', ['male', 'mixed']);
-        } elseif ($user->can('view_female_hostel_bookings') && !$user->can('manage_hostels') && !$user->hasRole('admin')) {
-            $query->whereIn('gender_type', ['female', 'mixed']);
-        }
-
-        $hostels = $query->latest()->get();
-
+        $hostels = $this->hostelService->getHostelsForUser($user, $currentSession?->id);
         $sessions = Session::latest()->get();
 
         return Inertia::render('Admin/Hostels/Index', [
@@ -59,24 +45,9 @@ class HostelController extends Controller
         return Inertia::render('Admin/Hostels/Create');
     }
 
-    public function store(Request $request)
+    public function store(HostelRequest $request)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:hostels,name',
-            'gender_type' => 'required|in:male,female,mixed',
-            'description' => 'nullable|string',
-            'payment_gateway' => 'nullable|string|in:squadco,paystack,none',
-            'squadco_secret_key' => 'nullable|string|max:255',
-            'squadco_public_key' => 'nullable|string|max:255',
-            'paystack_secret_key' => 'nullable|string|max:255',
-            'paystack_public_key' => 'nullable|string|max:255',
-        ]);
-
-        if (($validated['payment_gateway'] ?? null) === 'none') {
-            $validated['payment_gateway'] = null;
-        }
-
-        $hostel = Hostel::create($validated);
+        $hostel = Hostel::create($request->sanitized());
 
         activity('hostel')
             ->performedOn($hostel)
@@ -89,22 +60,10 @@ class HostelController extends Controller
     public function show(Hostel $hostel)
     {
         $currentSession = Session::current();
-        $sessionId = $currentSession?->id;
-
-        $hostel->load([
-            'blocks.floors.rooms' => function ($q) use ($sessionId) {
-                $q->with(['bookings' => function ($bq) use ($sessionId) {
-                    if ($sessionId) {
-                        $bq->where('session_id', $sessionId);
-                    }
-                    $bq->whereIn('status', ['pending', 'confirmed'])
-                        ->with(['student.user', 'student.department', 'invoice']);
-                }]);
-            }
-        ]);
+        $loadedHostel = $this->hostelService->getHostelWithDetails($hostel, $currentSession?->id);
 
         return Inertia::render('Admin/Hostels/Show', [
-            'hostel' => $hostel,
+            'hostel' => $loadedHostel,
             'currentSession' => $currentSession,
         ]);
     }
@@ -116,24 +75,9 @@ class HostelController extends Controller
         ]);
     }
 
-    public function update(Request $request, Hostel $hostel)
+    public function update(HostelRequest $request, Hostel $hostel)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:hostels,name,' . $hostel->id,
-            'gender_type' => 'required|in:male,female,mixed',
-            'description' => 'nullable|string',
-            'payment_gateway' => 'nullable|string|in:squadco,paystack,none',
-            'squadco_secret_key' => 'nullable|string|max:255',
-            'squadco_public_key' => 'nullable|string|max:255',
-            'paystack_secret_key' => 'nullable|string|max:255',
-            'paystack_public_key' => 'nullable|string|max:255',
-        ]);
-
-        if (($validated['payment_gateway'] ?? null) === 'none') {
-            $validated['payment_gateway'] = null;
-        }
-
-        $hostel->update($validated);
+        $hostel->update($request->sanitized());
 
         activity('hostel')
             ->performedOn($hostel)
@@ -145,12 +89,7 @@ class HostelController extends Controller
 
     public function destroy(Hostel $hostel)
     {
-        $activeBookings = \App\Models\HostelBooking::whereIn('status', ['pending', 'confirmed'])
-            ->whereHas('room.floor.block', function($q) use ($hostel) {
-                $q->where('hostel_id', $hostel->id);
-            })->exists();
-
-        if ($activeBookings) {
+        if ($this->hostelService->hasActiveBookings($hostel)) {
             return back()->with('error', 'Cannot delete hostel. There are active bookings in this hostel.');
         }
 
@@ -166,15 +105,7 @@ class HostelController extends Controller
 
     public function toggleVisibility(Hostel $hostel)
     {
-        $hostel->update([
-            'is_visible' => !$hostel->is_visible
-        ]);
-
-        $statusText = $hostel->is_visible ? 'unblocked (made visible)' : 'blocked (hidden)';
-        activity('hostel')
-            ->performedOn($hostel)
-            ->causedBy(auth()->user())
-            ->log("Hostel '{$hostel->name}' {$statusText}");
+        $this->hostelService->toggleVisibility($hostel, auth()->user());
 
         return back()->with('success', 'Hostel visibility updated.');
     }
@@ -222,20 +153,17 @@ class HostelController extends Controller
             $targetHostel = Hostel::find($request->hostel_id);
         }
 
-        $targetBlock = $request->filled('block_id') ? \App\Models\HostelBlock::find($request->block_id) : null;
-        $targetFloor = $request->filled('floor_id') ? \App\Models\HostelFloor::find($request->floor_id) : null;
+        $stats = $this->hostelService->importRooms(
+            $request->file('file'),
+            $targetHostel,
+            $request->input('block_id'),
+            $request->input('floor_id'),
+            auth()->user()
+        );
 
-        $import = new \App\Imports\HostelRoomImport($targetHostel, $targetBlock, $targetFloor);
-        \Maatwebsite\Excel\Facades\Excel::import($import, $request->file('file'));
-
-        $hostelName = $targetHostel ? "'{$targetHostel->name}'" : "hostels";
-        activity()
-            ->causedBy(auth()->user())
-            ->log("Imported {$import->importedCount} rooms for {$hostelName}");
-
-        $msg = "Successfully processed Excel file: {$import->importedCount} room(s) processed ({$import->createdCount} created, {$import->updatedCount} updated).";
-        if (count($import->errors) > 0) {
-            $msg .= " Note: " . implode(" ", array_slice($import->errors, 0, 3));
+        $msg = "Successfully processed Excel file: {$stats['imported']} room(s) processed ({$stats['created']} created, {$stats['updated']} updated).";
+        if (count($stats['errors']) > 0) {
+            $msg .= " Note: " . implode(" ", array_slice($stats['errors'], 0, 3));
         }
 
         return back()->with('success', $msg);

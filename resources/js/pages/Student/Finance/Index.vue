@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import StudentLayout from '@/layouts/StudentLayout.vue';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format as formatDate } from 'date-fns';
-import { CreditCard, ChevronDown, ChevronUp, FileText, Download, Clock, AlertTriangle } from 'lucide-vue-next';
+import { CreditCard, ChevronDown, ChevronUp, FileText, Download, Clock, AlertTriangle, RefreshCw, Search, Eye } from 'lucide-vue-next';
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 const page = usePage();
@@ -47,8 +47,9 @@ const props = defineProps<{
             id: string;
             gateway_reference: string;
             amount: number;
-            paid_at: string;
-            channel: string;
+            paid_at?: string;
+            channel?: string;
+            status: string;
         }>;
     }>;
     canGenerateInvoice: boolean;
@@ -64,22 +65,13 @@ const props = defineProps<{
     }>;
 }>();
 
-const expandedInvoices = ref<string[]>([]);
-
-const toggleExpand = (id: string) => {
-    const index = expandedInvoices.value.indexOf(id);
-    if (index === -1) {
-        expandedInvoices.value.push(id);
-    } else {
-        expandedInvoices.value.splice(index, 1);
-    }
-};
 
 const isPaymentModalOpen = ref(false);
 const isOptionalFeeModalOpen = ref(false);
 const selectedInvoice = ref<any>(null);
 const selectedOptionalFeeId = ref<string | null>(null);
 const paymentOption = ref('full'); // 'full' or 'half'
+
 
 const submitOptionalFee = () => {
     if (!selectedOptionalFeeId.value) return;
@@ -299,14 +291,17 @@ const getInvoiceCountdown = (invoice: any) => {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Invoices</CardTitle>
-                    <CardDescription>Outstanding and paid bills.</CardDescription>
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <CardTitle>Invoices</CardTitle>
+                            <CardDescription>Outstanding and paid bills.</CardDescription>
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead class="w-[50px]"></TableHead>
                                 <TableHead>Reference</TableHead>
                                 <TableHead>Session</TableHead>
                                 <TableHead>Type</TableHead>
@@ -321,121 +316,75 @@ const getInvoiceCountdown = (invoice: any) => {
                         </TableHeader>
                         <TableBody>
                             <tr v-if="invoices.length === 0">
-                                <td colspan="9" class="p-8 text-center text-muted-foreground">
+                                <td colspan="10" class="p-8 text-center text-muted-foreground">
                                     No invoices found.
                                 </td>
                             </tr>
-                            <template v-for="invoice in invoices" :key="invoice.id">
-                                <TableRow class="cursor-pointer hover:bg-muted/50" @click="toggleExpand(invoice.id)">
-                                    <TableCell>
-                                        <Button variant="ghost" size="icon" class="h-8 w-8 p-0">
-                                            <ChevronDown v-if="!expandedInvoices.includes(invoice.id)" class="h-4 w-4" />
-                                            <ChevronUp v-else class="h-4 w-4" />
-                                        </Button>
-                                    </TableCell>
-                                    <TableCell class="font-mono font-medium">{{ invoice.reference }}</TableCell>
-                                    <TableCell>{{ invoice.session?.name || 'N/A' }}</TableCell>
-                                    <TableCell>{{ formatType(invoice.type) }}</TableCell>
-                                    <TableCell class="font-bold">{{ formatCurrency(invoice.amount) }}</TableCell>
-                                    <TableCell class="text-green-600">{{ formatCurrency(Number(invoice.paid_amount || 0)) }}</TableCell>
-                                    <TableCell class="text-red-600 font-medium">{{ formatCurrency(invoice.amount - Number(invoice.paid_amount || 0)) }}</TableCell>
-                                    <TableCell>
-                                        <div>
-                                            <div class="text-xs">{{ invoice.due_date ? formatDate(new Date(invoice.due_date), 'MMM d, yyyy') : 'N/A' }}</div>
-                                            <div v-if="invoice.status !== 'paid' && invoice.due_date" class="mt-1">
-                                                <Badge 
-                                                    v-if="getInvoiceCountdown(invoice)?.expired" 
-                                                    variant="destructive" 
-                                                    class="font-mono text-[9px] px-1.5 py-0.2 uppercase"
-                                                >
-                                                    Expired
-                                                </Badge>
-                                                <Badge 
-                                                    v-else-if="getInvoiceCountdown(invoice)?.text" 
-                                                    variant="outline" 
-                                                    class="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 font-mono font-bold text-[10px] px-2 py-0.5 inline-flex items-center gap-1"
-                                                >
-                                                    <Clock class="w-3 h-3 animate-pulse text-amber-600" />
-                                                    {{ getInvoiceCountdown(invoice)?.text }}
-                                                </Badge>
-                                            </div>
+                            <tr v-for="invoice in invoices" :key="invoice.id" class="hover:bg-muted/50">
+                                <TableCell class="font-mono font-medium">
+                                    <Link 
+                                        :href="route('student.payments.invoice.show', invoice.id)" 
+                                        class="text-primary font-bold hover:underline inline-flex items-center gap-1.5"
+                                    >
+                                        {{ invoice.reference }}
+                                    </Link>
+                                </TableCell>
+                                <TableCell>{{ invoice.session?.name || 'N/A' }}</TableCell>
+                                <TableCell>{{ formatType(invoice.type) }}</TableCell>
+                                <TableCell class="font-bold">{{ formatCurrency(invoice.amount) }}</TableCell>
+                                <TableCell class="text-green-600 font-medium">{{ formatCurrency(Number(invoice.paid_amount || 0)) }}</TableCell>
+                                <TableCell class="text-red-600 font-medium">{{ formatCurrency(invoice.amount - Number(invoice.paid_amount || 0)) }}</TableCell>
+                                <TableCell>
+                                    <div>
+                                        <div class="text-xs">{{ invoice.due_date ? formatDate(new Date(invoice.due_date), 'MMM d, yyyy') : 'N/A' }}</div>
+                                        <div v-if="invoice.status !== 'paid' && invoice.due_date" class="mt-1">
+                                            <Badge 
+                                                v-if="getInvoiceCountdown(invoice)?.expired" 
+                                                variant="destructive" 
+                                                class="font-mono text-[9px] px-1.5 py-0.2 uppercase"
+                                            >
+                                                Expired
+                                            </Badge>
+                                            <Badge 
+                                                v-else-if="getInvoiceCountdown(invoice)?.text" 
+                                                variant="outline" 
+                                                class="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 font-mono font-bold text-[10px] px-2 py-0.5 inline-flex items-center gap-1"
+                                            >
+                                                <Clock class="w-3 h-3 animate-pulse text-amber-600" />
+                                                {{ getInvoiceCountdown(invoice)?.text }}
+                                            </Badge>
                                         </div>
-                                    </TableCell>
-                                    <TableCell>{{ getPaymentDate(invoice) }}</TableCell>
-                                    <TableCell>
-                                        <Badge variant="outline" :class="getStatusColor(invoice.status)">
-                                            {{ invoice.status.toUpperCase() }}
-                                        </Badge>
-                                    </TableCell>
-                                     <TableCell class="text-right">
-                                         <div v-if="invoice.status !== 'paid' && invoice.status !== 'cancelled'">
-                                             <Button 
-                                                 v-if="(invoice.type !== 'school_fee' || invoice.session?.school_fee_payment_enabled) && !getInvoiceCountdown(invoice)?.expired" 
-                                                 :disabled="!hasDepartment"
-                                                 @click.stop="openPaymentModal(invoice)"
-                                                 size="sm"
-                                             >
-                                                 <CreditCard class="mr-2 h-4 w-4" />
-                                                 Pay Now
-                                             </Button>
-                                             <span v-else-if="getInvoiceCountdown(invoice)?.expired" class="text-red-600 dark:text-red-400 text-xs font-semibold flex items-center justify-end gap-1 px-2.5 py-1">
-                                                 Expired
-                                             </span>
-                                             <span v-else class="text-amber-600 dark:text-amber-400 text-xs font-semibold flex items-center justify-end gap-1 px-2.5 py-1">
-                                                 Suspended
-                                             </span>
-                                         </div>
-                                         <span v-else-if="invoice.status === 'cancelled'" class="text-red-600 dark:text-red-400 text-xs font-semibold flex items-center justify-end gap-1 px-2.5 py-1">
-                                             Cancelled
-                                         </span>
-                                         <span v-else class="text-muted-foreground text-sm font-medium">Paid</span>
-                                     </TableCell>
-                                </TableRow>
-                                <!-- Expanded Details Row -->
-                                <TableRow v-if="expandedInvoices.includes(invoice.id)" class="bg-muted/30">
-                                    <TableCell colspan="9" class="p-4">
-                                        <div class="rounded-lg border bg-background p-4 shadow-sm">
-                                            <h4 class="mb-2 font-semibold flex items-center gap-2">
-                                                <FileText class="h-4 w-4" /> Invoice Breakdown
-                                            </h4>
-                                            <div v-if="invoice.items && invoice.items.length > 0">
-                                                <div v-for="item in invoice.items" :key="item.id" class="flex justify-between py-2 border-b last:border-0 text-sm">
-                                                    <span>{{ item.description }}</span>
-                                                    <span class="font-mono">{{ formatCurrency(item.amount) }}</span>
-                                                </div>
-                                                <div class="flex justify-between pt-4 font-bold border-t mt-2">
-                                                    <span>Total</span>
-                                                    <span>{{ formatCurrency(invoice.amount) }}</span>
-                                                </div>
-                                            </div>
-                                            <p v-else class="text-sm text-muted-foreground italic">No detailed breakdown available for this invoice.</p>
-
-                                            <!-- Payments List -->
-                                            <div v-if="invoice.payments && invoice.payments.length > 0" class="mt-6">
-                                                <h4 class="mb-3 font-semibold flex items-center gap-2">
-                                                    <CreditCard class="h-4 w-4" /> Payment History
-                                                </h4>
-                                                <div class="space-y-2">
-                                                    <div v-for="payment in invoice.payments" :key="payment.id" class="flex items-center justify-between p-3 rounded-md bg-slate-50 border border-slate-100">
-                                                        <div class="flex flex-col">
-                                                            <span class="font-bold text-sm">{{ formatCurrency(payment.amount) }}</span>
-                                                            <span class="text-[10px] text-muted-foreground uppercase tracking-wider">{{ payment.channel }} • {{ formatDate(new Date(payment.paid_at), 'MMM d, yyyy HH:mm') }}</span>
-                                                            <span class="text-[10px] font-mono text-slate-400">{{ payment.gateway_reference }}</span>
-                                                        </div>
-                                                        <a 
-                                                            :href="route('student.payments.download', payment.id)" 
-                                                            target="_blank"
-                                                            class="inline-flex items-center px-3 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
-                                                        >
-                                                            <Download class="w-3 h-3 mr-1.5" /> Receipt
-                                                        </a>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                    </div>
+                                </TableCell>
+                                <TableCell>{{ getPaymentDate(invoice) }}</TableCell>
+                                <TableCell>
+                                    <Badge variant="outline" :class="getStatusColor(invoice.status)">
+                                        {{ invoice.status.toUpperCase() }}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell class="text-right">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <Link :href="route('student.payments.invoice.show', invoice.id)">
+                                            <Button variant="outline" size="sm" class="h-8 text-xs">
+                                                <Eye class="mr-1.5 h-3.5 w-3.5" />
+                                                View
+                                            </Button>
+                                        </Link>
+                                        <div v-if="invoice.status !== 'paid' && invoice.status !== 'cancelled'" class="flex items-center gap-2">
+                                            <Button 
+                                                v-if="(invoice.type !== 'school_fee' || invoice.session?.school_fee_payment_enabled) && !getInvoiceCountdown(invoice)?.expired" 
+                                                :disabled="!hasDepartment"
+                                                @click="openPaymentModal(invoice)"
+                                                size="sm"
+                                                class="h-8"
+                                            >
+                                                <CreditCard class="mr-1.5 h-3.5 w-3.5" />
+                                                Pay Now
+                                            </Button>
                                         </div>
-                                    </TableCell>
-                                </TableRow>
-                            </template>
+                                    </div>
+                                </TableCell>
+                            </tr>
                         </TableBody>
                     </Table>
                 </CardContent>
