@@ -88,6 +88,37 @@ class PayrollExportImportTest extends TestCase
         });
     }
 
+    public function test_payroll_export_includes_present_and_absent_days()
+    {
+        \App\Models\Attendance::create([
+            'staff_id' => $this->staff->id,
+            'date' => '2026-09-10',
+            'status' => 'present',
+        ]);
+        \App\Models\Attendance::create([
+            'staff_id' => $this->staff->id,
+            'date' => '2026-09-11',
+            'status' => 'present',
+        ]);
+        \App\Models\Attendance::create([
+            'staff_id' => $this->staff->id,
+            'date' => '2026-09-12',
+            'status' => 'absent',
+        ]);
+
+        $export = new PayrollExport($this->payroll);
+        $headings = $export->headings();
+        $this->assertContains('present_days', $headings);
+        $this->assertContains('absent_days', $headings);
+
+        $collection = $export->collection();
+        $mapped = $export->map($collection->first());
+
+        // present_days is index 9, absent_days is index 10
+        $this->assertEquals(2, $mapped[9]);
+        $this->assertEquals(1, $mapped[10]);
+    }
+
     public function test_admin_can_import_and_update_generated_payroll()
     {
         $this->actingAs($this->admin);
