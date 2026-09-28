@@ -20,6 +20,7 @@ import {
     Loader2
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
+import { formatCurrency, formatCompactCurrency } from '@/lib/utils';
 
 // Shadcn UI Components
 import { Button } from '@/components/ui/button';
@@ -201,12 +202,7 @@ const formatDate = (dateString: string) => {
     });
 };
 
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-};
+
 
 const getStatusVariant = (status: string) => {
     switch(status) {
@@ -230,7 +226,10 @@ const downloadReceipt = (paymentId: string) => {
     window.open(route('admin.payments.download_receipt', paymentId), '_blank');
 };
 
+import Swal from 'sweetalert2';
+
 const requeryingId = ref<string | null>(null);
+const isBulkRequerying = ref(false);
 
 const hasPermission = (permission: string) => {
     const user = usePage().props.auth?.user as any;
@@ -251,6 +250,35 @@ const requeryPayment = (paymentId: string) => {
         }
     });
 };
+
+const bulkRequery = () => {
+    Swal.fire({
+        title: 'Bulk Requery Failed Payments?',
+        text: 'This will verify unconfirmed and failed transactions with payment gateways (Paystack, SeerBit, Squad, etc.) and update their statuses.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, Requery Now',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#4f46e5',
+    }).then((result) => {
+        if (result.isConfirmed) {
+            isBulkRequerying.value = true;
+            router.post(route('admin.payments.bulk-requery'), {
+                session_id: props.filters.session_id,
+                department_id: props.filters.department_id,
+                faculty_id: props.filters.faculty_id,
+                search: props.filters.search,
+                start_date: props.filters.start_date,
+                end_date: props.filters.end_date,
+            }, {
+                preserveScroll: true,
+                onFinish: () => {
+                    isBulkRequerying.value = false;
+                }
+            });
+        }
+    });
+};
 </script>
 
 <template>
@@ -266,11 +294,23 @@ const requeryPayment = (paymentId: string) => {
                         <h1 class="text-3xl font-bold tracking-tight text-foreground">Payments</h1>
                         <p class="text-muted-foreground mt-1">Manage, search, and track all student payment records.</p>
                     </div>
-                    <Button as-child variant="outline" class="border-primary/20 text-primary hover:bg-primary/5 shadow-sm">
-                        <a :href="reconciliationExportUrl">
-                            <Download class="w-4 h-4 mr-2" /> Export Reconciliation Report
-                        </a>
-                    </Button>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <Button 
+                            v-if="canRequery" 
+                            variant="default" 
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm"
+                            :disabled="isBulkRequerying"
+                            @click="bulkRequery"
+                        >
+                            <RefreshCw class="w-4 h-4 mr-2" :class="{ 'animate-spin': isBulkRequerying }" />
+                            {{ isBulkRequerying ? 'Requerying Payments...' : 'Bulk Requery Failed Payments' }}
+                        </Button>
+                        <Button as-child variant="outline" class="border-primary/20 text-primary hover:bg-primary/5 shadow-sm">
+                            <a :href="reconciliationExportUrl">
+                                <Download class="w-4 h-4 mr-2" /> Export Reconciliation Report
+                            </a>
+                        </Button>
+                    </div>
                 </div>
                 
                 <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
@@ -280,7 +320,7 @@ const requeryPayment = (paymentId: string) => {
                         <CreditCard class="h-4 w-4 text-primary" />
                         </CardHeader>
                         <CardContent>
-                        <div class="text-2xl font-bold">{{ formatCurrency(stats?.total_revenue || 0) }}</div>
+                        <div class="text-2xl font-bold cursor-help" :title="formatCurrency(stats?.total_revenue || 0)">{{ formatCompactCurrency(stats?.total_revenue || 0) }}</div>
                         <p class="text-xs text-muted-foreground">All time collected</p>
                         </CardContent>
                     </Card>
@@ -291,7 +331,7 @@ const requeryPayment = (paymentId: string) => {
                         <TrendingUp class="h-4 w-4 text-green-500" />
                         </CardHeader>
                         <CardContent>
-                        <div class="text-2xl font-bold">{{ formatCurrency(stats?.today_revenue || 0) }}</div>
+                        <div class="text-2xl font-bold cursor-help" :title="formatCurrency(stats?.today_revenue || 0)">{{ formatCompactCurrency(stats?.today_revenue || 0) }}</div>
                         <p class="text-xs text-muted-foreground">Collected today</p>
                         </CardContent>
                     </Card>

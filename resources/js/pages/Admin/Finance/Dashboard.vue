@@ -5,7 +5,8 @@ import { route } from 'ziggy-js';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { ArrowUpRight, ArrowDownRight, CreditCard, DollarSign, Wallet } from 'lucide-vue-next';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button'; // Assuming button component exists
+import { Button } from '@/components/ui/button';
+import { formatCurrency, formatCompactCurrency } from '@/lib/utils';
 
 interface Transaction {
     type: 'inflow' | 'outflow';
@@ -29,25 +30,7 @@ defineProps<{
     recentTransactions: Transaction[];
 }>();
 
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
-};
 
-const formatCompactCurrency = (amount: number) => {
-    if (!amount || isNaN(amount)) return '₦0';
-    const abs = Math.abs(amount);
-    if (abs >= 1_000_000_000) {
-        const val = amount / 1_000_000_000;
-        return '₦' + (val % 1 === 0 ? val.toFixed(0) : val.toFixed(2).replace(/\.?0+$/, '')) + 'B';
-    } else if (abs >= 1_000_000) {
-        const val = amount / 1_000_000;
-        return '₦' + (val % 1 === 0 ? val.toFixed(0) : val.toFixed(2).replace(/\.?0+$/, '')) + 'M';
-    } else if (abs >= 100_000) {
-        const val = amount / 1_000;
-        return '₦' + (val % 1 === 0 ? val.toFixed(0) : val.toFixed(1).replace(/\.?0+$/, '')) + 'K';
-    }
-    return formatCurrency(amount);
-};
 
 const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();

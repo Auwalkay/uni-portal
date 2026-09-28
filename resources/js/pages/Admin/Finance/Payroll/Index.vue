@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Eye, Trash2, PlusCircle, CheckCircle } from 'lucide-vue-next';
+import { Eye, Trash2, PlusCircle, CheckCircle, Download, Upload } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { route } from 'ziggy-js';
 import Swal from 'sweetalert2';
@@ -44,6 +44,52 @@ const generateForm = useForm({
     month: new Date().getMonth() + 1,
     year: new Date().getFullYear(),
 });
+
+const isImportModalOpen = ref(false);
+const selectedPayroll = ref<any>(null);
+const importForm = useForm({
+    file: null as File | null,
+});
+
+const openImportModal = (payroll: any) => {
+    selectedPayroll.value = payroll;
+    importForm.reset();
+    isImportModalOpen.value = true;
+};
+
+const handleFileChange = (e: Event) => {
+    const target = e.target as HTMLInputElement;
+    if (target.files && target.files[0]) {
+        importForm.file = target.files[0];
+    }
+};
+
+const submitImport = () => {
+    if (!selectedPayroll.value || !importForm.file) return;
+
+    importForm.post(route('admin.finance.payroll.import', selectedPayroll.value.id), {
+        onSuccess: () => {
+            isImportModalOpen.value = false;
+            importForm.reset();
+            Swal.fire({
+                icon: 'success',
+                title: 'Imported',
+                text: 'Payroll details updated successfully from uploaded file.',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000,
+            });
+        },
+        onError: () => {
+            Swal.fire({
+                icon: 'error',
+                title: 'Import Failed',
+                text: 'Failed to update payroll from file. Please check file format.',
+            });
+        },
+    });
+};
 
 const submitGenerate = () => {
     generateForm.post(route('admin.finance.payroll.generate'), {
@@ -105,10 +151,16 @@ const deletePayroll = (id: string) => {
                                     <Badge :variant="payroll.status === 'paid' ? 'default' : 'secondary'">{{ payroll.status }}</Badge>
                                 </TableCell>
                                 <TableCell class="text-right space-x-2">
-                                    <Link :href="route('admin.finance.payroll.show', payroll.id)">
+                                    <Link :href="route('admin.finance.payroll.show', payroll.id)" title="View Payroll Details">
                                         <Button size="icon" variant="ghost"><Eye class="h-4 w-4" /></Button>
                                     </Link>
-                                    <Button v-if="payroll.status !== 'paid'" size="icon" variant="ghost" class="text-destructive" @click="deletePayroll(payroll.id)"><Trash2 class="h-4 w-4" /></Button>
+                                    <a :href="route('admin.finance.payroll.export', payroll.id)" target="_blank" title="Export Excel">
+                                        <Button size="icon" variant="ghost" class="text-emerald-700 hover:text-emerald-800"><Download class="h-4 w-4" /></Button>
+                                    </a>
+                                    <Button v-if="payroll.status !== 'paid'" size="icon" variant="ghost" class="text-indigo-600 hover:text-indigo-700" title="Upload / Import Spreadsheet" @click="openImportModal(payroll)">
+                                        <Upload class="h-4 w-4" />
+                                    </Button>
+                                    <Button v-if="payroll.status !== 'paid'" size="icon" variant="ghost" class="text-destructive" @click="deletePayroll(payroll.id)" title="Delete Payroll"><Trash2 class="h-4 w-4" /></Button>
                                 </TableCell>
                             </TableRow>
                             <TableRow v-if="payrolls.data.length === 0">
@@ -118,6 +170,46 @@ const deletePayroll = (id: string) => {
                     </Table>
                 </CardContent>
             </Card>
+
+            <!-- Import Payroll Modal -->
+            <Dialog v-model:open="isImportModalOpen">
+                <DialogContent class="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle class="flex items-center gap-2">
+                            <Upload class="h-5 w-5 text-indigo-600" /> Upload & Update Payroll
+                        </DialogTitle>
+                        <DialogDescription>
+                            Upload an edited Excel or CSV spreadsheet to update basic salaries, allowances, deductions, status, or remarks for this payroll run.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form @submit.prevent="submitImport" class="space-y-4 py-2">
+                        <div class="space-y-2">
+                            <Label for="payroll_index_file" class="font-semibold text-xs uppercase tracking-wider text-slate-600">
+                                Select Payroll Spreadsheet (.xlsx, .csv, .xls)
+                            </Label>
+                            <Input 
+                                id="payroll_index_file" 
+                                type="file" 
+                                accept=".csv, .xls, .xlsx" 
+                                @change="handleFileChange" 
+                                required 
+                            />
+                        </div>
+
+                        <div v-if="importForm.errors.file" class="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg font-medium">
+                            {{ importForm.errors.file }}
+                        </div>
+
+                        <DialogFooter class="pt-3">
+                            <Button type="button" variant="outline" @click="isImportModalOpen = false">Cancel</Button>
+                            <Button type="submit" class="bg-indigo-600 hover:bg-indigo-700 font-bold" :disabled="importForm.processing">
+                                <Upload class="mr-1.5 h-4 w-4" /> Upload & Update
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
 
             <Dialog v-model:open="isGenerateModalOpen">
                 <DialogContent>

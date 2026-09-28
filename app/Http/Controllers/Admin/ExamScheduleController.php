@@ -3,16 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Building;
-use App\Models\Course;
-use App\Models\CourseRegistration;
 use App\Models\Department;
 use App\Models\Exam;
-use App\Models\ExamAttendance;
 use App\Models\ExamIncident;
 use App\Models\ExamInvigilator;
 use App\Models\ExamSchedule;
-use App\Models\Invoice;
 use App\Models\Semester;
 use App\Models\Session;
 use App\Models\Staff;
@@ -24,9 +19,7 @@ use Inertia\Inertia;
 
 class ExamScheduleController extends Controller
 {
-    public function __construct(protected ExamManagementService $examService)
-    {
-    }
+    public function __construct(protected ExamManagementService $examService) {}
 
     public function create(Request $request)
     {
@@ -132,20 +125,20 @@ class ExamScheduleController extends Controller
         $search = $request->input('search');
 
         $query = ExamSchedule::with([
-                'course',
-                'department',
-                'session',
-                'semester',
-                'invigilators.staff.user',
-                'incidents.student.user',
-                'incidents.invigilator.user',
-            ])
+            'course',
+            'department',
+            'session',
+            'semester',
+            'invigilators.staff.user',
+            'incidents.student.user',
+            'incidents.invigilator.user',
+        ])
             ->withCount(['attendances'])
             ->when(! $canManageExams, function ($q) use ($staff) {
                 // Lecturers / normal staff should ONLY see courses they are invigilating OR allocated to teach
                 $q->where(function ($subQ) use ($staff) {
                     $subQ->whereHas('invigilators', fn ($iq) => $iq->where('staff_id', $staff?->id ?? '00000000-0000-0000-0000-000000000000'))
-                         ->orWhereHas('course.allocations', fn ($aq) => $aq->where('staff_id', $staff?->id ?? '00000000-0000-0000-0000-000000000000'));
+                        ->orWhereHas('course.allocations', fn ($aq) => $aq->where('staff_id', $staff?->id ?? '00000000-0000-0000-0000-000000000000'));
                 });
             })
             ->when($selectedSessionId, fn ($q) => $q->where('session_id', $selectedSessionId))
@@ -155,8 +148,8 @@ class ExamScheduleController extends Controller
             ->when($examType, fn ($q) => $q->where('exam_type', $examType))
             ->when($search, function ($q, $search) {
                 $q->where('reference_id', 'like', "%{$search}%")
-                  ->orWhere('venue', 'like', "%{$search}%")
-                  ->orWhereHas('course', fn ($cq) => $cq->where('code', 'like', "%{$search}%")->orWhere('title', 'like', "%{$search}%"));
+                    ->orWhere('venue', 'like', "%{$search}%")
+                    ->orWhereHas('course', fn ($cq) => $cq->where('code', 'like', "%{$search}%")->orWhere('title', 'like', "%{$search}%"));
             });
 
         $schedules = $query->orderBy('exam_date', 'asc')
@@ -179,27 +172,25 @@ class ExamScheduleController extends Controller
         $totalExams = (int) ($metricsData->total_exams ?? 0);
         $totalCapacity = (int) ($metricsData->total_capacity ?? 0);
 
-        $totalInvigilators = ExamInvigilator::whereHas('schedule', fn ($q) => 
-            $q->when($selectedSessionId, fn ($sq) => $sq->where('session_id', $selectedSessionId))
-              ->when($selectedSemesterId, fn ($sq) => $sq->where('semester_id', $selectedSemesterId))
+        $totalInvigilators = ExamInvigilator::whereHas('schedule', fn ($q) => $q->when($selectedSessionId, fn ($sq) => $sq->where('session_id', $selectedSessionId))
+            ->when($selectedSemesterId, fn ($sq) => $sq->where('semester_id', $selectedSemesterId))
         )
-        ->when(! $canManageExams, fn ($q) => $q->where('staff_id', $staff?->id))
-        ->count();
+            ->when(! $canManageExams, fn ($q) => $q->where('staff_id', $staff?->id))
+            ->count();
 
         $incidentsQuery = ExamIncident::with([
-                'schedule.course',
-                'student.user',
-                'invigilator.user',
-                'logger',
-            ])
-            ->whereHas('schedule', fn ($q) => 
-                $q->when($selectedSessionId, fn ($sq) => $sq->where('session_id', $selectedSessionId))
-                  ->when($selectedSemesterId, fn ($sq) => $sq->where('semester_id', $selectedSemesterId))
+            'schedule.course',
+            'student.user',
+            'invigilator.user',
+            'logger',
+        ])
+            ->whereHas('schedule', fn ($q) => $q->when($selectedSessionId, fn ($sq) => $sq->where('session_id', $selectedSessionId))
+                ->when($selectedSemesterId, fn ($sq) => $sq->where('semester_id', $selectedSemesterId))
             )
             ->when(! $canManageExams, function ($q) use ($staff) {
                 $q->where(function ($iq) use ($staff) {
                     $iq->where('invigilator_id', $staff?->id)
-                      ->orWhere('logged_by', auth()->id());
+                        ->orWhere('logged_by', auth()->id());
                 });
             })
             ->latest('created_at');
@@ -265,27 +256,27 @@ class ExamScheduleController extends Controller
         $exam->load(['session', 'semester']);
 
         $schedulesQuery = ExamSchedule::with([
-                'course',
-                'department',
-                'session',
-                'semester',
-                'invigilators.staff.user',
-                'incidents.student.user',
-                'incidents.invigilator.user',
-            ])
+            'course',
+            'department',
+            'session',
+            'semester',
+            'invigilators.staff.user',
+            'incidents.student.user',
+            'incidents.invigilator.user',
+        ])
             ->withCount(['attendances'])
             ->where(function ($q) use ($exam) {
                 $q->where('exam_id', $exam->id)
-                  ->orWhere(function ($sq) use ($exam) {
-                      $sq->whereNull('exam_id')
-                        ->where('session_id', $exam->session_id)
-                        ->where('semester_id', $exam->semester_id);
-                  });
+                    ->orWhere(function ($sq) use ($exam) {
+                        $sq->whereNull('exam_id')
+                            ->where('session_id', $exam->session_id)
+                            ->where('semester_id', $exam->semester_id);
+                    });
             })
             ->when(! $canManageExams, function ($q) use ($staff) {
                 $q->where(function ($subQ) use ($staff) {
                     $subQ->whereHas('invigilators', fn ($iq) => $iq->where('staff_id', $staff?->id ?? '00000000-0000-0000-0000-000000000000'))
-                         ->orWhereHas('course.allocations', fn ($aq) => $aq->where('staff_id', $staff?->id ?? '00000000-0000-0000-0000-000000000000'));
+                        ->orWhereHas('course.allocations', fn ($aq) => $aq->where('staff_id', $staff?->id ?? '00000000-0000-0000-0000-000000000000'));
                 });
             });
 
@@ -294,11 +285,11 @@ class ExamScheduleController extends Controller
         $incidents = ExamIncident::with(['schedule.course', 'student.user', 'invigilator.user', 'logger'])
             ->whereHas('schedule', function ($q) use ($exam) {
                 $q->where('exam_id', $exam->id)
-                  ->orWhere(function ($sq) use ($exam) {
-                      $sq->whereNull('exam_id')
-                        ->where('session_id', $exam->session_id)
-                        ->where('semester_id', $exam->semester_id);
-                  });
+                    ->orWhere(function ($sq) use ($exam) {
+                        $sq->whereNull('exam_id')
+                            ->where('session_id', $exam->session_id)
+                            ->where('semester_id', $exam->semester_id);
+                    });
             })
             ->latest()
             ->get();
@@ -342,7 +333,7 @@ class ExamScheduleController extends Controller
             'instructions' => 'nullable|string',
         ]);
 
-        $validated['reference_id'] = 'EXM-' . strtoupper(substr(uniqid(), -6));
+        $validated['reference_id'] = 'EXM-'.strtoupper(substr(uniqid(), -6));
         $validated['created_by'] = auth()->id();
         $validated['is_published'] = false;
         $validated['docket_printing_enabled'] = true;
@@ -397,6 +388,7 @@ class ExamScheduleController extends Controller
         AcademicCacheService::clearAll();
 
         $msg = $exam->is_published ? 'Examination exercise published.' : 'Examination exercise un-published.';
+
         return back()->with('success', $msg);
     }
 
@@ -409,6 +401,7 @@ class ExamScheduleController extends Controller
         $exam->update(['docket_printing_enabled' => ! $exam->docket_printing_enabled]);
 
         $msg = $exam->docket_printing_enabled ? 'Docket printing enabled.' : 'Docket printing disabled.';
+
         return back()->with('success', $msg);
     }
 
@@ -418,12 +411,12 @@ class ExamScheduleController extends Controller
         $staff = Staff::where('user_id', auth()->id())->first();
 
         $schedules = ExamSchedule::with([
-                'course',
-                'department',
-                'session',
-                'semester',
-                'invigilators.staff.user',
-            ])
+            'course',
+            'department',
+            'session',
+            'semester',
+            'invigilators.staff.user',
+        ])
             ->withCount(['attendances'])
             ->when(! $canManageExams, function ($q) use ($staff) {
                 $q->whereHas('invigilators', fn ($iq) => $iq->where('staff_id', $staff?->id ?? '00000000-0000-0000-0000-000000000000'));
@@ -448,11 +441,12 @@ class ExamScheduleController extends Controller
         }
 
         $current = filter_var(\App\Models\SystemSetting::get('publish_exam_timetable', false), FILTER_VALIDATE_BOOLEAN);
-        $new = !$current;
+        $new = ! $current;
         \App\Models\SystemSetting::set('publish_exam_timetable', $new ? '1' : '0');
         AcademicCacheService::clearAll();
 
         $statusStr = $new ? 'published to students' : 'hidden from students (draft mode)';
+
         return back()->with('success', "Exam timetable is now {$statusStr}.");
     }
 
@@ -481,9 +475,9 @@ class ExamScheduleController extends Controller
         ]);
 
         $courseIds = [];
-        if (!empty($validated['course_ids'])) {
+        if (! empty($validated['course_ids'])) {
             $courseIds = array_unique(array_filter($validated['course_ids']));
-        } elseif (!empty($validated['course_id'])) {
+        } elseif (! empty($validated['course_id'])) {
             $courseIds = [$validated['course_id']];
         }
 
@@ -501,7 +495,7 @@ class ExamScheduleController extends Controller
                 unset($item['course_ids']);
                 $item['course_id'] = $cId;
                 $item['venue'] = $v;
-                $item['reference_id'] = 'EXM-' . strtoupper(substr(uniqid(), -6));
+                $item['reference_id'] = 'EXM-'.strtoupper(substr(uniqid(), -6));
                 $item['created_by'] = auth()->id();
                 ExamSchedule::create($item);
                 $createdCount++;
@@ -569,9 +563,9 @@ class ExamScheduleController extends Controller
         ]);
 
         $staffIds = [];
-        if (!empty($validated['staff_ids'])) {
+        if (! empty($validated['staff_ids'])) {
             $staffIds = array_unique(array_filter($validated['staff_ids']));
-        } elseif (!empty($validated['staff_id'])) {
+        } elseif (! empty($validated['staff_id'])) {
             $staffIds = [$validated['staff_id']];
         }
 
@@ -628,7 +622,7 @@ class ExamScheduleController extends Controller
         ]);
 
         $validated['exam_schedule_id'] = $exam->id;
-        $validated['reference_id'] = 'INC-' . strtoupper(substr(uniqid(), -6));
+        $validated['reference_id'] = 'INC-'.strtoupper(substr(uniqid(), -6));
         $validated['logged_by'] = auth()->id();
 
         ExamIncident::create($validated);
@@ -652,7 +646,7 @@ class ExamScheduleController extends Controller
             'action_taken' => 'nullable|string',
         ]);
 
-        $validated['reference_id'] = 'INC-' . strtoupper(substr(uniqid(), -6));
+        $validated['reference_id'] = 'INC-'.strtoupper(substr(uniqid(), -6));
         $validated['logged_by'] = auth()->id();
 
         ExamIncident::create($validated);
@@ -691,31 +685,30 @@ class ExamScheduleController extends Controller
         $search = $request->input('search');
 
         $query = ExamIncident::with([
-                'schedule.course',
-                'schedule.session',
-                'schedule.semester',
-                'student.user',
-                'invigilator.user',
-                'logger',
-            ])
-            ->whereHas('schedule', fn ($q) => 
-                $q->when($selectedSessionId, fn ($sq) => $sq->where('session_id', $selectedSessionId))
-                  ->when($selectedSemesterId, fn ($sq) => $sq->where('semester_id', $selectedSemesterId))
+            'schedule.course',
+            'schedule.session',
+            'schedule.semester',
+            'student.user',
+            'invigilator.user',
+            'logger',
+        ])
+            ->whereHas('schedule', fn ($q) => $q->when($selectedSessionId, fn ($sq) => $sq->where('session_id', $selectedSessionId))
+                ->when($selectedSemesterId, fn ($sq) => $sq->where('semester_id', $selectedSemesterId))
             )
             ->when(! $canManageExams, function ($q) use ($staff) {
                 $q->where(function ($iq) use ($staff) {
                     $iq->where('invigilator_id', $staff?->id)
-                      ->orWhere('logged_by', auth()->id());
+                        ->orWhere('logged_by', auth()->id());
                 });
             })
             ->when($selectedIncidentType, fn ($q) => $q->where('incident_type', $selectedIncidentType))
             ->when($selectedStatus, fn ($q) => $q->where('status', $selectedStatus))
             ->when($search, function ($q, $s) {
                 $q->where('reference_id', 'like', "%{$s}%")
-                  ->orWhere('description', 'like', "%{$s}%")
-                  ->orWhereHas('student.user', fn ($uq) => $uq->where('name', 'like', "%{$s}%"))
-                  ->orWhereHas('student', fn ($sq) => $sq->where('matriculation_number', 'like', "%{$s}%"))
-                  ->orWhereHas('schedule.course', fn ($cq) => $cq->where('code', 'like', "%{$s}%")->orWhere('title', 'like', "%{$s}%"));
+                    ->orWhere('description', 'like', "%{$s}%")
+                    ->orWhereHas('student.user', fn ($uq) => $uq->where('name', 'like', "%{$s}%"))
+                    ->orWhereHas('student', fn ($sq) => $sq->where('matriculation_number', 'like', "%{$s}%"))
+                    ->orWhereHas('schedule.course', fn ($cq) => $cq->where('code', 'like', "%{$s}%")->orWhere('title', 'like', "%{$s}%"));
             });
 
         $incidents = $query->latest('created_at')->paginate(20)->withQueryString();
@@ -735,7 +728,7 @@ class ExamScheduleController extends Controller
             ->get()
             ->map(fn ($e) => [
                 'id' => $e->id,
-                'label' => ($e->course?->code ?? 'Exam') . ' - ' . ($e->course?->title ?? '') . ($e->exam_date ? " ({$e->exam_date})" : ''),
+                'label' => ($e->course?->code ?? 'Exam').' - '.($e->course?->title ?? '').($e->exam_date ? " ({$e->exam_date})" : ''),
             ])
             ->values();
 
@@ -746,7 +739,7 @@ class ExamScheduleController extends Controller
                 ->get()
                 ->map(fn ($e) => [
                     'id' => $e->id,
-                    'label' => ($e->course?->code ?? 'Exam') . ' - ' . ($e->course?->title ?? '') . ($e->exam_date ? " ({$e->exam_date})" : ''),
+                    'label' => ($e->course?->code ?? 'Exam').' - '.($e->course?->title ?? '').($e->exam_date ? " ({$e->exam_date})" : ''),
                 ])
                 ->values();
         }
@@ -755,7 +748,7 @@ class ExamScheduleController extends Controller
             ->get()
             ->map(fn ($s) => [
                 'id' => $s->id,
-                'label' => (($s->matriculation_number || $s->matric_number) ? ($s->matriculation_number ?? $s->matric_number) . ' - ' : '') . ($s->user?->name ?? 'Student'),
+                'label' => (($s->matriculation_number || $s->matric_number) ? ($s->matriculation_number ?? $s->matric_number).' - ' : '').($s->user?->name ?? 'Student'),
             ])
             ->values();
 
@@ -763,7 +756,7 @@ class ExamScheduleController extends Controller
             ->get()
             ->map(fn ($st) => [
                 'id' => $st->id,
-                'label' => ($st->user?->name ?? 'Staff') . ($st->staff_number ? " ({$st->staff_number})" : ''),
+                'label' => ($st->user?->name ?? 'Staff').($st->staff_number ? " ({$st->staff_number})" : ''),
             ])
             ->values();
 
@@ -809,12 +802,12 @@ class ExamScheduleController extends Controller
             }
 
             if (count($stats['errors']) > 0) {
-                return back()->with('warning', $msg . ' Issues: ' . implode(' | ', array_slice($stats['errors'], 0, 4)));
+                return back()->with('warning', $msg.' Issues: '.implode(' | ', array_slice($stats['errors'], 0, 4)));
             }
 
             return back()->with('success', $msg);
         } catch (\Exception $e) {
-            return back()->with('error', 'Exam import failed: ' . $e->getMessage());
+            return back()->with('error', 'Exam import failed: '.$e->getMessage());
         }
     }
 
@@ -925,7 +918,7 @@ class ExamScheduleController extends Controller
 
             return back()->with('success', "Candidate Verified! {$student->user?->name} marked PRESENT for {$schedule->course?->code}.");
         } catch (\InvalidArgumentException $e) {
-            return back()->with('error', "Verification Blocked: " . $e->getMessage());
+            return back()->with('error', 'Verification Blocked: '.$e->getMessage());
         }
     }
 }

@@ -3,6 +3,7 @@ import { Head, router } from '@inertiajs/vue3';
 import { ref, watch, onMounted, computed } from 'vue';
 import { route } from 'ziggy-js';
 import AdminLayout from '@/layouts/AdminLayout.vue';
+import { formatCurrency, formatCompactCurrency } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { BookOpen, CreditCard, Users, GraduationCap, TrendingUp, Calendar, ArrowRight, UserPlus, FileText, ArrowUpRight, ArrowDownRight, Activity, CalendarClock, MapPin, Building2, Library, School, Building, LineChart, Pin, Download, RefreshCw } from 'lucide-vue-next';
 import StatsCard from '@/components/StatsCard.vue';
@@ -175,9 +176,7 @@ watch([selectedSession, selectedPeriod], ([newSession, newPeriod]) => {
     });
 });
 
-const formatCurrency = (value: number) => {
-    return '₦' + new Intl.NumberFormat('en-NG', { maximumFractionDigits: 0 }).format(value);
-};
+
 
 const getIcon = (iconName: string) => {
     const icons: Record<string, any> = { Users, CreditCard, BookOpen, GraduationCap, UserPlus, FileText, Activity };
@@ -428,7 +427,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-emerald-100 uppercase tracking-wider">Net Cash Flow</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-2xl sm:text-3xl font-bold truncate">{{ formatCurrency(stats.net_cash_flow || 0) }}</div>
+                            <div class="text-2xl sm:text-3xl font-bold truncate cursor-help" :title="formatCurrency(stats.net_cash_flow || 0)">{{ formatCompactCurrency(stats.net_cash_flow || 0) }}</div>
                             <div class="mt-2 flex items-center gap-1.5 text-xs text-emerald-200">
                                 <TrendingUp class="w-3 h-3" /> Inflow - Outflow
                             </div>
@@ -439,7 +438,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Revenue</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white truncate">{{ formatCurrency(stats.revenue || 0) }}</div>
+                            <div class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white truncate cursor-help" :title="formatCurrency(stats.revenue || 0)">{{ formatCompactCurrency(stats.revenue || 0) }}</div>
                             <div class="mt-2 flex items-center gap-1.5 text-xs text-emerald-600 font-bold">
                                 <ArrowUpRight class="w-3 h-3" /> {{ stats.revenue_growth }}% <span class="text-muted-foreground font-normal">vs last session</span>
                             </div>
@@ -450,7 +449,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Outflow</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white truncate">{{ formatCurrency(stats.total_outflow || 0) }}</div>
+                            <div class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white truncate cursor-help" :title="formatCurrency(stats.total_outflow || 0)">{{ formatCompactCurrency(stats.total_outflow || 0) }}</div>
                              <p class="text-xs text-muted-foreground mt-2">Expenses & Payroll</p>
                         </CardContent>
                     </Card>
@@ -459,7 +458,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Outstanding Fees</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-2xl sm:text-3xl font-bold text-amber-600 truncate">{{ formatCurrency(stats.outstanding_fees || 0) }}</div>
+                            <div class="text-2xl sm:text-3xl font-bold text-amber-600 truncate cursor-help" :title="formatCurrency(stats.outstanding_fees || 0)">{{ formatCompactCurrency(stats.outstanding_fees || 0) }}</div>
                              <div class="h-1.5 w-full bg-amber-100 dark:bg-amber-900/30 rounded-full mt-3 overflow-hidden">
                                 <div class="h-full bg-amber-500 rounded-full" style="width: 45%"></div>
                             </div>
@@ -595,7 +594,7 @@ const staffChartData = {
                             <CardTitle class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Session Revenue</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div class="text-2xl sm:text-3xl font-bold text-primary truncate">{{ formatCurrency(stats.revenue || 0) }}</div>
+                            <div class="text-2xl sm:text-3xl font-bold text-primary truncate cursor-help" :title="formatCurrency(stats.revenue || 0)">{{ formatCompactCurrency(stats.revenue || 0) }}</div>
                              <p class="text-xs text-muted-foreground mt-2 font-medium">Current session performance</p>
                         </CardContent>
                     </Card>

@@ -67,6 +67,8 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
         // Payroll Management (Requires run_payroll)
         Route::middleware(['permission:run_payroll'])->group(function () {
             Route::post('payroll/generate', [PayrollController::class, 'generate'])->name('payroll.generate');
+            Route::get('payroll/{payroll}/export', [PayrollController::class, 'export'])->name('payroll.export');
+            Route::post('payroll/{payroll}/import', [PayrollController::class, 'import'])->name('payroll.import');
             Route::post('payroll/{payroll}/mark-as-paid', [PayrollController::class, 'markAsPaid'])->name('payroll.mark-as-paid');
             Route::put('payroll/{payroll}/items/{payrollItem}', [PayrollController::class, 'updateItem'])->name('payroll.items.update');
             Route::post('payroll/{payroll}/items/{payrollItem}/toggle-exclusion', [PayrollController::class, 'toggleExclusion'])->name('payroll.items.toggle-exclusion');
@@ -179,6 +181,7 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
         Route::middleware(['permission:manual_payment_override|verify_payments|manage_payments'])->group(function () {
             Route::post('invoices/{invoice}/mark-as-paid', [InvoiceController::class, 'markAsPaid'])->name('invoices.mark-as-paid');
             Route::post('payments/{payment}/verify', [InvoiceController::class, 'verifyPayment'])->name('payments.verify');
+            Route::post('payments/bulk-requery', [InvoiceController::class, 'bulkRequery'])->name('payments.bulk-requery');
         });
     });
 

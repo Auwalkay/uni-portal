@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 use App\Models\Attendance;
+use App\Exports\PayrollExport;
+use App\Imports\PayrollImport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class PayrollController extends Controller
 {
@@ -291,5 +294,41 @@ class PayrollController extends Controller
         $filename = "Payslip_{$safeStaffNumber}_{$monthName}_{$payrollItem->payroll->year}.pdf";
 
         return $pdf->download($filename);
+    }
+
+    public function export(Payroll $payroll)
+    {
+        $monthName = date('F', mktime(0, 0, 0, $payroll->month, 10));
+        $filename = "Payroll_{$monthName}_{$payroll->year}.xlsx";
+
+        return Excel::download(new PayrollExport($payroll), $filename);
+    }
+
+    public function import(Payroll $payroll, Request $request)
+    {
+        if ($payroll->status === 'paid') {
+            return back()->with('error', 'Cannot modify payroll items for a paid payroll.');
+        }
+
+        $request->validate([
+            'file' => 'required|file|extensions:csv,xls,xlsx',
+        ]);
+
+        try {
+            Excel::import(new PayrollImport($payroll), $request->file('file'));
+
+            $payroll->recalculateTotal();
+
+            return back()->with('success', 'Payroll details updated successfully from uploaded spreadsheet.');
+        } catch (\Maatwebsite\Excel\Validators\ValidationException $e) {
+            $failures = $e->failures();
+            $errors = [];
+            foreach ($failures as $failure) {
+                $errors[] = "Row {$failure->row()}: " . implode(', ', $failure->errors());
+            }
+            return back()->withErrors(['file' => $errors]);
+        } catch (\Exception $e) {
+            return back()->withErrors(['file' => 'Import failed: ' . $e->getMessage()]);
+        }
     }
 }

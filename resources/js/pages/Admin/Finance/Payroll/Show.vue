@@ -37,6 +37,7 @@ import {
     Calendar,
     AlertCircle,
     Download,
+    Upload,
     Calculator,
 } from 'lucide-vue-next';
 import { ref, watch, computed } from 'vue';
@@ -275,6 +276,47 @@ const toggleExclusion = (item: any) => {
         });
     }
 };
+const isImportModalOpen = ref(false);
+const importForm = useForm({
+    file: null as File | null,
+});
+
+const handleFileChange = (e: Event) => {
+    const target = e.target as HTMLInputElement;
+    if (target.files && target.files[0]) {
+        importForm.file = target.files[0];
+    }
+};
+
+const submitImport = () => {
+    if (!importForm.file) {
+        Swal.fire({ icon: 'warning', title: 'No File Selected', text: 'Please select a CSV or Excel file to upload.' });
+        return;
+    }
+
+    importForm.post(route('admin.finance.payroll.import', props.payroll.id), {
+        onSuccess: () => {
+            isImportModalOpen.value = false;
+            importForm.reset();
+            Swal.fire({
+                icon: 'success',
+                title: 'Imported',
+                text: 'Payroll updated successfully from uploaded spreadsheet.',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000,
+            });
+        },
+        onError: () => {
+            Swal.fire({
+                icon: 'error',
+                title: 'Import Failed',
+                text: 'Failed to update payroll from file. Please verify file format and columns.',
+            });
+        },
+    });
+};
 </script>
 
 <template>
@@ -297,6 +339,12 @@ const toggleExclusion = (item: any) => {
                     </div>
                 </div>
                 <div class="flex gap-2">
+                    <a :href="route('admin.finance.payroll.export', payroll.id)" target="_blank">
+                        <Button variant="outline" class="font-semibold"><Download class="mr-2 h-4 w-4" /> Export Excel</Button>
+                    </a>
+                    <Button v-if="payroll.status !== 'paid'" variant="outline" @click="isImportModalOpen = true" class="font-semibold">
+                        <Upload class="mr-2 h-4 w-4" /> Upload / Import
+                    </Button>
                     <Button variant="outline" @click="print"><Printer class="mr-2 h-4 w-4" /> Print</Button>
                     <Button v-if="payroll.status !== 'paid'" @click="markAsPaid" class="bg-emerald-600 hover:bg-emerald-700 font-bold">
                         <CheckCircle class="mr-2 h-4 w-4" /> Mark as Paid
@@ -695,6 +743,49 @@ const toggleExclusion = (item: any) => {
                             <Button type="button" variant="outline" @click="isEditModalOpen = false">Cancel</Button>
                             <Button type="submit" class="bg-indigo-600 hover:bg-indigo-700 font-bold" :disabled="editForm.processing">
                                 Save Adjustments
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            <!-- Import Payroll Modal -->
+            <Dialog v-model:open="isImportModalOpen">
+                <DialogContent class="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle class="flex items-center gap-2">
+                            <Upload class="h-5 w-5 text-indigo-600" /> Upload & Update Payroll
+                        </DialogTitle>
+                        <DialogDescription>
+                            Upload an edited Excel or CSV spreadsheet to bulk update basic salaries, allowances, deductions, status, or remarks for this payroll run.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form @submit.prevent="submitImport" class="space-y-4 py-2">
+                        <div class="space-y-2">
+                            <Label for="payroll_file" class="font-semibold text-xs uppercase tracking-wider text-slate-600">
+                                Select Payroll Spreadsheet (.xlsx, .csv, .xls)
+                            </Label>
+                            <Input 
+                                id="payroll_file" 
+                                type="file" 
+                                accept=".csv, .xls, .xlsx" 
+                                @change="handleFileChange" 
+                                required 
+                            />
+                            <p class="text-[11px] text-muted-foreground">
+                                Tip: First click <strong>Export Excel</strong> to download the pre-populated template, modify the figures, then upload it back here.
+                            </p>
+                        </div>
+
+                        <div v-if="importForm.errors.file" class="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg font-medium">
+                            {{ importForm.errors.file }}
+                        </div>
+
+                        <DialogFooter class="pt-3">
+                            <Button type="button" variant="outline" @click="isImportModalOpen = false">Cancel</Button>
+                            <Button type="submit" class="bg-indigo-600 hover:bg-indigo-700 font-bold" :disabled="importForm.processing">
+                                <Upload class="mr-1.5 h-4 w-4" /> Import Updates
                             </Button>
                         </DialogFooter>
                     </form>
