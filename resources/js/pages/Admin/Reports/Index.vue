@@ -3,6 +3,7 @@ import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
 import { route } from 'ziggy-js';
+import { formatCurrency, formatCompactCurrency } from '@/lib/utils';
 import { 
     GraduationCap, DollarSign, Users, Building, FileText, Activity, 
     TrendingUp, Award, Library, Package, ChevronRight, Download, Calendar,
@@ -208,25 +209,7 @@ watch(() => [
     applyFilters();
 });
 
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount);
-};
 
-const formatCompactCurrency = (amount: number) => {
-    if (!amount || isNaN(amount)) return '₦0';
-    const abs = Math.abs(amount);
-    if (abs >= 1_000_000_000) {
-        const val = amount / 1_000_000_000;
-        return '₦' + (val % 1 === 0 ? val.toFixed(0) : val.toFixed(2).replace(/\.?0+$/, '')) + 'B';
-    } else if (abs >= 1_000_000) {
-        const val = amount / 1_000_000;
-        return '₦' + (val % 1 === 0 ? val.toFixed(0) : val.toFixed(2).replace(/\.?0+$/, '')) + 'M';
-    } else if (abs >= 100_000) {
-        const val = amount / 1_000;
-        return '₦' + (val % 1 === 0 ? val.toFixed(0) : val.toFixed(1).replace(/\.?0+$/, '')) + 'K';
-    }
-    return formatCurrency(amount);
-};
 
 // CHART DATA GENERATORS
 const monthlyRevenueChartData = computed(() => {

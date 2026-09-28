@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { route } from 'ziggy-js';
 import { 
     Filter, Search, CheckCircle, FileText, TrendingUp, TrendingDown, DollarSign, PieChart, Plus, Trash2, CreditCard,
@@ -23,6 +23,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import Swal from 'sweetalert2';
 import { format as formatDate } from 'date-fns';
+import { formatCurrency, formatCompactCurrency } from '@/lib/utils';
 import {
   Chart as ChartJS,
   Title,
@@ -144,9 +145,46 @@ const sortBy = (field: string) => {
     applyFilters();
 };
 
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
-};
+
+
+const lineChartOptions = computed(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        tooltip: {
+            callbacks: {
+                label: (context: any) => {
+                    const label = context.dataset.label || 'Revenue';
+                    const val = context.parsed.y ?? 0;
+                    return `${label}: ${formatCurrency(val)}`;
+                }
+            }
+        }
+    },
+    scales: {
+        y: {
+            ticks: {
+                callback: (value: any) => formatCurrency(value)
+            }
+        }
+    }
+}));
+
+const doughnutChartOptions = computed(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        tooltip: {
+            callbacks: {
+                label: (context: any) => {
+                    const label = context.label || '';
+                    const val = context.parsed ?? 0;
+                    return `${label}: ${val} invoices`;
+                }
+            }
+        }
+    }
+}));
 
 const formatInvoiceType = (type: string) => {
     if (!type) return 'N/A';
@@ -234,7 +272,7 @@ const breadcrumbs = [
                         <DollarSign class="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div class="text-2xl font-bold">{{ formatCurrency(analytics.total_expected) }}</div>
+                        <div class="text-2xl font-bold" :title="formatCurrency(analytics.total_expected)">{{ formatCompactCurrency(analytics.total_expected) }}</div>
                         <p class="text-xs text-muted-foreground">Expected from all invoices</p>
                     </CardContent>
                 </Card>
@@ -244,7 +282,7 @@ const breadcrumbs = [
                         <TrendingUp class="h-4 w-4 text-green-500" />
                     </CardHeader>
                     <CardContent>
-                        <div class="text-2xl font-bold text-green-600">{{ formatCurrency(analytics.total_collected) }}</div>
+                        <div class="text-2xl font-bold text-green-600" :title="formatCurrency(analytics.total_collected)">{{ formatCompactCurrency(analytics.total_collected) }}</div>
                         <p class="text-xs text-muted-foreground">Total payments received</p>
                     </CardContent>
                 </Card>
@@ -254,7 +292,7 @@ const breadcrumbs = [
                         <TrendingDown class="h-4 w-4 text-red-500" />
                     </CardHeader>
                     <CardContent>
-                        <div class="text-2xl font-bold text-red-600">{{ formatCurrency(analytics.total_outstanding) }}</div>
+                        <div class="text-2xl font-bold text-red-600" :title="formatCurrency(analytics.total_outstanding)">{{ formatCompactCurrency(analytics.total_outstanding) }}</div>
                         <p class="text-xs text-muted-foreground">Pending payments</p>
                     </CardContent>
                 </Card>
@@ -280,7 +318,7 @@ const breadcrumbs = [
                         <div class="h-[300px]">
                             <Line 
                                 :data="analytics.charts.revenue_trend" 
-                                :options="{ responsive: true, maintainAspectRatio: false }" 
+                                :options="lineChartOptions" 
                             />
                         </div>
                     </CardContent>
@@ -293,7 +331,7 @@ const breadcrumbs = [
                         <div class="h-[300px] flex items-center justify-center">
                             <Doughnut 
                                 :data="analytics.charts.status_distribution" 
-                                :options="{ responsive: true, maintainAspectRatio: false }" 
+                                :options="doughnutChartOptions" 
                             />
                         </div>
                     </CardContent>

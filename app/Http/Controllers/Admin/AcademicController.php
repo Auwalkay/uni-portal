@@ -8,10 +8,9 @@ use App\Models\Department;
 use App\Models\Faculty;
 use App\Models\Programme;
 use App\Models\Unit;
+use App\Services\AcademicCacheService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Illuminate\Support\Facades\Cache;
-use App\Services\AcademicCacheService;
 
 class AcademicController extends Controller
 {
@@ -110,9 +109,9 @@ class AcademicController extends Controller
         $semester = $request->input('semester');
 
         $courses = Course::with('department.faculty', 'programme')
-            ->when(!$user->can('manage_courses') && !$user->can('view_courses') && !$user->can('manage_academic_sessions'), function ($q) use ($user) {
+            ->when(! $user->can('manage_courses') && ! $user->can('view_courses') && ! $user->can('manage_academic_sessions'), function ($q) use ($user) {
                 $q->whereHas('allocations', function ($aq) use ($user) {
-                    $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
+                    $aq->whereHas('staff', fn ($sq) => $sq->where('user_id', $user->id));
                 });
             })
             ->when($search, fn ($q) => $q->where('title', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
@@ -163,15 +162,15 @@ class AcademicController extends Controller
         ]);
 
         $user = $request->user();
-        if ($request->type === 'faculty' && !$user->can('manage_faculties') && !$user->can('manage_academic_sessions')) {
+        if ($request->type === 'faculty' && ! $user->can('manage_faculties') && ! $user->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
-        } elseif ($request->type === 'department' && !$user->can('manage_departments') && !$user->can('manage_academic_sessions')) {
+        } elseif ($request->type === 'department' && ! $user->can('manage_departments') && ! $user->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
-        } elseif ($request->type === 'unit' && !$user->can('manage_departments') && !$user->can('manage_academic_sessions')) {
+        } elseif ($request->type === 'unit' && ! $user->can('manage_departments') && ! $user->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
-        } elseif ($request->type === 'programme' && !$user->can('manage_programmes') && !$user->can('manage_academic_sessions')) {
+        } elseif ($request->type === 'programme' && ! $user->can('manage_programmes') && ! $user->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
-        } elseif ($request->type === 'course' && !$user->can('manage_courses') && !$user->can('manage_academic_sessions')) {
+        } elseif ($request->type === 'course' && ! $user->can('manage_courses') && ! $user->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -196,15 +195,15 @@ class AcademicController extends Controller
         ]);
 
         $user = $request->user();
-        if ($request->type === 'faculty' && !$user->can('manage_faculties') && !$user->can('manage_academic_sessions')) {
+        if ($request->type === 'faculty' && ! $user->can('manage_faculties') && ! $user->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
-        } elseif ($request->type === 'department' && !$user->can('manage_departments') && !$user->can('manage_academic_sessions')) {
+        } elseif ($request->type === 'department' && ! $user->can('manage_departments') && ! $user->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
-        } elseif ($request->type === 'unit' && !$user->can('manage_departments') && !$user->can('manage_academic_sessions')) {
+        } elseif ($request->type === 'unit' && ! $user->can('manage_departments') && ! $user->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
-        } elseif ($request->type === 'programme' && !$user->can('manage_programmes') && !$user->can('manage_academic_sessions')) {
+        } elseif ($request->type === 'programme' && ! $user->can('manage_programmes') && ! $user->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
-        } elseif ($request->type === 'course' && !$user->can('manage_courses') && !$user->can('manage_academic_sessions')) {
+        } elseif ($request->type === 'course' && ! $user->can('manage_courses') && ! $user->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -248,12 +247,12 @@ class AcademicController extends Controller
                 $cleaned = str_replace(' ', '', $request->code);
                 $cleaned = strtoupper($cleaned);
                 if (preg_match('/^([A-Z\-]+)(\d+.*)$/', $cleaned, $matches)) {
-                    $formattedCode = $matches[1] . ' ' . $matches[2];
+                    $formattedCode = $matches[1].' '.$matches[2];
                 } else {
                     $formattedCode = $cleaned;
                 }
                 $request->merge([
-                    'code' => $formattedCode
+                    'code' => $formattedCode,
                 ]);
             }
             $data = $request->validate([
@@ -279,15 +278,15 @@ class AcademicController extends Controller
         ]);
 
         $user = $request->user();
-        if ($request->type === 'faculty' && !$user->can('manage_faculties') && !$user->can('manage_academic_sessions')) {
+        if ($request->type === 'faculty' && ! $user->can('manage_faculties') && ! $user->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
-        } elseif ($request->type === 'department' && !$user->can('manage_departments') && !$user->can('manage_academic_sessions')) {
+        } elseif ($request->type === 'department' && ! $user->can('manage_departments') && ! $user->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
-        } elseif ($request->type === 'unit' && !$user->can('manage_departments') && !$user->can('manage_academic_sessions')) {
+        } elseif ($request->type === 'unit' && ! $user->can('manage_departments') && ! $user->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
-        } elseif ($request->type === 'programme' && !$user->can('manage_programmes') && !$user->can('manage_academic_sessions')) {
+        } elseif ($request->type === 'programme' && ! $user->can('manage_programmes') && ! $user->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
-        } elseif ($request->type === 'course' && !$user->can('manage_courses') && !$user->can('manage_academic_sessions')) {
+        } elseif ($request->type === 'course' && ! $user->can('manage_courses') && ! $user->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -336,12 +335,12 @@ class AcademicController extends Controller
                 $cleaned = str_replace(' ', '', $request->code);
                 $cleaned = strtoupper($cleaned);
                 if (preg_match('/^([A-Z\-]+)(\d+.*)$/', $cleaned, $matches)) {
-                    $formattedCode = $matches[1] . ' ' . $matches[2];
+                    $formattedCode = $matches[1].' '.$matches[2];
                 } else {
                     $formattedCode = $cleaned;
                 }
                 $request->merge([
-                    'code' => $formattedCode
+                    'code' => $formattedCode,
                 ]);
             }
             $data = $request->validate([
@@ -361,7 +360,7 @@ class AcademicController extends Controller
 
     public function programmeCourses(Programme $programme)
     {
-        if (!auth()->user()->can('manage_programmes') && !auth()->user()->can('manage_courses') && !auth()->user()->can('manage_academic_sessions')) {
+        if (! auth()->user()->can('manage_programmes') && ! auth()->user()->can('manage_courses') && ! auth()->user()->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -373,7 +372,7 @@ class AcademicController extends Controller
                 'units' => $c->units,
                 'level' => $c->level,
                 'semester' => $c->semester,
-                'is_compulsory' => (bool)$c->pivot->is_compulsory,
+                'is_compulsory' => (bool) $c->pivot->is_compulsory,
             ];
         });
 
@@ -382,7 +381,7 @@ class AcademicController extends Controller
 
     public function storeProgrammeCourse(Request $request, Programme $programme)
     {
-        if (!$request->user()->can('manage_programmes') && !$request->user()->can('manage_courses') && !$request->user()->can('manage_academic_sessions')) {
+        if (! $request->user()->can('manage_programmes') && ! $request->user()->can('manage_courses') && ! $request->user()->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -394,9 +393,9 @@ class AcademicController extends Controller
         ]);
 
         $courseIds = [];
-        if (!empty($validated['course_ids'])) {
+        if (! empty($validated['course_ids'])) {
             $courseIds = $validated['course_ids'];
-        } elseif (!empty($validated['course_id'])) {
+        } elseif (! empty($validated['course_id'])) {
             $courseIds = [$validated['course_id']];
         }
 
@@ -423,12 +422,13 @@ class AcademicController extends Controller
 
         $addedCount = count($newCourseIds);
         $msg = $addedCount === 1 ? 'Course successfully added to programme.' : "{$addedCount} courses successfully added to programme.";
+
         return response()->json(['message' => $msg]);
     }
 
     public function importProgrammeCourses(Request $request, Programme $programme)
     {
-        if (!$request->user()->can('manage_programmes') && !$request->user()->can('manage_courses') && !$request->user()->can('manage_academic_sessions')) {
+        if (! $request->user()->can('manage_programmes') && ! $request->user()->can('manage_courses') && ! $request->user()->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -447,7 +447,7 @@ class AcademicController extends Controller
         $importedCount = 0;
 
         foreach ($sourceCourses as $course) {
-            if (!in_array($course->id, $existingCourseIds)) {
+            if (! in_array($course->id, $existingCourseIds)) {
                 $programme->courses()->attach($course->id, [
                     'id' => \Illuminate\Support\Str::uuid(),
                     'is_compulsory' => $course->pivot->is_compulsory,
@@ -457,13 +457,13 @@ class AcademicController extends Controller
         }
 
         return response()->json([
-            'message' => "Successfully imported {$importedCount} courses from {$sourceProgramme->name}."
+            'message' => "Successfully imported {$importedCount} courses from {$sourceProgramme->name}.",
         ]);
     }
 
     public function destroyProgrammeCourse(Programme $programme, Course $course)
     {
-        if (!auth()->user()->can('manage_programmes') && !auth()->user()->can('manage_courses') && !auth()->user()->can('manage_academic_sessions')) {
+        if (! auth()->user()->can('manage_programmes') && ! auth()->user()->can('manage_courses') && ! auth()->user()->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -474,7 +474,7 @@ class AcademicController extends Controller
 
     public function importProgrammeCoursesFromExcel(Request $request, Programme $programme)
     {
-        if (!$request->user()->can('manage_programmes') && !$request->user()->can('manage_courses') && !$request->user()->can('manage_academic_sessions')) {
+        if (! $request->user()->can('manage_programmes') && ! $request->user()->can('manage_courses') && ! $request->user()->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -489,22 +489,23 @@ class AcademicController extends Controller
             \App\Services\AcademicCacheService::clearAll();
 
             $stats = $import->getStats();
+
             return response()->json([
                 'success' => true,
                 'stats' => $stats,
-                'message' => "Import processed: {$stats['created']} courses created, {$stats['linked']} courses linked."
+                'message' => "Import processed: {$stats['created']} courses created, {$stats['linked']} courses linked.",
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error during import: ' . $e->getMessage()
+                'message' => 'Error during import: '.$e->getMessage(),
             ], 500);
         }
     }
 
     public function downloadCourseImportTemplate()
     {
-        if (!auth()->user()->can('manage_programmes') && !auth()->user()->can('manage_courses') && !auth()->user()->can('manage_academic_sessions')) {
+        if (! auth()->user()->can('manage_programmes') && ! auth()->user()->can('manage_courses') && ! auth()->user()->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -517,7 +518,7 @@ class AcademicController extends Controller
 
     public function importGlobalCoursesFromExcel(Request $request)
     {
-        if (!$request->user()->can('manage_courses') && !$request->user()->can('manage_academic_sessions')) {
+        if (! $request->user()->can('manage_courses') && ! $request->user()->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -526,28 +527,29 @@ class AcademicController extends Controller
         ]);
 
         try {
-            $import = new \App\Imports\GlobalCourseImport();
+            $import = new \App\Imports\GlobalCourseImport;
             \Maatwebsite\Excel\Facades\Excel::import($import, $request->file('file'));
 
             \App\Services\AcademicCacheService::clearAll();
 
             $stats = $import->getStats();
+
             return response()->json([
                 'success' => true,
                 'stats' => $stats,
-                'message' => "Import processed: {$stats['created']} courses created, {$stats['linked']} courses linked."
+                'message' => "Import processed: {$stats['created']} courses created, {$stats['linked']} courses linked.",
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error during import: ' . $e->getMessage()
+                'message' => 'Error during import: '.$e->getMessage(),
             ], 500);
         }
     }
 
     public function downloadGlobalCourseImportTemplate()
     {
-        if (!auth()->user()->can('manage_courses') && !auth()->user()->can('manage_academic_sessions')) {
+        if (! auth()->user()->can('manage_courses') && ! auth()->user()->can('manage_academic_sessions')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -560,7 +562,7 @@ class AcademicController extends Controller
 
     public function exportProgrammeCourses(Programme $programme)
     {
-        $fileName = \Illuminate\Support\Str::slug($programme->name) . '_curriculum.xlsx';
+        $fileName = \Illuminate\Support\Str::slug($programme->name).'_curriculum.xlsx';
 
         return \Maatwebsite\Excel\Facades\Excel::download(
             new \App\Exports\ProgrammeCurriculumExport($programme),

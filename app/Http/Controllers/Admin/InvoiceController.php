@@ -664,6 +664,77 @@ class InvoiceController extends Controller
         }
     }
 
+    public function bulkRequery(Request $request)
+    {
+        try {
+            $filters = $request->only(['session_id', 'department_id', 'faculty_id', 'search', 'start_date', 'end_date']);
+
+            $query = \App\Models\Payment::query()
+                ->whereNotNull('gateway_reference')
+                ->where('gateway_reference', '!=', '')
+                ->whereIn('status', ['failed', 'pending']);
+
+            // Filter by session if provided
+            if ($request->filled('session_id') && $request->session_id !== 'ALL_SESSIONS_RESET_VALUE') {
+                $query->whereHas('invoice', function ($q) use ($request) {
+                    $q->where('session_id', $request->session_id);
+                });
+            }
+
+            // Filter by department if provided
+            if ($request->filled('department_id') && $request->department_id !== 'ALL_DEPARTMENTS_RESET_VALUE') {
+                $query->whereHas('user.student', function ($q) use ($request) {
+                    $q->where('department_id', $request->department_id);
+                });
+            }
+
+            // Filter by faculty if provided
+            if ($request->filled('faculty_id') && $request->faculty_id !== 'ALL_FACULTIES_RESET_VALUE' && !$request->filled('department_id')) {
+                $query->whereHas('user.student', function ($q) use ($request) {
+                    $q->where('faculty_id', $request->faculty_id);
+                });
+            }
+
+            // Search filter if provided
+            if ($request->filled('search')) {
+                $search = trim($request->search);
+                $query->where(function ($q) use ($search) {
+                    $q->where('gateway_reference', 'like', "%{$search}%")
+                        ->orWhere('id', 'like', "%{$search}%")
+                        ->orWhereHas('user', function ($uq) use ($search) {
+                            $uq->where('name', 'like', "%{$search}%")
+                                ->orWhere('email', 'like', "%{$search}%");
+                        });
+                });
+            }
+
+            // Date Range Filters
+            if ($request->filled('start_date')) {
+                $query->whereRaw('COALESCE(paid_at, created_at) >= ?', [$request->start_date . ' 00:00:00']);
+            }
+            if ($request->filled('end_date')) {
+                $query->whereRaw('COALESCE(paid_at, created_at) <= ?', [$request->end_date . ' 23:59:59']);
+            }
+
+            $count = $query->count();
+
+            if ($count === 0) {
+                return back()->with('info', 'No failed or pending payments with gateway references found matching your current filters.');
+            }
+
+            // Dispatch job to background queue
+            \App\Jobs\BulkRequeryPaymentsJob::dispatch($filters, Auth::user());
+
+            return back()->with('success', "Bulk requery job queued successfully for {$count} transaction(s). Payment statuses are being re-queried in the background.");
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('[BULK_REQUERY_SYSTEM_ERROR] Exception in bulkRequery controller', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('error', 'Failed to queue bulk requery job: ' . $e->getMessage());
+        }
+    }
+
     public function destroy(Invoice $invoice)
     {
         if (!Auth::user()->can('cancel_invoices') && !Auth::user()->can('delete_invoices') && !Auth::user()->hasRole('admin')) {
