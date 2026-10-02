@@ -21,6 +21,7 @@ const props = defineProps<{
     student?: any;
     user?: any;
     isProfileComplete?: boolean;
+    isReturningStudent?: boolean;
     schoolFeeStatus?: string; // 'paid', 'partial', 'pending', 'cancelled', etc.
     showRegistrationNotification?: boolean;
     registrationMessage?: string;
@@ -205,7 +206,7 @@ const greeting = () => {
             </div>
 
             <!-- Late Payment Fine Notification -->
-            <div v-if="activeSession?.late_payment_deadline && schoolFeeStatus !== 'paid' && schoolFeeStatus !== 'partial'" 
+            <div v-if="isReturningStudent && activeSession?.late_payment_deadline && schoolFeeStatus !== 'paid' && schoolFeeStatus !== 'partial'" 
                 :class="[
                     'rounded-xl border p-4 shadow-sm flex items-start gap-4',
                     isLateFeeOverdue 
