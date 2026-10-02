@@ -6,6 +6,13 @@ import {
     LifeBuoy, Plus, Search, MessageSquare, Clock, 
     CheckCircle2, AlertCircle, X, ChevronRight 
 } from 'lucide-vue-next';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 interface Ticket {
     id: number;
@@ -194,90 +201,85 @@ const formatCategory = (cat: string) => {
             </div>
         </div>
 
-        <!-- Create Ticket Modal -->
-        <div v-if="showCreateModal" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-                <div class="fixed inset-0 bg-gray-500 dark:bg-gray-950 bg-opacity-75 dark:bg-opacity-80 transition-opacity" @click="showCreateModal = false"></div>
+        <!-- Create Ticket Dialog Modal -->
+        <Dialog v-model:open="showCreateModal">
+            <DialogContent class="max-w-lg rounded-2xl">
+                <DialogHeader>
+                    <DialogTitle class="text-xl font-bold flex items-center gap-2">
+                        <LifeBuoy class="w-5 h-5 text-indigo-600" />
+                        Create Support Ticket
+                    </DialogTitle>
+                </DialogHeader>
 
-                <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-                <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-gray-100 dark:border-gray-700">
-                    <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                            <Plus class="h-5 w-5 text-indigo-600" />
-                            Create Support Ticket
-                        </h3>
-                        <button @click="showCreateModal = false" class="text-gray-400 hover:text-gray-500">
-                            <X class="h-5 w-5" />
-                        </button>
+                <form @submit.prevent="submitTicket" class="space-y-4 py-2">
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-700 dark:text-gray-300 mb-1">Category *</label>
+                        <select
+                            v-model="form.category"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                            <option v-for="cat in categories" :key="cat.value" :value="cat.value">
+                                {{ cat.label }}
+                            </option>
+                        </select>
+                        <p v-if="form.errors.category" class="text-xs text-red-500 mt-1">{{ form.errors.category }}</p>
                     </div>
 
-                    <form @submit.prevent="submitTicket" class="p-6 space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
-                            <select
-                                v-model="form.category"
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            >
-                                <option v-for="cat in categories" :key="cat.value" :value="cat.value">
-                                    {{ cat.label }}
-                                </option>
-                            </select>
-                        </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-700 dark:text-gray-300 mb-1">Subject *</label>
+                        <input
+                            v-model="form.subject"
+                            type="text"
+                            required
+                            placeholder="Brief summary of the issue..."
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                        <p v-if="form.errors.subject" class="text-xs text-red-500 mt-1">{{ form.errors.subject }}</p>
+                    </div>
 
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
-                            <input
-                                v-model="form.subject"
-                                type="text"
-                                required
-                                placeholder="Brief summary of the issue..."
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            />
-                        </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-700 dark:text-gray-300 mb-1">Priority *</label>
+                        <select
+                            v-model="form.priority"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                            <option value="low">Low Priority</option>
+                            <option value="medium">Medium Priority</option>
+                            <option value="high">High Priority</option>
+                        </select>
+                        <p v-if="form.errors.priority" class="text-xs text-red-500 mt-1">{{ form.errors.priority }}</p>
+                    </div>
 
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Priority</label>
-                            <select
-                                v-model="form.priority"
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            >
-                                <option value="low">Low Priority</option>
-                                <option value="medium">Medium Priority</option>
-                                <option value="high">High Priority</option>
-                            </select>
-                        </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-700 dark:text-gray-300 mb-1">Message Description *</label>
+                        <textarea
+                            v-model="form.message"
+                            rows="4"
+                            required
+                            placeholder="Explain your issue in detail so we can help you best..."
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        ></textarea>
+                        <p v-if="form.errors.message" class="text-xs text-red-500 mt-1">{{ form.errors.message }}</p>
+                    </div>
 
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Message Description</label>
-                            <textarea
-                                v-model="form.message"
-                                rows="4"
-                                required
-                                placeholder="Explain your issue in detail so we can help you best..."
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            ></textarea>
-                        </div>
-
-                        <div class="pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-2">
-                            <button
-                                type="button"
-                                @click="showCreateModal = false"
-                                class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                :disabled="form.processing"
-                                class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
-                            >
-                                Submit Ticket
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
+                    <DialogFooter class="pt-4 border-t flex justify-end gap-2">
+                        <button
+                            type="button"
+                            @click="showCreateModal = false"
+                            class="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            :disabled="form.processing"
+                            class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 font-semibold"
+                        >
+                            Submit Ticket
+                        </button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     </AdminLayout>
 </template>
