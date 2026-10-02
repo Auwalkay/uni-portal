@@ -213,6 +213,7 @@ class ProfileController extends Controller
             'student' => $student->load(['program']),
             'user' => $student ? $student->user : auth()->user(),
             'isProfileComplete' => $isProfileComplete,
+            'isReturningStudent' => $student ? $student->isReturningStudent($resolvedSession) : false,
             'schoolFeeStatus' => $schoolFeeStatus,
             'showRegistrationNotification' => $showRegistrationNotification,
             'registrationMessage' => $registrationMessage,

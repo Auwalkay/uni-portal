@@ -63,11 +63,25 @@ class LatePaymentFineTest extends TestCase
             'late_payment_deadline' => now()->subDays(2), // Overdue
         ]);
 
-        // 3. Create student user
+        // 3. Create student user and student record (returning student: admitted in previous session)
+        $previousSession = Session::create([
+            'name' => '2025/2026 Academic Session',
+            'start_date' => '2025-01-01',
+            'end_date' => '2025-12-31',
+            'type' => 'regular',
+        ]);
+
         $studentUser = User::create([
             'name' => 'Student User',
             'email' => 'student@portal.com',
             'password' => Hash::make('password'),
+        ]);
+
+        \App\Models\Student::create([
+            'user_id' => $studentUser->id,
+            'admitted_session_id' => $previousSession->id,
+            'current_level' => 200,
+            'status' => 'active',
         ]);
 
         // 4. Create pending school fee invoice
@@ -101,6 +115,59 @@ class LatePaymentFineTest extends TestCase
             'description' => 'Late Payment Fine (2026/2027 Academic Session)',
             'amount' => 10000,
         ]);
+    }
+
+    public function test_fresh_students_do_not_receive_late_payment_fine()
+    {
+        SystemSetting::set('late_fee_enabled', '1');
+        SystemSetting::set('late_fee_amount', '10000');
+
+        $session = Session::create([
+            'name' => '2026/2027 Academic Session',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
+            'type' => 'regular',
+            'is_current' => true,
+            'late_payment_deadline' => now()->subDays(2),
+        ]);
+
+        $freshUser = User::create([
+            'name' => 'Fresh Student',
+            'email' => 'fresh@portal.com',
+            'password' => Hash::make('password'),
+        ]);
+
+        // Admitted session is equal to current session (Fresh Student)
+        $student = \App\Models\Student::create([
+            'user_id' => $freshUser->id,
+            'admitted_session_id' => $session->id,
+            'current_level' => 100,
+            'status' => 'active',
+        ]);
+
+        $this->assertFalse($student->isReturningStudent($session));
+
+        $invoice = Invoice::create([
+            'user_id' => $freshUser->id,
+            'session_id' => $session->id,
+            'type' => 'school_fee',
+            'reference' => 'INV-FRESH-LATE',
+            'invoice_number' => 'INV-NUM-FRESH',
+            'amount' => 100000,
+            'paid_amount' => 0,
+            'status' => 'pending',
+            'due_date' => now()->subDays(1),
+            'late_fine_applied' => false,
+        ]);
+
+        // Run artisan command
+        $this->artisan('fees:apply-late-payment-fines')
+            ->assertExitCode(0);
+
+        // Assert fine was NOT applied
+        $invoice->refresh();
+        $this->assertEquals(100000, (float)$invoice->amount);
+        $this->assertFalse($invoice->late_fine_applied);
     }
 
     public function test_student_payment_is_blocked_if_school_fees_disabled_for_session()

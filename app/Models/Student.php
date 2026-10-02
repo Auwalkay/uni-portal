@@ -280,4 +280,26 @@ class Student extends Model
     {
         return $this->dob ? \Carbon\Carbon::parse($this->dob)->age : null;
     }
+
+    /**
+     * Check if the student is a returning student for a given session or current session.
+     * Returning student means admission session is not equal to the current active session.
+     */
+    public function isReturningStudent($sessionOrId = null): bool
+    {
+        $sessionId = $sessionOrId instanceof Session ? $sessionOrId->id : $sessionOrId;
+
+        if ($this->admitted_session_id && $sessionId) {
+            return (string) $this->admitted_session_id !== (string) $sessionId;
+        }
+
+        if ($this->admitted_session_id) {
+            $currentSessionId = Session::current()?->id;
+            if ($currentSessionId) {
+                return (string) $this->admitted_session_id !== (string) $currentSessionId;
+            }
+        }
+
+        return (int) $this->current_level > 100;
+    }
 }

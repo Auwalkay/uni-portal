@@ -61,6 +61,13 @@ class ApplyLatePaymentFines extends Command
         $this->info("Found {$invoices->count()} overdue invoice(s). Appending late payment fines...");
 
         foreach ($invoices as $invoice) {
+            $student = \App\Models\Student::where('user_id', $invoice->user_id)->first();
+
+            // Late payment fines apply to returning students only (admission session != current session)
+            if (!$student || !$student->isReturningStudent($invoice->session_id)) {
+                continue;
+            }
+
             $fineAmount = (float) $invoice->session->late_fee_amount;
             DB::transaction(function () use ($invoice, $fineAmount, &$appliedCount) {
                 // Add late payment fine line item
