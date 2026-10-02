@@ -39,9 +39,9 @@ class AppServiceProvider extends ServiceProvider
             \App\Listeners\LoginListener::class
         );
 
-        // Implicitly grant "Super Admin" role all permissions
+        // Implicitly grant "Super Admin" and "Admin" roles all permissions
         \Illuminate\Support\Facades\Gate::before(function ($user, $ability) {
-            return $user->hasRole('super_admin') ? true : null;
+            return ($user->hasRole('super_admin') || $user->hasRole('admin')) ? true : null;
         });
 
         $this->configureRateLimiting();

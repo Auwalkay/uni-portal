@@ -249,6 +249,15 @@ Route::middleware(['auth', 'verified', 'permission:access_staff_portal'])->prefi
     Route::post('inventory/complaints', [MyInventoryController::class, 'storeComplaint'])->name('inventory.complaints.store');
 });
 
+// Top-level Inventory Fallback Route
+Route::middleware(['auth', 'verified'])->get('inventory', function () {
+    $user = auth()->user();
+    if ($user->hasRole(['admin', 'super_admin', 'store_officer', 'bursar']) || $user->can('access_admin_dashboard') || $user->can('view_inventory')) {
+        return redirect()->route('admin.inventory.index');
+    }
+    return redirect()->route('staff.inventory.index');
+});
+
 // Staff Profile (Available to all authenticated users with staff records)
 Route::middleware(['auth', 'verified'])->prefix('staff-portal')->name('staff.')->group(function () {
     Route::get('profile', [StaffProfileController::class, 'edit'])->name('profile.edit');

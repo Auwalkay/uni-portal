@@ -13,18 +13,23 @@ class MyInventoryController extends Controller
 {
     public function index()
     {
-        $staff = Staff::where('user_id', auth()->id())->firstOrFail();
+        $staff = Staff::where('user_id', auth()->id())->first();
 
-        $assignments = InventoryAssignment::where('assignable_type', Staff::class)
-            ->where('assignable_id', $staff->id)
-            ->with('item')
-            ->latest()
-            ->get();
+        $assignments = collect();
+        $complaints = collect();
 
-        $complaints = InventoryComplaint::where('user_id', auth()->id())
-            ->with('item')
-            ->latest()
-            ->get();
+        if ($staff) {
+            $assignments = InventoryAssignment::where('assignable_type', Staff::class)
+                ->where('assignable_id', $staff->id)
+                ->with('item')
+                ->latest()
+                ->get();
+
+            $complaints = InventoryComplaint::where('user_id', auth()->id())
+                ->with('item')
+                ->latest()
+                ->get();
+        }
 
         return Inertia::render('Staff/Inventory/Index', [
             'assignments' => $assignments,
@@ -34,7 +39,10 @@ class MyInventoryController extends Controller
 
     public function storeComplaint(Request $request)
     {
-        $staff = Staff::where('user_id', auth()->id())->firstOrFail();
+        $staff = Staff::where('user_id', auth()->id())->first();
+        if (!$staff) {
+            return redirect()->back()->with('error', 'No staff record found for your user account.');
+        }
 
         $validated = $request->validate([
             'inventory_item_id' => 'required|exists:inventory_items,id',
