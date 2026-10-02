@@ -121,28 +121,36 @@ class StaffImport implements ToModel, WithChunkReading, WithHeadingRow
                     $isAcademic = false;
                 }
 
-                // Create or Update Staff Profile
-                $staff = Staff::updateOrCreate(
-                    ['user_id' => $user->id],
-                    [
-                        'staff_number' => $staffNumber,
-                        'designation' => $getValue('designation', 'position', 'title'),
-                        'department_id' => $departmentId,
-                        'is_academic' => $isAcademic,
-                        'phone_number' => $getValue('phone_number', 'phone', 'mobile'),
-                        'gender' => strtolower($getValue('gender', 'sex') ?? 'male'),
-                        'date_of_birth' => $dateOfBirth,
-                        'marital_status' => $getValue('marital_status', 'marital_sta', 'marital'),
-                        'address' => $getValue('address', 'contact_address'),
-                        'nationality' => $getValue('nationality', 'country') ?? 'Nigerian',
-                        'state_id' => $stateId,
-                        'lga_id' => $lgaId,
-                        'specialization' => $getValue('specialization', 'area_of_specialization'),
-                        'research_interests' => $getValue('research_interests', 'research'),
-                        'highest_qualification' => $getValue('highest_qualification', 'qualification'),
-                        'date_joined' => $dateJoined,
-                    ]
-                );
+                // Create or Update Staff Profile safely checking staff_number OR user_id
+                $staff = Staff::where('staff_number', $staffNumber)
+                    ->orWhere('user_id', $user->id)
+                    ->first();
+
+                $staffData = [
+                    'user_id' => $user->id,
+                    'staff_number' => $staffNumber,
+                    'designation' => $getValue('designation', 'position', 'title'),
+                    'department_id' => $departmentId,
+                    'is_academic' => $isAcademic,
+                    'phone_number' => $getValue('phone_number', 'phone', 'mobile'),
+                    'gender' => strtolower($getValue('gender', 'sex') ?? 'male'),
+                    'date_of_birth' => $dateOfBirth,
+                    'marital_status' => $getValue('marital_status', 'marital_sta', 'marital'),
+                    'address' => $getValue('address', 'contact_address'),
+                    'nationality' => $getValue('nationality', 'country') ?? 'Nigerian',
+                    'state_id' => $stateId,
+                    'lga_id' => $lgaId,
+                    'specialization' => $getValue('specialization', 'area_of_specialization'),
+                    'research_interests' => $getValue('research_interests', 'research'),
+                    'highest_qualification' => $getValue('highest_qualification', 'qualification'),
+                    'date_joined' => $dateJoined,
+                ];
+
+                if ($staff) {
+                    $staff->update($staffData);
+                } else {
+                    $staff = Staff::create($staffData);
+                }
 
                 if ($isNewUser) {
                     try {
