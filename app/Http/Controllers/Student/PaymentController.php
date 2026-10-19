@@ -57,6 +57,8 @@ class PaymentController extends Controller
 
     public function index()
     {
+        $feeService = app(FeeService::class);
+
         $invoices = Invoice::where('user_id', Auth::id())
             ->with([
                 'items',
@@ -72,7 +74,6 @@ class PaymentController extends Controller
         $unpaidSchoolFeeInvoices = $invoices->filter(fn ($inv) => $inv->type === 'school_fee' && $inv->status !== 'paid' && (float) $inv->paid_amount === 0.0);
 
         if ($unpaidSchoolFeeInvoices->isNotEmpty()) {
-            $feeService = app(FeeService::class);
             $hasRefreshed = false;
             foreach ($unpaidSchoolFeeInvoices as $invoice) {
                 if ($invoice->updated_at->lt(now()->subHour())) {
