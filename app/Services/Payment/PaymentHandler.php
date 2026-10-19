@@ -30,6 +30,7 @@ class PaymentHandler
         $reference = Payment::generateReference('PAY');
         $transactionId = Payment::generateTransactionId('MIUPAY');
 
+        $now = now();
         $payment = Payment::create([
             'invoice_id' => $invoice->id,
             'user_id' => $user->id,
@@ -38,12 +39,15 @@ class PaymentHandler
             'gateway_reference' => $reference,
             'amount' => $amount,
             'status' => 'pending',
+            'policy_agreed_at' => $now,
         ]);
 
         $defaultMetadata = [
             'customer_name' => $user->name,
             'payment_type' => $invoice->type,
             'invoice_id' => $invoice->id,
+            'policy_agreed' => true,
+            'policy_agreed_at' => $now->toIso8601String(),
         ];
 
         $mergedMetadata = array_merge($defaultMetadata, $metadata);

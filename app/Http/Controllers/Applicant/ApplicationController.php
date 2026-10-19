@@ -19,36 +19,82 @@ class ApplicationController extends Controller
             // Redirect or handle invalid role ??
         }
 
-        $applicant = Applicant::where('user_id', $user->id)->first();
+        $applicant = Applicant::where('user_id', $user->id)
+            ->with(['programme'])
+            ->first();
 
-        $invoice = null;
+        $applicationInvoice = \App\Models\Invoice::with('session')
+            ->where('user_id', $user->id)
+            ->where('type', 'application_fee')
+            ->latest()
+            ->first();
+
+        $currentSession = \App\Services\AcademicCacheService::getCurrentSession();
+
+        // If applicant submitted an application but application invoice is missing, generate it
+        if ($applicant && (!$applicationInvoice || $applicationInvoice->status !== 'paid') && $applicant->status === 'pending_payment') {
+            if (!$applicationInvoice && $currentSession) {
+                $applicationInvoice = \App\Models\Invoice::create([
+                    'user_id' => $user->id,
+                    'type' => 'application_fee',
+                    'session_id' => $currentSession->id,
+                    'reference' => 'APP-' . strtoupper(uniqid()),
+                    'amount' => SystemSetting::get('application_fee', 100000),
+                    'paid_amount' => 0,
+                    'status' => 'pending',
+                    'due_date' => now()->addDays(7),
+                ]);
+
+                $applicationInvoice->items()->create([
+                    'description' => 'Application Fee',
+                    'amount' => SystemSetting::get('application_fee', 100000),
+                    'quantity' => 1,
+                ]);
+
+                $applicationInvoice->load('session');
+            }
+        }
+
+        $acceptanceInvoice = null;
         if ($applicant && $applicant->status === 'admitted') {
-            $invoice = \App\Models\Invoice::where('user_id', $user->id)
+            $acceptanceInvoice = \App\Models\Invoice::where('user_id', $user->id)
                 ->where('type', 'acceptance_fee')
                 ->where('status', 'pending')
                 ->first();
         }
 
-        // If no applicant profile, maybe redirect to start page?
+        $hasPaidApplicationFee = $applicationInvoice && $applicationInvoice->status === 'paid';
+
         return Inertia::render('Applicant/Dashboard', [
             'applicant' => $applicant,
-            'invoice' => $invoice,
+            'applicationInvoice' => $applicationInvoice,
+            'invoice' => $acceptanceInvoice ?? $applicationInvoice,
+            'hasPaidApplicationFee' => $hasPaidApplicationFee,
+            'currentSession' => $currentSession,
         ]);
     }
 
     public function create()
     {
         return Inertia::render('Applicant/Application/Start', [
-            'faculties' => \App\Services\AcademicCacheService::getFacultiesWithProgrammes(),
+            'faculties' => \App\Services\AcademicCacheService::getFacultiesWithProgrammes(true),
+            'currentSession' => \App\Services\AcademicCacheService::getCurrentSession(),
         ]);
     }
 
     public function form(Request $request)
     {
+        $programme = null;
+        if ($request->query('programme_id')) {
+            $programme = \App\Models\Programme::where('is_active', true)->find($request->query('programme_id'));
+        }
+
         return Inertia::render('Applicant/Application/FormWizard', [
             'mode' => $request->query('mode', 'UTME'),
             'programme_id' => $request->query('programme_id'),
+            'programme' => $programme,
             'states' => \App\Services\AcademicCacheService::getStates(),
+            'currentSession' => \App\Services\AcademicCacheService::getCurrentSession(),
         ]);
     }
 
@@ -63,7 +109,10 @@ class ApplicationController extends Controller
                 'phone' => 'required|string',
                 'jamb_score' => 'required|numeric',
                 'previous_institution' => 'nullable|string',
-                'programme_id' => 'required|exists:programmes,id',
+                'programme_id' => [
+                    'required',
+                    \Illuminate\Validation\Rule::exists('programmes', 'id')->where('is_active', true),
+                ],
                 'mode' => 'required|string',
                 'state_id' => 'required|exists:states,id',
                 'lga_id' => 'required|exists:lgas,id',
@@ -206,8 +255,17 @@ class ApplicationController extends Controller
             return redirect()->route('applicant.apply.start');
         }
 
+        $invoice = \App\Models\Invoice::with('session')
+            ->where('user_id', $user->id)
+            ->where('type', 'application_fee')
+            ->latest()
+            ->first();
+
         return Inertia::render('Applicant/Application/Show', [
             'applicant' => $applicant,
+            'invoice' => $invoice,
+            'hasPaidApplicationFee' => $invoice && $invoice->status === 'paid',
+            'currentSession' => \App\Services\AcademicCacheService::getCurrentSession(),
         ]);
     }
 }

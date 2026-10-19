@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { LayoutGrid, FileText, Upload } from 'lucide-vue-next';
+import { LayoutGrid, FileText, Upload, CreditCard } from 'lucide-vue-next';
 
 import { computed, markRaw } from 'vue';
 import NavMain from '@/components/NavMain.vue';
@@ -32,9 +32,9 @@ const mainNavItems: NavItem[] = [
         icon: FileText,
     },
     {
-        title: 'Documents',
-        href: '/applicant/documents',
-        icon: Upload,
+        title: 'Application Payment',
+        href: '/applicant/payment',
+        icon: CreditCard,
     },
 ];
 </script>

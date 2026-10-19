@@ -66,32 +66,38 @@ class LogSystemRequests
             'user_agent' => substr((string) $request->header('User-Agent'), 0, 150),
         ]);
 
-        // 2. Database Activity Log (Recorded so requests appear on Admin Dashboard Activity Logs)
-        try {
-            if (function_exists('activity')) {
-                $activityLogger = activity('system_request')
-                    ->event($request->method())
-                    ->withProperties([
-                        'method' => $request->method(),
-                        'url' => $request->fullUrl(),
-                        'path' => '/' . ltrim($path, '/'),
-                        'route_name' => $request->route()?->getName() ?? 'unnamed_route',
-                        'status_code' => $statusCode,
-                        'duration_ms' => "{$duration}ms",
-                        'ip_address' => $request->ip(),
-                        'user_email' => $user?->email ?? 'guest',
-                        'user_role' => $user ? ($user->getRoleNames()->first() ?? 'user') : 'guest',
-                        'payload' => !empty($input) ? $input : null,
-                    ]);
+        // 2. Database Activity Log: Only record state-mutating actions (POST, PUT, PATCH, DELETE)
+        // or auth failures to avoid massive write contention on routine GET/Inertia requests
+        $isStateMutating = !in_array($request->method(), ['GET', 'HEAD', 'OPTIONS']);
+        $isFailedAuth = $statusCode === 401 || $statusCode === 403;
 
-                if ($user) {
-                    $activityLogger->causedBy($user);
+        if ($isStateMutating || $isFailedAuth) {
+            try {
+                if (function_exists('activity')) {
+                    $activityLogger = activity('system_request')
+                        ->event($request->method())
+                        ->withProperties([
+                            'method' => $request->method(),
+                            'url' => $request->fullUrl(),
+                            'path' => '/' . ltrim($path, '/'),
+                            'route_name' => $request->route()?->getName() ?? 'unnamed_route',
+                            'status_code' => $statusCode,
+                            'duration_ms' => "{$duration}ms",
+                            'ip_address' => $request->ip(),
+                            'user_email' => $user?->email ?? 'guest',
+                            'user_role' => $user ? ($user->getRoleNames()->first() ?? 'user') : 'guest',
+                            'payload' => !empty($input) ? $input : null,
+                        ]);
+
+                    if ($user) {
+                        $activityLogger->causedBy($user);
+                    }
+
+                    $activityLogger->log("{$request->method()} /" . ltrim($path, '/'));
                 }
-
-                $activityLogger->log("{$request->method()} /" . ltrim($path, '/'));
+            } catch (\Throwable $e) {
+                // Catch silently so logging never interrupts user requests
             }
-        } catch (\Throwable $e) {
-            // Catch silently so logging never interrupts user requests
         }
     }
 }

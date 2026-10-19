@@ -8,6 +8,7 @@ use App\Models\Student;
 use App\Models\Invoice;
 use App\Models\Payment;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 
 class BursaryController extends Controller
@@ -147,116 +148,131 @@ class BursaryController extends Controller
         $perPage = $request->query('per_page', 20);
         $students = $query->paginate($perPage)->withQueryString();
 
-        // Calculate Stats across matching dataset using chunking (5K+ scaling)
-        $totalStatsQuery = $this->getFilteredStudentsQuery($request, $sessionId, $feeType);
-        
-        $stats = [
-            'total_billed' => 0,
-            'total_paid' => 0,
-            'total_balance' => 0,
-            'student_count' => 0,
-            'paid_count' => 0,
-            'partial_count' => 0,
-            'unpaid_count' => 0,
-            'scholarship_count' => 0,
-            'avg_fee_per_student' => 0,
-            'avg_outstanding' => 0,
-            'collection_rate' => 0,
-        ];
+        // Calculate Stats across matching dataset using chunking (5K+ scaling) with caching for pagination/sorting speed
+        $statsCacheKey = 'bursary_stats_' . md5(json_encode([
+            'session_id' => $sessionId,
+            'fee_type' => $feeType,
+            'faculty_id' => $request->query('faculty_id'),
+            'department_id' => $request->query('department_id'),
+            'program_id' => $request->query('program_id'),
+            'level' => $request->query('level'),
+            'status' => $request->query('status'),
+            'search' => $request->query('search'),
+        ]));
 
-        $scholarshipsMap = \App\Models\Scholarship::all()->keyBy('id');
-        $scholarshipStatsMap = [];
-
-        foreach ($scholarshipsMap as $sId => $sch) {
-            $scholarshipStatsMap[$sId] = [
-                'id' => $sch->id,
-                'name' => $sch->name,
-                'type' => $sch->type,
-                'percentage' => (float)$sch->percentage,
-                'amount' => (float)$sch->amount,
-                'value_display' => $sch->type === 'percentage' ? $sch->percentage . '% Discount' : '₦' . number_format($sch->amount, 2),
-                'student_count' => 0,
-                'total_discount' => 0,
+        [$stats, $scholarshipStatsMap] = Cache::remember($statsCacheKey, 180, function () use ($request, $sessionId, $feeType, $session, $feeService, $allConfigsBySession, $adminChargeEnabled, $adminChargeAmount) {
+            $totalStatsQuery = $this->getFilteredStudentsQuery($request, $sessionId, $feeType);
+            
+            $stats = [
                 'total_billed' => 0,
                 'total_paid' => 0,
                 'total_balance' => 0,
+                'student_count' => 0,
                 'paid_count' => 0,
+                'partial_count' => 0,
                 'unpaid_count' => 0,
+                'scholarship_count' => 0,
+                'avg_fee_per_student' => 0,
+                'avg_outstanding' => 0,
+                'collection_rate' => 0,
             ];
-        }
 
-        $totalStatsQuery->reorder('students.id', 'asc')->with([
-            'invoices' => function($q) use ($sessionId, $feeType) {
-                $q->where('session_id', $sessionId)->where('type', $feeType);
-            }, 
-            'scholarship', 
-            'program:id,name,scholarship_eligible'
-        ])->chunkById(1000, function ($studentsChunk) use ($feeType, $session, $feeService, $allConfigsBySession, $adminChargeEnabled, $adminChargeAmount, $scholarshipsMap, &$scholarshipStatsMap, &$stats) {
-            foreach ($studentsChunk as $student) {
-                $stats['student_count']++;
+            $scholarshipsMap = \App\Models\Scholarship::all()->keyBy('id');
+            $scholarshipStatsMap = [];
 
-                $invoice = $student->invoices->first();
+            foreach ($scholarshipsMap as $sId => $sch) {
+                $scholarshipStatsMap[$sId] = [
+                    'id' => $sch->id,
+                    'name' => $sch->name,
+                    'type' => $sch->type,
+                    'percentage' => (float)$sch->percentage,
+                    'amount' => (float)$sch->amount,
+                    'value_display' => $sch->type === 'percentage' ? $sch->percentage . '% Discount' : '₦' . number_format($sch->amount, 2),
+                    'student_count' => 0,
+                    'total_discount' => 0,
+                    'total_billed' => 0,
+                    'total_paid' => 0,
+                    'total_balance' => 0,
+                    'paid_count' => 0,
+                    'unpaid_count' => 0,
+                ];
+            }
 
-                if ($invoice) {
-                    $billed = (float)$invoice->amount;
-                    $paid = (float)$invoice->paid_amount;
-                    $status = $invoice->status;
-                } else {
-                    $billed = ($feeType === 'school_fee' && $session) 
-                        ? $feeService->calculateExpectedSchoolFeeWithConfigs($student, $session, $allConfigsBySession, $adminChargeEnabled, $adminChargeAmount) 
-                        : 0;
-                    $paid = 0;
-                    $status = 'unpaid';
-                }
-                
-                $stats['total_billed'] += $billed;
-                $stats['total_paid'] += $paid;
-                $stats['total_balance'] += max(0, $billed - $paid);
+            $totalStatsQuery->reorder('students.id', 'asc')->with([
+                'invoices' => function($q) use ($sessionId, $feeType) {
+                    $q->where('session_id', $sessionId)->where('type', $feeType);
+                }, 
+                'scholarship', 
+                'program:id,name,scholarship_eligible'
+            ])->chunkById(1000, function ($studentsChunk) use ($feeType, $session, $feeService, $allConfigsBySession, $adminChargeEnabled, $adminChargeAmount, $scholarshipsMap, &$scholarshipStatsMap, &$stats) {
+                foreach ($studentsChunk as $student) {
+                    $stats['student_count']++;
 
-                if ($student->scholarship_id) {
-                    $stats['scholarship_count']++;
+                    $invoice = $student->invoices->first();
 
-                    if (isset($scholarshipStatsMap[$student->scholarship_id])) {
-                        $sId = $student->scholarship_id;
-                        $scholarshipStatsMap[$sId]['student_count']++;
-                        $scholarshipStatsMap[$sId]['total_billed'] += $billed;
-                        $scholarshipStatsMap[$sId]['total_paid'] += $paid;
-                        $scholarshipStatsMap[$sId]['total_balance'] += max(0, $billed - $paid);
-                        if ($status === 'paid') {
-                            $scholarshipStatsMap[$sId]['paid_count']++;
-                        } else {
-                            $scholarshipStatsMap[$sId]['unpaid_count']++;
-                        }
+                    if ($invoice) {
+                        $billed = (float)$invoice->amount;
+                        $paid = (float)$invoice->paid_amount;
+                        $status = $invoice->status;
+                    } else {
+                        $billed = ($feeType === 'school_fee' && $session) 
+                            ? $feeService->calculateExpectedSchoolFeeWithConfigs($student, $session, $allConfigsBySession, $adminChargeEnabled, $adminChargeAmount) 
+                            : 0;
+                        $paid = 0;
+                        $status = 'unpaid';
+                    }
+                    
+                    $stats['total_billed'] += $billed;
+                    $stats['total_paid'] += $paid;
+                    $stats['total_balance'] += max(0, $billed - $paid);
 
-                        $schObj = $scholarshipsMap->get($sId);
-                        if ($schObj) {
-                            if ($schObj->type === 'percentage' && $schObj->percentage > 0) {
-                                $pctDecimal = ($schObj->percentage / 100);
-                                $discountVal = $pctDecimal < 1 ? ($billed / (1 - $pctDecimal)) * $pctDecimal : $billed;
+                    if ($student->scholarship_id) {
+                        $stats['scholarship_count']++;
+
+                        if (isset($scholarshipStatsMap[$student->scholarship_id])) {
+                            $sId = $student->scholarship_id;
+                            $scholarshipStatsMap[$sId]['student_count']++;
+                            $scholarshipStatsMap[$sId]['total_billed'] += $billed;
+                            $scholarshipStatsMap[$sId]['total_paid'] += $paid;
+                            $scholarshipStatsMap[$sId]['total_balance'] += max(0, $billed - $paid);
+                            if ($status === 'paid') {
+                                $scholarshipStatsMap[$sId]['paid_count']++;
                             } else {
-                                $discountVal = (float)$schObj->amount;
+                                $scholarshipStatsMap[$sId]['unpaid_count']++;
                             }
-                            $scholarshipStatsMap[$sId]['total_discount'] += round($discountVal, 2);
+
+                            $schObj = $scholarshipsMap->get($sId);
+                            if ($schObj) {
+                                if ($schObj->type === 'percentage' && $schObj->percentage > 0) {
+                                    $pctDecimal = ($schObj->percentage / 100);
+                                    $discountVal = $pctDecimal < 1 ? ($billed / (1 - $pctDecimal)) * $pctDecimal : $billed;
+                                } else {
+                                    $discountVal = (float)$schObj->amount;
+                                }
+                                $scholarshipStatsMap[$sId]['total_discount'] += round($discountVal, 2);
+                            }
                         }
                     }
+
+                    if ($status === 'paid') $stats['paid_count']++;
+                    elseif ($status === 'partial') $stats['partial_count']++;
+                    else $stats['unpaid_count']++;
                 }
+            }, 'students.id', 'id');
 
-                if ($status === 'paid') $stats['paid_count']++;
-                elseif ($status === 'partial') $stats['partial_count']++;
-                else $stats['unpaid_count']++;
-            }
-        }, 'students.id', 'id');
+            $stats['collection_rate'] = $stats['total_billed'] > 0 
+                ? round(($stats['total_paid'] / $stats['total_billed']) * 100, 1) 
+                : 0;
+            $stats['avg_fee_per_student'] = $stats['student_count'] > 0 
+                ? round($stats['total_billed'] / $stats['student_count'], 2) 
+                : 0;
+            $unpaidOrPartialCount = $stats['unpaid_count'] + $stats['partial_count'];
+            $stats['avg_outstanding'] = $unpaidOrPartialCount > 0 
+                ? round($stats['total_balance'] / $unpaidOrPartialCount, 2) 
+                : 0;
 
-        $stats['collection_rate'] = $stats['total_billed'] > 0 
-            ? round(($stats['total_paid'] / $stats['total_billed']) * 100, 1) 
-            : 0;
-        $stats['avg_fee_per_student'] = $stats['student_count'] > 0 
-            ? round($stats['total_billed'] / $stats['student_count'], 2) 
-            : 0;
-        $unpaidOrPartialCount = $stats['unpaid_count'] + $stats['partial_count'];
-        $stats['avg_outstanding'] = $unpaidOrPartialCount > 0 
-            ? round($stats['total_balance'] / $unpaidOrPartialCount, 2) 
-            : 0;
+            return [$stats, $scholarshipStatsMap];
+        });
 
         // Load invoices for the selected session with their payments to avoid N+1 for paginated list (1 single query)
         $invoiceIds = $students->pluck('invoices')->flatten()->pluck('id')->filter()->values();

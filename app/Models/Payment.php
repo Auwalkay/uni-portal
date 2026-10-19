@@ -26,6 +26,7 @@ class Payment extends Model
 
     protected $casts = [
         'paid_at' => 'datetime',
+        'policy_agreed_at' => 'datetime',
     ];
 
     public function invoice(): BelongsTo
