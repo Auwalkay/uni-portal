@@ -57,16 +57,6 @@ class PaymentController extends Controller
 
     public function index()
     {
-        $feeService = app(FeeService::class);
-        $rawInvoices = Invoice::where('user_id', Auth::id())
-            ->where('status', '!=', 'paid')
-            ->where('type', 'school_fee')
-            ->get();
-
-        foreach ($rawInvoices as $invoice) {
-            $feeService->refreshInvoiceIfUnpaid($invoice);
-        }
-
         $invoices = Invoice::where('user_id', Auth::id())
             ->with([
                 'items',
@@ -77,6 +67,23 @@ class PaymentController extends Controller
             ])
             ->latest()
             ->get();
+
+        // Refresh unpaid school fee invoices only when needed, avoiding redundant queries on every navigation
+        $unpaidSchoolFeeInvoices = $invoices->filter(fn ($inv) => $inv->type === 'school_fee' && $inv->status !== 'paid' && (float) $inv->paid_amount === 0.0);
+
+        if ($unpaidSchoolFeeInvoices->isNotEmpty()) {
+            $feeService = app(FeeService::class);
+            $hasRefreshed = false;
+            foreach ($unpaidSchoolFeeInvoices as $invoice) {
+                if ($invoice->updated_at->lt(now()->subHour())) {
+                    $feeService->refreshInvoiceIfUnpaid($invoice);
+                    $hasRefreshed = true;
+                }
+            }
+            if ($hasRefreshed) {
+                $invoices->load(['items', 'session', 'payments']);
+            }
+        }
 
         $currentSession = Session::current();
         $canGenerateInvoice = false;
@@ -231,6 +238,10 @@ class PaymentController extends Controller
 
         $request->validate([
             'amount' => 'required|numeric|min:1',
+            'agreed_to_policy' => 'required|accepted',
+        ], [
+            'agreed_to_policy.accepted' => 'You must read and agree to the Non-Refundable Payment Policy before proceeding.',
+            'agreed_to_policy.required' => 'You must read and agree to the Non-Refundable Payment Policy before proceeding.',
         ]);
 
         $balance = max(0, (float) $invoice->amount - (float) $invoice->paid_amount);

@@ -69,6 +69,14 @@ class ResultController extends Controller
 
             $history = [];
 
+            // Preload all published course registrations once to eliminate N+1 session loop queries
+            $allPublishedRegs = CourseRegistration::where('student_id', $student->id)
+                ->where('is_published', true)
+                ->with(['course', 'semester'])
+                ->get();
+
+            $regsBySession = $allPublishedRegs->groupBy('session_id');
+
             foreach ($sessions as $session) {
                 // Check clearance for this session
                 $schoolFeeCleared = true;
@@ -93,12 +101,8 @@ class ResultController extends Controller
                     'semesters' => []
                 ];
 
-                // Get semesters for this session
-                $registrationsInSession = CourseRegistration::where('student_id', $student->id)
-                    ->where('session_id', $session->id)
-                    ->where('is_published', true)
-                    ->with(['course', 'semester'])
-                    ->get()
+                // Group preloaded registrations for this session by semester name
+                $registrationsInSession = $regsBySession->get($session->id, collect())
                     ->groupBy('semester.name');
 
                 foreach ($registrationsInSession as $semesterName => $regs) {
@@ -135,11 +139,7 @@ class ResultController extends Controller
                 $history[] = $sessionData;
             }
 
-            // CGPA calculation: only include allowed semesters
-            $allPublishedRegs = CourseRegistration::where('student_id', $student->id)
-                ->where('is_published', true)
-                ->with(['course', 'semester'])
-                ->get();
+            // CGPA calculation: reuse preloaded registrations directly without re-querying database
 
             $cgpaRegs = $allPublishedRegs->filter(function ($reg) use ($enforceSchoolFee, $enforceHostelFee, $schoolFeeInvoices, $hostelBookings) {
                 $semesterName = $reg->semester?->name ?? '';

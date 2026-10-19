@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import NoRefundPolicyAgreement from '@/components/Payment/NoRefundPolicyAgreement.vue';
 
 const props = defineProps<{
     invoices: Array<{
@@ -71,6 +72,7 @@ const isOptionalFeeModalOpen = ref(false);
 const selectedInvoice = ref<any>(null);
 const selectedOptionalFeeId = ref<string | null>(null);
 const paymentOption = ref('full'); // 'full' or 'half'
+const hasAgreedToPolicy = ref(false);
 
 
 const submitOptionalFee = () => {
@@ -86,6 +88,7 @@ const submitOptionalFee = () => {
 const openPaymentModal = (invoice: any) => {
     selectedInvoice.value = invoice;
     paymentOption.value = 'full';
+    hasAgreedToPolicy.value = false;
     isPaymentModalOpen.value = true;
 };
 
@@ -161,10 +164,11 @@ const canPayHalf = computed(() => {
 });
 
 const submitPayment = () => {
-    if (!selectedInvoice.value) return;
+    if (!selectedInvoice.value || !hasAgreedToPolicy.value) return;
     
     router.post(route('student.payments.pay', selectedInvoice.value.id), {
-        amount: activePaymentAmount.value.toFixed(2)
+        amount: activePaymentAmount.value.toFixed(2),
+        agreed_to_policy: hasAgreedToPolicy.value,
     }, {
         onFinish: () => {
             isPaymentModalOpen.value = false;
@@ -392,16 +396,16 @@ const getInvoiceCountdown = (invoice: any) => {
         </div>
 
         <Dialog v-model:open="isPaymentModalOpen">
-            <DialogContent class="sm:max-w-[425px]">
+            <DialogContent class="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Make Payment</DialogTitle>
                     <DialogDescription>
-                        Enter the amount you wish to pay.
+                        Select payment option and agree to institutional terms before proceeding.
                     </DialogDescription>
                 </DialogHeader>
-                <div class="grid gap-4 py-4">
+                <div class="space-y-4 py-2">
                     <div v-if="selectedInvoice" class="space-y-4">
-                        <RadioGroup v-model="paymentOption" class="grid gap-4">
+                        <RadioGroup v-model="paymentOption" class="grid gap-3 sm:grid-cols-2">
                             <div>
                                 <RadioGroupItem
                                     id="full"
@@ -410,11 +414,11 @@ const getInvoiceCountdown = (invoice: any) => {
                                 />
                                 <Label
                                     for="full"
-                                    class="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
+                                    class="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer text-center"
                                 >
-                                    <span class="mb-2 text-lg font-semibold">Pay Balance</span>
-                                    <span class="text-sm text-muted-foreground">Clear remaining debt</span>
-                                    <span class="mt-2 text-xl font-bold">{{ formatCurrency(fullBalance) }}</span>
+                                    <span class="mb-1 text-sm font-semibold">Pay Balance</span>
+                                    <span class="text-xs text-muted-foreground">Clear remaining balance</span>
+                                    <span class="mt-1.5 text-base font-bold font-mono">{{ formatCurrency(fullBalance) }}</span>
                                 </Label>
                             </div>
                             
@@ -426,22 +430,32 @@ const getInvoiceCountdown = (invoice: any) => {
                                 />
                                 <Label
                                     for="half"
-                                    class="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
+                                    class="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer text-center"
                                 >
-                                    <span class="mb-2 text-lg font-semibold">
+                                    <span class="mb-1 text-sm font-semibold">
                                         {{ selectedInvoice.type === 'hostel_fee' ? 'Pay 75% Installment' : 'Pay Installment' }}
                                     </span>
-                                    <span class="text-sm text-muted-foreground">
-                                        {{ selectedInvoice.type === 'hostel_fee' ? '75% Upfront payment' : 'Mandatory Upfront Portion' }}
+                                    <span class="text-xs text-muted-foreground">
+                                        {{ selectedInvoice.type === 'hostel_fee' ? '75% Upfront payment' : 'Mandatory Upfront' }}
                                     </span>
-                                    <span class="mt-2 text-xl font-bold">{{ formatCurrency(installmentAmount) }}</span>
+                                    <span class="mt-1.5 text-base font-bold font-mono">{{ formatCurrency(installmentAmount) }}</span>
                                 </Label>
                             </div>
                         </RadioGroup>
+
+                        <!-- Non-Refundable Payment Policy Agreement -->
+                        <NoRefundPolicyAgreement 
+                            v-model="hasAgreedToPolicy"
+                            checkbox-id="student-index-policy-agree"
+                            :effective-date="selectedInvoice?.session?.name ? `${selectedInvoice.session.name} Session` : 'Current Academic Session'"
+                        />
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button type="submit" @click="submitPayment">Proceed to Payment</Button>
+                    <Button variant="outline" @click="isPaymentModalOpen = false">Cancel</Button>
+                    <Button type="submit" @click="submitPayment" :disabled="!hasAgreedToPolicy">
+                        Proceed to Payment
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

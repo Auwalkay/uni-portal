@@ -35,24 +35,40 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $user = $request->user();
+        $authData = null;
+
+        if ($user) {
+            $userRolesAndPerms = \Illuminate\Support\Facades\Cache::remember(
+                "user_auth_roles_perms_{$user->id}",
+                120,
+                fn() => [
+                    'roles' => $user->getRoleNames(),
+                    'permissions' => $user->getAllPermissions()->pluck('name'),
+                ]
+            );
+
+            $authData = [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'profile_photo_path' => $user->profile_photo_path,
+                'roles' => $userRolesAndPerms['roles'],
+                'permissions' => $userRolesAndPerms['permissions'],
+                'student' => $user->student ? [
+                    'id' => $user->student->id,
+                    'department_id' => $user->student->effective_department_id,
+                    'program_id' => $user->student->program_id,
+                ] : null,
+            ];
+        }
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
             'settings' => \App\Services\AcademicCacheService::getSystemSettings(),
             'auth' => [
-                'user' => $request->user() ? [
-                    'id' => $request->user()->id,
-                    'name' => $request->user()->name,
-                    'email' => $request->user()->email,
-                    'profile_photo_path' => $request->user()->profile_photo_path,
-                    'roles' => $request->user()->getRoleNames(),
-                    'permissions' => $request->user()->getAllPermissions()->pluck('name'),
-                    'student' => $request->user()->student ? [
-                        'id' => $request->user()->student->id,
-                        'department_id' => $request->user()->student->effective_department_id,
-                        'program_id' => $request->user()->student->program_id,
-                    ] : null,
-                ] : null,
+                'user' => $authData,
             ],
             'sidebarOpen' => !$request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'flash' => [

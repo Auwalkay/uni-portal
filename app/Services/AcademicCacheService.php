@@ -21,10 +21,16 @@ class AcademicCacheService
         });
     }
 
-    public static function getProgrammes()
+    public static function getProgrammes(bool $onlyActive = true)
     {
-        return Cache::remember('all_programmes_list_v2', self::TTL, function () {
-            return Programme::orderBy('name')->get(['id', 'name', 'department_id']);
+        $cacheKey = $onlyActive ? 'active_programmes_list_v2' : 'all_programmes_list_v2';
+
+        return Cache::remember($cacheKey, self::TTL, function () use ($onlyActive) {
+            $query = Programme::orderBy('name');
+            if ($onlyActive) {
+                $query->where('is_active', true);
+            }
+            return $query->get(['id', 'name', 'department_id', 'is_active']);
         });
     }
 
@@ -142,10 +148,30 @@ class AcademicCacheService
         return Cache::remember('faculties_with_departments_full', self::TTL, fn() => Faculty::with('departments.units')->get());
     }
 
-    public static function getFacultiesWithProgrammes()
+    public static function getFacultiesWithProgrammes(bool $onlyActive = true)
     {
-        return Cache::remember('faculties_with_departments_and_programmes', self::TTL, function () {
-            return Faculty::with('departments.programmes')->get();
+        $cacheKey = $onlyActive ? 'faculties_with_departments_and_active_programmes' : 'faculties_with_departments_and_programmes';
+
+        return Cache::remember($cacheKey, self::TTL, function () use ($onlyActive) {
+            return Faculty::with([
+                'departments' => function ($deptQuery) use ($onlyActive) {
+                    if ($onlyActive) {
+                        $deptQuery->whereHas('programmes', fn ($q) => $q->where('is_active', true));
+                    }
+                    $deptQuery->orderBy('name');
+                },
+                'departments.programmes' => function ($query) use ($onlyActive) {
+                    if ($onlyActive) {
+                        $query->where('is_active', true);
+                    }
+                    $query->orderBy('name');
+                },
+            ])
+            ->when($onlyActive, function ($facultyQuery) {
+                $facultyQuery->whereHas('departments.programmes', fn ($q) => $q->where('is_active', true));
+            })
+            ->orderBy('name')
+            ->get();
         });
     }
 
@@ -258,8 +284,10 @@ class AcademicCacheService
         self::clearTimetableCache();
         Cache::forget('faculties_with_departments');
         Cache::forget('faculties_with_departments_and_programmes');
+        Cache::forget('faculties_with_departments_and_active_programmes');
         Cache::forget('all_programmes_list');
         Cache::forget('all_programmes_list_v2');
+        Cache::forget('active_programmes_list_v2');
         Cache::forget('states_with_lgas');
         Cache::forget('all_scholarships');
         Cache::forget('academic_sessions_list');

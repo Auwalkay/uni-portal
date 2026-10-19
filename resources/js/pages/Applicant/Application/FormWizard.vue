@@ -22,8 +22,10 @@ import Swal from 'sweetalert2';
 const props = defineProps<{
     mode?: string;
     programme_id?: string;
+    programme?: { id: string; name: string } | null;
     states?: Array<{ id: number; name: string; lgas: Array<{ id: number; name: string }> }>;
     scholarships?: Array<{ id: string; name: string; percentage: string }>;
+    currentSession?: { id: string; name: string } | null;
 }>();
 
 const steps = ['JAMB Details', 'Personal Info', 'Academic History', 'Document Uploads', 'Review'];
@@ -219,8 +221,16 @@ const submitApplication = () => {
                 <div class="absolute bottom-0 left-0 -m-20 w-64 h-64 bg-secondary/5 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
 
                 <CardHeader class="border-b bg-muted/20 px-8 py-8">
-                    <CardTitle class="font-serif text-3xl font-bold text-primary">{{ steps[currentStep] }}</CardTitle>
-                    <p class="text-base text-muted-foreground mt-2">Please provide accurate information for your application.</p>
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                            <CardTitle class="font-serif text-3xl font-bold text-primary">{{ steps[currentStep] }}</CardTitle>
+                            <p class="text-base text-muted-foreground mt-2">Please provide accurate information for your application.</p>
+                        </div>
+                        <div v-if="currentSession" class="self-start sm:self-auto shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">
+                            <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+                            <span>{{ currentSession.name }} Academic Session</span>
+                        </div>
+                    </div>
                 </CardHeader>
 
                 <CardContent class="p-8 space-y-8 min-h-[500px] relative">
@@ -436,7 +446,25 @@ const submitApplication = () => {
                                 <span class="bg-primary text-primary-foreground w-8 h-8 rounded-full flex items-center justify-center font-bold">2</span>
                                 <h3 class="font-serif text-xl font-bold text-foreground">Academic Information</h3>
                             </div>
-                            <div class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
+                            <div class="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-sm">
+                                <div class="space-y-1">
+                                    <span class="block text-muted-foreground text-xs uppercase tracking-wider font-semibold">Application Mode</span>
+                                    <span class="font-medium text-base text-foreground bg-muted/30 px-3 py-2 rounded-md block border border-transparent hover:border-border transition-colors">
+                                        {{ form.mode }}
+                                    </span>
+                                </div>
+                                <div class="space-y-1" v-if="programme">
+                                    <span class="block text-muted-foreground text-xs uppercase tracking-wider font-semibold">Programme Choice</span>
+                                    <span class="font-medium text-base text-foreground bg-muted/30 px-3 py-2 rounded-md block border border-transparent hover:border-border transition-colors">
+                                        {{ programme.name }}
+                                    </span>
+                                </div>
+                                <div class="space-y-1" v-if="currentSession">
+                                    <span class="block text-muted-foreground text-xs uppercase tracking-wider font-semibold">Academic Session</span>
+                                    <span class="font-medium text-base text-foreground bg-muted/30 px-3 py-2 rounded-md block border border-transparent hover:border-border transition-colors">
+                                        {{ currentSession.name }} Session
+                                    </span>
+                                </div>
                                 <div class="space-y-1">
                                     <span class="block text-muted-foreground text-xs uppercase tracking-wider font-semibold">JAMB Score</span>
                                     <span class="font-medium text-base text-foreground bg-muted/30 px-3 py-2 rounded-md block border border-transparent hover:border-border transition-colors flex items-center gap-2">
