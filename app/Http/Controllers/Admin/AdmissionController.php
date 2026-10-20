@@ -28,10 +28,13 @@ class AdmissionController extends Controller
 
         // Filters
         if ($request->filled('search')) {
-            $query->whereHas('user', function ($q) use ($request) {
-                $q->where('name', 'like', '%'.$request->search.'%')
-                    ->orWhere('email', 'like', '%'.$request->search.'%');
-            })->orWhere('jamb_registration_number', 'like', '%'.$request->search.'%');
+            $search = trim($request->search);
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('user', function ($uq) use ($search) {
+                    $uq->where('name', 'like', '%'.$search.'%')
+                        ->orWhere('email', 'like', '%'.$search.'%');
+                })->orWhere('jamb_registration_number', 'like', '%'.$search.'%');
+            });
         }
 
         if ($request->filled('status')) {
@@ -42,14 +45,19 @@ class AdmissionController extends Controller
             $query->where('programme_id', $request->programme_id);
         }
 
-        $applicants = $query->latest()->paginate(10)->withQueryString();
+        $perPage = min(max($request->integer('per_page', 15), 5), 100);
+
+        $applicants = $query->latest()->paginate($perPage)->withQueryString();
 
         $programmes = \App\Services\AcademicCacheService::getProgrammes();
+
+        $filters = $request->only(['search', 'status', 'programme_id']);
+        $filters['per_page'] = $perPage;
 
         return Inertia::render('Admin/Admissions/Index', [
             'applicants' => $applicants,
             'stats' => $stats,
-            'filters' => $request->only(['search', 'status', 'programme_id']),
+            'filters' => $filters,
             'programmes' => $programmes,
         ]);
     }

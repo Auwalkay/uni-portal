@@ -21,7 +21,8 @@ class AttendanceController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Attendance::with(['staff.user', 'staff.department.faculty', 'creator:id,name', 'updater:id,name']);
+        $query = Attendance::whereHas('staff', fn ($q) => $q->active())
+            ->with(['staff.user', 'staff.department.faculty', 'creator:id,name', 'updater:id,name']);
 
         if ($request->filled('date')) {
             $query->whereDate('date', $request->date);
@@ -65,7 +66,7 @@ class AttendanceController extends Controller
             ->get(['staff_id', 'status', 'clock_in', 'clock_out', 'notes'])
             ->keyBy('staff_id');
 
-        $allStaff = Staff::whereHas('user', fn ($q) => $q->where('is_active', true))
+        $allStaff = Staff::active()
             ->with(['user:id,name', 'department:id,name'])
             ->select('id', 'user_id', 'department_id', 'staff_number')
             ->get()
@@ -112,7 +113,14 @@ class AttendanceController extends Controller
         $validated = $request->validate([
             'date' => 'required|date',
             'attendances' => 'required|array',
-            'attendances.*.staff_id' => 'required|exists:staff,id',
+            'attendances.*.staff_id' => [
+                'required',
+                \Illuminate\Validation\Rule::exists('staff', 'id')->where(function ($query) {
+                    $query->whereIn('user_id', function ($sub) {
+                        $sub->select('id')->from('users')->where('is_active', true)->whereNull('deleted_at');
+                    });
+                }),
+            ],
             'attendances.*.status' => 'required|in:present,late,absent,on_leave',
             'attendances.*.clock_in' => 'nullable',
             'attendances.*.clock_out' => 'nullable',
@@ -237,7 +245,14 @@ class AttendanceController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'staff_id' => 'required|exists:staff,id',
+            'staff_id' => [
+                'required',
+                \Illuminate\Validation\Rule::exists('staff', 'id')->where(function ($query) {
+                    $query->whereIn('user_id', function ($sub) {
+                        $sub->select('id')->from('users')->where('is_active', true)->whereNull('deleted_at');
+                    });
+                }),
+            ],
             'date' => 'required|date',
             'clock_in' => 'nullable',
             'clock_out' => 'nullable',
@@ -355,7 +370,7 @@ class AttendanceController extends Controller
         ]);
 
         $targetDate = $request->date;
-        $activeStaff = Staff::whereHas('user', fn ($q) => $q->where('is_active', true))->get();
+        $activeStaff = Staff::active()->get();
         $count = 0;
 
         foreach ($activeStaff as $staff) {
@@ -391,7 +406,7 @@ class AttendanceController extends Controller
     {
         $headers = ['staff_id', 'staff_name', 'department', 'clock_in', 'clock_out'];
 
-        $staffMembers = Staff::whereHas('user', fn ($q) => $q->where('is_active', true))
+        $staffMembers = Staff::active()
             ->with(['user', 'department'])
             ->get();
 
@@ -426,6 +441,9 @@ class AttendanceController extends Controller
     {
         $stats = $this->getReportStats($request);
 
+        $filters = $request->all();
+        $filters['per_page'] = min(max($request->integer('per_page', 15), 5), 100);
+
         return Inertia::render('Admin/HR/Attendance/Reports', [
             'stats' => $stats['data'],
             'departmentSummary' => $stats['departmentSummary'],
@@ -439,7 +457,7 @@ class AttendanceController extends Controller
             'semesters' => Semester::orderBy('registration_starts_at', 'desc')->get(),
             'departments' => AcademicCacheService::getAllDepartments(),
             'reportTitle' => $stats['title'],
-            'filters' => $request->all(),
+            'filters' => $filters,
         ]);
     }
 
@@ -546,15 +564,32 @@ class AttendanceController extends Controller
         $cacheKey = 'att_rep_'.md5(json_encode([
             't' => $type,
             'd' => $date->format('Y-m-d'),
+            'from' => $request->from_date,
+            'to' => $request->to_date,
             's' => $request->session_id,
             'sem' => $request->semester_id,
             'dept' => $request->department_id,
         ]));
 
         return Cache::remember($cacheKey, 300, function () use ($request, $type, $date) {
-            $query = Attendance::query();
+            $query = Attendance::whereHas('staff', fn ($q) => $q->active());
 
-            if ($type === 'monthly') {
+            if ($type === 'custom' || $request->filled('from_date') || $request->filled('to_date')) {
+                $start = $request->filled('from_date')
+                    ? Carbon::parse($request->from_date)->startOfDay()
+                    : now()->startOfMonth();
+                $end = $request->filled('to_date')
+                    ? Carbon::parse($request->to_date)->endOfDay()
+                    : now()->endOfDay();
+
+                if ($start->gt($end)) {
+                    [$start, $end] = [$end->copy()->startOfDay(), $start->copy()->endOfDay()];
+                }
+
+                $dateRange = [$start, $end];
+                $query->whereBetween('date', [$dateRange[0]->format('Y-m-d'), $dateRange[1]->format('Y-m-d')]);
+                $reportTitle = $dateRange[0]->format('M d, Y').' - '.$dateRange[1]->format('M d, Y');
+            } elseif ($type === 'monthly') {
                 $dateRange = [$date->copy()->startOfMonth(), $date->copy()->endOfMonth()];
                 $query->whereBetween('date', [$dateRange[0]->format('Y-m-d'), $dateRange[1]->format('Y-m-d')]);
                 $reportTitle = $date->format('F Y');
@@ -582,16 +617,26 @@ class AttendanceController extends Controller
                 $query->whereHas('staff', fn ($q) => $q->where('department_id', $request->department_id));
             }
 
-            $data = $query->select(
+            $isSqlite = DB::connection()->getDriverName() === 'sqlite';
+
+            $selects = [
                 'staff_id',
                 DB::raw('count(*) as total_days'),
                 DB::raw('SUM(CASE WHEN status = "present" THEN 1 ELSE 0 END) as present_count'),
                 DB::raw('SUM(CASE WHEN status = "late" THEN 1 ELSE 0 END) as late_count'),
                 DB::raw('SUM(CASE WHEN status = "absent" THEN 1 ELSE 0 END) as absent_count'),
                 DB::raw('SUM(CASE WHEN status = "on_leave" THEN 1 ELSE 0 END) as leave_count'),
-                DB::raw('SEC_TO_TIME(AVG(CASE WHEN clock_in IS NOT NULL THEN TIME_TO_SEC(clock_in) END)) as avg_clock_in_sec'),
-                DB::raw('SUM(CASE WHEN clock_in IS NOT NULL AND clock_out IS NOT NULL THEN TIME_TO_SEC(TIMEDIFF(clock_out, clock_in)) ELSE 0 END) as total_seconds_worked')
-            )
+            ];
+
+            if ($isSqlite) {
+                $selects[] = DB::raw('NULL as avg_clock_in_sec');
+                $selects[] = DB::raw('0 as total_seconds_worked');
+            } else {
+                $selects[] = DB::raw('SEC_TO_TIME(AVG(CASE WHEN clock_in IS NOT NULL THEN TIME_TO_SEC(clock_in) END)) as avg_clock_in_sec');
+                $selects[] = DB::raw('SUM(CASE WHEN clock_in IS NOT NULL AND clock_out IS NOT NULL THEN TIME_TO_SEC(TIMEDIFF(clock_out, clock_in)) ELSE 0 END) as total_seconds_worked');
+            }
+
+            $data = $query->select($selects)
                 ->groupBy('staff_id')
                 ->with(['staff.user', 'staff.department'])
                 ->get()
@@ -676,7 +721,8 @@ class AttendanceController extends Controller
         $startDate = $date->copy()->startOfMonth();
         $endDate = $date->copy()->endOfMonth();
 
-        $query = Staff::join('users', 'staff.user_id', '=', 'users.id')
+        $query = Staff::active()
+            ->join('users', 'staff.user_id', '=', 'users.id')
             ->select('staff.*')
             ->with('user:id,name', 'department:id,name')
             ->orderBy('users.name', 'asc');

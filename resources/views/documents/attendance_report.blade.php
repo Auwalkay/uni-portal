@@ -10,10 +10,10 @@
         .header .meta { font-size: 10px; color: #64748b; margin-top: 5px; }
         
         .kpi-container { width: 100%; margin-bottom: 20px; text-align: center; }
-        .kpi-box { display: inline-block; width: 18%; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; margin: 0 0.8%; vertical-align: top; }
-        .kpi-title { font-size: 9px; text-transform: uppercase; color: #64748b; font-weight: bold; margin-bottom: 4px; }
-        .kpi-value { font-size: 16px; font-weight: bold; color: #0f172a; }
-        .kpi-sub { font-size: 9px; color: #94a3b8; margin-top: 2px; }
+        .kpi-box { display: inline-block; width: 15%; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 6px; margin: 0 0.5%; vertical-align: top; }
+        .kpi-title { font-size: 8px; text-transform: uppercase; color: #64748b; font-weight: bold; margin-bottom: 4px; }
+        .kpi-value { font-size: 15px; font-weight: bold; color: #0f172a; }
+        .kpi-sub { font-size: 8px; color: #94a3b8; margin-top: 2px; }
 
         .section-title { font-size: 13px; font-weight: bold; color: #0f172a; margin-top: 20px; margin-bottom: 8px; text-transform: uppercase; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
 
@@ -26,6 +26,7 @@
         .text-green { color: #16a34a; font-weight: bold; }
         .text-amber { color: #d97706; font-weight: bold; }
         .text-red { color: #dc2626; font-weight: bold; }
+        .text-blue { color: #2563eb; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -58,6 +59,11 @@
             <div class="kpi-sub">Unlogged Days</div>
         </div>
         <div class="kpi-box">
+            <div class="kpi-title">Days On Leave</div>
+            <div class="kpi-value text-blue">{{ $overallStats['total_leave'] ?? 0 }}</div>
+            <div class="kpi-sub">Approved Leave</div>
+        </div>
+        <div class="kpi-box">
             <div class="kpi-title">Hours Logged</div>
             <div class="kpi-value">{{ $overallStats['total_hours_worked'] }} hrs</div>
             <div class="kpi-sub">Total Time</div>
@@ -86,16 +92,16 @@
         <tbody>
             @foreach($stats as $staff)
                 <tr>
-                    <td style="font-family: monospace; font-weight: bold; color: #475569;">{{ $staff->staff->staff_number }}</td>
-                    <td><strong>{{ $staff->staff->user->name }}</strong></td>
-                    <td>{{ $staff->staff->department->name }}</td>
+                    <td style="font-family: monospace; font-weight: bold; color: #475569;">{{ $staff->staff?->staff_number ?? 'N/A' }}</td>
+                    <td><strong>{{ $staff->staff?->user?->name ?? 'Unknown' }}</strong></td>
+                    <td>{{ $staff->staff?->department?->name ?? 'Unassigned' }}</td>
                     <td class="text-center">{{ $staff->total_days }}</td>
                     <td class="text-center text-green">{{ $staff->present_count }}</td>
                     <td class="text-center text-amber">{{ $staff->late_count }}</td>
                     <td class="text-center text-red">{{ $staff->absent_count }}</td>
-                    <td class="text-center">{{ $staff->leave_count }}</td>
-                    <td class="text-center" style="font-weight: bold;">{{ $staff->avg_clock_in }}</td>
-                    <td class="text-center">{{ $staff->total_hours_formatted }}</td>
+                    <td class="text-center text-blue">{{ $staff->leave_count ?? 0 }}</td>
+                    <td class="text-center" style="font-weight: bold;">{{ $staff->avg_clock_in ?? 'N/A' }}</td>
+                    <td class="text-center">{{ $staff->total_hours_formatted ?? 'N/A' }}</td>
                     <td class="text-right" style="font-weight: bold;">{{ $staff->punctuality_rate }}%</td>
                     <td class="text-right">
                         <span style="font-weight: bold; color: {{ $staff->rate >= 80 ? '#16a34a' : ($staff->rate >= 50 ? '#d97706' : '#dc2626') }}">{{ $staff->rate }}%</span>
@@ -116,6 +122,7 @@
                 <th class="text-center">Present</th>
                 <th class="text-center">Late</th>
                 <th class="text-center">Absent</th>
+                <th class="text-center">Leave</th>
                 <th class="text-right">Avg Punctuality</th>
                 <th class="text-right">Avg Attendance Rate</th>
             </tr>
@@ -129,6 +136,7 @@
                     <td class="text-center text-green">{{ $dept['present_count'] }}</td>
                     <td class="text-center text-amber">{{ $dept['late_count'] }}</td>
                     <td class="text-center text-red">{{ $dept['absent_count'] }}</td>
+                    <td class="text-center text-blue">{{ $dept['leave_count'] ?? 0 }}</td>
                     <td class="text-right" style="font-weight: bold;">{{ $dept['avg_punctuality'] }}%</td>
                     <td class="text-right" style="font-weight: bold; color: {{ $dept['avg_rate'] >= 80 ? '#16a34a' : '#d97706' }};">
                         {{ $dept['avg_rate'] }}%
