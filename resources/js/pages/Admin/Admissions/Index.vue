@@ -30,23 +30,44 @@ import StatsCard from '@/components/StatsCard.vue';
 import { format } from 'date-fns';
 import { type BreadcrumbItem } from '@/types';
 
-const props = defineProps<{
-    applicants: {
-        data: Array<{
-            id: string;
-            jamb_registration_number: string;
-            status: string;
-            created_at: string;
-            user: {
-                name: string;
-                email: string;
-            };
-            programme?: {
-                name: string;
-            };
-        }>;
-        links: Array<any>;
+interface ApplicantItem {
+    id: string;
+    jamb_registration_number: string;
+    status: string;
+    created_at: string;
+    user: {
+        name: string;
+        email: string;
     };
+    programme?: {
+        name: string;
+    };
+}
+
+interface PaginationLink {
+    url: string | null;
+    label: string;
+    active: boolean;
+}
+
+interface PaginatedApplicants {
+    data: Array<ApplicantItem>;
+    links: Array<PaginationLink>;
+    current_page: number;
+    first_page_url?: string;
+    from: number | null;
+    last_page: number;
+    last_page_url?: string;
+    next_page_url?: string | null;
+    path?: string;
+    per_page: number;
+    prev_page_url?: string | null;
+    to: number | null;
+    total: number;
+}
+
+const props = defineProps<{
+    applicants: PaginatedApplicants;
     stats: {
         total: number;
         admitted: number;
@@ -57,6 +78,7 @@ const props = defineProps<{
         search?: string;
         status?: string;
         programme_id?: string;
+        per_page?: string | number;
     };
     programmes: Array<{ id: string; name: string }>;
 }>();
@@ -68,6 +90,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 const search = ref(props.filters.search || '');
 const status = ref(props.filters.status || '');
 const programme = ref(props.filters.programme_id || '');
+const perPage = ref(String(props.filters.per_page || '15'));
 
 const updateFilters = debounce(() => {
     router.get(
@@ -75,13 +98,14 @@ const updateFilters = debounce(() => {
         { 
             search: search.value, 
             status: status.value,
-            programme_id: programme.value 
+            programme_id: programme.value,
+            per_page: perPage.value
         },
         { preserveState: true, preserveScroll: true, replace: true }
     );
 }, 300);
 
-watch([search, status, programme], updateFilters);
+watch([search, status, programme, perPage], updateFilters);
 
 const getStatusBadgeVariant = (status: string) => {
     switch (status) {
@@ -107,6 +131,7 @@ const clearFilters = () => {
     search.value = '';
     status.value = '';
     programme.value = '';
+    perPage.value = '15';
 };
 </script>
 
@@ -200,8 +225,19 @@ const clearFilters = () => {
                         </option>
                     </select>
 
+                    <select 
+                        v-model="perPage" 
+                        class="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                        <option value="10">10 / page</option>
+                        <option value="15">15 / page</option>
+                        <option value="25">25 / page</option>
+                        <option value="50">50 / page</option>
+                        <option value="100">100 / page</option>
+                    </select>
+
                     <Button 
-                        v-if="search || status || programme" 
+                        v-if="search || status || programme || perPage !== '15'" 
                         variant="ghost" 
                         size="sm" 
                         @click="clearFilters"
@@ -266,6 +302,27 @@ const clearFilters = () => {
                         </TableRow>
                     </TableBody>
                 </Table>
+
+                <!-- Pagination Footer -->
+                <div v-if="applicants.total > 0" class="flex flex-col sm:flex-row items-center justify-between border-t p-4 px-6 gap-4 bg-muted/20">
+                    <div class="text-xs text-muted-foreground font-medium">
+                        Showing <span class="font-bold text-foreground">{{ applicants.from || 0 }}</span> to <span class="font-bold text-foreground">{{ applicants.to || 0 }}</span> of <span class="font-bold text-foreground">{{ applicants.total }}</span> applications
+                    </div>
+                    <div v-if="applicants.links && applicants.links.length > 3" class="flex flex-wrap items-center gap-1">
+                        <Button 
+                            v-for="(link, i) in applicants.links" 
+                            :key="i"
+                            :variant="link.active ? 'default' : 'outline'"
+                            size="sm"
+                            :disabled="!link.url"
+                            as-child
+                            class="h-8 min-w-[32px] px-2 text-xs font-semibold rounded-md"
+                        >
+                            <Link v-if="link.url" :href="link.url" preserve-scroll preserve-state v-html="link.label" />
+                            <span v-else v-html="link.label"></span>
+                        </Button>
+                    </div>
+                </div>
             </div>
         </div>
     </AdminLayout>

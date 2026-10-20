@@ -22,7 +22,9 @@ import {
     XCircle,
     Eye,
     ShieldAlert,
-    Clock3
+    Clock3,
+    Search,
+    Loader2
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
 import { Button } from '@/components/ui/button';
@@ -33,7 +35,8 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription
+  CardDescription,
+  CardFooter
 } from '@/components/ui/card';
 import {
   Table,
@@ -85,6 +88,8 @@ const props = defineProps<{
 const activeTab = ref<'staff' | 'departments' | 'at_risk'>('staff');
 const reportType = ref(props.filters.type || 'monthly');
 const selectedDate = ref(props.filters.date || new Date().toISOString().split('T')[0]);
+const fromDate = ref(props.filters.from_date || props.dateRange?.start || new Date().toISOString().split('T')[0]);
+const toDate = ref(props.filters.to_date || props.dateRange?.end || new Date().toISOString().split('T')[0]);
 const selectedSession = ref(props.filters.session_id || '');
 const selectedSemester = ref(props.filters.semester_id || '');
 const selectedDept = ref(props.filters.department_id || 'ALL');
@@ -112,22 +117,174 @@ const filteredAtRiskStaff = computed(() => {
     });
 });
 
+const isFiltering = ref(false);
+
+// Staff Performance tab pagination
+const staffPerPage = ref(Number(props.filters?.per_page || 15));
+const staffCurrentPage = ref(1);
+
+const totalStaffPages = computed(() => {
+    return Math.max(1, Math.ceil(filteredStats.value.length / staffPerPage.value));
+});
+
+watch([searchQuery, staffPerPage, activeTab], () => {
+    staffCurrentPage.value = 1;
+    atRiskCurrentPage.value = 1;
+});
+
+const paginatedStats = computed(() => {
+    const start = (staffCurrentPage.value - 1) * staffPerPage.value;
+    return filteredStats.value.slice(start, start + staffPerPage.value);
+});
+
+const staffFrom = computed(() => {
+    if (filteredStats.value.length === 0) return 0;
+    return (staffCurrentPage.value - 1) * staffPerPage.value + 1;
+});
+
+const staffTo = computed(() => {
+    return Math.min(staffCurrentPage.value * staffPerPage.value, filteredStats.value.length);
+});
+
+const staffPaginationLinks = computed(() => {
+    const total = totalStaffPages.value;
+    const current = staffCurrentPage.value;
+    const links: Array<{ label: string; page: number | null; active: boolean; disabled: boolean }> = [];
+
+    links.push({
+        label: '&laquo; Previous',
+        page: current > 1 ? current - 1 : null,
+        active: false,
+        disabled: current <= 1
+    });
+
+    let start = Math.max(1, current - 2);
+    let end = Math.min(total, current + 2);
+
+    if (start > 1) {
+        links.push({ label: '1', page: 1, active: current === 1, disabled: false });
+        if (start > 2) {
+            links.push({ label: '...', page: null, active: false, disabled: true });
+        }
+    }
+
+    for (let p = start; p <= end; p++) {
+        links.push({ label: String(p), page: p, active: current === p, disabled: false });
+    }
+
+    if (end < total) {
+        if (end < total - 1) {
+            links.push({ label: '...', page: null, active: false, disabled: true });
+        }
+        links.push({ label: String(total), page: total, active: current === total, disabled: false });
+    }
+
+    links.push({
+        label: 'Next &raquo;',
+        page: current < total ? current + 1 : null,
+        active: false,
+        disabled: current >= total
+    });
+
+    return links;
+});
+
+const goToStaffPage = (page: number | null) => {
+    if (page !== null && page >= 1 && page <= totalStaffPages.value) {
+        staffCurrentPage.value = page;
+    }
+};
+
+// At-Risk tab pagination
+const atRiskPerPage = ref(15);
+const atRiskCurrentPage = ref(1);
+
+const totalAtRiskPages = computed(() => {
+    return Math.max(1, Math.ceil(filteredAtRiskStaff.value.length / atRiskPerPage.value));
+});
+
+const paginatedAtRiskStaff = computed(() => {
+    const start = (atRiskCurrentPage.value - 1) * atRiskPerPage.value;
+    return filteredAtRiskStaff.value.slice(start, start + atRiskPerPage.value);
+});
+
+const atRiskFrom = computed(() => {
+    if (filteredAtRiskStaff.value.length === 0) return 0;
+    return (atRiskCurrentPage.value - 1) * atRiskPerPage.value + 1;
+});
+
+const atRiskTo = computed(() => {
+    return Math.min(atRiskCurrentPage.value * atRiskPerPage.value, filteredAtRiskStaff.value.length);
+});
+
+const atRiskPaginationLinks = computed(() => {
+    const total = totalAtRiskPages.value;
+    const current = atRiskCurrentPage.value;
+    const links: Array<{ label: string; page: number | null; active: boolean; disabled: boolean }> = [];
+
+    links.push({
+        label: '&laquo; Previous',
+        page: current > 1 ? current - 1 : null,
+        active: false,
+        disabled: current <= 1
+    });
+
+    let start = Math.max(1, current - 2);
+    let end = Math.min(total, current + 2);
+
+    if (start > 1) {
+        links.push({ label: '1', page: 1, active: current === 1, disabled: false });
+        if (start > 2) {
+            links.push({ label: '...', page: null, active: false, disabled: true });
+        }
+    }
+
+    for (let p = start; p <= end; p++) {
+        links.push({ label: String(p), page: p, active: current === p, disabled: false });
+    }
+
+    if (end < total) {
+        if (end < total - 1) {
+            links.push({ label: '...', page: null, active: false, disabled: true });
+        }
+        links.push({ label: String(total), page: total, active: current === total, disabled: false });
+    }
+
+    links.push({
+        label: 'Next &raquo;',
+        page: current < total ? current + 1 : null,
+        active: false,
+        disabled: current >= total
+    });
+
+    return links;
+});
+
+const goToAtRiskPage = (page: number | null) => {
+    if (page !== null && page >= 1 && page <= totalAtRiskPages.value) {
+        atRiskCurrentPage.value = page;
+    }
+};
+
 const updateReport = () => {
+    isFiltering.value = true;
     router.get(route('admin.attendance.reports'), {
         type: reportType.value,
         date: selectedDate.value,
+        from_date: reportType.value === 'custom' ? fromDate.value : undefined,
+        to_date: reportType.value === 'custom' ? toDate.value : undefined,
         session_id: selectedSession.value,
         semester_id: selectedSemester.value,
         department_id: selectedDept.value === 'ALL' ? '' : selectedDept.value,
+        per_page: staffPerPage.value,
     }, {
         preserveState: true,
         replace: true,
+        onFinish: () => {
+            isFiltering.value = false;
+        },
     });
 };
-
-watch([reportType, selectedDate, selectedSession, selectedSemester, selectedDept], () => {
-    updateReport();
-});
 
 // Staff Detail History Drilldown Modal
 const showHistoryModal = ref(false);
@@ -239,7 +396,7 @@ const getStatusBadge = (status: string) => {
             </div>
 
             <!-- Smart KPI Summary Cards -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 md:gap-6">
                 <!-- Card 1: Attendance Rate -->
                 <Card class="border-none shadow-xl shadow-indigo-100 bg-gradient-to-br from-indigo-600 to-violet-700 text-white overflow-hidden relative group">
                     <div class="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
@@ -281,7 +438,19 @@ const getStatusBadge = (status: string) => {
                     </CardContent>
                 </Card>
 
-                <!-- Card 4: Total Work Hours -->
+                <!-- Card 4: Days on Leave -->
+                <Card class="border-none shadow-lg shadow-slate-200/50 bg-white">
+                    <CardContent class="p-6 space-y-4">
+                        <div class="flex justify-between items-start">
+                            <p class="text-slate-400 font-bold text-xs uppercase tracking-widest">Days On Leave</p>
+                            <div class="p-2 bg-blue-50 rounded-lg"><Calendar class="w-4 h-4 text-blue-600" /></div>
+                        </div>
+                        <h2 class="text-3xl font-black text-slate-900">{{ overallStats?.total_leave || 0 }}</h2>
+                        <p class="text-[10px] text-blue-600 font-bold">Approved Staff Leave Days</p>
+                    </CardContent>
+                </Card>
+
+                <!-- Card 5: Total Work Hours -->
                 <Card class="border-none shadow-lg shadow-slate-200/50 bg-white">
                     <CardContent class="p-6 space-y-4">
                         <div class="flex justify-between items-start">
@@ -293,7 +462,7 @@ const getStatusBadge = (status: string) => {
                     </CardContent>
                 </Card>
 
-                <!-- Card 5: At-Risk Staff -->
+                <!-- Card 6: At-Risk Staff -->
                 <Card class="border-none shadow-lg shadow-amber-100 bg-amber-50/50 border border-amber-200/60">
                     <CardContent class="p-6 space-y-4">
                         <div class="flex justify-between items-start">
@@ -320,6 +489,7 @@ const getStatusBadge = (status: string) => {
                     <SelectContent>
                         <SelectItem value="monthly">Monthly Report</SelectItem>
                         <SelectItem value="weekly">Weekly Report</SelectItem>
+                        <SelectItem value="custom">Custom Date Range</SelectItem>
                         <SelectItem value="session">Academic Session</SelectItem>
                         <SelectItem value="semester">Academic Semester</SelectItem>
                     </SelectContent>
@@ -327,6 +497,17 @@ const getStatusBadge = (status: string) => {
 
                 <div v-if="reportType === 'monthly' || reportType === 'weekly'">
                     <Input type="date" v-model="selectedDate" class="w-44 h-10 border-slate-200 bg-white rounded-xl font-bold text-xs shadow-sm" />
+                </div>
+
+                <div v-if="reportType === 'custom'" class="flex items-center gap-2">
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">From</span>
+                        <Input type="date" v-model="fromDate" class="w-36 h-10 border-slate-200 bg-white rounded-xl font-bold text-xs shadow-sm" />
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">To</span>
+                        <Input type="date" v-model="toDate" class="w-36 h-10 border-slate-200 bg-white rounded-xl font-bold text-xs shadow-sm" />
+                    </div>
                 </div>
 
                 <Select v-if="reportType === 'session'" v-model="selectedSession">
@@ -356,6 +537,17 @@ const getStatusBadge = (status: string) => {
                         <SelectItem v-for="d in departments" :key="d.id" :value="String(d.id)">{{ d.name }}</SelectItem>
                     </SelectContent>
                 </Select>
+
+                <Button 
+                    type="button" 
+                    class="h-10 px-5 font-bold text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm shadow-indigo-200 flex items-center gap-1.5 shrink-0"
+                    :disabled="isFiltering"
+                    @click="updateReport"
+                >
+                    <Loader2 v-if="isFiltering" class="w-3.5 h-3.5 animate-spin" />
+                    <Filter v-else class="w-3.5 h-3.5" />
+                    Apply Filter
+                </Button>
 
                 <div class="relative flex-1 min-w-[240px] max-w-[320px]">
                     <Search class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -410,7 +602,7 @@ const getStatusBadge = (status: string) => {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            <TableRow v-for="staff in filteredStats" :key="staff.staff_id" class="border-slate-50 group hover:bg-slate-50/70 transition-all">
+                            <TableRow v-for="staff in paginatedStats" :key="staff.staff_id" class="border-slate-50 group hover:bg-slate-50/70 transition-all">
                                 <TableCell class="py-4 px-6 font-mono text-xs font-black text-indigo-600 tracking-tighter">{{ staff.staff?.staff_number }}</TableCell>
                                 <TableCell class="py-4 px-6">
                                     <div class="flex flex-col">
@@ -429,6 +621,9 @@ const getStatusBadge = (status: string) => {
                                         </Badge>
                                         <Badge class="bg-red-50 text-red-700 border-red-200 font-bold text-[10px] px-2 py-0.5">
                                             {{ staff.absent_count }} Absent
+                                        </Badge>
+                                        <Badge class="bg-blue-50 text-blue-700 border-blue-200 font-bold text-[10px] px-2 py-0.5">
+                                            {{ staff.leave_count || 0 }} On Leave
                                         </Badge>
                                     </div>
                                 </TableCell>
@@ -464,6 +659,42 @@ const getStatusBadge = (status: string) => {
                             </TableRow>
                         </TableBody>
                     </Table>
+
+                    <!-- Pagination Footer -->
+                    <CardFooter v-if="filteredStats.length > 0" class="flex flex-col sm:flex-row items-center justify-between border-t border-slate-100 p-4 px-6 gap-4 bg-slate-50/50">
+                        <div class="flex items-center gap-4">
+                            <div class="text-xs text-slate-500 font-medium">
+                                Showing <span class="font-bold text-slate-900">{{ staffFrom }}</span> to <span class="font-bold text-slate-900">{{ staffTo }}</span> of <span class="font-bold text-slate-900">{{ filteredStats.length }}</span> staff members
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-xs text-slate-400">Per page:</span>
+                                <select 
+                                    v-model="staffPerPage" 
+                                    class="h-8 rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-xs font-bold text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                                >
+                                    <option :value="10">10</option>
+                                    <option :value="15">15</option>
+                                    <option :value="25">25</option>
+                                    <option :value="50">50</option>
+                                    <option :value="100">100</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div v-if="totalStaffPages > 1" class="flex flex-wrap items-center gap-1">
+                            <Button 
+                                v-for="(link, i) in staffPaginationLinks" 
+                                :key="i"
+                                :variant="link.active ? 'default' : 'outline'"
+                                size="sm"
+                                :disabled="link.disabled"
+                                @click="goToStaffPage(link.page)"
+                                class="h-8 min-w-[32px] px-2 text-xs font-bold rounded-lg cursor-pointer transition-all"
+                                :class="link.active ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'"
+                            >
+                                <span v-html="link.label"></span>
+                            </Button>
+                        </div>
+                    </CardFooter>
                 </Card>
 
                 <!-- Tab 2: Department Summary Table -->
@@ -477,6 +708,7 @@ const getStatusBadge = (status: string) => {
                                 <TableHead class="py-4 text-xs font-black uppercase text-slate-400 text-center">Total Present</TableHead>
                                 <TableHead class="py-4 text-xs font-black uppercase text-slate-400 text-center">Total Late</TableHead>
                                 <TableHead class="py-4 text-xs font-black uppercase text-slate-400 text-center">Total Absent</TableHead>
+                                <TableHead class="py-4 text-xs font-black uppercase text-slate-400 text-center">Total On Leave</TableHead>
                                 <TableHead class="py-4 text-xs font-black uppercase text-slate-400 text-right">Avg Punctuality %</TableHead>
                                 <TableHead class="py-4 px-6 text-xs font-black uppercase text-slate-400 text-right">Avg Attendance Rate</TableHead>
                             </TableRow>
@@ -489,6 +721,7 @@ const getStatusBadge = (status: string) => {
                                 <TableCell class="py-4 text-center font-bold text-green-600">{{ dept.present_count }}</TableCell>
                                 <TableCell class="py-4 text-center font-bold text-amber-600">{{ dept.late_count }}</TableCell>
                                 <TableCell class="py-4 text-center font-bold text-red-600">{{ dept.absent_count }}</TableCell>
+                                <TableCell class="py-4 text-center font-bold text-blue-600">{{ dept.leave_count || 0 }}</TableCell>
                                 <TableCell class="py-4 text-right font-bold text-xs text-emerald-600">{{ dept.avg_punctuality }}%</TableCell>
                                 <TableCell class="py-4 px-6 text-right">
                                     <span :class="['text-sm font-black', dept.avg_rate >= 80 ? 'text-green-600' : 'text-amber-600']">
@@ -508,13 +741,14 @@ const getStatusBadge = (status: string) => {
                                 <TableHead class="py-4 px-6 text-xs font-black uppercase text-amber-800">Staff ID</TableHead>
                                 <TableHead class="py-4 px-6 text-xs font-black uppercase text-amber-800">Staff Member</TableHead>
                                 <TableHead class="py-4 text-xs font-black uppercase text-amber-800 text-center">Unlogged Absences</TableHead>
+                                <TableHead class="py-4 text-xs font-black uppercase text-amber-800 text-center">Days On Leave</TableHead>
                                 <TableHead class="py-4 text-xs font-black uppercase text-amber-800 text-center">Punctuality Score</TableHead>
                                 <TableHead class="py-4 px-6 text-xs font-black uppercase text-amber-800 text-right">Attendance Rate</TableHead>
                                 <TableHead class="py-4 px-6 text-xs font-black uppercase text-amber-800 text-center">Action</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            <TableRow v-for="staff in filteredAtRiskStaff" :key="staff.staff_id" class="border-slate-50 hover:bg-amber-50/30 transition-all">
+                            <TableRow v-for="staff in paginatedAtRiskStaff" :key="staff.staff_id" class="border-slate-50 hover:bg-amber-50/30 transition-all">
                                 <TableCell class="py-4 px-6 font-mono text-xs font-black text-amber-900">{{ staff.staff?.staff_number }}</TableCell>
                                 <TableCell class="py-4 px-6">
                                     <div class="flex flex-col">
@@ -523,6 +757,7 @@ const getStatusBadge = (status: string) => {
                                     </div>
                                 </TableCell>
                                 <TableCell class="py-4 text-center font-black text-red-600">{{ staff.absent_count }} days</TableCell>
+                                <TableCell class="py-4 text-center font-bold text-xs text-blue-700">{{ staff.leave_count || 0 }} days</TableCell>
                                 <TableCell class="py-4 text-center font-bold text-xs text-amber-700">{{ staff.punctuality_rate }}%</TableCell>
                                 <TableCell class="py-4 px-6 text-right font-black text-red-600">{{ staff.rate }}%</TableCell>
                                 <TableCell class="py-4 px-6 text-center">
@@ -532,13 +767,49 @@ const getStatusBadge = (status: string) => {
                                 </TableCell>
                             </TableRow>
                             <TableRow v-if="atRiskStaff?.length === 0">
-                                <TableCell colspan="6" class="py-16 text-center text-green-700 font-bold">
+                                <TableCell colspan="7" class="py-16 text-center text-green-700 font-bold">
                                     <CheckCircle2 class="w-8 h-8 mx-auto mb-2 text-green-600" />
                                     Great news! No staff members are currently flagged as at-risk for low attendance.
                                 </TableCell>
                             </TableRow>
                         </TableBody>
                     </Table>
+
+                    <!-- Pagination Footer -->
+                    <CardFooter v-if="filteredAtRiskStaff.length > 0" class="flex flex-col sm:flex-row items-center justify-between border-t border-amber-100 p-4 px-6 gap-4 bg-amber-50/20">
+                        <div class="flex items-center gap-4">
+                            <div class="text-xs text-slate-500 font-medium">
+                                Showing <span class="font-bold text-slate-900">{{ atRiskFrom }}</span> to <span class="font-bold text-slate-900">{{ atRiskTo }}</span> of <span class="font-bold text-slate-900">{{ filteredAtRiskStaff.length }}</span> at-risk staff
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-xs text-slate-400">Per page:</span>
+                                <select 
+                                    v-model="atRiskPerPage" 
+                                    class="h-8 rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-xs font-bold text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                                >
+                                    <option :value="10">10</option>
+                                    <option :value="15">15</option>
+                                    <option :value="25">25</option>
+                                    <option :value="50">50</option>
+                                    <option :value="100">100</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div v-if="totalAtRiskPages > 1" class="flex flex-wrap items-center gap-1">
+                            <Button 
+                                v-for="(link, i) in atRiskPaginationLinks" 
+                                :key="i"
+                                :variant="link.active ? 'default' : 'outline'"
+                                size="sm"
+                                :disabled="link.disabled"
+                                @click="goToAtRiskPage(link.page)"
+                                class="h-8 min-w-[32px] px-2 text-xs font-bold rounded-lg cursor-pointer transition-all"
+                                :class="link.active ? 'bg-amber-600 text-white hover:bg-amber-700' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'"
+                            >
+                                <span v-html="link.label"></span>
+                            </Button>
+                        </div>
+                    </CardFooter>
                 </Card>
             </div>
 

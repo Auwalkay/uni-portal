@@ -34,8 +34,10 @@ import {
     Loader2,
     Sparkles,
     CheckSquare,
-    ListCheck
+    ListCheck,
+    RotateCcw
 } from 'lucide-vue-next';
+import Swal from 'sweetalert2';
 import { route } from 'ziggy-js';
 import {
   Dialog,
@@ -147,13 +149,13 @@ const showQuickSheetModal = ref(false);
 const quickSheetSearch = ref('');
 const quickSheetDept = ref('ALL');
 
-const batchMap = ref<Record<string, { status: string; clock_in?: string; clock_out?: string; notes?: string }>>({});
+const batchMap = ref<Record<string, { status: string | null; clock_in?: string; clock_out?: string; notes?: string }>>({});
 
 const syncBatchMap = () => {
-    const map: Record<string, { status: string; clock_in?: string; clock_out?: string; notes?: string }> = {};
+    const map: Record<string, { status: string | null; clock_in?: string; clock_out?: string; notes?: string }> = {};
     props.allStaff.forEach(s => {
         map[s.id] = {
-            status: s.existing_status || 'present',
+            status: s.existing_status || null,
             clock_in: s.clock_in || '',
             clock_out: s.clock_out || '',
             notes: s.notes || '',
@@ -193,11 +195,15 @@ const paginatedQuickStaff = computed(() => {
 
 const setStaffStatus = (staffId: string, status: 'present' | 'absent' | 'late' | 'on_leave') => {
     if (batchMap.value[staffId]) {
-        batchMap.value[staffId].status = status;
+        if (batchMap.value[staffId].status === status) {
+            batchMap.value[staffId].status = null;
+        } else {
+            batchMap.value[staffId].status = status;
+        }
     }
 };
 
-const markAllVisible = (status: 'present' | 'absent' | 'late' | 'on_leave') => {
+const markAllVisible = (status: 'present' | 'absent' | 'late' | 'on_leave' | null) => {
     filteredQuickStaff.value.forEach(s => {
         if (batchMap.value[s.id]) {
             batchMap.value[s.id].status = status;
@@ -210,26 +216,40 @@ const quickStats = computed(() => {
     let absent = 0;
     let late = 0;
     let onLeave = 0;
+    let unmarked = 0;
 
     Object.values(batchMap.value).forEach(item => {
         if (item.status === 'present') present++;
         else if (item.status === 'absent') absent++;
         else if (item.status === 'late') late++;
         else if (item.status === 'on_leave') onLeave++;
+        else unmarked++;
     });
 
-    return { present, absent, late, onLeave, total: props.allStaff.length };
+    return { present, absent, late, onLeave, unmarked, total: props.allStaff.length };
 });
 
 const isSubmittingBulk = ref(false);
 
 const saveBulkAttendance = () => {
+    const markedStaff = props.allStaff.filter(s => !!batchMap.value[s.id]?.status);
+
+    if (markedStaff.length === 0) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'No Staff Marked',
+            text: 'Please select an attendance status for at least one staff member before saving.',
+            confirmButtonColor: '#4f46e5',
+        });
+        return;
+    }
+
     isSubmittingBulk.value = true;
     const payload = {
         date: selectedDate.value,
-        attendances: props.allStaff.map(s => ({
+        attendances: markedStaff.map(s => ({
             staff_id: s.id,
-            status: batchMap.value[s.id]?.status || 'present',
+            status: batchMap.value[s.id].status!,
             clock_in: batchMap.value[s.id]?.clock_in || null,
             clock_out: batchMap.value[s.id]?.clock_out || null,
             notes: batchMap.value[s.id]?.notes || null,
@@ -1004,6 +1024,9 @@ const markAbsentForUnlogged = () => {
                                 <Badge variant="outline" class="bg-blue-50 text-blue-700 border-blue-200 font-bold px-2.5 py-1">
                                     🏖 Leave: {{ quickStats.onLeave }}
                                 </Badge>
+                                <Badge v-if="quickStats.unmarked > 0" variant="outline" class="bg-slate-100 text-slate-600 border-slate-300 font-bold px-2.5 py-1">
+                                    ⏳ Unmarked: {{ quickStats.unmarked }}
+                                </Badge>
                             </div>
                         </div>
                     </DialogHeader>
@@ -1049,6 +1072,15 @@ const markAbsentForUnlogged = () => {
                                 @click="markAllVisible('absent')"
                             >
                                 <UserX class="w-3.5 h-3.5 mr-1.5" /> Mark All Absent
+                            </Button>
+                            <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="sm" 
+                                class="h-9 text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-200/60"
+                                @click="markAllVisible(null)"
+                            >
+                                <RotateCcw class="w-3.5 h-3.5 mr-1.5" /> Clear All
                             </Button>
                         </div>
                     </div>
@@ -1181,7 +1213,7 @@ const markAbsentForUnlogged = () => {
                     <!-- Footer Actions -->
                     <DialogFooter class="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-row items-center justify-between">
                         <p class="text-xs text-muted-foreground hidden sm:block">
-                            Submitting will save attendance logs for <strong class="text-slate-800 dark:text-slate-200">{{ allStaff.length }}</strong> staff members.
+                            Submitting will save attendance logs for <strong class="text-slate-800 dark:text-slate-200">{{ quickStats.total - quickStats.unmarked }}</strong> of <strong class="text-slate-800 dark:text-slate-200">{{ allStaff.length }}</strong> active staff.
                         </p>
 
                         <div class="flex items-center gap-2 w-full sm:w-auto justify-end">

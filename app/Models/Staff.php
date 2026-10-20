@@ -105,4 +105,11 @@ class Staff extends Model
     {
         return $this->belongsTo(User::class, 'updated_by');
     }
+
+    public function scopeActive($query)
+    {
+        return $query->whereHas('user', function ($q) {
+            $q->where('is_active', true)->whereNull('deleted_at');
+        });
+    }
 }
