@@ -20,6 +20,7 @@ use App\Http\Controllers\Staff\StaffFinanceController;
 use App\Http\Controllers\Staff\StaffProfileController;
 use App\Http\Controllers\SupportTicketController;
 use App\Http\Controllers\Webhooks\PaystackWebhookController;
+use App\Http\Controllers\Webhooks\SeerbitWebhookController;
 use App\Http\Controllers\Webhooks\SquadcoWebhookController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -66,7 +67,11 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
         // Payroll Management (Requires run_payroll)
         Route::middleware(['permission:run_payroll'])->group(function () {
             Route::post('payroll/generate', [PayrollController::class, 'generate'])->name('payroll.generate');
+            Route::get('payroll/{payroll}/export', [PayrollController::class, 'export'])->name('payroll.export');
+            Route::post('payroll/{payroll}/import', [PayrollController::class, 'import'])->name('payroll.import');
             Route::post('payroll/{payroll}/mark-as-paid', [PayrollController::class, 'markAsPaid'])->name('payroll.mark-as-paid');
+            Route::put('payroll/{payroll}/items/{payrollItem}', [PayrollController::class, 'updateItem'])->name('payroll.items.update');
+            Route::post('payroll/{payroll}/items/{payrollItem}/toggle-exclusion', [PayrollController::class, 'toggleExclusion'])->name('payroll.items.toggle-exclusion');
             Route::get('payroll/{payroll}/payslip/{payrollItem}/download', [PayrollController::class, 'downloadPayslip'])->name('payroll.payslip.download');
             Route::resource('payroll', PayrollController::class)->only(['index', 'show', 'destroy']);
         });
@@ -172,10 +177,16 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
             Route::post('invoices/{invoice}/recalculate', [InvoiceController::class, 'recalculate'])->name('invoices.recalculate');
         });
 
+        // Waive / Remove Late Charges
+        Route::middleware(['permission:waive_late_charges'])->group(function () {
+            Route::post('invoices/{invoice}/waive-late-charge', [InvoiceController::class, 'waiveLateCharge'])->name('invoices.waive-late-charge');
+        });
+
         // Manual Invoice Payment / Override / Requery
         Route::middleware(['permission:manual_payment_override|verify_payments|manage_payments'])->group(function () {
             Route::post('invoices/{invoice}/mark-as-paid', [InvoiceController::class, 'markAsPaid'])->name('invoices.mark-as-paid');
             Route::post('payments/{payment}/verify', [InvoiceController::class, 'verifyPayment'])->name('payments.verify');
+            Route::post('payments/bulk-requery', [InvoiceController::class, 'bulkRequery'])->name('payments.bulk-requery');
         });
     });
 
@@ -243,6 +254,15 @@ Route::middleware(['auth', 'verified', 'permission:access_staff_portal'])->prefi
     Route::post('inventory/complaints', [MyInventoryController::class, 'storeComplaint'])->name('inventory.complaints.store');
 });
 
+// Top-level Inventory Fallback Route
+Route::middleware(['auth', 'verified'])->get('inventory', function () {
+    $user = auth()->user();
+    if ($user->hasRole(['admin', 'super_admin', 'store_officer', 'bursar']) || $user->can('access_admin_dashboard') || $user->can('view_inventory')) {
+        return redirect()->route('admin.inventory.index');
+    }
+    return redirect()->route('staff.inventory.index');
+});
+
 // Staff Profile (Available to all authenticated users with staff records)
 Route::middleware(['auth', 'verified'])->prefix('staff-portal')->name('staff.')->group(function () {
     Route::get('profile', [StaffProfileController::class, 'edit'])->name('profile.edit');
@@ -291,6 +311,7 @@ require __DIR__.'/settings.php';
 Route::middleware('throttle:webhooks')->group(function () {
     Route::post('webhooks/squadco', [SquadcoWebhookController::class, 'handle'])->name('webhooks.squadco');
     Route::post('webhooks/paystack', [PaystackWebhookController::class, 'handle'])->name('webhooks.paystack');
+    Route::post('webhooks/seerbit', [SeerbitWebhookController::class, 'handle'])->name('webhooks.seerbit');
 });
 
 // Public Verification

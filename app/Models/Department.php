@@ -38,4 +38,14 @@ class Department extends Model
     {
         return $this->hasMany(Programme::class);
     }
+
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    public function scopeAcademic($query)
+    {
+        return $query->where('is_academic', true);
+    }
 }

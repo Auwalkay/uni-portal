@@ -74,6 +74,7 @@ const props = defineProps<{
         };
     };
     filters: {
+        search?: string;
         session_id?: string;
         level?: string;
         hostel_id?: string;
@@ -85,14 +86,16 @@ const props = defineProps<{
         start_date?: string;
         end_date?: string;
         gender?: string;
+        hostel_visibility?: string;
         sort_by?: string;
         sort_direction?: string;
         per_page?: number;
     };
     canManageBookings?: boolean;
+    canChangeRoom?: boolean;
 }>();
 
-const searchTerm = ref('');
+const searchTerm = ref(props.filters.search || '');
 const filterSessionId = ref(props.filters.session_id || props.currentSession?.id || 'all');
 const filterLevel = ref(props.filters.level || 'all');
 const filterHostelId = ref(props.filters.hostel_id || 'all');
@@ -104,6 +107,7 @@ const filterDate = ref(props.filters.date || '');
 const filterStartDate = ref(props.filters.start_date || '');
 const filterEndDate = ref(props.filters.end_date || '');
 const filterGender = ref(props.filters.gender || 'all');
+const filterHostelVisibility = ref(props.filters.hostel_visibility || 'visible');
 
 const filterSortBy = ref(props.filters.sort_by || 'created_at');
 const filterSortDirection = ref(props.filters.sort_direction || 'desc');
@@ -259,8 +263,13 @@ const submitBooking = () => {
     });
 };
 
+watch(searchTerm, debounce(() => {
+    applyFilters();
+}, 300));
+
 const applyFilters = () => {
     router.get(route('admin.hostels.bookings.index'), {
+        search: searchTerm.value || '',
         session_id: filterSessionId.value === 'all' ? 'all' : filterSessionId.value,
         level: filterLevel.value === 'all' ? '' : filterLevel.value,
         hostel_id: filterHostelId.value === 'all' ? '' : filterHostelId.value,
@@ -272,6 +281,7 @@ const applyFilters = () => {
         start_date: filterStartDate.value,
         end_date: filterEndDate.value,
         gender: filterGender.value === 'all' ? '' : filterGender.value,
+        hostel_visibility: filterHostelVisibility.value,
         sort_by: filterSortBy.value,
         sort_direction: filterSortDirection.value,
     }, {
@@ -282,6 +292,7 @@ const applyFilters = () => {
 
 const exportCsv = () => {
     const params = new URLSearchParams();
+    if (searchTerm.value) params.append('search', searchTerm.value);
     if (filterSessionId.value) params.append('session_id', filterSessionId.value);
     if (filterLevel.value && filterLevel.value !== 'all') params.append('level', filterLevel.value);
     if (filterHostelId.value && filterHostelId.value !== 'all') params.append('hostel_id', filterHostelId.value);
@@ -293,6 +304,7 @@ const exportCsv = () => {
     if (filterStartDate.value) params.append('start_date', filterStartDate.value);
     if (filterEndDate.value) params.append('end_date', filterEndDate.value);
     if (filterGender.value && filterGender.value !== 'all') params.append('gender', filterGender.value);
+    if (filterHostelVisibility.value) params.append('hostel_visibility', filterHostelVisibility.value);
 
     window.location.href = `${route('admin.hostels.bookings.export')}?${params.toString()}`;
 };
@@ -309,6 +321,7 @@ const resetFilters = () => {
     filterDate.value = '';
     filterStartDate.value = '';
     filterEndDate.value = '';
+    filterHostelVisibility.value = 'visible';
     if (props.canManageBookings) {
         filterGender.value = 'all';
     }
@@ -325,8 +338,38 @@ const handleLevelChange = (val: string) => {
     applyFilters();
 };
 
+const handleHostelVisibilityChange = (val: string) => {
+    filterHostelVisibility.value = val;
+    filterHostelId.value = 'all';
+    filterBlockId.value = 'all';
+    filterFloorId.value = 'all';
+    filterRoomId.value = 'all';
+    applyFilters();
+};
+
 const handleHostelChange = (val: string) => {
     filterHostelId.value = val;
+    filterBlockId.value = 'all';
+    filterFloorId.value = 'all';
+    filterRoomId.value = 'all';
+    applyFilters();
+};
+
+const handleBlockChange = (val: string) => {
+    filterBlockId.value = val;
+    filterFloorId.value = 'all';
+    filterRoomId.value = 'all';
+    applyFilters();
+};
+
+const handleFloorChange = (val: string) => {
+    filterFloorId.value = val;
+    filterRoomId.value = 'all';
+    applyFilters();
+};
+
+const handleRoomFilterChange = (val: string) => {
+    filterRoomId.value = val;
     applyFilters();
 };
 
@@ -384,12 +427,14 @@ const filteredBookings = computed(() => {
         return list;
     }
     
-    const term = searchTerm.value.toLowerCase();
+    const term = searchTerm.value.toLowerCase().trim();
     return list.filter((b: any) => 
-        b.student?.user?.name?.toLowerCase().includes(term) ||
-        b.student?.matriculation_number?.toLowerCase().includes(term) ||
-        b.invoice?.reference?.toLowerCase().includes(term) ||
-        b.room?.floor?.block?.hostel?.name?.toLowerCase().includes(term)
+        (b.student?.user?.name && b.student.user.name.toLowerCase().includes(term)) ||
+        (b.student?.matriculation_number && b.student.matriculation_number.toLowerCase().includes(term)) ||
+        (b.student?.jamb_registration_number && b.student.jamb_registration_number.toLowerCase().includes(term)) ||
+        (b.room?.room_number && b.room.room_number.toString().toLowerCase().includes(term)) ||
+        (b.invoice?.reference && b.invoice.reference.toLowerCase().includes(term)) ||
+        (b.room?.floor?.block?.hostel?.name && b.room.floor.block.hostel.name.toLowerCase().includes(term))
     );
 });
 
@@ -407,6 +452,72 @@ const reallocateStudent = (bookingId: string) => {
             preserveScroll: true
         });
     }
+};
+
+// Change Room Modal State
+const isChangeRoomModalOpen = ref(false);
+const changeRoomTargetBooking = ref<any>(null);
+const changeRoomHostels = ref<any[]>([]);
+const isFetchingChangeRoomHostels = ref(false);
+const changeRoomSelectedHostelId = ref<string | null>(null);
+const changeRoomSelectedBlockId = ref<string | null>(null);
+const changeRoomSelectedFloorId = ref<string | null>(null);
+const changeRoomSelectedRoomId = ref<string | null>(null);
+
+const changeRoomForm = useForm({
+    hostel_room_id: '',
+});
+
+const openChangeRoomModal = async (booking: any) => {
+    changeRoomTargetBooking.value = booking;
+    changeRoomSelectedHostelId.value = null;
+    changeRoomSelectedBlockId.value = null;
+    changeRoomSelectedFloorId.value = null;
+    changeRoomSelectedRoomId.value = null;
+    changeRoomForm.hostel_room_id = '';
+    changeRoomHostels.value = [];
+    isChangeRoomModalOpen.value = true;
+    
+    if (booking.student?.id) {
+        isFetchingChangeRoomHostels.value = true;
+        try {
+            const res = await axios.get(route('admin.hostels.rooms.available'), {
+                params: { student_id: booking.student.id }
+            });
+            changeRoomHostels.value = res.data;
+        } catch (e) {
+            console.error('Failed to fetch rooms for change room modal', e);
+        } finally {
+            isFetchingChangeRoomHostels.value = false;
+        }
+    }
+};
+
+const activeChangeRoomHostel = computed(() => {
+    return changeRoomHostels.value.find(h => h.id === changeRoomSelectedHostelId.value);
+});
+
+const activeChangeRoomBlock = computed(() => {
+    return activeChangeRoomHostel.value?.blocks?.find((b: any) => b.id === changeRoomSelectedBlockId.value);
+});
+
+const activeChangeRoomFloor = computed(() => {
+    return activeChangeRoomBlock.value?.floors?.find((f: any) => f.id === changeRoomSelectedFloorId.value);
+});
+
+const handleChangeRoomRoomSelect = (roomId: string) => {
+    changeRoomSelectedRoomId.value = roomId;
+    changeRoomForm.hostel_room_id = roomId;
+};
+
+const submitChangeRoom = () => {
+    if (!changeRoomTargetBooking.value || !changeRoomForm.hostel_room_id) return;
+    changeRoomForm.post(route('admin.hostels.bookings.change-room', changeRoomTargetBooking.value.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            isChangeRoomModalOpen.value = false;
+        }
+    });
 };
 
 const formatCurrency = (amount: any) => {
@@ -566,6 +677,23 @@ const getInvoiceBalance = (invoice: any) => {
                         </Select>
                     </div>
 
+                    <!-- Hostel Visibility Selector -->
+                    <div>
+                        <Select v-model="filterHostelVisibility" @update:modelValue="handleHostelVisibilityChange">
+                            <SelectTrigger class="h-10 bg-muted/30 w-full text-left">
+                                <div class="flex items-center gap-2">
+                                    <Eye class="h-4 w-4 text-muted-foreground" />
+                                    <SelectValue placeholder="Hostel Visibility" />
+                                </div>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="visible">Visible Hostels Only</SelectItem>
+                                <SelectItem value="hidden">Hidden Hostels Only</SelectItem>
+                                <SelectItem value="all">All Hostels (Visible & Hidden)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
                     <!-- Hostel Selector -->
                     <div>
                         <Select v-model="filterHostelId" @update:modelValue="handleHostelChange">
@@ -578,7 +706,10 @@ const getInvoiceBalance = (invoice: any) => {
                             <SelectContent>
                                 <SelectItem value="all">-- All Hostels --</SelectItem>
                                 <SelectItem v-for="hostel in hostels" :key="hostel.id" :value="hostel.id">
-                                    {{ hostel.name }}
+                                    <div class="flex items-center justify-between w-full gap-2">
+                                        <span>{{ hostel.name }}</span>
+                                        <span v-if="hostel.is_visible === false" class="text-[10px] text-rose-600 font-bold uppercase">(Hidden)</span>
+                                    </div>
                                 </SelectItem>
                             </SelectContent>
                         </Select>
@@ -784,7 +915,8 @@ const getInvoiceBalance = (invoice: any) => {
                                     <div class="space-y-1">
                                         <div class="flex items-center gap-1.5 text-foreground font-semibold">
                                             <Hotel class="h-3.5 w-3.5 text-primary" />
-                                            {{ booking.room?.floor?.block?.hostel?.name }}
+                                            <span>{{ booking.room?.floor?.block?.hostel?.name }}</span>
+                                            <span v-if="booking.room?.floor?.block?.hostel?.is_visible === false" class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 uppercase">Hidden</span>
                                         </div>
                                         <p class="text-[11px] text-muted-foreground font-medium pl-5">
                                             {{ booking.room?.floor?.block?.name }} • {{ booking.room?.floor?.name }} • Room {{ booking.room?.room_number }}
@@ -839,6 +971,15 @@ const getInvoiceBalance = (invoice: any) => {
                                 </td>
                                 <td class="px-6 py-4 text-right">
                                     <div v-if="canManageBookings" class="flex items-center justify-end gap-2">
+                                        <Button 
+                                            v-if="booking.status !== 'cancelled' && (canChangeRoom ?? canManageBookings)"
+                                            variant="outline" 
+                                            size="sm" 
+                                            class="text-xs text-indigo-600 border-indigo-200 hover:bg-indigo-50 hover:border-indigo-500 h-8 rounded-lg font-semibold"
+                                            @click="openChangeRoomModal(booking)"
+                                        >
+                                            Change Room
+                                        </Button>
                                         <Button 
                                             v-if="booking.status !== 'cancelled'"
                                             variant="outline" 
@@ -1077,6 +1218,112 @@ const getInvoiceBalance = (invoice: any) => {
                         <Button type="submit" :disabled="form.processing || !form.student_id || !form.hostel_room_id">
                             <Loader2 v-if="form.processing" class="h-4 w-4 mr-2 animate-spin" />
                             Allocate Room
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+
+        <!-- Change Room Dialog -->
+        <Dialog :open="isChangeRoomModalOpen" @update:open="isChangeRoomModalOpen = $event">
+            <DialogContent class="sm:max-w-[500px]">
+                <DialogHeader>
+                    <DialogTitle>Change Room / Reassign</DialogTitle>
+                    <DialogDescription>
+                        Reassign <span class="font-bold text-foreground">{{ changeRoomTargetBooking?.student?.user?.name }}</span> to another available room.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <form @submit.prevent="submitChangeRoom" class="space-y-5 py-4">
+                    <div v-if="changeRoomTargetBooking" class="p-3 border rounded-xl bg-muted/40 text-xs space-y-1">
+                        <p class="font-bold text-foreground">Current Placement:</p>
+                        <p class="text-muted-foreground">
+                            {{ changeRoomTargetBooking.room?.floor?.block?.hostel?.name }} • {{ changeRoomTargetBooking.room?.floor?.block?.name }} • {{ changeRoomTargetBooking.room?.floor?.name }} • Room {{ changeRoomTargetBooking.room?.room_number }}
+                        </p>
+                        <p class="text-muted-foreground pt-1">
+                            Invoice Status: <span class="font-bold uppercase text-foreground">{{ changeRoomTargetBooking.invoice?.status || 'Unpaid' }}</span>
+                        </p>
+                    </div>
+
+                    <div v-if="isFetchingChangeRoomHostels" class="flex items-center justify-center p-6">
+                        <Loader2 class="h-6 w-6 animate-spin text-primary mr-2" />
+                        <span class="text-sm text-muted-foreground font-medium">Fetching open rooms...</span>
+                    </div>
+
+                    <div v-else-if="changeRoomHostels.length === 0" class="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg text-center">
+                        <p class="text-xs text-amber-800 dark:text-amber-300 font-medium">
+                            No open rooms found matching student gender.
+                        </p>
+                    </div>
+
+                    <div v-else class="grid grid-cols-1 gap-4">
+                        <!-- Select Hostel -->
+                        <div class="space-y-1.5">
+                            <Label>New Hostel <span class="text-red-500">*</span></Label>
+                            <Select v-model="changeRoomSelectedHostelId">
+                                <SelectTrigger class="w-full">
+                                    <SelectValue placeholder="Select Hostel" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="hostel in changeRoomHostels" :key="hostel.id" :value="hostel.id">
+                                        {{ hostel.name }} ({{ hostel.gender_type }})
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <!-- Select Block -->
+                        <div v-if="changeRoomSelectedHostelId" class="space-y-1.5">
+                            <Label>Wing / Block <span class="text-red-500">*</span></Label>
+                            <Select v-model="changeRoomSelectedBlockId">
+                                <SelectTrigger class="w-full">
+                                    <SelectValue placeholder="Select Block" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="block in activeChangeRoomHostel?.blocks || []" :key="block.id" :value="block.id">
+                                        {{ block.name }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <!-- Select Floor -->
+                        <div v-if="changeRoomSelectedBlockId" class="space-y-1.5">
+                            <Label>Floor <span class="text-red-500">*</span></Label>
+                            <Select v-model="changeRoomSelectedFloorId">
+                                <SelectTrigger class="w-full">
+                                    <SelectValue placeholder="Select Floor" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="floor in activeChangeRoomBlock?.floors || []" :key="floor.id" :value="floor.id">
+                                        {{ floor.name }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <!-- Select Room -->
+                        <div v-if="changeRoomSelectedFloorId" class="space-y-1.5">
+                            <Label>New Room <span class="text-red-500">*</span></Label>
+                            <Select v-model="changeRoomSelectedRoomId" @update:modelValue="handleChangeRoomRoomSelect">
+                                <SelectTrigger class="w-full">
+                                    <SelectValue placeholder="Select Room" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="room in activeChangeRoomFloor?.rooms || []" :key="room.id" :value="room.id">
+                                        Room {{ room.room_number }} ({{ room.available_beds }} beds available)
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p v-if="changeRoomForm.errors.hostel_room_id" class="text-xs text-destructive mt-1 font-semibold">{{ changeRoomForm.errors.hostel_room_id }}</p>
+                        </div>
+                    </div>
+
+                    <DialogFooter class="border-t pt-4">
+                        <Button type="button" variant="outline" @click="isChangeRoomModalOpen = false">Cancel</Button>
+                        <Button type="submit" :disabled="changeRoomForm.processing || !changeRoomForm.hostel_room_id">
+                            <Loader2 v-if="changeRoomForm.processing" class="h-4 w-4 mr-2 animate-spin" />
+                            Confirm Room Change
                         </Button>
                     </DialogFooter>
                 </form>

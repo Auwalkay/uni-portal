@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 import StudentLayout from '@/layouts/StudentLayout.vue';
 import { 
     LifeBuoy, Plus, Search, MessageSquare, Clock, 
     CheckCircle2, AlertCircle, X, ChevronRight 
 } from 'lucide-vue-next';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
+} from '@/components/ui/dialog';
+import Swal from 'sweetalert2';
 
 interface Ticket {
     id: number;
@@ -52,33 +56,41 @@ const submitTicket = () => {
         onSuccess: () => {
             showCreateModal.value = false;
             form.reset();
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000,
+                icon: 'success',
+                title: 'Support Ticket Submitted',
+            });
         },
     });
 };
 
 const filteredTickets = computed(() => {
-    if (!searchQuery.value) return props.tickets;
-    return props.tickets.filter(ticket => 
-        ticket.subject.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-        ticket.category.toLowerCase().includes(searchQuery.value.toLowerCase())
+    if (!searchQuery.value) return props.tickets || [];
+    return (props.tickets || []).filter(ticket => 
+        (ticket.subject || '').toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+        (ticket.category || '').toLowerCase().includes(searchQuery.value.toLowerCase())
     );
 });
 
 const getStatusColor = (status: string) => {
     switch (status) {
-        case 'open': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+        case 'open': return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400';
         case 'in_progress': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
         case 'resolved': return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
-        case 'closed': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+        case 'closed': return 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400';
         default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
     }
 };
 
 const getPriorityColor = (priority: string) => {
     switch (priority) {
-        case 'high': return 'text-red-600 dark:text-red-400';
-        case 'medium': return 'text-yellow-600 dark:text-yellow-400';
-        case 'low': return 'text-green-600 dark:text-green-400';
+        case 'high': return 'text-rose-600 dark:text-rose-400';
+        case 'medium': return 'text-amber-600 dark:text-amber-400';
+        case 'low': return 'text-emerald-600 dark:text-emerald-400';
         default: return 'text-gray-600 dark:text-gray-400';
     }
 };
@@ -130,7 +142,7 @@ const formatCategory = (cat: string) => {
                     </div>
 
                     <!-- Tickets List -->
-                    <div v-if="filteredTickets.length > 0" class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <div v-if="filteredTickets && filteredTickets.length > 0" class="divide-y divide-gray-100 dark:divide-gray-700">
                         <Link
                             v-for="ticket in filteredTickets"
                             :key="ticket.id"
@@ -140,19 +152,19 @@ const formatCategory = (cat: string) => {
                             <div class="p-6 flex items-center justify-between">
                                 <div class="flex-1 min-w-0 pr-4">
                                     <div class="flex items-center gap-3 mb-1.5 flex-wrap">
-                                        <span :class="['px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider', getStatusColor(ticket.status)]">
-                                            {{ ticket.status.replace('_', ' ') }}
+                                        <span :class="['px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider', getStatusColor(ticket.status || 'open')]">
+                                            {{ (ticket.status || 'open').replace('_', ' ') }}
                                         </span>
                                         <span class="text-xs text-gray-500 dark:text-gray-400">
-                                            {{ formatCategory(ticket.category) }}
+                                            {{ formatCategory(ticket.category || '') }}
                                         </span>
-                                        <span :class="['text-xs font-medium flex items-center gap-1', getPriorityColor(ticket.priority)]">
+                                        <span :class="['text-xs font-medium flex items-center gap-1', getPriorityColor(ticket.priority || 'medium')]">
                                             <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
-                                            {{ ticket.priority }} Priority
+                                            {{ ticket.priority || 'medium' }} Priority
                                         </span>
                                     </div>
                                     <h2 class="text-base font-semibold text-gray-900 dark:text-white truncate">
-                                        {{ ticket.subject }}
+                                        {{ ticket.subject || 'Support Ticket' }}
                                     </h2>
                                     <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">
                                         {{ ticket.latest_message?.message || 'No messages yet.' }}
@@ -162,7 +174,7 @@ const formatCategory = (cat: string) => {
                                     <div class="text-right hidden sm:block">
                                         <p class="text-xs text-gray-400 dark:text-gray-500">Last updated</p>
                                         <p class="text-sm font-medium text-gray-900 dark:text-white">
-                                            {{ new Date(ticket.created_at).toLocaleDateString() }}
+                                            {{ ticket.created_at ? new Date(ticket.created_at).toLocaleDateString() : 'N/A' }}
                                         </p>
                                     </div>
                                     <ChevronRight class="h-5 w-5 text-gray-400" />
@@ -191,90 +203,85 @@ const formatCategory = (cat: string) => {
             </div>
         </div>
 
-        <!-- Create Ticket Modal -->
-        <div v-if="showCreateModal" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-                <div class="fixed inset-0 bg-gray-500 dark:bg-gray-950 bg-opacity-75 dark:bg-opacity-80 transition-opacity" @click="showCreateModal = false"></div>
+        <!-- Create Ticket Dialog Modal -->
+        <Dialog v-model:open="showCreateModal">
+            <DialogContent class="max-w-lg rounded-2xl">
+                <DialogHeader>
+                    <DialogTitle class="text-xl font-bold flex items-center gap-2">
+                        <LifeBuoy class="w-5 h-5 text-indigo-600" />
+                        Create Support Ticket
+                    </DialogTitle>
+                </DialogHeader>
 
-                <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-                <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-gray-100 dark:border-gray-700">
-                    <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                            <Plus class="h-5 w-5 text-indigo-600" />
-                            Create Support Ticket
-                        </h3>
-                        <button @click="showCreateModal = false" class="text-gray-400 hover:text-gray-500">
-                            <X class="h-5 w-5" />
-                        </button>
+                <form @submit.prevent="submitTicket" class="space-y-4 py-2">
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-700 dark:text-gray-300 mb-1">Category *</label>
+                        <select
+                            v-model="form.category"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                            <option v-for="cat in categories" :key="cat.value" :value="cat.value">
+                                {{ cat.label }}
+                            </option>
+                        </select>
+                        <p v-if="form.errors.category" class="text-xs text-red-500 mt-1">{{ form.errors.category }}</p>
                     </div>
 
-                    <form @submit.prevent="submitTicket" class="p-6 space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
-                            <select
-                                v-model="form.category"
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            >
-                                <option v-for="cat in categories" :key="cat.value" :value="cat.value">
-                                    {{ cat.label }}
-                                </option>
-                            </select>
-                        </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-700 dark:text-gray-300 mb-1">Subject *</label>
+                        <input
+                            v-model="form.subject"
+                            type="text"
+                            required
+                            placeholder="Brief summary of the issue..."
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                        <p v-if="form.errors.subject" class="text-xs text-red-500 mt-1">{{ form.errors.subject }}</p>
+                    </div>
 
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
-                            <input
-                                v-model="form.subject"
-                                type="text"
-                                required
-                                placeholder="Brief summary of the issue..."
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            />
-                        </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-700 dark:text-gray-300 mb-1">Priority *</label>
+                        <select
+                            v-model="form.priority"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                            <option value="low">Low Priority</option>
+                            <option value="medium">Medium Priority</option>
+                            <option value="high">High Priority</option>
+                        </select>
+                        <p v-if="form.errors.priority" class="text-xs text-red-500 mt-1">{{ form.errors.priority }}</p>
+                    </div>
 
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Priority</label>
-                            <select
-                                v-model="form.priority"
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            >
-                                <option value="low">Low Priority</option>
-                                <option value="medium">Medium Priority</option>
-                                <option value="high">High Priority</option>
-                            </select>
-                        </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-700 dark:text-gray-300 mb-1">Message Description *</label>
+                        <textarea
+                            v-model="form.message"
+                            rows="4"
+                            required
+                            placeholder="Explain your issue in detail so we can help you best..."
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        ></textarea>
+                        <p v-if="form.errors.message" class="text-xs text-red-500 mt-1">{{ form.errors.message }}</p>
+                    </div>
 
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Message Description</label>
-                            <textarea
-                                v-model="form.message"
-                                rows="4"
-                                required
-                                placeholder="Explain your issue in detail so we can help you best..."
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            ></textarea>
-                        </div>
-
-                        <div class="pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-2">
-                            <button
-                                type="button"
-                                @click="showCreateModal = false"
-                                class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                :disabled="form.processing"
-                                class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
-                            >
-                                Submit Ticket
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
+                    <DialogFooter class="pt-4 border-t flex justify-end gap-2">
+                        <button
+                            type="button"
+                            @click="showCreateModal = false"
+                            class="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            :disabled="form.processing"
+                            class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 font-semibold"
+                        >
+                            Submit Ticket
+                        </button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     </StudentLayout>
 </template>

@@ -135,16 +135,16 @@ class StudentController extends Controller
                 'program_duration' => $duration,
             ]);
 
-            $currentSession = \App\Models\Session::find($validated['admitted_session_id']);
+            $currentSession = \App\Models\Session::current() ?? \App\Models\Session::find($validated['admitted_session_id']);
 
-            $currenSemester = $currentSession ? $currentSession->semesters()->where('is_current', true)->first() : null;
+            $currentSemester = $currentSession ? $currentSession->semesters()->where('is_current', true)->first() : null;
 
             StudentSession::create([
                 'student_id' => $student->id,
-                'session_id' => $validated['admitted_session_id'],
+                'session_id' => $currentSession->id,
                 'level' => $validated['current_level'],
                 'status' => 'active',
-                'semester' => $currenSemester?->name ?? 'First Semester',
+                'semester' => $currentSemester?->name ?? 'First Semester',
             ]);
 
             // Handle WAEC Result
@@ -160,7 +160,7 @@ class StudentController extends Controller
 
             Mail::to($user->email)->send(new StudentAccountCreated($user, $password));
 
-            // Auto-generate school fee invoice
+            // Auto-generate school fee invoice for current active session
             $feeService = app(\App\Services\Finance\FeeService::class);
             $feeService->generateSchoolFeeInvoice($student, $currentSession);
         });
@@ -334,6 +334,36 @@ class StudentController extends Controller
             $query->where('entry_mode', $request->entry_mode);
         }
 
+        // Age Filter
+        if ($request->filled('age_range') && $request->age_range !== 'ALL_AGES' && $request->age_range !== 'all') {
+            $range = $request->age_range;
+            if ($range === '15-19') {
+                $query->whereNotNull('dob')
+                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) >= 15')
+                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) <= 19');
+            } elseif ($range === '20-30') {
+                $query->whereNotNull('dob')
+                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) >= 20')
+                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) <= 30');
+            } elseif ($range === '30_above' || $range === '30+') {
+                $query->whereNotNull('dob')
+                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) >= 30');
+            }
+        } elseif ($request->filled('min_age') || $request->filled('max_age') || $request->filled('age')) {
+            if ($request->filled('min_age')) {
+                $query->whereNotNull('dob')
+                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) >= ?', [(int) $request->min_age]);
+            }
+            if ($request->filled('max_age')) {
+                $query->whereNotNull('dob')
+                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) <= ?', [(int) $request->max_age]);
+            }
+            if ($request->filled('age') && !$request->filled('min_age') && !$request->filled('max_age')) {
+                $query->whereNotNull('dob')
+                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) = ?', [(int) $request->age]);
+            }
+        }
+
         // Sorting
         $sortBy = $request->query('sort_by', 'created_at');
         $sortOrder = $request->query('sort_order', 'desc');
@@ -362,7 +392,7 @@ class StudentController extends Controller
             'filters' => $request->only([
                 'search', 'session_id', 'faculty_id', 'department_id', 'level',
                 'program_id', 'program', 'scholarship_id', 'date_from', 'date_to',
-                'gender', 'status', 'entry_mode', 'sort_by', 'sort_order', 'per_page'
+                'gender', 'status', 'entry_mode', 'age_range', 'min_age', 'max_age', 'age', 'sort_by', 'sort_order', 'per_page'
             ]),
             'sessions' => fn() => AcademicCacheService::getSessions(),
             'faculties' => fn() => AcademicCacheService::getFaculties(),

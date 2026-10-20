@@ -10,12 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { CheckCircle2 } from 'lucide-vue-next';
 
-interface Programme { id: string; name: string; }
+interface Programme { id: string; name: string; is_active?: boolean; }
 interface Department { id: string; name: string; programmes: Programme[]; }
 interface Faculty { id: string; name: string; departments: Department[]; }
 
 const props = defineProps<{
-    faculties: Faculty[]
+    faculties: Faculty[];
+    currentSession?: { id: string; name: string } | null;
 }>();
 
 const form = useForm({
@@ -30,7 +31,7 @@ const selectedFaculty = computed(() => props.faculties.find(f => f.id === form.f
 const departments = computed(() => selectedFaculty.value?.departments || []);
 
 const selectedDepartment = computed(() => departments.value.find(d => d.id === form.department_id));
-const programmes = computed(() => selectedDepartment.value?.programmes || []);
+const programmes = computed(() => (selectedDepartment.value?.programmes || []).filter(p => p.is_active !== false));
 
 const proceedToForm = () => {
     router.visit(route('applicant.apply.form'), {
@@ -61,8 +62,16 @@ const proceedToForm = () => {
 
             <Card class="border-t-4 border-t-primary shadow-xl ring-1 ring-border/50 bg-card/95 backdrop-blur-sm animate-fade-in-up delay-100">
                 <CardHeader class="pb-8">
-                    <CardTitle class="text-2xl font-serif">Application Pathway</CardTitle>
-                    <CardDescription class="text-base text-muted-foreground/80">Please ensure the information selected below precisely matches your supporting documents.</CardDescription>
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                            <CardTitle class="text-2xl font-serif">Application Pathway</CardTitle>
+                            <CardDescription class="text-base text-muted-foreground/80 mt-1">Please ensure the information selected below precisely matches your supporting documents.</CardDescription>
+                        </div>
+                        <div v-if="currentSession" class="self-start sm:self-auto shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">
+                            <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+                            <span>{{ currentSession.name }} Academic Session</span>
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent class="space-y-8">
                     

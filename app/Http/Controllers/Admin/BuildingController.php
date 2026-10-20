@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Building;
 use App\Imports\BuildingImport;
+use App\Models\Building;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
-use Illuminate\Support\Str;
 
 class BuildingController extends Controller
 {
@@ -23,8 +23,8 @@ class BuildingController extends Controller
             $search = trim($request->search);
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('code', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
+                    ->orWhere('code', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
             });
         }
 
@@ -145,7 +145,7 @@ class BuildingController extends Controller
     {
         $this->authorizePermission(['edit_buildings', 'manage_buildings']);
 
-        $building->usable_for_exams = !$building->usable_for_exams;
+        $building->usable_for_exams = ! $building->usable_for_exams;
         $building->save();
 
         $statusText = $building->usable_for_exams ? 'eligible for examinations' : 'no longer used for examinations';
@@ -163,9 +163,10 @@ class BuildingController extends Controller
 
         try {
             Excel::import(new BuildingImport, $request->file('file'));
+
             return back()->with('success', 'Campus buildings imported successfully.');
         } catch (\Exception $e) {
-            return back()->with('error', 'Error importing buildings: ' . $e->getMessage());
+            return back()->with('error', 'Error importing buildings: '.$e->getMessage());
         }
     }
 
@@ -218,7 +219,7 @@ class BuildingController extends Controller
     private function authorizePermission(array $permissions)
     {
         $user = auth()->user();
-        if (!$user) {
+        if (! $user) {
             abort(401, 'Unauthenticated');
         }
 

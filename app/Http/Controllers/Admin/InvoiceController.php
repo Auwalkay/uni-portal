@@ -508,7 +508,7 @@ class InvoiceController extends Controller
 
     public function show(Invoice $invoice)
     {
-        $invoice->load(['user.student', 'session', 'items', 'payments.user', 'payments.recorder', 'creator', 'updater']);
+        $invoice->load(['user.student', 'session', 'items', 'payments.user', 'payments.recorder', 'creator', 'updater', 'waivedBy']);
 
         return Inertia::render('Admin/Invoices/Show', [
             'invoice' => $invoice,
@@ -532,8 +532,12 @@ class InvoiceController extends Controller
             return back()->with('error', 'Invoice is already marked as paid.');
         }
 
-        $balance = $invoice->amount - $invoice->paid_amount;
-        $amountToRecord = $request->amount ?? $balance;
+        $balance = max(0, (float) $invoice->amount - (float) $invoice->paid_amount);
+        if ($balance <= 0) {
+            return back()->with('error', 'Invoice is already fully paid.');
+        }
+
+        $amountToRecord = min($balance, (float) ($request->amount ?? $balance));
 
         if ($amountToRecord <= 0) {
             return back()->with('error', 'Invalid amount.');
@@ -551,8 +555,12 @@ class InvoiceController extends Controller
             'paid_at' => $request->paid_at,
         ]);
 
-        $newTotalPaid = $invoice->paid_amount + $amountToRecord;
-        $newStatus = $newTotalPaid >= $invoice->amount ? 'paid' : 'partial';
+        // Remove late fine if manual payment date is on or before the late payment deadline
+        app(\App\Services\Payment\PaymentHandler::class)->checkAndRemoveLateFineIfPaidBeforeDeadline($invoice, $request->paid_at);
+        $invoice->refresh();
+
+        $newTotalPaid = min((float) $invoice->amount, (float) $invoice->paid_amount + $amountToRecord);
+        $newStatus = $newTotalPaid >= (float) $invoice->amount ? 'paid' : 'partial';
 
         $invoice->update([
             'status' => $newStatus,
@@ -610,14 +618,9 @@ class InvoiceController extends Controller
                 return back()->with('error', 'Cannot requery payment: No gateway reference exists for this transaction.');
             }
 
-            // Resolve the correct gateway service based on the payment's gateway field
+            // Resolve the correct gateway service based on the payment's gateway field and associated hostel keys
             $gatewayName = strtolower($payment->gateway ?? 'squadco');
-
-            if ($gatewayName === 'paystack') {
-                $gatewayService = app(\App\Services\PaystackService::class);
-            } else {
-                $gatewayService = app(\App\Services\SquadcoService::class);
-            }
+            $gatewayService = \App\Services\Payment\PaymentGatewayFactory::resolveForInvoice($payment->invoice, $gatewayName);
 
             // 1. Verify with the gateway
             $paymentData = $gatewayService->verifyTransaction($payment->gateway_reference);
@@ -658,6 +661,77 @@ class InvoiceController extends Controller
             ]);
 
             return back()->with('error', 'Payment re-query error: ' . $e->getMessage());
+        }
+    }
+
+    public function bulkRequery(Request $request)
+    {
+        try {
+            $filters = $request->only(['session_id', 'department_id', 'faculty_id', 'search', 'start_date', 'end_date']);
+
+            $query = \App\Models\Payment::query()
+                ->whereNotNull('gateway_reference')
+                ->where('gateway_reference', '!=', '')
+                ->whereIn('status', ['failed', 'pending']);
+
+            // Filter by session if provided
+            if ($request->filled('session_id') && $request->session_id !== 'ALL_SESSIONS_RESET_VALUE') {
+                $query->whereHas('invoice', function ($q) use ($request) {
+                    $q->where('session_id', $request->session_id);
+                });
+            }
+
+            // Filter by department if provided
+            if ($request->filled('department_id') && $request->department_id !== 'ALL_DEPARTMENTS_RESET_VALUE') {
+                $query->whereHas('user.student', function ($q) use ($request) {
+                    $q->where('department_id', $request->department_id);
+                });
+            }
+
+            // Filter by faculty if provided
+            if ($request->filled('faculty_id') && $request->faculty_id !== 'ALL_FACULTIES_RESET_VALUE' && !$request->filled('department_id')) {
+                $query->whereHas('user.student', function ($q) use ($request) {
+                    $q->where('faculty_id', $request->faculty_id);
+                });
+            }
+
+            // Search filter if provided
+            if ($request->filled('search')) {
+                $search = trim($request->search);
+                $query->where(function ($q) use ($search) {
+                    $q->where('gateway_reference', 'like', "%{$search}%")
+                        ->orWhere('id', 'like', "%{$search}%")
+                        ->orWhereHas('user', function ($uq) use ($search) {
+                            $uq->where('name', 'like', "%{$search}%")
+                                ->orWhere('email', 'like', "%{$search}%");
+                        });
+                });
+            }
+
+            // Date Range Filters
+            if ($request->filled('start_date')) {
+                $query->whereRaw('COALESCE(paid_at, created_at) >= ?', [$request->start_date . ' 00:00:00']);
+            }
+            if ($request->filled('end_date')) {
+                $query->whereRaw('COALESCE(paid_at, created_at) <= ?', [$request->end_date . ' 23:59:59']);
+            }
+
+            $count = $query->count();
+
+            if ($count === 0) {
+                return back()->with('info', 'No failed or pending payments with gateway references found matching your current filters.');
+            }
+
+            // Dispatch job to background queue
+            \App\Jobs\BulkRequeryPaymentsJob::dispatch($filters, Auth::user());
+
+            return back()->with('success', "Bulk requery job queued successfully for {$count} transaction(s). Payment statuses are being re-queried in the background.");
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('[BULK_REQUERY_SYSTEM_ERROR] Exception in bulkRequery controller', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('error', 'Failed to queue bulk requery job: ' . $e->getMessage());
         }
     }
 
@@ -789,5 +863,84 @@ class InvoiceController extends Controller
         $adjustedFormatted = number_format(abs($discrepancy), 2);
         $typeWord = $discrepancy > 0 ? 'added' : 'credited';
         return back()->with('success', "Invoice recalculated successfully. Adjustment of ₦{$adjustedFormatted} {$typeWord}.");
+    }
+
+    public function waiveLateCharge(Request $request, Invoice $invoice)
+    {
+        if (!Auth::user()->can('waive_late_charges') && !Auth::user()->hasRole('super_admin')) {
+            abort(403, 'Unauthorized. You need the waive_late_charges permission to remove late charges.');
+        }
+
+        if ($invoice->late_fine_waived) {
+            return back()->with('error', 'Late payment fine has already been waived for this invoice.');
+        }
+
+        $request->validate([
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        // Find late fee items
+        $lateFineItems = $invoice->items->filter(function ($item) {
+            $desc = strtolower($item->description ?? '');
+            return str_contains($desc, 'late payment fine') || str_contains($desc, 'late fee');
+        });
+
+        $fineAmountSum = (float) $lateFineItems->sum('amount');
+
+        // If no line items found, but late_fine_applied is true, fallback to session's late fee amount
+        if ($fineAmountSum <= 0 && $invoice->late_fine_applied) {
+            $fineAmountSum = (float) ($invoice->session?->late_fee_amount ?? 0);
+        }
+
+        if ($fineAmountSum <= 0 && !$invoice->late_fine_applied) {
+            return back()->with('error', 'No active late payment charges found on this invoice to waive.');
+        }
+
+        DB::transaction(function () use ($request, $invoice, $lateFineItems, $fineAmountSum) {
+            // Delete late fine line items
+            foreach ($lateFineItems as $item) {
+                $item->delete();
+            }
+
+            $oldAmount = (float) $invoice->amount;
+            $newTotalAmount = max(0, $oldAmount - $fineAmountSum);
+            $paidAmount = (float) $invoice->paid_amount;
+
+            $newStatus = 'pending';
+            if ($paidAmount >= $newTotalAmount && $newTotalAmount > 0) {
+                $newStatus = 'paid';
+            } elseif ($paidAmount > 0) {
+                $newStatus = 'partial';
+            }
+
+            $reason = $request->input('reason');
+
+            $invoice->update([
+                'amount' => $newTotalAmount,
+                'status' => $newStatus,
+                'late_fine_applied' => false,
+                'late_fine_waived' => true,
+                'late_fine_waived_at' => now(),
+                'late_fine_waived_by' => Auth::id(),
+                'late_fine_waived_reason' => $reason,
+                'updated_by' => Auth::id(),
+            ]);
+
+            activity()
+                ->performedOn($invoice)
+                ->causedBy(Auth::user())
+                ->withProperties([
+                    'waived_amount' => $fineAmountSum,
+                    'reason' => $reason,
+                    'old_amount' => $oldAmount,
+                    'new_amount' => $newTotalAmount,
+                ])
+                ->log("Waived late payment fine of ₦" . number_format($fineAmountSum, 2));
+
+            \Illuminate\Support\Facades\Log::info("[LATE_FINE_WAIVED] Waived late fine of ₦{$fineAmountSum} on invoice {$invoice->id} (Ref: {$invoice->reference}) by user " . Auth::id() . ". Reason: {$reason}");
+        });
+
+        $formatted = number_format($fineAmountSum, 2);
+        return back()->with('success', "Late payment charge of ₦{$formatted} has been successfully waived.");
     }
 }

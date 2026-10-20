@@ -18,12 +18,27 @@ class Invoice extends Model
         return LogOptions::defaults()->logFillable()->logOnlyDirty()->dontLogEmptyChanges();
     }
 
+    protected static function booted(): void
+    {
+        static::saving(function (Invoice $invoice) {
+            if ($invoice->amount > 0 && $invoice->paid_amount > $invoice->amount) {
+                $invoice->paid_amount = (float) $invoice->amount;
+            }
+
+            if ($invoice->amount > 0 && $invoice->paid_amount >= $invoice->amount) {
+                $invoice->status = 'paid';
+            }
+        });
+    }
+
     protected $guarded = [];
 
     protected $casts = [
         'amount' => 'double',
         'paid_amount' => 'double',
         'late_fine_applied' => 'boolean',
+        'late_fine_waived' => 'boolean',
+        'late_fine_waived_at' => 'datetime',
         'due_date' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
@@ -67,5 +82,21 @@ class Invoice extends Model
     public function updater()
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function waivedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'late_fine_waived_by');
+    }
+
+    public function getHostel(): ?Hostel
+    {
+        $booking = $this->relationLoaded('booking') ? $this->booking : $this->booking()->first();
+        if ($booking) {
+            $booking->loadMissing('room.floor.block.hostel');
+            return $booking->room?->floor?->block?->hostel;
+        }
+
+        return null;
     }
 }

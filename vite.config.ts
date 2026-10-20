@@ -29,7 +29,15 @@ export default defineConfig({
             output: {
                 manualChunks(id) {
                     if (id.includes('node_modules')) {
-                        return 'vendor';
+                        if (id.includes('chart.js') || id.includes('vue-chartjs')) {
+                            return 'vendor-charts';
+                        }
+                        if (id.includes('lucide-vue-next')) {
+                            return 'vendor-icons';
+                        }
+                        if (id.includes('reka-ui') || id.includes('radix-vue')) {
+                            return 'vendor-ui';
+                        }
                     }
                 },
             },

@@ -13,8 +13,22 @@ class ScholarshipController extends Controller
     {
         $scholarships = Scholarship::withCount(['students', 'applicants'])->latest()->get();
 
+        $totalStudentsOnScholarship = $scholarships->sum('students_count');
+        $totalApplicantsOnScholarship = $scholarships->sum('applicants_count');
+        $totalBeneficiaries = $totalStudentsOnScholarship + $totalApplicantsOnScholarship;
+
+        $summaryStats = [
+            'total_schemes' => $scholarships->count(),
+            'active_schemes' => $scholarships->where('is_active', true)->count(),
+            'inactive_schemes' => $scholarships->where('is_active', false)->count(),
+            'total_students' => $totalStudentsOnScholarship,
+            'total_applicants' => $totalApplicantsOnScholarship,
+            'total_beneficiaries' => $totalBeneficiaries,
+        ];
+
         return Inertia::render('Admin/Scholarships/Index', [
             'scholarships' => $scholarships,
+            'summaryStats' => $summaryStats,
         ]);
     }
 

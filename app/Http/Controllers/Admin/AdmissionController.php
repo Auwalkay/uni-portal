@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Mail\StudentAdmitted;
 use App\Models\Applicant;
 use App\Models\Invoice;
-use App\Models\Programme;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -71,10 +70,10 @@ class AdmissionController extends Controller
             ->first();
 
         return Inertia::render('Admin/Admissions/Show', [
-            'applicant'    => $applicant,
+            'applicant' => $applicant,
             'payment_info' => $paymentInfo,
-            'programmes'   => fn() => \App\Services\AcademicCacheService::getProgrammes(),
-            'scholarships' => fn() => \App\Services\AcademicCacheService::getScholarships(),
+            'programmes' => fn () => \App\Services\AcademicCacheService::getProgrammes(),
+            'scholarships' => fn () => \App\Services\AcademicCacheService::getScholarships(),
         ]);
     }
 
@@ -86,9 +85,9 @@ class AdmissionController extends Controller
 
         // Extra fields required when admitting
         if ($request->status === 'admitted') {
-            $rules['admitted_level']        = 'required|in:100,200,300,400,500';
+            $rules['admitted_level'] = 'required|in:100,200,300,400,500';
             $rules['admitted_programme_id'] = 'required|exists:programmes,id';
-            $rules['scholarship_id']        = 'nullable|exists:scholarships,id';
+            $rules['scholarship_id'] = 'nullable|exists:scholarships,id';
         }
 
         $validated = $request->validate($rules);
@@ -96,9 +95,9 @@ class AdmissionController extends Controller
         $updateData = ['status' => $validated['status']];
 
         if ($validated['status'] === 'admitted') {
-            $updateData['admitted_level']        = $validated['admitted_level'];
+            $updateData['admitted_level'] = $validated['admitted_level'];
             $updateData['admitted_programme_id'] = $validated['admitted_programme_id'];
-            $updateData['scholarship_id']        = $validated['scholarship_id'] ?? null;
+            $updateData['scholarship_id'] = $validated['scholarship_id'] ?? null;
         }
 
         $applicant->update($updateData);
@@ -111,8 +110,8 @@ class AdmissionController extends Controller
                 ['user_id' => $applicant->user_id, 'type' => 'acceptance_fee'],
                 [
                     'reference' => 'ACC-'.strtoupper(uniqid()),
-                    'amount'   => 50000.00,
-                    'status'   => 'pending',
+                    'amount' => 50000.00,
+                    'status' => 'pending',
                     'due_date' => now()->addWeeks(2),
                 ]
             );
@@ -141,7 +140,7 @@ class AdmissionController extends Controller
         //     $cacheModifiedTime = \Illuminate\Support\Facades\Storage::disk('local')->lastModified($filePath);
         //     $applicantUpdatedTime = $applicant->updated_at->timestamp;
         //     $scholarshipUpdatedTime = $applicant->scholarship ? $applicant->scholarship->updated_at->timestamp : 0;
-        // 
+        //
         //     if ($cacheModifiedTime >= max($applicantUpdatedTime, $scholarshipUpdatedTime)) {
         //         return \Illuminate\Support\Facades\Storage::disk('local')->download($filePath, $fileName, [
         //             'Content-Type' => 'application/pdf',
@@ -152,7 +151,7 @@ class AdmissionController extends Controller
 
         $applicant->load(['user', 'programme.department.faculty', 'state', 'lga', 'scholarship']);
         $currentSession = \App\Models\Session::current();
-        
+
         // Calculate Fees for the Letter
         $feesData = $this->calculateEstimatedFeesForApplicant($applicant, $currentSession);
 
@@ -176,8 +175,10 @@ class AdmissionController extends Controller
 
     private function calculateEstimatedFeesForApplicant($applicant, $session)
     {
-        if (!$session) return null;
-        
+        if (! $session) {
+            return null;
+        }
+
         $program = $applicant->programme;
         $deptId = $program?->department_id;
         $facultyId = $program?->department?->faculty_id;
@@ -194,7 +195,7 @@ class AdmissionController extends Controller
                 $q->where(function ($sub) {
                     $sub->where('level', '100')->orWhereNull('level');
                 })
-                ->orWhere('entry_mode', $entryMode);
+                    ->orWhere('entry_mode', $entryMode);
             })
             ->where(function ($q) use ($entryMode) {
                 $q->where('entry_mode', $entryMode)->orWhereNull('entry_mode');
@@ -214,35 +215,35 @@ class AdmissionController extends Controller
                 ?? $configs->where('department_id', $deptId)->whereNull('program_id')->first()
                 ?? $configs->where('faculty_id', $facultyId)->whereNull('department_id')->whereNull('program_id')->first()
                 ?? $configs->whereNull('faculty_id')->whereNull('department_id')->whereNull('program_id')->first();
-            
+
             if ($resolved) {
                 if ($resolved->feeType && $resolved->feeType->is_one_time) {
                     $oneTimeFeesTotal += $resolved->amount;
                     $oneTimeFeesList[] = [
                         'name' => $resolved->feeType->name,
-                        'amount' => $resolved->amount
+                        'amount' => $resolved->amount,
                     ];
                 } else {
                     $tuition += $resolved->amount;
                     $feeName = $resolved->feeType ? strtolower($resolved->feeType->name) : '';
                     $feeSlug = $resolved->feeType ? $resolved->feeType->slug : '';
-                    $isExcluded = str_contains($feeName, 'drug test') || 
+                    $isExcluded = str_contains($feeName, 'drug test') ||
                                   str_contains($feeSlug, 'drug-test') ||
-                                  str_contains($feeName, 'acceptance') || 
+                                  str_contains($feeName, 'acceptance') ||
                                   str_contains($feeSlug, 'acceptance') ||
-                                  str_contains($feeName, 'matriculation') || 
+                                  str_contains($feeName, 'matriculation') ||
                                   str_contains($feeSlug, 'matriculation');
-                    
-                    if (!$isExcluded) {
+
+                    if (! $isExcluded) {
                         $discountTuitionBase += $resolved->amount;
                     }
                 }
             }
         }
 
-        $adminCharge = \App\Models\SystemSetting::get('admin_charge_enabled', true) 
+        $adminCharge = \App\Models\SystemSetting::get('admin_charge_enabled', true)
             ? \App\Models\SystemSetting::get('admin_charge_amount', 250000) : 0;
-            
+
         // Calculate Discount based on Scholarship Coverage
         $discount = 0;
         $scholarship = $applicant->scholarship;
@@ -267,7 +268,7 @@ class AdmissionController extends Controller
             'one_time_fees_list' => $oneTimeFeesList,
             'discount' => $discount,
             'total' => $total - $discount,
-            'scholarship_name' => $scholarship?->name
+            'scholarship_name' => $scholarship?->name,
         ];
     }
 }

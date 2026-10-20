@@ -37,6 +37,8 @@ class HostelBookingController extends Controller
 
         $currentSession = Session::current();
         
+        $search = trim($request->input('search', ''));
+
         $sessionId = $request->input('session_id');
         if ($sessionId === 'all') {
             $sessionId = null;
@@ -66,6 +68,11 @@ class HostelBookingController extends Controller
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
         $gender = $request->input('gender', 'all');
+
+        $hostelVisibility = $request->input('hostel_visibility', 'visible');
+        if (!in_array($hostelVisibility, ['visible', 'hidden', 'all'])) {
+            $hostelVisibility = 'visible';
+        }
 
         // Force gender scope if user has specific male/female supervisor permissions
         $userPermittedGender = null;
@@ -97,6 +104,28 @@ class HostelBookingController extends Controller
         ]);
 
         // Filters
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('student', function ($sq) use ($search) {
+                    $sq->where('matriculation_number', 'like', "%{$search}%")
+                       ->orWhere('jamb_registration_number', 'like', "%{$search}%")
+                       ->orWhereHas('user', function ($uq) use ($search) {
+                           $uq->where('name', 'like', "%{$search}%")
+                              ->orWhere('email', 'like', "%{$search}%");
+                       });
+                })
+                ->orWhereHas('room', function ($rq) use ($search) {
+                    $rq->where('room_number', 'like', "%{$search}%")
+                       ->orWhereHas('floor.block.hostel', function ($hq) use ($search) {
+                           $hq->where('name', 'like', "%{$search}%");
+                       });
+                })
+                ->orWhereHas('invoice', function ($iq) use ($search) {
+                    $iq->where('reference', 'like', "%{$search}%");
+                });
+            });
+        }
+
         if ($sessionId) {
             $query->where('session_id', $sessionId);
         }
@@ -158,6 +187,8 @@ class HostelBookingController extends Controller
             });
         }
 
+        $this->applyVisibilityFilter($query, $hostelVisibility);
+
         // Sorting
         if ($sortBy === 'student_name') {
             $query->join('students', 'hostel_bookings.student_id', '=', 'students.id')
@@ -184,17 +215,81 @@ class HostelBookingController extends Controller
 
         $sessions = Session::latest()->get(['id', 'name']);
         
-        // Scope Hostel Dropdown Options based on permission
-        $hostelsQuery = Hostel::with(['blocks.floors.rooms'])->orderBy('name');
+        // Scope Hostel Dropdown Options based on permission and visibility filter
+        $hostelsQuery = Hostel::with([
+            'blocks' => function ($bq) use ($hostelVisibility) {
+                if ($hostelVisibility === 'visible') {
+                    $bq->where('is_visible', true);
+                }
+            },
+            'blocks.floors' => function ($fq) use ($hostelVisibility) {
+                if ($hostelVisibility === 'visible') {
+                    $fq->where('is_visible', true);
+                }
+            },
+            'blocks.floors.rooms' => function ($rq) use ($hostelVisibility) {
+                if ($hostelVisibility === 'visible') {
+                    $rq->where('is_visible', true);
+                }
+            }
+        ])
+            ->orderBy('name');
+        if ($hostelVisibility === 'visible') {
+            $hostelsQuery->where('is_visible', true);
+        } elseif ($hostelVisibility === 'hidden') {
+            $hostelsQuery->where('is_visible', false);
+        }
+
         if ($gender === 'male' || $gender === 'female') {
             $hostelsQuery->where('gender_type', $gender);
         }
         $hostels = $hostelsQuery->get();
 
-        // Analytics Calculations (Independent of UI request search/filters, but strictly scoped if user has single-gender permission)
+        // Analytics Calculations (Scoped to visibility filter across rooms, blocks, hostels, permitted gender, and active filter selections)
         $statsQuery = HostelBooking::query();
+        $this->applyVisibilityFilter($statsQuery, $hostelVisibility);
+
         if ($userPermittedGender) {
             $statsQuery->whereHas('room.floor.block.hostel', fn($q) => $q->where('gender_type', $userPermittedGender));
+        } elseif ($gender === 'male' || $gender === 'female') {
+            $statsQuery->whereHas('room.floor.block.hostel', fn($q) => $q->where('gender_type', $gender));
+        }
+
+        if ($sessionId) {
+            $statsQuery->where('session_id', $sessionId);
+        }
+        if ($level) {
+            $statsQuery->whereHas('student', fn($q) => $q->where('current_level', $level));
+        }
+        if ($hostelId) {
+            $statsQuery->whereHas('room.floor.block', fn($q) => $q->where('hostel_id', $hostelId));
+        }
+        if ($blockId) {
+            $statsQuery->whereHas('room.floor', fn($q) => $q->where('hostel_block_id', $blockId));
+        }
+        if ($floorId) {
+            $statsQuery->whereHas('room', fn($q) => $q->where('hostel_floor_id', $floorId));
+        }
+        if ($roomId) {
+            $statsQuery->where('hostel_room_id', $roomId);
+        }
+        if ($status === 'expired') {
+            if ($currentSession) {
+                $statsQuery->where('session_id', '!=', $currentSession->id)->whereIn('status', ['pending', 'confirmed']);
+            } else {
+                $statsQuery->whereRaw('1 = 0');
+            }
+        } elseif ($status) {
+            $statsQuery->where('status', $status);
+        }
+        if ($date) {
+            $statsQuery->whereDate('hostel_bookings.created_at', $date);
+        }
+        if ($startDate) {
+            $statsQuery->whereDate('hostel_bookings.created_at', '>=', Carbon::parse($startDate)->startOfDay());
+        }
+        if ($endDate) {
+            $statsQuery->whereDate('hostel_bookings.created_at', '<=', Carbon::parse($endDate)->endOfDay());
         }
 
         $totalBookingsCount = (clone $statsQuery)->count();
@@ -202,18 +297,38 @@ class HostelBookingController extends Controller
         $pendingCount = (clone $statsQuery)->where('status', 'pending')->count();
         $cancelledCount = (clone $statsQuery)->where('status', 'cancelled')->count();
 
-        // Rooms and Capacity for hostels
+        // Rooms and Capacity Analytics (Scoped to visibility filter across rooms, blocks, hostels, and active scope)
         $capacityQuery = HostelRoom::query();
+        $this->applyRoomVisibilityFilter($capacityQuery, $hostelVisibility);
+
         if ($userPermittedGender) {
             $capacityQuery->whereHas('floor.block.hostel', fn($q) => $q->where('gender_type', $userPermittedGender));
+        } elseif ($gender === 'male' || $gender === 'female') {
+            $capacityQuery->whereHas('floor.block.hostel', fn($q) => $q->where('gender_type', $gender));
+        }
+
+        if ($hostelId) {
+            $capacityQuery->whereHas('floor.block', fn($q) => $q->where('hostel_id', $hostelId));
+        }
+        if ($blockId) {
+            $capacityQuery->whereHas('floor', fn($q) => $q->where('hostel_block_id', $blockId));
+        }
+        if ($floorId) {
+            $capacityQuery->where('hostel_floor_id', $floorId);
+        }
+        if ($roomId) {
+            $capacityQuery->where('id', $roomId);
         }
 
         $totalRooms = (clone $capacityQuery)->count();
         $totalCapacity = (int) (clone $capacityQuery)->sum('capacity');
 
-        // Occupied Rooms: Rooms with at least 1 active booking (pending or confirmed)
-        $occupiedRooms = (clone $capacityQuery)->whereHas('bookings', function ($q) {
+        // Occupied Rooms: Rooms matching capacityQuery with at least 1 active booking (pending or confirmed)
+        $occupiedRooms = (clone $capacityQuery)->whereHas('bookings', function ($q) use ($sessionId) {
             $q->whereIn('status', ['pending', 'confirmed']);
+            if ($sessionId) {
+                $q->where('session_id', $sessionId);
+            }
         })->count();
 
         $vacantRooms = max(0, $totalRooms - $occupiedRooms);
@@ -244,6 +359,7 @@ class HostelBookingController extends Controller
         ];
 
         $canManageBookings = $user->can('manage_hostel_bookings') || $user->can('manage_hostels') || $user->hasRole('admin');
+        $canChangeRoom = $user->can('change_hostel_room') || $user->hasRole('admin') || $user->hasRole('super_admin');
 
         return Inertia::render('Admin/Hostels/Bookings', [
             'bookings' => $bookings,
@@ -269,6 +385,7 @@ class HostelBookingController extends Controller
                 'gender_breakdown' => $genderBreakdown,
             ],
             'filters' => [
+                'search' => $search,
                 'session_id' => $sessionId,
                 'level' => $level,
                 'hostel_id' => $hostelId,
@@ -280,11 +397,13 @@ class HostelBookingController extends Controller
                 'start_date' => $startDate,
                 'end_date' => $endDate,
                 'gender' => $gender,
+                'hostel_visibility' => $hostelVisibility,
                 'sort_by' => $sortBy,
                 'sort_direction' => $sortDirection,
                 'per_page' => $perPage,
             ],
             'canManageBookings' => $canManageBookings,
+            'canChangeRoom' => $canChangeRoom,
         ]);
     }
 
@@ -326,6 +445,20 @@ class HostelBookingController extends Controller
 
         $currentSession = Session::current();
         $currentSessionId = $currentSession ? $currentSession->id : null;
+
+        $existingInvoice = Invoice::where('user_id', $student->user_id)
+            ->where('session_id', $currentSessionId)
+            ->where('type', 'hostel_fee')
+            ->whereIn('status', ['paid', 'partial', 'pending'])
+            ->first();
+
+        $existingInvoiceAmount = $existingInvoice ? (float) $existingInvoice->amount : null;
+
+        $hostelFees = HostelFee::where('session_id', $currentSessionId)->get();
+        $globalFee = $hostelFees->firstWhere('hostel_id', null);
+
+        $student->load('scholarship');
+        $hasHostelScholarship = $student->scholarship && $student->scholarship->covers_hostel_fees;
 
         $hostels = Hostel::with(['blocks.floors.rooms.bookings' => function ($q) use ($currentSessionId) {
             $q->where('session_id', $currentSessionId);
@@ -391,6 +524,14 @@ class HostelBookingController extends Controller
             return back()->with('error', 'No active academic session found.');
         }
 
+        if (!$room->is_visible || !$room->floor->is_visible || !$room->floor->block->is_visible || !$room->floor->block->hostel->is_visible) {
+            return back()->with('error', 'Cannot allocate room. The selected room or its floor/block/hostel is hidden or not open for bookings.');
+        }
+
+        if ($room->is_suspended) {
+            return back()->with('error', 'Cannot allocate room. This room is currently suspended.');
+        }
+
         // 1. School fee check
         $hasPaidFees = Invoice::where('user_id', $student->user_id)
             ->where('type', 'school_fee')
@@ -445,7 +586,7 @@ class HostelBookingController extends Controller
                 }
             }
             $finalAmount = $fee->amount - $discountAmount;
-            $isPaidInput = false;
+            $isPaidInput = filter_var($request->input('confirm_immediately') ?? $request->input('direct_confirmation') ?? $request->input('mark_as_paid') ?? $request->input('is_paid'), FILTER_VALIDATE_BOOLEAN);
 
             // Check if there is an existing hostel fee invoice for this session
             $invoice = Invoice::where('user_id', $student->user_id)
@@ -619,20 +760,22 @@ class HostelBookingController extends Controller
             return back()->with('error', 'No active academic session found.');
         }
 
-        // Room capacity check for current session
+        // Room capacity check for current session (excluding this booking)
         $bookedCount = $room->bookings()
             ->where('session_id', $currentSession->id)
             ->whereIn('status', ['pending', 'confirmed'])
+            ->where('id', '!=', $booking->id)
             ->count();
             
         if ($bookedCount >= $room->capacity) {
             return back()->with('error', 'Cannot re-allocate. This room is already fully booked.');
         }
 
-        // Check if student already has another active booking for this session
+        // Check if student already has another active booking for this session (excluding this booking)
         $activeBookingExists = HostelBooking::where('student_id', $booking->student_id)
             ->where('session_id', $currentSession->id)
             ->whereIn('status', ['pending', 'confirmed'])
+            ->where('id', '!=', $booking->id)
             ->exists();
 
         if ($activeBookingExists) {
@@ -662,6 +805,140 @@ class HostelBookingController extends Controller
         return back()->with('success', 'Student room allocation reactivated successfully!');
     }
 
+    public function changeRoom(HostelBooking $booking, Request $request)
+    {
+        $user = Auth::user();
+        if (!$user->can('change_hostel_room') && !$user->hasRole('admin') && !$user->hasRole('super_admin')) {
+            return back()->with('error', 'Unauthorized. You do not have permission to change hostel rooms.');
+        }
+
+        $request->validate([
+            'hostel_room_id' => 'required|exists:hostel_rooms,id',
+        ]);
+
+        $currentSession = Session::current();
+        if (!$currentSession) {
+            return back()->with('error', 'No active academic session found.');
+        }
+
+        DB::beginTransaction();
+        try {
+            $newRoom = HostelRoom::with('floor.block.hostel')->lockForUpdate()->findOrFail($request->hostel_room_id);
+
+            if ($newRoom->is_suspended || !$newRoom->is_visible || !$newRoom->floor->is_visible || !$newRoom->floor->block->is_visible || !$newRoom->floor->block->hostel->is_visible) {
+                DB::rollBack();
+                return back()->with('error', 'Selected room or its floor/block/hostel is not currently open for allocations.');
+            }
+
+            $bookedCount = $newRoom->bookings()
+                ->where('session_id', $currentSession->id)
+                ->whereIn('status', ['pending', 'confirmed'])
+                ->where('id', '!=', $booking->id)
+                ->count();
+
+            if ($bookedCount >= $newRoom->capacity) {
+                DB::rollBack();
+                return back()->with('error', 'The selected room is already fully booked. Please select another available unit.');
+            }
+
+            $oldRoomNumber = $booking->room?->room_number ?? 'N/A';
+
+            // Update booking room reference
+            $booking->hostel_room_id = $newRoom->id;
+            $booking->updated_by = Auth::id();
+
+            // Recalculate fee for new room and update invoice
+            if ($booking->invoice) {
+                $hostelId = $newRoom->floor->block->hostel->id;
+                $fee = HostelFee::where('session_id', $currentSession->id)
+                    ->where(function ($q) use ($hostelId) {
+                        $q->where('hostel_id', $hostelId)->orWhereNull('hostel_id');
+                    })
+                    ->orderBy('hostel_id', 'desc')
+                    ->first();
+
+                if (!$fee) {
+                    throw new \Exception('Accommodation fees have not been configured for this session.');
+                }
+
+                $discountAmount = 0;
+                $student = $booking->student;
+                $student?->load('scholarship');
+                if ($student?->scholarship && $student->scholarship->covers_hostel_fees) {
+                    if ($student->scholarship->type === 'fixed') {
+                        $discountAmount = min($student->scholarship->amount, $fee->amount);
+                    } else {
+                        $discountAmount = $fee->amount * ($student->scholarship->percentage / 100);
+                    }
+                }
+
+                $newFinalAmount = max(0, $fee->amount - $discountAmount);
+                $invoice = $booking->invoice;
+                $invoice->items()->delete();
+                
+                InvoiceItem::create([
+                    'invoice_id' => $invoice->id,
+                    'description' => "Hostel Accommodation Fee ({$newRoom->floor->block->hostel->name} - Block: {$newRoom->floor->block->name}, Room: {$newRoom->room_number})",
+                    'amount' => $fee->amount,
+                ]);
+
+                if ($discountAmount > 0) {
+                    $discountDesc = $student->scholarship->type === 'fixed'
+                        ? "Scholarship Discount ({$student->scholarship->name} - Fixed ₦" . number_format($student->scholarship->amount, 2) . ")"
+                        : "Scholarship Discount ({$student->scholarship->name} - " . floatval($student->scholarship->percentage) . "%)";
+                    InvoiceItem::create([
+                        'invoice_id' => $invoice->id,
+                        'description' => $discountDesc,
+                        'amount' => -$discountAmount,
+                    ]);
+                }
+
+                $totalPaid = (float) $invoice->payments()->whereIn('status', ['successful', 'success', 'paid'])->sum('amount');
+                if ($invoice->paid_amount > 0 && $totalPaid == 0) {
+                    $totalPaid = (float) $invoice->paid_amount;
+                }
+
+                if ($totalPaid >= $newFinalAmount && $newFinalAmount > 0) {
+                    $invoiceStatus = 'paid';
+                    $bookingStatus = 'confirmed';
+                } elseif ($totalPaid > 0) {
+                    $invoiceStatus = 'partial';
+                    $bookingStatus = 'confirmed';
+                } else {
+                    $invoiceStatus = 'pending';
+                    $bookingStatus = 'pending';
+                }
+
+                $invoice->update([
+                    'amount' => $newFinalAmount,
+                    'status' => $invoiceStatus,
+                ]);
+
+                $booking->status = $bookingStatus;
+            }
+
+            $booking->save();
+
+            activity('hostel')
+                ->performedOn($booking)
+                ->causedBy(Auth::user())
+                ->withProperties([
+                    'student_name' => $booking->student?->user?->name,
+                    'old_room' => $oldRoomNumber,
+                    'new_room' => $newRoom->room_number,
+                    'hostel' => $newRoom->floor->block->hostel->name,
+                    'status' => $booking->status,
+                ])
+                ->log("Reassigned room from {$oldRoomNumber} to {$newRoom->room_number} for student {$booking->student?->user?->name}");
+
+            DB::commit();
+            return back()->with('success', "Room changed to Room {$newRoom->room_number} successfully!");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Failed to change room: ' . $e->getMessage());
+        }
+    }
+
     public function downloadSlip(HostelBooking $booking)
     {
         $booking->load(['room.floor.block.hostel', 'student.user', 'student.faculty', 'student.department', 'session', 'invoice']);
@@ -681,7 +958,10 @@ class HostelBookingController extends Controller
             'isFontSubsettingEnabled' => true,
         ]);
 
-        return $pdf->download("Accommodation_Slip_{$booking->student->matric_no}.pdf");
+        $matricNo = $booking->student->matriculation_number ?? $booking->student->matric_no ?? $booking->student->matric_number ?? $booking->student->id;
+        $safeMatric = str_replace(['/', '\\', ' '], '_', $matricNo);
+
+        return $pdf->download("Accommodation_Slip_{$safeMatric}.pdf");
     }
 
     public function export(Request $request)
@@ -698,6 +978,8 @@ class HostelBookingController extends Controller
 
         $currentSession = Session::current();
         
+        $search = trim($request->input('search', ''));
+
         $sessionId = $request->input('session_id');
         if ($sessionId === 'all') {
             $sessionId = null;
@@ -728,6 +1010,11 @@ class HostelBookingController extends Controller
         $endDate = $request->input('end_date');
         $gender = $request->input('gender', 'all');
 
+        $hostelVisibility = $request->input('hostel_visibility', 'visible');
+        if (!in_array($hostelVisibility, ['visible', 'hidden', 'all'])) {
+            $hostelVisibility = 'visible';
+        }
+
         $isMaleSupervisor = ($user->can('view_male_hostel_bookings') || $user->hasRole('male_hostel_supervisor')) &&
                             !($user->can('view_female_hostel_bookings') || $user->hasRole('female_hostel_supervisor'));
         $isFemaleSupervisor = ($user->can('view_female_hostel_bookings') || $user->hasRole('female_hostel_supervisor')) &&
@@ -747,6 +1034,30 @@ class HostelBookingController extends Controller
             'session',
             'invoice.payments',
         ]);
+
+        $this->applyVisibilityFilter($query, $hostelVisibility);
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('student', function ($sq) use ($search) {
+                    $sq->where('matriculation_number', 'like', "%{$search}%")
+                       ->orWhere('jamb_registration_number', 'like', "%{$search}%")
+                       ->orWhereHas('user', function ($uq) use ($search) {
+                           $uq->where('name', 'like', "%{$search}%")
+                              ->orWhere('email', 'like', "%{$search}%");
+                       });
+                })
+                ->orWhereHas('room', function ($rq) use ($search) {
+                    $rq->where('room_number', 'like', "%{$search}%")
+                       ->orWhereHas('floor.block.hostel', function ($hq) use ($search) {
+                           $hq->where('name', 'like', "%{$search}%");
+                       });
+                })
+                ->orWhereHas('invoice', function ($iq) use ($search) {
+                    $iq->where('reference', 'like', "%{$search}%");
+                });
+            });
+        }
 
         if ($sessionId) $query->where('session_id', $sessionId);
         if ($level) $query->whereHas('student', fn($q) => $q->where('current_level', $level));
@@ -841,5 +1152,67 @@ class HostelBookingController extends Controller
             'Content-Type' => 'text/csv',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ]);
+    }
+
+    /**
+     * Apply visibility filter (visible, hidden, all) to HostelBooking query checking room, floor, block, and hostel.
+     */
+    private function applyVisibilityFilter($query, string $visibility)
+    {
+        if ($visibility === 'visible') {
+            $query->whereHas('room', function ($rq) {
+                $rq->where('is_visible', true)
+                   ->whereHas('floor', function ($fq) {
+                       $fq->where('is_visible', true)
+                          ->whereHas('block', function ($bq) {
+                              $bq->where('is_visible', true)
+                                 ->whereHas('hostel', function ($hq) {
+                                     $hq->where('is_visible', true);
+                                 });
+                          });
+                   });
+            });
+        } elseif ($visibility === 'hidden') {
+            $query->where(function ($q) {
+                $q->whereHas('room', fn($rq) => $rq->where('is_visible', false))
+                  ->orWhereHas('room.floor', fn($fq) => $fq->where('is_visible', false))
+                  ->orWhereHas('room.floor.block', fn($bq) => $bq->where('is_visible', false))
+                  ->orWhereHas('room.floor.block.hostel', fn($hq) => $hq->where('is_visible', false));
+            });
+        }
+
+        return $query;
+    }
+
+    /**
+     * Apply visibility filter (visible, hidden, all) to HostelRoom capacity query checking room, floor, block, and hostel.
+     */
+    private function applyRoomVisibilityFilter($query, string $visibility)
+    {
+        if ($visibility === 'visible') {
+            $query->where('is_visible', true)
+                  ->where('is_suspended', false)
+                  ->whereHas('floor', function ($fq) {
+                      $fq->where('is_visible', true)
+                         ->whereHas('block', function ($bq) {
+                             $bq->where('is_visible', true)
+                                ->whereHas('hostel', function ($hq) {
+                                    $hq->where('is_visible', true);
+                                });
+                         });
+                  });
+        } elseif ($visibility === 'hidden') {
+            $query->where('is_suspended', false)
+                  ->where(function ($q) {
+                      $q->where('is_visible', false)
+                        ->orWhereHas('floor', fn($fq) => $fq->where('is_visible', false))
+                        ->orWhereHas('floor.block', fn($bq) => $bq->where('is_visible', false))
+                        ->orWhereHas('floor.block.hostel', fn($hq) => $hq->where('is_visible', false));
+                  });
+        } else {
+            $query->where('is_suspended', false);
+        }
+
+        return $query;
     }
 }

@@ -11,6 +11,7 @@ class ExamSchedule extends Model
 
     protected $fillable = [
         'reference_id',
+        'exam_id',
         'session_id',
         'semester_id',
         'department_id',
@@ -29,6 +30,11 @@ class ExamSchedule extends Model
     protected $casts = [
         'exam_date' => 'date',
     ];
+
+    public function exam()
+    {
+        return $this->belongsTo(Exam::class);
+    }
 
     public function session()
     {

@@ -11,9 +11,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { 
     Calendar, Clock, Building2, Plus, Trash2, ArrowLeft, 
-    CheckCircle2, Sparkles, AlertCircle, BookOpen, Layers, School
+    CheckCircle2, AlertCircle, BookOpen, Check
 } from 'lucide-vue-next';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import Swal from 'sweetalert2';
 
 interface Props {
@@ -22,6 +22,8 @@ interface Props {
     departments: any[];
     courses: any[];
     buildings: any[];
+    exams?: any[];
+    preselectedExamId?: string;
     currentSessionId?: string;
     currentSemesterId?: string;
     exam?: any;
@@ -52,6 +54,7 @@ const venueList = ref<Array<{ name: string; capacity: number | string }>>(parseI
 
 // Form Initialization
 const form = useForm({
+    exam_id: props.exam?.exam_id || props.preselectedExamId || '',
     session_id: props.exam?.session_id || props.currentSessionId || props.sessions[0]?.id || '',
     semester_id: props.exam?.semester_id || props.currentSemesterId || props.semesters[0]?.id || '',
     department_id: props.exam?.department_id || '',
@@ -66,14 +69,51 @@ const form = useForm({
     instructions: props.exam?.instructions || '',
 });
 
+// Smart coupling: When exam_id is selected, automatically lock and sync session_id and semester_id
+watch(() => form.exam_id, (newExamId) => {
+    if (newExamId && props.exams) {
+        const found = props.exams.find(e => e.id === newExamId);
+        if (found) {
+            form.session_id = found.session_id;
+            form.semester_id = found.semester_id;
+        }
+    }
+}, { immediate: true });
+
+// Auto-filter Semesters based on selected Session
+const semesterOptions = computed(() => {
+    let list = props.semesters || [];
+    if (form.session_id) {
+        list = list.filter(s => s.session_id === form.session_id);
+    }
+    return list.map(sem => ({ value: sem.id, label: sem.name }));
+});
+
 // Dropdown Options
 const sessionOptions = computed(() => [
     ...(props.sessions || []).map(s => ({ value: s.id, label: `${s.name}${s.is_current ? ' (Current)' : ''}` }))
 ]);
 
-const semesterOptions = computed(() => [
-    ...(props.semesters || []).map(sem => ({ value: sem.id, label: sem.name }))
-]);
+const examExerciseOptions = computed(() => {
+    const list = props.exams || [];
+    return [
+        { value: '', label: 'None (Standalone Schedule)' },
+        ...list.map(e => {
+            const sess = e.session?.name || '';
+            const sem = e.semester?.name || '';
+            const info = [sess, sem].filter(Boolean).join(' • ');
+            return { 
+                value: e.id, 
+                label: info ? `${e.title} (${info})` : e.title 
+            };
+        })
+    ];
+});
+
+const selectedExamDetails = computed(() => {
+    if (!form.exam_id || !props.exams) return null;
+    return props.exams.find(e => e.id === form.exam_id) || null;
+});
 
 const departmentOptions = computed(() => [
     { value: '', label: 'All Departments / General' },
@@ -91,15 +131,15 @@ const levelOptions = computed(() => [
 ]);
 
 const courseOptions = computed(() => [
-    { value: '', label: '+ Add Course to Exam Schedule...' },
+    { value: '', label: '+ Select Course to Schedule...' },
     ...(props.courses || []).map(c => ({ value: c.id, label: `${c.code} - ${c.title}` }))
 ]);
 
 const buildingSelectOptions = computed(() => [
-    { value: '', label: 'Quick Select Registered Building...' },
+    { value: '', label: 'Quick Select Campus Building...' },
     ...(props.buildings || []).map(b => ({
         value: b.name,
-        label: `🏢 ${b.name} (${b.code}) — Cap: ${b.capacity}`
+        label: `${b.name} (${b.code}) — Capacity: ${b.capacity}`
     }))
 ]);
 
@@ -152,30 +192,34 @@ const totalSeatingCapacity = computed(() => {
     return venueList.value.reduce((acc, curr) => acc + (Number(curr.capacity) || 0), 0);
 });
 
+const activeHallsCount = computed(() => {
+    const named = venueList.value.filter(v => v.name && v.name.trim() !== '').length;
+    return named > 0 ? named : venueList.value.length;
+});
+
 // Submit Form
 const handleSubmit = () => {
     if (selectedCourseIds.value.length === 0) {
         Swal.fire({
             icon: 'warning',
             title: 'Course Required',
-            text: 'Please select at least one course for the examination schedule.',
+            text: 'Please select at least one course for this exam timetable slot.',
         });
         return;
     }
 
-    const validVenues = venueList.value.filter(v => v.name.trim() !== '');
-    if (validVenues.length === 0) {
-        Swal.fire({
-            icon: 'warning',
-            title: 'Venue Required',
-            text: 'Please enter at least one venue or hall for this exam schedule.',
+    const validVenues = venueList.value.filter(v => v.name && v.name.trim() !== '');
+    if (validVenues.length === 0 && venueList.value.some(v => !v.name.trim())) {
+        venueList.value.forEach((v, idx) => {
+            if (!v.name.trim()) v.name = `Main Exam Hall #${idx + 1}`;
         });
-        return;
     }
+
+    const finalVenues = venueList.value.filter(v => v.name && v.name.trim() !== '');
 
     form.course_id = selectedCourseIds.value[0];
     (form as any).course_ids = selectedCourseIds.value;
-    form.venue = validVenues.map(v => v.name.trim()).join(', ');
+    form.venue = finalVenues.map(v => v.name.trim()).join(', ');
     form.max_capacity = totalSeatingCapacity.value > 0 ? totalSeatingCapacity.value : 100;
 
     if (isEditing.value && props.exam?.id) {
@@ -188,7 +232,11 @@ const handleSubmit = () => {
                     timer: 1500,
                     showConfirmButton: false,
                 }).then(() => {
-                    router.visit(route('admin.exams.index'));
+                    if (form.exam_id) {
+                        router.visit(route('admin.exams.exercises.show', form.exam_id));
+                    } else {
+                        router.visit(route('admin.exams.index'));
+                    }
                 });
             },
         });
@@ -198,343 +246,335 @@ const handleSubmit = () => {
                 Swal.fire({
                     icon: 'success',
                     title: 'Scheduled!',
-                    text: 'Exam schedule(s) created successfully.',
+                    text: 'Exam timetable slot created successfully.',
                     timer: 1500,
                     showConfirmButton: false,
                 }).then(() => {
-                    router.visit(route('admin.exams.index'));
+                    if (form.exam_id) {
+                        router.visit(route('admin.exams.exercises.show', form.exam_id));
+                    } else {
+                        router.visit(route('admin.exams.index'));
+                    }
                 });
             },
         });
     }
 };
+
+const breadcrumbs = [
+    { title: 'Academic Management', href: '#' },
+    { title: 'Examination Exercises', href: route('admin.exams.index') },
+    { title: isEditing.value ? 'Edit Paper Slot' : 'Create Paper Slot', href: '#' },
+];
 </script>
 
 <template>
-    <AdminLayout>
-        <Head :title="isEditing ? 'Edit Exam Schedule' : 'Schedule Examination Timetable'" />
+    <AdminLayout :breadcrumbs="breadcrumbs">
+        <Head :title="isEditing ? 'Edit Exam Slot' : 'Schedule Exam Slot'" />
 
-        <div class="max-w-6xl mx-auto space-y-6 pb-24">
-            <!-- Top Header & Navigation -->
+        <div class="p-6 md:p-8 space-y-8 w-full max-w-5xl mx-auto pb-28">
+            
+            <!-- Header Section -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
                 <div class="space-y-1">
                     <div class="flex items-center gap-2">
                         <Button 
                             variant="ghost" 
                             size="sm" 
-                            class="h-8 px-2 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100" 
+                            class="h-7 px-2 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 text-xs font-medium" 
                             @click="router.visit(route('admin.exams.index'))"
                         >
-                            <ArrowLeft class="w-4 h-4 mr-1" /> Back to Timetable Hub
+                            <ArrowLeft class="w-3.5 h-3.5 mr-1" /> Back to Exercises Hub
                         </Button>
-                        <Badge variant="outline" class="bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300">
-                            {{ isEditing ? 'Edit Schedule' : 'New Schedule' }}
-                        </Badge>
                     </div>
-                    <h1 class="text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight flex items-center gap-2">
-                        <Calendar class="w-7 h-7 text-purple-600 dark:text-purple-400 inline" />
-                        {{ isEditing ? 'Edit Examination Schedule' : 'Schedule Examination Timetable' }}
+                    <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight flex items-center gap-2.5">
+                        <Calendar class="w-7 h-7 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                        {{ isEditing ? 'Edit Examination Timetable Slot' : 'Schedule Exam Paper Slot' }}
                     </h1>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">
-                        Configure course papers, date, time slots, and allocate hall venues with capacity limits.
+                    <p class="text-xs text-slate-500 dark:text-slate-400 max-w-2xl">
+                        Configure course paper slots, select target course(s), date & time schedule, and assign exam halls.
                     </p>
                 </div>
 
-                <div class="flex items-center gap-2">
-                    <Button variant="outline" size="sm" @click="router.visit(route('admin.exams.index'))">
+                <div class="flex items-center gap-2.5 shrink-0">
+                    <Button variant="outline" size="sm" class="h-10 text-xs rounded-xl border-slate-200 dark:border-slate-800" @click="router.visit(route('admin.exams.index'))">
                         Cancel
                     </Button>
                     <Button 
                         size="sm" 
-                        class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-5"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs h-10 px-5 rounded-xl shadow-xs gap-1.5"
                         :disabled="form.processing"
                         @click="handleSubmit"
                     >
-                        <CheckCircle2 class="w-4 h-4 mr-1.5" />
-                        {{ isEditing ? 'Save Changes' : 'Publish Schedule' }}
+                        <CheckCircle2 class="w-4 h-4" />
+                        {{ isEditing ? 'Save Changes' : 'Save & Publish Slot' }}
                     </Button>
                 </div>
             </div>
 
-            <!-- Form Content Grid -->
+            <!-- Form Cards Flow -->
             <form @submit.prevent="handleSubmit" class="space-y-6">
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    
-                    <!-- Left Column: Academic & Course Details (7 Cols) -->
-                    <div class="lg:col-span-7 space-y-6">
-                        
-                        <!-- 1. Academic Session & Semester Card -->
-                        <Card class="border-slate-200 dark:border-slate-800 shadow-xs">
-                            <CardHeader class="pb-3 border-b border-slate-100 dark:border-slate-800">
-                                <CardTitle class="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
-                                    <School class="w-4 h-4 text-purple-600" />
-                                    Academic Term & Session
-                                </CardTitle>
-                                <CardDescription class="text-xs">Select the target academic session and semester for this timetable entry.</CardDescription>
-                            </CardHeader>
-                            <CardContent class="p-4 space-y-4">
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div class="space-y-1.5">
-                                        <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Academic Session</Label>
-                                        <SearchableSelect
-                                            v-model="form.session_id"
-                                            :items="sessionOptions"
-                                            placeholder="Select Session"
-                                            search-placeholder="Search sessions..."
-                                            :error-class="!!form.errors.session_id"
-                                        />
-                                    </div>
-                                    <div class="space-y-1.5">
-                                        <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Semester</Label>
-                                        <SearchableSelect
-                                            v-model="form.semester_id"
-                                            :items="semesterOptions"
-                                            placeholder="Select Semester"
-                                            search-placeholder="Search semesters..."
-                                            :error-class="!!form.errors.semester_id"
-                                        />
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
+                
+                <!-- Card 1: Main Exam Exercise Selection -->
+                <Card class="border border-slate-200/80 dark:border-slate-800/80 shadow-xs bg-white dark:bg-slate-900 rounded-2xl">
+                    <CardHeader class="pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center justify-between">
+                            <CardTitle class="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                                <span class="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold flex items-center justify-center">1</span>
+                                Parent Examination Exercise
+                            </CardTitle>
+                            <Badge v-if="selectedExamDetails" class="bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border-indigo-200 text-[10px] font-bold">
+                                Auto-Linked
+                            </Badge>
+                        </div>
+                        <CardDescription class="text-xs text-slate-500">
+                            Select the parent exercise event. Academic session and semester automatically sync.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent class="p-5 space-y-4">
+                        <div class="space-y-1.5">
+                            <Label class="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                Target Examination Exercise *
+                            </Label>
+                            <SearchableSelect
+                                v-model="form.exam_id"
+                                :items="examExerciseOptions"
+                                placeholder="Select Examination Exercise..."
+                                search-placeholder="Search exam exercises..."
+                                trigger-class="h-9 text-xs rounded-lg border-slate-200 dark:border-slate-800"
+                            />
+                        </div>
 
-                        <!-- 2. Course Selection Card (Multi-Course Support) -->
-                        <Card class="border-slate-200 dark:border-slate-800 shadow-xs">
-                            <CardHeader class="pb-3 border-b border-slate-100 dark:border-slate-800">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <CardTitle class="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
-                                            <BookOpen class="w-4 h-4 text-purple-600" />
-                                            Course Selection (Multi-Course Supported)
-                                        </CardTitle>
-                                        <CardDescription class="text-xs">Add one or multiple courses if venues are shared during this exam session.</CardDescription>
-                                    </div>
-                                    <Badge v-if="selectedCourseIds.length > 0" class="bg-purple-100 text-purple-900 dark:bg-purple-950 dark:text-purple-200 font-bold text-xs">
-                                        {{ selectedCourseIds.length }} Course(s) Selected
-                                    </Badge>
+                        <!-- Auto-filled Info Badge when Exercise is selected -->
+                        <div v-if="selectedExamDetails" class="p-3.5 bg-indigo-50/70 dark:bg-indigo-950/40 rounded-xl border border-indigo-200/80 dark:border-indigo-800 flex items-center justify-between text-xs">
+                            <div class="flex items-center gap-2.5">
+                                <Check class="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                                <div>
+                                    <span class="font-bold text-slate-900 dark:text-slate-100 text-xs block">{{ selectedExamDetails.title }}</span>
+                                    <span v-if="selectedExamDetails.session?.name || selectedExamDetails.semester?.name" class="text-slate-500 font-medium text-[11px] block mt-0.5">
+                                        {{ selectedExamDetails.session?.name }} <span v-if="selectedExamDetails.session?.name && selectedExamDetails.semester?.name">•</span> {{ selectedExamDetails.semester?.name }}
+                                    </span>
                                 </div>
-                            </CardHeader>
-                            <CardContent class="p-4 space-y-3">
+                            </div>
+                            <Badge class="bg-indigo-600 text-white text-[10px] font-semibold px-2 py-0.5">Linked</Badge>
+                        </div>
+
+                        <!-- Manual Session & Semester Dropdowns if Standalone -->
+                        <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+                            <div class="space-y-1.5">
+                                <Label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Academic Session *</Label>
                                 <SearchableSelect
-                                    v-model="tempCourseSelect"
-                                    :items="courseOptions"
-                                    placeholder="+ Add Course to Schedule..."
-                                    search-placeholder="Search course by code or title..."
-                                    @update:model-value="addCoursePill"
+                                    v-model="form.session_id"
+                                    :items="sessionOptions"
+                                    placeholder="Select Session"
+                                    search-placeholder="Search sessions..."
+                                    trigger-class="h-9 text-xs rounded-lg border-slate-200 dark:border-slate-800"
                                 />
+                            </div>
+                            <div class="space-y-1.5">
+                                <Label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Semester *</Label>
+                                <SearchableSelect
+                                    v-model="form.semester_id"
+                                    :items="semesterOptions"
+                                    placeholder="Select Semester"
+                                    search-placeholder="Search semesters..."
+                                    trigger-class="h-9 text-xs rounded-lg border-slate-200 dark:border-slate-800"
+                                />
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
 
-                                <!-- Selected Courses List -->
-                                <div v-if="selectedCourseIds.length > 0" class="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                                    <Label class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Selected Exam Courses</Label>
-                                    <div class="flex flex-wrap gap-2">
-                                        <div
-                                            v-for="cId in selectedCourseIds"
-                                            :key="cId"
-                                            class="inline-flex items-center gap-2 bg-purple-50 text-purple-950 dark:bg-purple-950/80 dark:text-purple-200 border border-purple-200 dark:border-purple-800 rounded-lg py-1.5 px-3 text-xs font-semibold shadow-2xs"
-                                        >
-                                            <BookOpen class="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                                            <span>{{ getCourseLabel(cId) }}</span>
-                                            <button
-                                                type="button"
-                                                @click="removeCoursePill(cId)"
-                                                class="text-purple-500 hover:text-red-600 dark:hover:text-red-400 font-bold ml-1 rounded-full hover:bg-purple-200/60 dark:hover:bg-purple-900/60 w-4 h-4 inline-flex items-center justify-center transition-colors"
-                                                title="Remove course"
-                                            >
-                                                &times;
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div v-else class="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-900 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
-                                    <AlertCircle class="w-4 h-4 text-amber-600 shrink-0" />
-                                    <span>Please select at least one course from the dropdown above to create the examination schedule.</span>
-                                </div>
-
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                                    <div class="space-y-1.5">
-                                        <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Department (Optional)</Label>
-                                        <SearchableSelect
-                                            v-model="form.department_id"
-                                            :items="departmentOptions"
-                                            placeholder="All Departments"
-                                            search-placeholder="Search departments..."
-                                        />
-                                    </div>
-                                    <div class="space-y-1.5">
-                                        <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Level</Label>
-                                        <SearchableSelect
-                                            v-model="form.level"
-                                            :items="levelOptions"
-                                            placeholder="Select Level"
-                                            search-placeholder="Search levels..."
-                                        />
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <!-- 3. Date & Time Slot Card -->
-                        <Card class="border-slate-200 dark:border-slate-800 shadow-xs">
-                            <CardHeader class="pb-3 border-b border-slate-100 dark:border-slate-800">
+                <!-- Card 2: Course Selection -->
+                <Card class="border border-slate-200/80 dark:border-slate-800/80 shadow-xs bg-white dark:bg-slate-900 rounded-2xl">
+                    <CardHeader class="pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center justify-between">
+                            <div>
                                 <CardTitle class="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
-                                    <Clock class="w-4 h-4 text-purple-600" />
-                                    Date & Time Slot
+                                    <span class="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold flex items-center justify-center">2</span>
+                                    Course & Department
                                 </CardTitle>
-                                <CardDescription class="text-xs">Specify the examination date and exact start / end duration.</CardDescription>
-                            </CardHeader>
-                            <CardContent class="p-4 space-y-4">
-                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <div class="space-y-1.5">
-                                        <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Exam Date</Label>
-                                        <Input v-model="form.exam_date" type="date" class="h-9 text-xs" required />
-                                    </div>
-                                    <div class="space-y-1.5">
-                                        <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">Start Time</Label>
-                                        <Input v-model="form.start_time" type="time" class="h-9 text-xs" required />
-                                    </div>
-                                    <div class="space-y-1.5">
-                                        <Label class="text-xs font-bold uppercase tracking-wider text-slate-500">End Time</Label>
-                                        <Input v-model="form.end_time" type="time" class="h-9 text-xs" required />
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
+                                <CardDescription class="text-xs text-slate-500">Select course(s) taking this examination paper.</CardDescription>
+                            </div>
+                            <Badge v-if="selectedCourseIds.length > 0" class="bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border-indigo-200 text-xs font-semibold">
+                                {{ selectedCourseIds.length }} Course(s) Selected
+                            </Badge>
+                        </div>
+                    </CardHeader>
+                    <CardContent class="p-5 space-y-4">
+                        <SearchableSelect
+                            v-model="tempCourseSelect"
+                            :items="courseOptions"
+                            placeholder="+ Select Course to Schedule..."
+                            search-placeholder="Search course code or title..."
+                            trigger-class="h-9 text-xs rounded-lg border-slate-200 dark:border-slate-800"
+                            @update:model-value="addCoursePill"
+                        />
 
-                    <!-- Right Column: Venues Array & Capacity Card (5 Cols) -->
-                    <div class="lg:col-span-5 space-y-6">
-                        
-                        <!-- 4. Venues & Hall Capacity Card -->
-                        <Card class="border-slate-200 dark:border-slate-800 shadow-xs">
-                            <CardHeader class="pb-3 border-b border-slate-100 dark:border-slate-800">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <CardTitle class="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
-                                            <Building2 class="w-4 h-4 text-purple-600" />
-                                            Exam Venues & Capacities
-                                        </CardTitle>
-                                        <CardDescription class="text-xs">Add halls to schedule exams across multiple buildings.</CardDescription>
+                        <!-- Selected Courses Pills -->
+                        <div v-if="selectedCourseIds.length > 0" class="space-y-2 pt-1">
+                            <Label class="text-[11px] font-semibold text-slate-400">Selected Courses</Label>
+                            <div class="flex flex-wrap gap-2">
+                                <div
+                                    v-for="cId in selectedCourseIds"
+                                    :key="cId"
+                                    class="inline-flex items-center gap-2 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-900 dark:text-indigo-200 border border-indigo-200/80 dark:border-indigo-800 rounded-lg py-1 px-3 text-xs font-semibold shadow-xs"
+                                >
+                                    <BookOpen class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                                    <span>{{ getCourseLabel(cId) }}</span>
+                                    <button
+                                        type="button"
+                                        @click="removeCoursePill(cId)"
+                                        class="text-indigo-400 hover:text-rose-600 font-bold ml-1 rounded-full w-4 h-4 inline-flex items-center justify-center transition-colors"
+                                        title="Remove course"
+                                    >
+                                        &times;
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-else class="p-3 bg-amber-50/80 dark:bg-amber-950/30 rounded-xl border border-amber-200/80 dark:border-amber-900 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2.5">
+                            <AlertCircle class="w-4 h-4 text-amber-600 shrink-0" />
+                            <span>Select at least one course for this timetable slot from the dropdown above.</span>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                            <div class="space-y-1.5">
+                                <Label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Department (Optional)</Label>
+                                <SearchableSelect
+                                    v-model="form.department_id"
+                                    :items="departmentOptions"
+                                    placeholder="All Departments"
+                                    search-placeholder="Search departments..."
+                                    trigger-class="h-9 text-xs rounded-lg border-slate-200 dark:border-slate-800"
+                                />
+                            </div>
+                            <div class="space-y-1.5">
+                                <Label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Level</Label>
+                                <SearchableSelect
+                                    v-model="form.level"
+                                    :items="levelOptions"
+                                    placeholder="Select Level"
+                                    search-placeholder="Search levels..."
+                                    trigger-class="h-9 text-xs rounded-lg border-slate-200 dark:border-slate-800"
+                                />
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <!-- Card 3: Date, Time & Venues -->
+                <Card class="border border-slate-200/80 dark:border-slate-800/80 shadow-xs bg-white dark:bg-slate-900 rounded-2xl">
+                    <CardHeader class="pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <CardTitle class="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                            <span class="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold flex items-center justify-center">3</span>
+                            Date, Time & Venue Allocation
+                        </CardTitle>
+                        <CardDescription class="text-xs text-slate-500">Specify exam date, start & end time, and allocate hall venues.</CardDescription>
+                    </CardHeader>
+                    <CardContent class="p-5 space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div class="space-y-1.5">
+                                <Label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Exam Date *</Label>
+                                <Input v-model="form.exam_date" type="date" class="h-9 text-xs rounded-lg border-slate-200 dark:border-slate-800" required />
+                            </div>
+                            <div class="space-y-1.5">
+                                <Label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Start Time *</Label>
+                                <Input v-model="form.start_time" type="time" class="h-9 text-xs rounded-lg border-slate-200 dark:border-slate-800" required />
+                            </div>
+                            <div class="space-y-1.5">
+                                <Label class="text-xs font-semibold text-slate-700 dark:text-slate-300">End Time *</Label>
+                                <Input v-model="form.end_time" type="time" class="h-9 text-xs rounded-lg border-slate-200 dark:border-slate-800" required />
+                            </div>
+                        </div>
+
+                        <div class="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                            <div class="flex items-center justify-between">
+                                <Label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Exam Venues & Capacity</Label>
+                                <Button type="button" variant="outline" size="sm" class="h-7 text-xs gap-1 border-indigo-200 text-indigo-700 dark:border-indigo-800 dark:text-indigo-300 rounded-lg font-medium" @click="addVenueRow">
+                                    <Plus class="w-3.5 h-3.5" /> Add Venue
+                                </Button>
+                            </div>
+
+                            <!-- Quick Select Building -->
+                            <div v-if="buildingSelectOptions.length > 1">
+                                <SearchableSelect
+                                    v-model="selectedBuildingQuick"
+                                    :items="buildingSelectOptions"
+                                    placeholder="Quick select campus building..."
+                                    search-placeholder="Search campus building..."
+                                    trigger-class="h-9 text-xs rounded-lg border-slate-200 dark:border-slate-800"
+                                    @update:model-value="handleBuildingQuickSelect"
+                                />
+                            </div>
+
+                            <!-- Venue Rows -->
+                            <div class="space-y-2">
+                                <div 
+                                    v-for="(vItem, idx) in venueList" 
+                                    :key="idx" 
+                                    class="flex items-center gap-2 bg-slate-50/80 dark:bg-slate-950/60 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800"
+                                >
+                                    <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400 w-5 text-center">#{{ idx + 1 }}</span>
+                                    <div class="flex-1 min-w-0">
+                                        <Input
+                                            v-model="vItem.name"
+                                            placeholder="Venue / Hall Name (e.g. LT 1)"
+                                            class="h-8 text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg"
+                                            required
+                                        />
                                     </div>
-                                    <Button type="button" variant="outline" size="sm" class="h-7 text-xs gap-1 border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-300" @click="addVenueRow">
-                                        <Plus class="w-3.5 h-3.5" /> Add Venue
+                                    <div class="w-24">
+                                        <Input
+                                            v-model="vItem.capacity"
+                                            type="number"
+                                            min="1"
+                                            placeholder="Seats"
+                                            class="h-8 text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg"
+                                            required
+                                        />
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="h-8 w-8 p-0 text-slate-400 hover:text-rose-600 rounded-lg"
+                                        :disabled="venueList.length <= 1"
+                                        @click="removeVenueRow(idx)"
+                                    >
+                                        <Trash2 class="w-3.5 h-3.5" />
                                     </Button>
                                 </div>
-                            </CardHeader>
-                            <CardContent class="p-4 space-y-4">
-                                <!-- Quick Select Registered Campus Building -->
-                                <div v-if="buildingSelectOptions.length > 1" class="space-y-1.5">
-                                    <Label class="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Quick Select Registered Campus Building</Label>
-                                    <SearchableSelect
-                                        v-model="selectedBuildingQuick"
-                                        :items="buildingSelectOptions"
-                                        placeholder="⚡ Select building to add..."
-                                        search-placeholder="Search campus building..."
-                                        @update:model-value="handleBuildingQuickSelect"
-                                    />
-                                </div>
+                            </div>
 
-                                <!-- Dynamic Venue Rows -->
-                                <div class="space-y-2.5 pt-1">
-                                    <div 
-                                        v-for="(vItem, idx) in venueList" 
-                                        :key="idx" 
-                                        class="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800"
-                                    >
-                                        <span class="text-xs font-bold text-purple-600 dark:text-purple-400 w-5 text-center">#{{ idx + 1 }}</span>
-                                        <div class="flex-1 min-w-0">
-                                            <Input
-                                                v-model="vItem.name"
-                                                placeholder="Venue / Hall Name"
-                                                class="h-8 text-xs bg-white dark:bg-slate-950"
-                                                required
-                                            />
-                                        </div>
-                                        <div class="w-24">
-                                            <Input
-                                                v-model="vItem.capacity"
-                                                type="number"
-                                                min="1"
-                                                placeholder="Seats"
-                                                class="h-8 text-xs bg-white dark:bg-slate-950"
-                                                title="Hall Capacity"
-                                                required
-                                            />
-                                        </div>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="h-8 w-8 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-                                            :disabled="venueList.length <= 1"
-                                            @click="removeVenueRow(idx)"
-                                            title="Remove venue"
-                                        >
-                                            <Trash2 class="w-4 h-4" />
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                <!-- Capacity Counter Summary -->
-                                <div class="p-3 bg-purple-50/70 dark:bg-purple-950/40 rounded-xl border border-purple-200 dark:border-purple-900 flex items-center justify-between text-xs">
-                                    <div>
-                                        <span class="text-slate-500 font-medium block text-[11px]">Selected Halls</span>
-                                        <strong class="text-slate-900 dark:text-slate-100 text-sm font-bold">{{ venueList.filter(v => v.name.trim()).length }} Hall(s)</strong>
-                                    </div>
-                                    <div class="text-right">
-                                        <span class="text-purple-600 dark:text-purple-400 font-semibold block text-[11px]">Combined Seating Capacity</span>
-                                        <strong class="text-purple-700 dark:text-purple-300 text-base font-black">{{ totalSeatingCapacity }} seats</strong>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <!-- 5. Instructions & Hall Rules Card -->
-                        <Card class="border-slate-200 dark:border-slate-800 shadow-xs">
-                            <CardHeader class="pb-3 border-b border-slate-100 dark:border-slate-800">
-                                <CardTitle class="text-sm font-bold text-slate-900 dark:text-slate-100">
-                                    Hall Rules & Instructions
-                                </CardTitle>
-                                <CardDescription class="text-xs">Optional instructions or required exam materials for students.</CardDescription>
-                            </CardHeader>
-                            <CardContent class="p-4 space-y-3">
-                                <Textarea 
-                                    v-model="form.instructions" 
-                                    rows="4" 
-                                    placeholder="E.g. Candidates must bring valid student ID card and exam docket. No mobile phones or programmable calculators allowed." 
-                                    class="text-xs" 
-                                />
-                            </CardContent>
-                        </Card>
-                    </div>
-                </div>
-
-                <!-- Sticky Bottom Action Footer -->
-                <div class="fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 py-3 px-6 shadow-lg">
-                    <div class="max-w-6xl mx-auto flex items-center justify-between">
-                        <div class="text-xs text-slate-500 hidden sm:block">
-                            <span v-if="selectedCourseIds.length > 0 && venueList.filter(v => v.name.trim()).length > 0">
-                                Ready to schedule <strong>{{ selectedCourseIds.length }} course(s)</strong> across <strong>{{ venueList.filter(v => v.name.trim()).length }} hall(s)</strong> ({{ totalSeatingCapacity }} seats).
-                            </span>
-                            <span v-else class="text-amber-600 font-medium">
-                                Complete course and venue selection to publish timetable.
-                            </span>
+                            <!-- Seating Capacity Summary -->
+                            <div class="p-3 bg-indigo-50/70 dark:bg-indigo-950/40 rounded-xl border border-indigo-200/80 dark:border-indigo-800 flex items-center justify-between text-xs">
+                                <span class="text-slate-600 dark:text-slate-300 font-medium">
+                                    Total Seating Capacity ({{ activeHallsCount }} hall(s)):
+                                </span>
+                                <strong class="text-indigo-600 dark:text-indigo-400 text-sm font-bold">{{ totalSeatingCapacity }} Seats</strong>
+                            </div>
                         </div>
-                        <div class="flex items-center gap-3 ml-auto sm:ml-0">
-                            <Button type="button" variant="outline" size="sm" @click="router.visit(route('admin.exams.index'))">
-                                Cancel
-                            </Button>
-                            <Button 
-                                type="submit" 
-                                size="sm" 
-                                class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-6"
-                                :disabled="form.processing"
-                            >
-                                <CheckCircle2 class="w-4 h-4 mr-1.5" />
-                                {{ isEditing ? 'Save Changes' : 'Publish Schedule' }}
-                            </Button>
-                        </div>
-                    </div>
-                </div>
+                    </CardContent>
+                </Card>
+
+                <!-- Card 4: Instructions -->
+                <Card class="border border-slate-200/80 dark:border-slate-800/80 shadow-xs bg-white dark:bg-slate-900 rounded-2xl">
+                    <CardHeader class="pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <CardTitle class="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                            <span class="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold flex items-center justify-center">4</span>
+                            Hall Rules & Remarks (Optional)
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent class="p-5">
+                        <Textarea 
+                            v-model="form.instructions" 
+                            rows="2" 
+                            placeholder="E.g. Candidates must bring valid student ID card and exam docket. No mobile phones allowed." 
+                            class="text-xs rounded-lg border-slate-200 dark:border-slate-800" 
+                        />
+                    </CardContent>
+                </Card>
             </form>
         </div>
     </AdminLayout>

@@ -32,9 +32,23 @@ class HostelBlockController extends Controller
             return back()->with('error', 'Cannot delete block. There are active bookings in rooms on this block.');
         }
 
-        // Delete block and conventionally all nested floors/rooms due to cascading migrations
         $block->delete();
 
         return back()->with('success', 'Block removed successfully.');
+    }
+
+    public function toggleVisibility(Hostel $hostel, HostelBlock $block)
+    {
+        if ($block->hostel_id !== $hostel->id) {
+            abort(404);
+        }
+
+        $block->update([
+            'is_visible' => !$block->is_visible,
+        ]);
+
+        $statusText = $block->is_visible ? 'made visible' : 'hidden';
+
+        return back()->with('success', "Block '{$block->name}' is now {$statusText}.");
     }
 }

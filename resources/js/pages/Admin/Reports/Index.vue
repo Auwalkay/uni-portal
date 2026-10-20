@@ -3,6 +3,7 @@ import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
 import { route } from 'ziggy-js';
+import { formatCurrency, formatCompactCurrency } from '@/lib/utils';
 import { 
     GraduationCap, DollarSign, Users, Building, FileText, Activity, 
     TrendingUp, Award, Library, Package, ChevronRight, Download, Calendar,
@@ -208,9 +209,7 @@ watch(() => [
     applyFilters();
 });
 
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount);
-};
+
 
 // CHART DATA GENERATORS
 const monthlyRevenueChartData = computed(() => {
@@ -550,7 +549,7 @@ const breadcrumbs = [
                             <DollarSign class="h-5 w-5 text-emerald-600" />
                         </CardHeader>
                         <CardContent>
-                            <div class="text-3xl font-bold text-emerald-950">{{ formatCurrency(financeStats.total_collected) }}</div>
+                            <div class="text-3xl font-bold text-emerald-950 cursor-help" :title="formatCurrency(financeStats.total_collected)">{{ formatCompactCurrency(financeStats.total_collected) }}</div>
                             <p class="text-xs text-emerald-700 mt-1">{{ financeStats.collection_rate }}% collection rate achieved</p>
                         </CardContent>
                     </Card>
@@ -784,19 +783,19 @@ const breadcrumbs = [
                     <Card>
                         <CardContent class="p-6">
                             <p class="text-sm font-medium text-slate-500">Total Invoiced</p>
-                            <h3 class="text-2xl font-bold mt-1 text-indigo-900">{{ formatCurrency(financeStats.total_invoiced) }}</h3>
+                            <h3 class="text-2xl font-bold mt-1 text-indigo-900 cursor-help" :title="formatCurrency(financeStats.total_invoiced)">{{ formatCompactCurrency(financeStats.total_invoiced) }}</h3>
                         </CardContent>
                     </Card>
                     <Card>
                         <CardContent class="p-6">
                             <p class="text-sm font-medium text-slate-500">Total Collected</p>
-                            <h3 class="text-2xl font-bold mt-1 text-emerald-600">{{ formatCurrency(financeStats.total_collected) }}</h3>
+                            <h3 class="text-2xl font-bold mt-1 text-emerald-600 cursor-help" :title="formatCurrency(financeStats.total_collected)">{{ formatCompactCurrency(financeStats.total_collected) }}</h3>
                         </CardContent>
                     </Card>
                     <Card>
                         <CardContent class="p-6">
                             <p class="text-sm font-medium text-slate-500">Outstanding Balance</p>
-                            <h3 class="text-2xl font-bold mt-1 text-rose-600">{{ formatCurrency(financeStats.outstanding_balance) }}</h3>
+                            <h3 class="text-2xl font-bold mt-1 text-rose-600 cursor-help" :title="formatCurrency(financeStats.outstanding_balance)">{{ formatCompactCurrency(financeStats.outstanding_balance) }}</h3>
                         </CardContent>
                     </Card>
                     <Card>

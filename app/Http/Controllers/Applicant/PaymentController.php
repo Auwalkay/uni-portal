@@ -24,13 +24,14 @@ class PaymentController extends Controller
     public function index()
     {
         $user = Auth::user();
-        $invoice = Invoice::where('user_id', $user->id)
+        $invoice = Invoice::with('session')
+            ->where('user_id', $user->id)
             ->where('type', 'application_fee')
             ->where('status', '!=', 'paid')
             ->latest()
             ->first();
 
-        // If no pending invoice, maybe they already paid?
+        // If no pending invoice, maybe they already paid or need one generated?
         if (!$invoice) {
             // Check if they have a paid one
             $paidInvoice = Invoice::where('user_id', $user->id)
@@ -39,51 +40,80 @@ class PaymentController extends Controller
                 ->exists();
 
             if ($paidInvoice) {
-                return redirect()->route('applicant.apply.show');
+                return redirect()->route('applicant.apply.show')->with('info', 'Your application fee has already been paid.');
             }
 
-            return redirect()->route('applicant.dashboard')->with('error', 'No application invoice found.');
+            // If an applicant record exists, ensure an application fee invoice is ready for payment
+            $applicant = Applicant::where('user_id', $user->id)->first();
+            if ($applicant) {
+                $currentSession = \App\Services\AcademicCacheService::getCurrentSession();
+                if (!$currentSession) {
+                    return redirect()->route('applicant.dashboard')->with('error', 'No active academic session found for payment.');
+                }
+
+                $invoice = Invoice::create([
+                    'user_id' => $user->id,
+                    'type' => 'application_fee',
+                    'session_id' => $currentSession->id,
+                    'reference' => 'APP-' . strtoupper(uniqid()),
+                    'amount' => \App\Models\SystemSetting::get('application_fee', 100000),
+                    'paid_amount' => 0,
+                    'status' => 'pending',
+                    'due_date' => now()->addDays(7),
+                ]);
+
+                $invoice->items()->create([
+                    'description' => 'Application Fee',
+                    'amount' => \App\Models\SystemSetting::get('application_fee', 100000),
+                    'quantity' => 1,
+                ]);
+
+                $invoice->load('session');
+            } else {
+                return redirect()->route('applicant.apply.start')->with('info', 'Please begin your application first.');
+            }
+        }
+
+        $currentSession = \App\Services\AcademicCacheService::getCurrentSession();
+
+        // Ensure pending invoice is associated with current session if session_id is missing
+        if (!$invoice->session_id && $currentSession) {
+            $invoice->update(['session_id' => $currentSession->id]);
+            $invoice->setRelation('session', $currentSession);
         }
 
         return Inertia::render('Applicant/Payment/Index', [
-            'invoice' => $invoice
+            'invoice' => $invoice,
+            'currentSession' => $currentSession,
         ]);
     }
 
     public function pay(Request $request)
     {
+        $request->validate([
+            'agreed_to_policy' => 'required|accepted',
+        ], [
+            'agreed_to_policy.accepted' => 'You must read and agree to the Non-Refundable Payment Policy before proceeding.',
+            'agreed_to_policy.required' => 'You must read and agree to the Non-Refundable Payment Policy before proceeding.',
+        ]);
+
         $user = Auth::user();
         $invoice = Invoice::where('user_id', $user->id)
             ->where('type', 'application_fee')
             ->where('status', '!=', 'paid')
+            ->latest()
             ->firstOrFail();
 
-        $payment = Payment::create([
-            'transaction_id' => 'TRX-' . strtoupper(uniqid()),
-            'invoice_id' => $invoice->id,
-            'user_id' => $user->id,
-            'gateway_reference' => 'TEMP-' . uniqid(),
-            'amount' => $invoice->amount,
-            'status' => 'pending',
-        ]);
-
-        $reference = 'PAY-' . strtoupper(uniqid());
-        $payment->update(['gateway_reference' => $reference]);
-
-        $data = $this->gateway->initializeTransaction(
-            $user->email,
-            $invoice->amount,
-            $reference,
-            route('applicant.payment.callback'),
-            [
-                'customer_name' => $user->name,
-                'payment_type' => 'application_fee',
-                'invoice_id' => $invoice->id,
-            ]
+        $paymentHandler = app(\App\Services\Payment\PaymentHandler::class);
+        $initiation = $paymentHandler->initiatePayment(
+            $invoice,
+            $user,
+            (float) $invoice->amount,
+            route('applicant.payment.callback')
         );
 
-        if ($data && isset($data['authorization_url'])) {
-            return Inertia::location($data['authorization_url']);
+        if ($initiation && !empty($initiation['authorization_url'])) {
+            return Inertia::location($initiation['authorization_url']);
         }
 
         return back()->with('error', 'Payment initialization failed.');
@@ -96,22 +126,12 @@ class PaymentController extends Controller
             return redirect()->route('applicant.payment.index')->with('error', 'No reference supplied.');
         }
 
-        $data = $this->gateway->verifyTransaction($reference);
+        $result = app(\App\Services\Payment\PaymentHandler::class)->verifyAndProcessPayment($reference);
 
-        $payment = Payment::where('gateway_reference', $reference)->first();
-
-        if ($data && $data['status'] === 'success') {
-            if ($payment && $payment->status !== 'success') {
-                app(\App\Services\Payment\PaymentHandler::class)->handleSuccessfulPayment($reference, $data);
-            }
-
+        if ($result['status'] === 'success') {
             return redirect()->route('applicant.apply.show')->with('success', 'Payment successful! Application submitted.');
         }
 
-        if ($payment && $payment->status !== 'success') {
-            $payment->update(['status' => 'failed']);
-        }
-
-        return redirect()->route('applicant.payment.index')->with('error', 'Payment verification failed or was abandoned.');
+        return redirect()->route('applicant.payment.index')->with('error', 'Payment verification failed or is pending confirmation.');
     }
 }

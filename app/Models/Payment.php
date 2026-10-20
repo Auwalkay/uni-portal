@@ -26,6 +26,7 @@ class Payment extends Model
 
     protected $casts = [
         'paid_at' => 'datetime',
+        'policy_agreed_at' => 'datetime',
     ];
 
     public function invoice(): BelongsTo
@@ -41,5 +42,31 @@ class Payment extends Model
     public function recorder(): BelongsTo
     {
         return $this->belongsTo(User::class, 'recorded_by');
+    }
+
+    public static function isSuccessStatus(?string $status): bool
+    {
+        if (!$status) {
+            return false;
+        }
+        return in_array(strtolower($status), ['success', 'successful', 'approved', 'completed', 'paid'], true);
+    }
+
+    public static function isFailedStatus(?string $status): bool
+    {
+        if (!$status) {
+            return false;
+        }
+        return in_array(strtolower($status), ['failed', 'cancelled', 'error', 'abandoned', 'declined', 'expired'], true);
+    }
+
+    public static function generateReference(string $prefix = 'PAY'): string
+    {
+        return $prefix . '-' . strtoupper(uniqid());
+    }
+
+    public static function generateTransactionId(string $prefix = 'MIUPAY'): string
+    {
+        return $prefix . date('Y') . strtoupper(\Illuminate\Support\Str::random(8));
     }
 }

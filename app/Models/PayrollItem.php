@@ -30,4 +30,21 @@ class PayrollItem extends Model
     {
         return $this->belongsTo(Staff::class);
     }
+
+    /**
+     * Recalculate totals for this payroll item.
+     */
+    public function recalculate(): void
+    {
+        if ($this->status === 'excluded') {
+            $this->net_salary = 0;
+            return;
+        }
+
+        $basic = (float) $this->basic_salary;
+        $allowances = (float) $this->total_allowances;
+        $deductions = (float) $this->total_deductions;
+
+        $this->net_salary = max(0, $basic + $allowances - $deductions);
+    }
 }

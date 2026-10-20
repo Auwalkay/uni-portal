@@ -88,12 +88,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/dashboard', [\App\Http\Controllers\Student\ProfileController::class, 'dashboard'])->name('dashboard');
 
             Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
+            Route::get('/payments/invoices/{invoice}', [PaymentController::class, 'showInvoice'])->name('payments.invoice.show');
             Route::post('/payments/create-school-fee', [PaymentController::class, 'createSchoolFeeInvoice'])->name('payments.create_school_fee');
             Route::get('/payments/optional-fees', [PaymentController::class, 'getOptionalFees'])->name('payments.optional_fees');
             Route::post('/payments/initiate-optional/{config}', [PaymentController::class, 'initiateOptionalFee'])->name('payments.initiate_optional');
             Route::post('/payments/{invoice}/pay', [PaymentController::class, 'pay'])->name('payments.pay');
             Route::get('/payments/callback', [PaymentController::class, 'callback'])->name('payments.callback');
             Route::get('/payments/{payment}/download', [PaymentController::class, 'downloadReceipt'])->name('payments.download');
+            Route::post('/payments/{payment}/requery', [PaymentController::class, 'requery'])->name('payments.requery');
+            Route::post('/payments/requery-reference', [PaymentController::class, 'requeryReference'])->name('payments.requery_reference');
 
             Route::get('/courses', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'index'])->name('courses.index');
             Route::get('/courses/register', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'create'])->name('courses.create');
@@ -305,23 +308,32 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::resource('timetables', \App\Http\Controllers\Admin\TimetableController::class)->only(['index', 'store', 'destroy']);
         });
 
-        // Exam Management
-        Route::middleware(['permission:manage_exams|access_admin_dashboard'])->group(function () {
-            Route::post('exams/toggle-publish', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'togglePublish'])->name('exams.toggle_publish');
-            Route::get('exams', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'index'])->name('exams.index');
-            Route::get('exams/create', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'create'])->name('exams.create');
-            Route::get('exams/scanner', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'scanner'])->name('exams.scanner');
-            Route::post('exams', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'store'])->name('exams.store');
-            Route::post('exams/import', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'import'])->name('exams.import');
+        // Exam Management (Granular Permissions)
+        Route::middleware(['permission:manage_exams|view_exams|create_exams|edit_exams|delete_exams|publish_exams|assign_invigilators|scan_exam_cards|mark_exam_attendance|log_exam_incidents|access_admin_dashboard'])->group(function () {
+            Route::post('exams/toggle-publish', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'togglePublish'])->name('exams.toggle_publish')->middleware('permission:manage_exams|publish_exams');
+            Route::get('exams', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'index'])->name('exams.index')->middleware('permission:manage_exams|view_exams');
+            Route::get('exams/exercises/{exam}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'showExam'])->name('exams.exercises.show')->middleware('permission:manage_exams|view_exams');
+            Route::post('exams/exercises', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'storeExam'])->name('exams.exercises.store')->middleware('permission:manage_exams|create_exams');
+            Route::put('exams/exercises/{exam}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'updateExam'])->name('exams.exercises.update')->middleware('permission:manage_exams|edit_exams');
+            Route::delete('exams/exercises/{exam}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'destroyExam'])->name('exams.exercises.destroy')->middleware('permission:manage_exams|delete_exams');
+            Route::post('exams/exercises/{exam}/toggle-publish', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'togglePublishExam'])->name('exams.exercises.toggle_publish')->middleware('permission:manage_exams|publish_exams');
+            Route::post('exams/exercises/{exam}/toggle-docket', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'toggleDocketExam'])->name('exams.exercises.toggle_docket')->middleware('permission:manage_exams|publish_exams');
+            Route::get('exams/create', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'create'])->name('exams.create')->middleware('permission:manage_exams|create_exams');
+            Route::get('exams/scanner', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'scanner'])->name('exams.scanner')->middleware('permission:manage_exams|scan_exam_cards|mark_exam_attendance');
+            Route::get('exams/incidents', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'incidentsIndex'])->name('exams.incidents.index')->middleware('permission:manage_exams|log_exam_incidents');
+            Route::post('exams/incidents', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'storeIncident'])->name('exams.incidents.general_store')->middleware('permission:manage_exams|log_exam_incidents');
+            Route::post('exams', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'store'])->name('exams.store')->middleware('permission:manage_exams|create_exams');
+            Route::post('exams/import', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'import'])->name('exams.import')->middleware('permission:manage_exams|create_exams');
             Route::get('exams/template', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'downloadTemplate'])->name('exams.template');
-            Route::get('exams/verify-pass/{token}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'verifyPass'])->name('exams.verify_pass');
-            Route::post('exams/mark-attendance', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'markAttendance'])->name('exams.mark_attendance');
-            Route::get('exams/{exam}/edit', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'edit'])->name('exams.edit');
-            Route::put('exams/{exam}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'update'])->name('exams.update');
-            Route::delete('exams/{exam}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'destroy'])->name('exams.destroy');
-            Route::post('exams/{exam}/invigilators', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'assignInvigilator'])->name('exams.invigilators.assign');
-            Route::delete('exam-invigilators/{invigilator}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'removeInvigilator'])->name('exams.invigilators.remove');
-            Route::post('exams/{exam}/incidents', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'logIncident'])->name('exams.incidents.store');
+            Route::get('exams/verify-pass/{token}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'verifyPass'])->name('exams.verify_pass')->middleware('permission:manage_exams|scan_exam_cards|mark_exam_attendance');
+            Route::post('exams/mark-attendance', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'markAttendance'])->name('exams.mark_attendance')->middleware('permission:manage_exams|mark_exam_attendance|scan_exam_cards');
+            Route::get('exams/{exam}/edit', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'edit'])->name('exams.edit')->middleware('permission:manage_exams|edit_exams');
+            Route::put('exams/{exam}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'update'])->name('exams.update')->middleware('permission:manage_exams|edit_exams');
+            Route::delete('exams/{exam}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'destroy'])->name('exams.destroy')->middleware('permission:manage_exams|delete_exams');
+            Route::post('exams/{exam}/invigilators', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'assignInvigilator'])->name('exams.invigilators.assign')->middleware('permission:manage_exams|assign_invigilators');
+            Route::delete('exam-invigilators/{invigilator}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'removeInvigilator'])->name('exams.invigilators.remove')->middleware('permission:manage_exams|assign_invigilators');
+            Route::post('exams/{exam}/incidents', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'logIncident'])->name('exams.incidents.store')->middleware('permission:manage_exams|log_exam_incidents');
+            Route::put('exam-incidents/{incident}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'updateIncident'])->name('exams.incidents.update')->middleware('permission:manage_exams|log_exam_incidents');
         });
 
         // Campus Buildings Management
@@ -334,12 +346,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 
         // Hostel Management
-        Route::middleware(['permission:manage_hostels|manage_hostel_fees|manage_hostel_bookings|view_hostel_bookings|view_male_hostel_bookings|view_female_hostel_bookings'])->group(function () {
+        Route::middleware(['permission:manage_hostels|manage_hostel_fees|manage_hostel_bookings|view_hostel_bookings|view_male_hostel_bookings|view_female_hostel_bookings|change_hostel_room'])->group(function () {
             Route::get('hostels/bookings', [HostelBookingController::class, 'index'])->name('hostels.bookings.index');
             Route::get('hostels/bookings/export', [HostelBookingController::class, 'export'])->name('hostels.bookings.export');
             Route::post('hostels/bookings', [HostelBookingController::class, 'store'])->name('hostels.bookings.store');
             Route::post('hostels/bookings/{booking}/unbook', [HostelBookingController::class, 'unbook'])->name('hostels.bookings.unbook');
             Route::post('hostels/bookings/{booking}/reallocate', [HostelBookingController::class, 'reallocate'])->name('hostels.bookings.reallocate');
+            Route::post('hostels/bookings/{booking}/change-room', [HostelBookingController::class, 'changeRoom'])->name('hostels.bookings.change-room')->middleware('permission:change_hostel_room');
             Route::get('hostels/bookings/{booking}/download-slip', [HostelBookingController::class, 'downloadSlip'])->name('hostels.bookings.download-slip');
             Route::get('hostels/search-students', [HostelBookingController::class, 'searchStudents'])->name('hostels.search-students');
             Route::get('hostels/rooms/available', [HostelBookingController::class, 'getAvailableRooms'])->name('hostels.rooms.available');
@@ -350,6 +363,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('hostels/{hostel}/rooms/import', [HostelController::class, 'importRooms'])->name('hostels.specific-rooms.import');
 
             // Hostels CRUD
+            Route::get('hostels/create', [HostelController::class, 'create'])->name('hostels.create')->middleware('permission:create_hostels');
+            Route::get('hostels/{hostel}/edit', [HostelController::class, 'edit'])->name('hostels.edit')->middleware('permission:create_hostels');
             Route::resource('hostels', HostelController::class)->only(['index', 'show']);
             Route::post('hostels', [HostelController::class, 'store'])->name('hostels.store')->middleware('permission:create_hostels');
             Route::put('hostels/{hostel}', [HostelController::class, 'update'])->name('hostels.update')->middleware('permission:create_hostels');
@@ -358,9 +373,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('hostels/{hostel}/toggle-visibility', [HostelController::class, 'toggleVisibility'])->name('hostels.toggle-visibility')->middleware('permission:toggle_hostels');
 
             Route::post('hostels/{hostel}/blocks', [HostelBlockController::class, 'store'])->name('hostels.blocks.store')->middleware('permission:create_hostels');
+            Route::post('hostels/{hostel}/blocks/{block}/toggle-visibility', [HostelBlockController::class, 'toggleVisibility'])->name('hostels.blocks.toggle-visibility')->middleware('permission:toggle_hostels');
             Route::delete('hostels/{hostel}/blocks/{block}', [HostelBlockController::class, 'destroy'])->name('hostels.blocks.destroy')->middleware('permission:create_hostels');
 
             Route::post('hostels/{hostel}/blocks/{block}/floors', [HostelFloorController::class, 'store'])->name('hostels.floors.store')->middleware('permission:create_hostels');
+            Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/toggle-visibility', [HostelFloorController::class, 'toggleVisibility'])->name('hostels.floors.toggle-visibility')->middleware('permission:toggle_hostels');
             Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}', [HostelFloorController::class, 'destroy'])->name('hostels.floors.destroy')->middleware('permission:create_hostels');
 
             Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms', [HostelRoomController::class, 'store'])->name('hostels.rooms.store')->middleware('permission:create_hostels');

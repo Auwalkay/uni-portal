@@ -10,10 +10,11 @@ use App\Models\Semester;
 use App\Models\Session;
 use App\Models\Student;
 use App\Models\StudentSession;
+use App\Services\AcademicCacheService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use App\Services\AcademicCacheService;
 use Inertia\Inertia;
 
 class CourseRegistrationController extends Controller
@@ -39,9 +40,9 @@ class CourseRegistrationController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('matriculation_number', 'like', "%{$search}%")
-                  ->orWhereHas('user', function ($uq) use ($search) {
-                      $uq->where('name', 'like', "%{$search}%");
-                  });
+                    ->orWhereHas('user', function ($uq) use ($search) {
+                        $uq->where('name', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -59,12 +60,12 @@ class CourseRegistrationController extends Controller
         if ($status === 'registered') {
             $query->whereHas('registrations', function ($q) use ($sessionId, $semesterId) {
                 $q->where('session_id', $sessionId)
-                  ->where('semester_id', $semesterId);
+                    ->where('semester_id', $semesterId);
             });
         } elseif ($status === 'not_registered') {
             $query->whereDoesntHave('registrations', function ($q) use ($sessionId, $semesterId) {
                 $q->where('session_id', $sessionId)
-                  ->where('semester_id', $semesterId);
+                    ->where('semester_id', $semesterId);
             });
         }
 
@@ -98,7 +99,7 @@ class CourseRegistrationController extends Controller
         Gate::authorize('manage_student_registrations');
 
         $currentSession = Session::current();
-        if (!$currentSession) {
+        if (! $currentSession) {
             return back()->with('error', 'No active academic session found.');
         }
 
@@ -109,32 +110,48 @@ class CourseRegistrationController extends Controller
             ->where('session_id', $currentSession->id)
             ->exists();
 
-        if (!$hasPaid) {
+        if (! $hasPaid) {
             return back()->with('error', 'Course registration is only allowed for students who have paid their school fees for the current session.');
         }
 
         // 2. Fetch Data (from cache)
         $semesters = $currentSession->semesters()->orderBy('name')->get();
-        
-        $faculties = AcademicCacheService::getFaculties();
-        $departments = AcademicCacheService::getAcademicDepartments();
-        $programmes = AcademicCacheService::getProgrammes();
+
+        $faculties = AcademicCacheService::getFaculties(true);
+        $departments = AcademicCacheService::getAcademicDepartments(true);
+        $programmes = AcademicCacheService::getProgrammes(true);
 
         $level = request('level', $student->current_level);
-        $query = Course::where('level', $level);
+        $query = Course::where('level', $level)->where('is_active', true);
+        $query->whereHas('department', fn($d) => $d->where('is_active', true));
 
-        if (request('department_id')) {
+        if (request()->filled('programme_id') && request('programme_id') !== 'all') {
+            $programmeId = request('programme_id');
+            $query->where(function ($q) use ($programmeId) {
+                $q->where('programme_id', $programmeId)
+                  ->orWhereExists(function ($sub) use ($programmeId) {
+                      $sub->select(DB::raw(1))
+                          ->from('course_programme')
+                          ->whereColumn('course_programme.course_id', 'courses.id')
+                          ->where('course_programme.programme_id', $programmeId);
+                  });
+            });
+        }
+
+        if (request()->filled('department_id') && request('department_id') !== 'all') {
             $query->where('department_id', request('department_id'));
-        } elseif (request('faculty_id')) {
-            $deptIds = \App\Models\Department::where('faculty_id', request('faculty_id'))->pluck('id');
+        } elseif (request()->filled('faculty_id') && request('faculty_id') !== 'all') {
+            $deptIds = \App\Models\Department::where('faculty_id', request('faculty_id'))
+                ->where('is_active', true)
+                ->pluck('id');
             $query->whereIn('department_id', $deptIds);
         } else {
             $query->where('department_id', $student->department_id);
         }
 
         $availableCourses = $query->with(['department', 'allocations' => function ($q) use ($currentSession) {
-                $q->where('session_id', $currentSession->id)->with('staff.user');
-            }])
+            $q->where('session_id', $currentSession->id)->with('staff.user');
+        }])
             ->orderBy('semester')
             ->orderBy('code')
             ->get();
@@ -158,7 +175,7 @@ class CourseRegistrationController extends Controller
             'registeredCourses' => $registeredCourses,
             'registeredCourseIds' => $registeredCourseIds,
             'maxUnits' => 24, // Default or fetch from program
-            'filters' => request()->only(['faculty_id', 'department_id', 'level']),
+            'filters' => request()->only(['faculty_id', 'department_id', 'programme_id', 'level']),
         ]);
     }
 
@@ -172,7 +189,7 @@ class CourseRegistrationController extends Controller
         ]);
 
         $currentSession = Session::current();
-        if (!$currentSession) {
+        if (! $currentSession) {
             abort(404, 'No active session.');
         }
 
@@ -183,15 +200,18 @@ class CourseRegistrationController extends Controller
             ->where('session_id', $currentSession->id)
             ->exists();
 
-        if (!$hasPaid) {
+        if (! $hasPaid) {
             return back()->with('error', 'Student must pay school fees before course registration can be processed.');
         }
 
         $semesters = Semester::where('session_id', $currentSession->id)->get();
-        $firstSemester = $semesters->filter(fn($s) => stripos($s->name, 'First') !== false || $s->name == '1')->first();
-        $secondSemester = $semesters->filter(fn($s) => stripos($s->name, 'Second') !== false || $s->name == '2')->first();
+        $firstSemester = $semesters->filter(fn ($s) => stripos($s->name, 'First') !== false || $s->name == '1')->first();
+        $secondSemester = $semesters->filter(fn ($s) => stripos($s->name, 'Second') !== false || $s->name == '2')->first();
 
-        $selectedCourses = Course::whereIn('id', $request->courses)->get();
+        $selectedCourses = Course::whereIn('id', $request->courses)->where('is_active', true)->get();
+        if ($selectedCourses->count() !== count($request->courses)) {
+            return back()->with('error', 'One or more selected courses are inactive.');
+        }
 
         DB::transaction(function () use ($student, $currentSession, $firstSemester, $secondSemester, $selectedCourses) {
             $studentSession = StudentSession::firstOrCreate(
@@ -204,8 +224,10 @@ class CourseRegistrationController extends Controller
                 ->delete();
 
             foreach ($selectedCourses as $course) {
-                $semesterId = $course->semester == '1' ? $firstSemester?->id : $secondSemester?->id;
-                
+                $semesterId = ($course->semester == '1' || $course->semester == 1)
+                    ? $firstSemester?->id
+                    : ($secondSemester?->id ?? $firstSemester?->id);
+
                 CourseRegistration::create([
                     'student_id' => $student->id,
                     'course_id' => $course->id,
@@ -216,7 +238,7 @@ class CourseRegistrationController extends Controller
             }
         });
 
-        \App\Services\AcademicCacheService::clearTimetableCache();
+        AcademicCacheService::clearTimetableCache();
 
         return to_route('admin.course_registration.manage', $student->id)->with('success', 'Course registration processed successfully.');
     }
@@ -226,7 +248,7 @@ class CourseRegistrationController extends Controller
         Gate::authorize('manage_student_registrations');
 
         $currentSession = Session::current();
-        if (!$currentSession) {
+        if (! $currentSession) {
             abort(404, 'No active session.');
         }
 
@@ -234,14 +256,14 @@ class CourseRegistrationController extends Controller
             ->where('session_id', $currentSession->id)
             ->with('course', 'semester')
             ->get()
-            ->groupBy(fn($reg) => $reg->semester?->name ?? 'Unknown');
+            ->groupBy(fn ($reg) => $reg->semester?->name ?? 'Unknown');
 
         if ($registrations->isEmpty()) {
             return back()->with('error', 'No course registration records found for this session.');
         }
 
         if ($request->query('download') === '1') {
-            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.course_form', [
+            $pdf = Pdf::loadView('documents.course_form', [
                 'student' => $student->load(['user', 'academicDepartment.faculty', 'program']),
                 'registrations' => $registrations,
                 'session' => $currentSession,

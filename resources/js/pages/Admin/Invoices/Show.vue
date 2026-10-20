@@ -11,9 +11,10 @@ import { Separator } from '@/components/ui/separator';
 import Swal from 'sweetalert2';
 import { 
     ArrowLeft, Printer, CreditCard, CheckCircle2, Clock, Calendar, 
-    User, Mail, School, Building, RefreshCw, Download, ShieldCheck,
+    User, Mail, School, Building, RefreshCw, Download, ShieldCheck, ShieldAlert,
     AlertCircle, Wallet, History, Trash2, Edit3, Plus, Trash, Tag
 } from 'lucide-vue-next';
+import { Textarea } from '@/components/ui/textarea';
 import { type BreadcrumbItem } from '@/types';
 import { 
     Dialog, 
@@ -135,6 +136,54 @@ const deleteInvoice = () => {
                 }
             });
         }
+    });
+};
+
+// Waive Late Charge State & Actions
+const isWaiveModalOpen = ref(false);
+const waiveForm = useForm({
+    reason: '',
+});
+
+const lateFineItem = computed(() => {
+    return props.invoice.items?.find((i: any) => {
+        const desc = (i.description || '').toLowerCase();
+        return desc.includes('late payment fine') || desc.includes('late fee');
+    });
+});
+
+const lateFineAmount = computed(() => {
+    if (lateFineItem.value) {
+        return Number(lateFineItem.value.amount) || 0;
+    }
+    if (props.invoice.late_fine_applied) {
+        return Number(props.invoice.session?.late_fee_amount) || 0;
+    }
+    return 0;
+});
+
+const canWaiveLateCharge = computed(() => {
+    return hasPermission('waive_late_charges') && 
+           !props.invoice.late_fine_waived && 
+           (props.invoice.late_fine_applied || !!lateFineItem.value);
+});
+
+const openWaiveModal = () => {
+    waiveForm.reason = '';
+    isWaiveModalOpen.value = true;
+};
+
+const confirmWaiveLateCharge = () => {
+    waiveForm.post(route('admin.invoices.waive-late-charge', props.invoice.id), {
+        onSuccess: () => {
+            isWaiveModalOpen.value = false;
+            Swal.fire({
+                title: 'Late Fine Waived!',
+                text: 'The late payment charge has been successfully removed and permanently waived on this invoice.',
+                icon: 'success',
+                confirmButtonColor: '#3b82f6',
+            });
+        },
     });
 };
 
@@ -261,6 +310,15 @@ const filteredPayments = computed(() => {
                         class="flex-1 md:flex-none border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-900 dark:text-indigo-300"
                     >
                         <Edit3 class="w-4 h-4 mr-2" /> Edit Breakdown
+                    </Button>
+
+                    <Button 
+                        v-if="canWaiveLateCharge" 
+                        variant="outline" 
+                        @click="openWaiveModal" 
+                        class="flex-1 md:flex-none border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/40"
+                    >
+                        <ShieldAlert class="w-4 h-4 mr-2" /> Waive Late Charge
                     </Button>
 
                     <Button 
@@ -409,6 +467,89 @@ const filteredPayments = computed(() => {
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
+
+                    <!-- Waive Late Charge Confirmation Modal -->
+                    <Dialog v-model:open="isWaiveModalOpen">
+                        <DialogContent class="sm:max-w-md">
+                            <DialogHeader>
+                                <DialogTitle class="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                                    <ShieldAlert class="w-5 h-5" /> Waive Late Payment Charge
+                                </DialogTitle>
+                                <DialogDescription>
+                                    This will permanently remove the late payment fine from this invoice and prevent automated cron and refresh tasks from re-applying it.
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            <div class="space-y-4 py-3">
+                                <div class="bg-amber-50 dark:bg-amber-950/30 p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-600 dark:text-slate-400">Late Charge to Remove:</span>
+                                        <span class="font-bold font-mono text-amber-700 dark:text-amber-400">-{{ formatCurrency(lateFineAmount) }}</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-600 dark:text-slate-400">Current Total:</span>
+                                        <span class="font-bold font-mono text-slate-700 dark:text-slate-300">{{ formatCurrency(invoice.amount) }}</span>
+                                    </div>
+                                    <Separator class="bg-amber-200 dark:bg-amber-900/50" />
+                                    <div class="flex justify-between font-semibold">
+                                        <span class="text-slate-800 dark:text-slate-200">New Invoice Total:</span>
+                                        <span class="font-black font-mono text-emerald-600 dark:text-emerald-400">
+                                            {{ formatCurrency(Math.max(0, invoice.amount - lateFineAmount)) }}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div class="space-y-2">
+                                    <Label for="waiver_reason" class="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                        Waiver Justification / Reason <span class="text-slate-400 font-normal">(optional)</span>
+                                    </Label>
+                                    <Textarea 
+                                        id="waiver_reason"
+                                        v-model="waiveForm.reason"
+                                        placeholder="e.g., Approved VC concession, medical leave exemption, or banking channel reconciliation delay"
+                                        rows="3"
+                                        class="text-sm"
+                                    />
+                                </div>
+                            </div>
+
+                            <DialogFooter class="flex gap-2 sm:justify-end">
+                                <Button type="button" variant="ghost" @click="isWaiveModalOpen = false">
+                                    Cancel
+                                </Button>
+                                <Button 
+                                    type="button" 
+                                    class="bg-amber-600 hover:bg-amber-700 text-white" 
+                                    :disabled="waiveForm.processing"
+                                    @click="confirmWaiveLateCharge"
+                                >
+                                    <ShieldAlert class="w-4 h-4 mr-2" /> {{ waiveForm.processing ? 'Waiving...' : 'Confirm & Waive Fee' }}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                </div>
+            </div>
+
+            <!-- Late Fine Waived Banner -->
+            <div v-if="invoice.late_fine_waived" class="rounded-xl border border-amber-200 bg-amber-50/80 p-4 dark:border-amber-900/60 dark:bg-amber-950/20 flex items-start gap-3 shadow-sm no-print">
+                <div class="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-lg text-amber-700 dark:text-amber-300 shrink-0">
+                    <ShieldCheck class="w-5 h-5" />
+                </div>
+                <div class="space-y-1 text-sm flex-1">
+                    <div class="flex items-center gap-2 font-bold text-amber-900 dark:text-amber-200">
+                        <span>Late Payment Fine Waived</span>
+                        <Badge variant="outline" class="border-amber-300 text-amber-800 bg-amber-100 dark:border-amber-700 dark:text-amber-300 dark:bg-amber-900/40 text-[10px] uppercase font-bold tracking-wider">
+                            Fee Waived
+                        </Badge>
+                    </div>
+                    <p class="text-amber-800/90 dark:text-amber-300/80 text-xs">
+                        The late payment fine on this invoice was formally waived on {{ formatDate(invoice.late_fine_waived_at) }}
+                        <span v-if="invoice.waived_by">by <strong class="font-semibold">{{ invoice.waived_by.name }}</strong></span>.
+                    </p>
+                    <p v-if="invoice.late_fine_waived_reason" class="text-xs text-amber-700 dark:text-amber-400 italic">
+                        Justification / Reason: "{{ invoice.late_fine_waived_reason }}"
+                    </p>
                 </div>
             </div>
 
@@ -546,8 +687,19 @@ const filteredPayments = computed(() => {
                                 <TableBody>
                                     <TableRow v-for="item in invoice.items" :key="item.id" class="border-b-slate-100 dark:border-b-slate-800">
                                         <TableCell class="pl-8 py-5">
-                                            <div class="font-semibold text-slate-700 dark:text-slate-200">{{ item.description }}</div>
-                                            <div class="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-tighter">Academic Charge</div>
+                                            <div class="flex items-center gap-2">
+                                                <span class="font-semibold text-slate-700 dark:text-slate-200">{{ item.description }}</span>
+                                                <Badge 
+                                                    v-if="item.description?.toLowerCase().includes('late payment fine') || item.description?.toLowerCase().includes('late fee')"
+                                                    variant="outline"
+                                                    class="border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:bg-amber-950/40 text-[10px] font-bold uppercase tracking-wider"
+                                                >
+                                                    Late Penalty
+                                                </Badge>
+                                            </div>
+                                            <div class="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-tighter">
+                                                {{ (item.description?.toLowerCase().includes('late payment fine') || item.description?.toLowerCase().includes('late fee')) ? 'Penalty Charge' : 'Academic Charge' }}
+                                            </div>
                                         </TableCell>
                                         <TableCell class="text-right pr-8 py-5 font-mono text-slate-900 dark:text-white">
                                             {{ formatCurrency(item.amount) }}

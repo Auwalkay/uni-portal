@@ -3,21 +3,19 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Imports\AttendanceImport;
 use App\Models\Attendance;
+use App\Models\Holiday;
+use App\Models\Semester;
+use App\Models\Session;
 use App\Models\Staff;
-use App\Models\Faculty;
-use App\Models\Department;
+use App\Services\AcademicCacheService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
-use App\Imports\AttendanceImport;
-use App\Models\Session;
-use App\Models\Semester;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Cache;
-use App\Models\Holiday;
-use App\Services\AcademicCacheService;
 
 class AttendanceController extends Controller
 {
@@ -32,7 +30,7 @@ class AttendanceController extends Controller
         }
 
         if ($request->filled('department_id')) {
-            $query->whereHas('staff', fn($q) => $q->where('department_id', $request->department_id));
+            $query->whereHas('staff', fn ($q) => $q->where('department_id', $request->department_id));
         }
 
         if ($request->filled('status')) {
@@ -44,13 +42,13 @@ class AttendanceController extends Controller
 
         if ($sortBy === 'name') {
             $query->join('staff', 'attendances.staff_id', '=', 'staff.id')
-                  ->join('users', 'staff.user_id', '=', 'users.id')
-                  ->orderBy('users.name', $sortDir)
-                  ->select('attendances.*');
+                ->join('users', 'staff.user_id', '=', 'users.id')
+                ->orderBy('users.name', $sortDir)
+                ->select('attendances.*');
         } elseif ($sortBy === 'staff_number') {
             $query->join('staff', 'attendances.staff_id', '=', 'staff.id')
-                  ->orderBy('staff.staff_number', $sortDir)
-                  ->select('attendances.*');
+                ->orderBy('staff.staff_number', $sortDir)
+                ->select('attendances.*');
         } elseif ($sortBy === 'clock_out') {
             $query->orderByRaw("attendances.clock_out IS NULL ASC, attendances.clock_out {$sortDir}");
         } elseif ($sortBy === 'created_at') {
@@ -67,14 +65,15 @@ class AttendanceController extends Controller
             ->get(['staff_id', 'status', 'clock_in', 'clock_out', 'notes'])
             ->keyBy('staff_id');
 
-        $allStaff = Staff::whereHas('user', fn($q) => $q->where('is_active', true))
+        $allStaff = Staff::whereHas('user', fn ($q) => $q->where('is_active', true))
             ->with(['user:id,name', 'department:id,name'])
             ->select('id', 'user_id', 'department_id', 'staff_number')
             ->get()
-            ->sortBy(fn($s) => $s->user?->name)
+            ->sortBy(fn ($s) => $s->user?->name)
             ->values()
             ->map(function ($s) use ($existingAttendances) {
                 $att = $existingAttendances->get($s->id);
+
                 return [
                     'id' => $s->id,
                     'name' => $s->user?->name ?? 'Unknown Staff',
@@ -127,8 +126,8 @@ class AttendanceController extends Controller
         $rows = [];
         foreach ($validated['attendances'] as $item) {
             $status = $item['status'];
-            $clockIn = !empty($item['clock_in']) ? $item['clock_in'] : ($status === 'present' ? '08:00:00' : ($status === 'late' ? '09:30:00' : null));
-            $clockOut = !empty($item['clock_out']) ? $item['clock_out'] : ($status === 'present' || $status === 'late' ? '17:00:00' : null);
+            $clockIn = ! empty($item['clock_in']) ? $item['clock_in'] : ($status === 'present' ? '08:00:00' : ($status === 'late' ? '09:30:00' : null));
+            $clockOut = ! empty($item['clock_out']) ? $item['clock_out'] : ($status === 'present' || $status === 'late' ? '17:00:00' : null);
 
             $rows[] = [
                 'id' => (string) \Illuminate\Support\Str::uuid(),
@@ -137,7 +136,7 @@ class AttendanceController extends Controller
                 'status' => $status,
                 'clock_in' => $clockIn,
                 'clock_out' => $clockOut,
-                'notes' => !empty($item['notes']) ? $item['notes'] : null,
+                'notes' => ! empty($item['notes']) ? $item['notes'] : null,
                 'source' => 'manual',
                 'created_by' => $userId,
                 'updated_by' => $userId,
@@ -197,7 +196,7 @@ class AttendanceController extends Controller
     public function updateHoliday(Request $request, Holiday $holiday)
     {
         $validated = $request->validate([
-            'date' => 'required|date|unique:holidays,date,' . $holiday->id,
+            'date' => 'required|date|unique:holidays,date,'.$holiday->id,
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
         ]);
@@ -231,6 +230,7 @@ class AttendanceController extends Controller
             ->log("Removed public holiday: {$holiday->name} on {$holiday->date}");
 
         $holiday->delete();
+
         return back()->with('success', 'Holiday removed.');
     }
 
@@ -344,6 +344,7 @@ class AttendanceController extends Controller
             ->log("Deleted attendance record for staff {$attendance->staff?->user?->name} on {$attendance->date?->format('Y-m-d')}");
 
         $attendance->delete();
+
         return back()->with('success', 'Attendance record removed.');
     }
 
@@ -354,7 +355,7 @@ class AttendanceController extends Controller
         ]);
 
         $targetDate = $request->date;
-        $activeStaff = Staff::whereHas('user', fn($q) => $q->where('is_active', true))->get();
+        $activeStaff = Staff::whereHas('user', fn ($q) => $q->where('is_active', true))->get();
         $count = 0;
 
         foreach ($activeStaff as $staff) {
@@ -362,7 +363,7 @@ class AttendanceController extends Controller
                 ->whereDate('date', $targetDate)
                 ->exists();
 
-            if (!$exists) {
+            if (! $exists) {
                 Attendance::create([
                     'staff_id' => $staff->id,
                     'date' => $targetDate,
@@ -390,7 +391,7 @@ class AttendanceController extends Controller
     {
         $headers = ['staff_id', 'staff_name', 'department', 'clock_in', 'clock_out'];
 
-        $staffMembers = Staff::whereHas('user', fn($q) => $q->where('is_active', true))
+        $staffMembers = Staff::whereHas('user', fn ($q) => $q->where('is_active', true))
             ->with(['user', 'department'])
             ->get();
 
@@ -410,12 +411,15 @@ class AttendanceController extends Controller
             ];
         }
 
-        return Excel::download(new class($headers, $data) implements \Maatwebsite\Excel\Concerns\FromCollection {
+        return Excel::download(new class($headers, $data) implements \Maatwebsite\Excel\Concerns\FromCollection
+        {
             public function __construct(protected $headers, protected $data) {}
-            public function collection() {
+
+            public function collection()
+            {
                 return collect([$this->headers, ...$this->data]);
             }
-        }, 'attendance_import_template_' . now()->format('Y_m_d') . '.xlsx');
+        }, 'attendance_import_template_'.now()->format('Y_m_d').'.xlsx');
     }
 
     public function reports(Request $request)
@@ -463,6 +467,7 @@ class AttendanceController extends Controller
             $rec->formatted_date = Carbon::parse($rec->date)->format('D, d M Y');
             $rec->formatted_clock_in = $rec->clock_in ? Carbon::parse($rec->clock_in)->format('h:i A') : '---';
             $rec->formatted_clock_out = $rec->clock_out ? Carbon::parse($rec->clock_out)->format('h:i A') : '---';
+
             return $rec;
         });
 
@@ -485,16 +490,19 @@ class AttendanceController extends Controller
                 'overallStats' => $stats['overallStats'],
                 'departmentSummary' => $stats['departmentSummary'],
                 'title' => $stats['title'],
-                'date' => now()->format('d M, Y')
+                'date' => now()->format('d M, Y'),
             ])->setPaper('a4', 'landscape');
-            
-            return $pdf->download('attendance_report_' . now()->format('Y_m_d') . '.pdf');
+
+            return $pdf->download('attendance_report_'.now()->format('Y_m_d').'.pdf');
         }
 
-        return Excel::download(new class($stats['data'], $stats['overallStats']) implements \Maatwebsite\Excel\Concerns\FromCollection, \Maatwebsite\Excel\Concerns\WithHeadings {
+        return Excel::download(new class($stats['data'], $stats['overallStats']) implements \Maatwebsite\Excel\Concerns\FromCollection, \Maatwebsite\Excel\Concerns\WithHeadings
+        {
             public function __construct(protected $data, protected $overallStats) {}
-            public function collection() {
-                return $this->data->map(fn($s) => [
+
+            public function collection()
+            {
+                return $this->data->map(fn ($s) => [
                     $s->staff?->staff_number ?? 'N/A',
                     $s->staff?->user?->name ?? 'Unknown',
                     $s->staff?->department?->name ?? 'N/A',
@@ -505,35 +513,37 @@ class AttendanceController extends Controller
                     $s->leave_count,
                     $s->avg_clock_in ?? 'N/A',
                     $s->total_hours_formatted ?? 'N/A',
-                    $s->punctuality_rate . '%',
-                    $s->rate . '%'
+                    $s->punctuality_rate.'%',
+                    $s->rate.'%',
                 ]);
             }
-            public function headings(): array {
+
+            public function headings(): array
+            {
                 return [
-                    'Staff ID', 
-                    'Staff Name', 
-                    'Department', 
-                    'Total Recorded Days', 
-                    'Present (On Time)', 
-                    'Late', 
-                    'Absent', 
-                    'On Leave', 
-                    'Average Clock-In', 
-                    'Total Hours Worked', 
-                    'Punctuality Rate', 
-                    'Attendance Rate'
+                    'Staff ID',
+                    'Staff Name',
+                    'Department',
+                    'Total Recorded Days',
+                    'Present (On Time)',
+                    'Late',
+                    'Absent',
+                    'On Leave',
+                    'Average Clock-In',
+                    'Total Hours Worked',
+                    'Punctuality Rate',
+                    'Attendance Rate',
                 ];
             }
-        }, 'attendance_report_' . now()->format('Y_m_d') . '.xlsx');
+        }, 'attendance_report_'.now()->format('Y_m_d').'.xlsx');
     }
 
     private function getReportStats(Request $request)
     {
         $type = $request->input('type', 'monthly');
         $date = $request->filled('date') ? Carbon::parse($request->date) : now();
-        
-        $cacheKey = 'att_rep_' . md5(json_encode([
+
+        $cacheKey = 'att_rep_'.md5(json_encode([
             't' => $type,
             'd' => $date->format('Y-m-d'),
             's' => $request->session_id,
@@ -551,17 +561,17 @@ class AttendanceController extends Controller
             } elseif ($type === 'weekly') {
                 $dateRange = [$date->copy()->startOfWeek(), $date->copy()->endOfWeek()];
                 $query->whereBetween('date', [$dateRange[0]->format('Y-m-d'), $dateRange[1]->format('Y-m-d')]);
-                $reportTitle = "Week of " . $dateRange[0]->format('M d, Y') . " - " . $dateRange[1]->format('M d, Y');
+                $reportTitle = 'Week of '.$dateRange[0]->format('M d, Y').' - '.$dateRange[1]->format('M d, Y');
             } elseif ($type === 'session' && $request->filled('session_id')) {
                 $session = Session::findOrFail($request->session_id);
                 $dateRange = [Carbon::parse($session->start_date), $session->end_date ? Carbon::parse($session->end_date) : now()];
                 $query->whereBetween('date', [$dateRange[0]->format('Y-m-d'), $dateRange[1]->format('Y-m-d')]);
-                $reportTitle = "Session: " . $session->name;
+                $reportTitle = 'Session: '.$session->name;
             } elseif ($type === 'semester' && $request->filled('semester_id')) {
                 $semester = Semester::findOrFail($request->semester_id);
                 $dateRange = [Carbon::parse($semester->registration_starts_at), $semester->registration_ends_at ? Carbon::parse($semester->registration_ends_at) : now()];
                 $query->whereBetween('date', [$dateRange[0]->format('Y-m-d'), $dateRange[1]->format('Y-m-d')]);
-                $reportTitle = "Semester: " . $semester->name;
+                $reportTitle = 'Semester: '.$semester->name;
             } else {
                 $dateRange = [$date->copy()->startOfMonth(), $date->copy()->endOfMonth()];
                 $query->whereBetween('date', [$dateRange[0]->format('Y-m-d'), $dateRange[1]->format('Y-m-d')]);
@@ -569,7 +579,7 @@ class AttendanceController extends Controller
             }
 
             if ($request->filled('department_id')) {
-                $query->whereHas('staff', fn($q) => $q->where('department_id', $request->department_id));
+                $query->whereHas('staff', fn ($q) => $q->where('department_id', $request->department_id));
             }
 
             $data = $query->select(
@@ -582,29 +592,29 @@ class AttendanceController extends Controller
                 DB::raw('SEC_TO_TIME(AVG(CASE WHEN clock_in IS NOT NULL THEN TIME_TO_SEC(clock_in) END)) as avg_clock_in_sec'),
                 DB::raw('SUM(CASE WHEN clock_in IS NOT NULL AND clock_out IS NOT NULL THEN TIME_TO_SEC(TIMEDIFF(clock_out, clock_in)) ELSE 0 END) as total_seconds_worked')
             )
-            ->groupBy('staff_id')
-            ->with(['staff.user', 'staff.department'])
-            ->get()
-            ->map(function ($s) {
-                $totalRecorded = $s->present_count + $s->late_count + $s->absent_count + $s->leave_count;
-                $s->rate = $totalRecorded > 0 ? round((($s->present_count + $s->late_count) / $totalRecorded) * 100, 1) : 0;
-                $s->punctuality_rate = ($s->present_count + $s->late_count) > 0 ? round(($s->present_count / ($s->present_count + $s->late_count)) * 100, 1) : 0;
-                
-                if ($s->avg_clock_in_sec) {
-                    $s->avg_clock_in = Carbon::parse($s->avg_clock_in_sec)->format('h:i A');
-                } else {
-                    $s->avg_clock_in = 'N/A';
-                }
+                ->groupBy('staff_id')
+                ->with(['staff.user', 'staff.department'])
+                ->get()
+                ->map(function ($s) {
+                    $totalRecorded = $s->present_count + $s->late_count + $s->absent_count + $s->leave_count;
+                    $s->rate = $totalRecorded > 0 ? round((($s->present_count + $s->late_count) / $totalRecorded) * 100, 1) : 0;
+                    $s->punctuality_rate = ($s->present_count + $s->late_count) > 0 ? round(($s->present_count / ($s->present_count + $s->late_count)) * 100, 1) : 0;
 
-                $hours = floor($s->total_seconds_worked / 3600);
-                $minutes = floor(($s->total_seconds_worked % 3600) / 60);
-                $s->total_hours_formatted = "{$hours}h {$minutes}m";
+                    if ($s->avg_clock_in_sec) {
+                        $s->avg_clock_in = Carbon::parse($s->avg_clock_in_sec)->format('h:i A');
+                    } else {
+                        $s->avg_clock_in = 'N/A';
+                    }
 
-                return $s;
-            });
+                    $hours = floor($s->total_seconds_worked / 3600);
+                    $minutes = floor(($s->total_seconds_worked % 3600) / 60);
+                    $s->total_hours_formatted = "{$hours}h {$minutes}m";
+
+                    return $s;
+                });
 
             // Departmental Summary
-            $departmentSummary = $data->groupBy(fn($item) => $item->staff?->department?->name ?? 'Unassigned')
+            $departmentSummary = $data->groupBy(fn ($item) => $item->staff?->department?->name ?? 'Unassigned')
                 ->map(function ($group, $deptName) {
                     $staffCount = $group->count();
                     $totalPresent = $group->sum('present_count');
@@ -612,7 +622,7 @@ class AttendanceController extends Controller
                     $totalAbsent = $group->sum('absent_count');
                     $totalLeave = $group->sum('leave_count');
                     $totalDaysSum = $group->sum('total_days');
-                    
+
                     $avgRate = $group->avg('rate');
                     $avgPunctuality = $group->avg('punctuality_rate');
 
@@ -630,7 +640,7 @@ class AttendanceController extends Controller
                 })->values();
 
             // At-Risk Staff (< 75% attendance or >= 3 absences)
-            $atRiskStaff = $data->filter(fn($item) => $item->rate < 75 || $item->absent_count >= 3)->values();
+            $atRiskStaff = $data->filter(fn ($item) => $item->rate < 75 || $item->absent_count >= 3)->values();
 
             // Overall Summary Stats
             $overallStats = [
@@ -661,7 +671,7 @@ class AttendanceController extends Controller
         $date = $request->filled('date') ? Carbon::parse($request->date) : now();
         $month = $date->month;
         $year = $date->year;
-        
+
         $daysInMonth = $date->daysInMonth;
         $startDate = $date->copy()->startOfMonth();
         $endDate = $date->copy()->endOfMonth();
@@ -679,7 +689,7 @@ class AttendanceController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('staff.staff_number', 'like', "%{$search}%")
-                  ->orWhere('users.name', 'like', "%{$search}%");
+                    ->orWhere('users.name', 'like', "%{$search}%");
             });
         }
 
@@ -691,12 +701,12 @@ class AttendanceController extends Controller
             ->get()
             ->groupBy('staff_id')
             ->map(function ($items) {
-                return $items->keyBy(fn($i) => Carbon::parse($i->date)->format('Y-m-d'));
+                return $items->keyBy(fn ($i) => Carbon::parse($i->date)->format('Y-m-d'));
             });
 
         $holidays = Holiday::whereBetween('date', [$startDate, $endDate])
             ->get()
-            ->keyBy(fn($h) => $h->date);
+            ->keyBy(fn ($h) => $h->date);
 
         return Inertia::render('Admin/HR/Attendance/Calendar', [
             'staffList' => $staffList,

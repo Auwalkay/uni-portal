@@ -67,14 +67,14 @@ const selectSession = (sessionId: number) => {
                             </p>
                         </div>
                          <div class="mb-1 hidden md:block">
-                            <Link v-if="!(isSecondSemester && schoolFeeStatus === 'partial')" :href="route('student.courses.create')">
+                            <Link v-if="schoolFeeStatus === 'paid' || schoolFeeStatus === 'partial'" :href="route('student.courses.create')">
                                 <Button size="lg" class="bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 border-0 font-semibold shadow-xl shadow-black/10 transition-all hover:scale-105 active:scale-95 px-6 cursor-pointer">
                                     <PlusCircle v-if="!hasCurrentRegistration" class="mr-2 h-5 w-5" /> 
                                     {{ hasCurrentRegistration ? 'Review Registration' : 'Register Courses' }}
                                 </Button>
                             </Link>
                             <Button v-else disabled size="lg" class="bg-white/55 text-emerald-900/60 border-0 font-semibold cursor-not-allowed px-6">
-                                <Lock class="mr-2 h-4 w-4" /> Locked
+                                <Lock class="mr-2 h-4 w-4" /> Unpaid Fees
                             </Button>
                         </div>
                     </div>
@@ -83,14 +83,14 @@ const selectSession = (sessionId: number) => {
             
             <!-- Mobile Action Button -->
             <div class="px-4 md:hidden -mt-6 relative z-20">
-                 <Link v-if="!(isSecondSemester && schoolFeeStatus === 'partial')" :href="route('student.courses.create')" class="block w-full">
+                 <Link v-if="schoolFeeStatus === 'paid' || schoolFeeStatus === 'partial'" :href="route('student.courses.create')" class="block w-full">
                     <Button size="lg" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg border border-emerald-500/50 cursor-pointer">
                         <PlusCircle v-if="!hasCurrentRegistration" class="mr-2 h-5 w-5" /> 
                         {{ hasCurrentRegistration ? 'Modify Registration' : 'Register Courses' }}
                     </Button>
                 </Link>
                 <Button v-else disabled size="lg" class="w-full bg-gray-200 text-gray-400 border-0 font-semibold cursor-not-allowed shadow-none">
-                    <Lock class="mr-2 h-4 w-4" /> Locked
+                    <Lock class="mr-2 h-4 w-4" /> Unpaid Fees
                 </Button>
             </div>
 
@@ -220,20 +220,6 @@ const selectSession = (sessionId: number) => {
                                             </div>
                                         </div>
                                         <div class="flex-shrink-0 relative z-10 flex gap-2">
-                                             <a 
-                                                v-if="selectedSessionRecord.id && $page.props.settings?.enable_exam_card_download && !(isSecondSemester && (schoolFeeStatus !== 'paid' || hasPendingInvoices))"
-                                                :href="route('student.courses.exam_card', { session_id: selectedSessionRecord.id })" 
-                                                target="_blank"
-                                             > 
-                                                <Button variant="default" class="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all h-10 px-4 group/btn">
-                                                    <FileText class="w-4 h-4 text-emerald-100 group-hover/btn:text-white transition-colors" />
-                                                    Exam Card
-                                                </Button>
-                                             </a>
-                                             <Button v-else-if="selectedSessionRecord.id && $page.props.settings?.enable_exam_card_download" disabled variant="default" class="gap-2 bg-gray-150 text-gray-400 border border-gray-200 shadow-none cursor-not-allowed h-10 px-4">
-                                                 <Lock class="w-4 h-4" />
-                                                 Exam Card
-                                             </Button>
                                              <a 
                                                 v-if="selectedSessionRecord.id"
                                                 :href="route('student.courses.form', { session_id: selectedSessionRecord.id })" 

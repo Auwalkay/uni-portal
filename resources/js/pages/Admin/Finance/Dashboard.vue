@@ -5,7 +5,8 @@ import { route } from 'ziggy-js';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { ArrowUpRight, ArrowDownRight, CreditCard, DollarSign, Wallet } from 'lucide-vue-next';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button'; // Assuming button component exists
+import { Button } from '@/components/ui/button';
+import { formatCurrency, formatCompactCurrency } from '@/lib/utils';
 
 interface Transaction {
     type: 'inflow' | 'outflow';
@@ -29,9 +30,7 @@ defineProps<{
     recentTransactions: Transaction[];
 }>();
 
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
-};
+
 
 const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
@@ -62,7 +61,7 @@ const formatDate = (dateString: string) => {
                         <ArrowDownRight class="h-4 w-4 text-emerald-500" />
                     </CardHeader>
                     <CardContent>
-                        <div class="text-2xl font-bold text-emerald-600">{{ formatCurrency(stats.totalInflow) }}</div>
+                        <div class="text-2xl font-bold text-emerald-600 cursor-help" :title="formatCurrency(stats.totalInflow)">{{ formatCompactCurrency(stats.totalInflow) }}</div>
                         <p class="text-xs text-muted-foreground">From student fees</p>
                     </CardContent>
                 </Card>
@@ -72,7 +71,7 @@ const formatDate = (dateString: string) => {
                         <ArrowUpRight class="h-4 w-4 text-rose-500" />
                     </CardHeader>
                     <CardContent>
-                        <div class="text-2xl font-bold text-rose-600">{{ formatCurrency(stats.totalOutflow) }}</div>
+                        <div class="text-2xl font-bold text-rose-600 cursor-help" :title="formatCurrency(stats.totalOutflow)">{{ formatCompactCurrency(stats.totalOutflow) }}</div>
                         <p class="text-xs text-muted-foreground">Expenses + Payroll</p>
                     </CardContent>
                 </Card>
@@ -82,8 +81,8 @@ const formatDate = (dateString: string) => {
                         <Wallet class="h-4 w-4 text-primary" />
                     </CardHeader>
                     <CardContent>
-                        <div class="text-2xl font-bold" :class="stats.netBalance >= 0 ? 'text-primary' : 'text-rose-600'">
-                             {{ formatCurrency(stats.netBalance) }}
+                        <div class="text-2xl font-bold cursor-help" :class="stats.netBalance >= 0 ? 'text-primary' : 'text-rose-600'" :title="formatCurrency(stats.netBalance)">
+                             {{ formatCompactCurrency(stats.netBalance) }}
                         </div>
                         <p class="text-xs text-muted-foreground">Available funds</p>
                     </CardContent>

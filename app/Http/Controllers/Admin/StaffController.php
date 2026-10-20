@@ -268,12 +268,25 @@ class StaffController extends Controller
             'file' => 'required|file|extensions:csv,xls,xlsx|max:10240',
         ]);
 
+        $file = $request->file('file');
+        \Illuminate\Support\Facades\Log::info("[StaffController] Starting staff import process.", [
+            'original_filename' => $file->getClientOriginalName(),
+            'file_size_bytes' => $file->getSize(),
+            'uploaded_by' => auth()->user()?->email,
+        ]);
+
         try {
             $import = new StaffImport;
-            Excel::import($import, $request->file('file'));
+            Excel::import($import, $file);
 
-            return redirect()->route('admin.staff.index')->with('success', $import->getProcessedCount() . ' staff members imported successfully.');
+            $count = $import->getProcessedCount();
+            \Illuminate\Support\Facades\Log::info("[StaffController] Staff import completed successfully. Processed count: {$count}");
+
+            return redirect()->route('admin.staff.index')->with('success', $count . ' staff members imported successfully.');
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("[StaffController] Staff import failed: " . $e->getMessage(), [
+                'exception' => $e,
+            ]);
             return redirect()->route('admin.staff.index')->with('error', 'Error during import: ' . $e->getMessage());
         }
     }

@@ -93,7 +93,9 @@ class EndToEndFlowTest extends TestCase
 
         // Update Status to Admitted
         $response = $this->put(route('admin.admissions.update', $applicant->id), [
-            'status' => 'admitted'
+            'status' => 'admitted',
+            'admitted_level' => '100',
+            'admitted_programme_id' => $applicant->program_choice_1,
         ]);
 
         // 3. Admission Acceptance & Matriculation
