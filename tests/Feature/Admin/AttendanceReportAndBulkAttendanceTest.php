@@ -268,6 +268,26 @@ class AttendanceReportAndBulkAttendanceTest extends TestCase
             'source' => 'manual',
         ]);
 
+        $userWithoutDept = User::create([
+            'name' => 'Staff Without Dept',
+            'email' => 'nodept@portal.com',
+            'password' => Hash::make('password'),
+            'is_active' => true,
+        ]);
+        $staffWithoutDept = Staff::create([
+            'user_id' => $userWithoutDept->id,
+            'department_id' => null,
+            'staff_number' => 'STF-NODEPT',
+        ]);
+        Attendance::create([
+            'staff_id' => $staffWithoutDept->id,
+            'date' => now()->startOfMonth()->toDateString(),
+            'status' => 'present',
+            'clock_in' => '08:00:00',
+            'clock_out' => '17:00:00',
+            'source' => 'manual',
+        ]);
+
         $pdfResponse = $this->actingAs($this->adminUser)
             ->get(route('admin.attendance.export', [
                 'format' => 'pdf',

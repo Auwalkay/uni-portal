@@ -92,16 +92,16 @@
         <tbody>
             @foreach($stats as $staff)
                 <tr>
-                    <td style="font-family: monospace; font-weight: bold; color: #475569;">{{ $staff->staff->staff_number }}</td>
-                    <td><strong>{{ $staff->staff->user->name }}</strong></td>
-                    <td>{{ $staff->staff->department->name }}</td>
+                    <td style="font-family: monospace; font-weight: bold; color: #475569;">{{ $staff->staff?->staff_number ?? 'N/A' }}</td>
+                    <td><strong>{{ $staff->staff?->user?->name ?? 'Unknown' }}</strong></td>
+                    <td>{{ $staff->staff?->department?->name ?? 'Unassigned' }}</td>
                     <td class="text-center">{{ $staff->total_days }}</td>
                     <td class="text-center text-green">{{ $staff->present_count }}</td>
                     <td class="text-center text-amber">{{ $staff->late_count }}</td>
                     <td class="text-center text-red">{{ $staff->absent_count }}</td>
-                    <td class="text-center text-blue">{{ $staff->leave_count }}</td>
-                    <td class="text-center" style="font-weight: bold;">{{ $staff->avg_clock_in }}</td>
-                    <td class="text-center">{{ $staff->total_hours_formatted }}</td>
+                    <td class="text-center text-blue">{{ $staff->leave_count ?? 0 }}</td>
+                    <td class="text-center" style="font-weight: bold;">{{ $staff->avg_clock_in ?? 'N/A' }}</td>
+                    <td class="text-center">{{ $staff->total_hours_formatted ?? 'N/A' }}</td>
                     <td class="text-right" style="font-weight: bold;">{{ $staff->punctuality_rate }}%</td>
                     <td class="text-right">
                         <span style="font-weight: bold; color: {{ $staff->rate >= 80 ? '#16a34a' : ($staff->rate >= 50 ? '#d97706' : '#dc2626') }}">{{ $staff->rate }}%</span>
