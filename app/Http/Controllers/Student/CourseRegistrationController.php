@@ -134,8 +134,9 @@ class CourseRegistrationController extends Controller
         $programme = $student->program;
         $maxUnits = $programme ? $programme->max_credit_units : 24;
 
-        $faculties = AcademicCacheService::getAllFaculties();
-        $departments = AcademicCacheService::getAcademicDepartments();
+        $faculties = AcademicCacheService::getAllFaculties(true);
+        $departments = AcademicCacheService::getAcademicDepartments(true);
+        $programmes = AcademicCacheService::getProgrammes(true);
 
         $availableCourses = $this->getAvailableCourses($student, $currentSession, $department, $request);
 
@@ -165,6 +166,7 @@ class CourseRegistrationController extends Controller
             'isPartialPayment' => $paymentInfo['isPartial'],
             'faculties' => $faculties,
             'departments' => $departments,
+            'programmes' => $programmes,
             'courses' => $availableCourses,
             'registeredCourses' => $registeredCourses,
             'registeredCourseIds' => $registeredCourseIds,
@@ -178,6 +180,7 @@ class CourseRegistrationController extends Controller
                 'level' => $request->input('level', $student->current_level),
                 'faculty_id' => $request->input('faculty_id'),
                 'department_id' => $request->input('department_id'),
+                'programme_id' => $request->input('programme_id'),
             ],
         ]);
     }
@@ -236,7 +239,10 @@ class CourseRegistrationController extends Controller
         $programme = $student->program;
         $maxUnits = $programme ? $programme->max_credit_units : 24;
 
-        $selectedCourses = Course::whereIn('id', $request->courses)->get();
+        $selectedCourses = Course::whereIn('id', $request->courses)->where('is_active', true)->get();
+        if ($selectedCourses->count() !== count($request->courses)) {
+            return back()->with('error', 'One or more selected courses are inactive or no longer available for registration.');
+        }
         $firstSemCourses = $selectedCourses->where('semester', '1');
         $secondSemCourses = $selectedCourses->where('semester', '2');
 
@@ -506,20 +512,40 @@ class CourseRegistrationController extends Controller
 
     private function getAvailableCourses(Student $student, Session $session, $department, Request $request)
     {
-        $query = Course::query();
+        $query = Course::query()->where('is_active', true);
+
+        // Department must also be active
+        $query->whereHas('department', function ($d) {
+            $d->where('is_active', true);
+        });
 
         $level = $request->input('level', $student->current_level);
         if ($level) {
             $query->where('level', $level);
         }
 
-        if ($request->filled('department_id')) {
+        if ($request->filled('programme_id') && $request->programme_id !== 'all') {
+            $programmeId = $request->programme_id;
+            $query->where(function ($q) use ($programmeId) {
+                $q->where('programme_id', $programmeId)
+                  ->orWhereExists(function ($sub) use ($programmeId) {
+                      $sub->select(DB::raw(1))
+                          ->from('course_programme')
+                          ->whereColumn('course_programme.course_id', 'courses.id')
+                          ->where('course_programme.programme_id', $programmeId);
+                  });
+            });
+        }
+
+        if ($request->filled('department_id') && $request->department_id !== 'all') {
             $query->where('department_id', $request->department_id);
-        } elseif ($request->filled('faculty_id')) {
-            $deptIds = \App\Models\Department::where('faculty_id', $request->faculty_id)->pluck('id');
+        } elseif ($request->filled('faculty_id') && $request->faculty_id !== 'all') {
+            $deptIds = \App\Models\Department::where('faculty_id', $request->faculty_id)
+                ->where('is_active', true)
+                ->pluck('id');
             $query->whereIn('department_id', $deptIds);
         } else {
-            if ($department) {
+            if ($department && $department->is_active) {
                 $query->where('department_id', $department->id);
             }
         }

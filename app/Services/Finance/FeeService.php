@@ -414,11 +414,11 @@ class FeeService
                 }
             }
 
-            // Check if late payment fine should be included (returning students only)
+            // Check if late payment fine should be included (returning students only, if not previously waived)
             $session = $invoice->session;
             $lateFineAmount = 0;
             $applyLateFine = false;
-            if ($student->isReturningStudent($session) && $session && $session->late_payment_deadline && $session->late_payment_deadline->isPast() && $session->late_fee_amount > 0) {
+            if (!$invoice->late_fine_waived && $student->isReturningStudent($session) && $session && $session->late_payment_deadline && $session->late_payment_deadline->isPast() && $session->late_fee_amount > 0) {
                 $isEnabled = filter_var(SystemSetting::get('late_fee_enabled', true), FILTER_VALIDATE_BOOLEAN);
                 if ($isEnabled) {
                     $lateFineAmount = (float) $session->late_fee_amount;

@@ -181,10 +181,21 @@ class LatePaymentFineTest extends TestCase
             'school_fee_payment_enabled' => false, // DISABLED
         ]);
 
+        $faculty = \App\Models\Faculty::create(['name' => 'Sciences', 'code' => 'SCI']);
+        $department = \App\Models\Department::create(['name' => 'Computer Science', 'code' => 'CSC', 'faculty_id' => $faculty->id]);
+
         $studentUser = User::create([
             'name' => 'Student User',
             'email' => 'student@portal.com',
             'password' => Hash::make('password'),
+        ]);
+        $studentUser->assignRole('student');
+
+        \App\Models\Student::create([
+            'user_id' => $studentUser->id,
+            'department_id' => $department->id,
+            'matriculation_number' => 'MAT/TEST/001',
+            'status' => 'active',
         ]);
 
         $invoice = Invoice::create([
@@ -201,9 +212,11 @@ class LatePaymentFineTest extends TestCase
         ]);
 
         // Try to pay
-        $response = $this->actingAs($studentUser)->post(route('student.payments.pay', $invoice->id), [
-            'amount' => 50000,
-        ]);
+        $response = $this->withoutMiddleware([\App\Http\Middleware\EnsureStudentProfileCompleted::class])
+            ->actingAs($studentUser)
+            ->post(route('student.payments.pay', $invoice->id), [
+                'amount' => 50000,
+            ]);
 
         $response->assertRedirect();
         $response->assertSessionHas('error', 'School fee payments are currently disabled for the 2026/2027 Academic Session.');

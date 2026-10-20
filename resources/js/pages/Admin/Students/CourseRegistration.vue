@@ -46,24 +46,43 @@ if (props.registeredCourses.length > 0) {
 const filterForm = ref({
     faculty_id: props.filters?.faculty_id || '',
     department_id: props.filters?.department_id || '',
+    programme_id: props.filters?.programme_id || '',
     level: props.filters?.level || String(props.student.current_level) || '100',
 });
 
 const isLoading = ref(false);
 
 const filteredDepartments = computed(() => {
-    if (!filterForm.value.faculty_id) return [];
-    return props.departments.filter(d => d.faculty_id === filterForm.value.faculty_id);
+    const activeDepts = (props.departments || []).filter(d => d.is_active !== false);
+    if (!filterForm.value.faculty_id) return activeDepts;
+    return activeDepts.filter(d => String(d.faculty_id) === String(filterForm.value.faculty_id));
+});
+
+const filteredProgrammes = computed(() => {
+    const activeProgs = (props.programmes || []).filter(p => p.is_active !== false);
+    if (filterForm.value.department_id) {
+        return activeProgs.filter(p => String(p.department_id) === String(filterForm.value.department_id));
+    }
+    if (filterForm.value.faculty_id) {
+        const deptIds = new Set(filteredDepartments.value.map(d => String(d.id)));
+        return activeProgs.filter(p => deptIds.has(String(p.department_id)));
+    }
+    return activeProgs;
 });
 
 const facultyItems = computed(() => [
     { value: '', label: 'All Faculties' },
-    ...props.faculties.map(f => ({ value: String(f.id), label: f.name }))
+    ...(props.faculties || []).filter(f => f.is_active !== false).map(f => ({ value: String(f.id), label: f.name }))
 ]);
 
 const departmentItems = computed(() => [
     { value: '', label: 'All Departments' },
     ...filteredDepartments.value.map(d => ({ value: String(d.id), label: d.name }))
+]);
+
+const programmeItems = computed(() => [
+    { value: '', label: 'All Programmes' },
+    ...filteredProgrammes.value.map(p => ({ value: String(p.id), label: p.name }))
 ]);
 
 const levelItems = [
@@ -77,6 +96,11 @@ const levelItems = [
 
 watch(() => filterForm.value.faculty_id, () => {
     filterForm.value.department_id = '';
+    filterForm.value.programme_id = '';
+});
+
+watch(() => filterForm.value.department_id, () => {
+    filterForm.value.programme_id = '';
 });
 
 const loadCourses = () => {
@@ -282,7 +306,17 @@ const breadcrumbs = [
                                     :items="departmentItems"
                                     placeholder="All Departments"
                                     search-placeholder="Search departments..."
-                                    :disabled="!filterForm.faculty_id"
+                                    :disabled="!filterForm.faculty_id && filteredDepartments.length === 0"
+                                />
+                            </div>
+
+                            <div class="space-y-2">
+                                <Label class="text-xs font-bold text-gray-500 uppercase">Programme</Label>
+                                <SearchableSelect
+                                    v-model="filterForm.programme_id"
+                                    :items="programmeItems"
+                                    placeholder="All Programmes"
+                                    search-placeholder="Search programmes..."
                                 />
                             </div>
 

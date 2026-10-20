@@ -177,6 +177,11 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
             Route::post('invoices/{invoice}/recalculate', [InvoiceController::class, 'recalculate'])->name('invoices.recalculate');
         });
 
+        // Waive / Remove Late Charges
+        Route::middleware(['permission:waive_late_charges'])->group(function () {
+            Route::post('invoices/{invoice}/waive-late-charge', [InvoiceController::class, 'waiveLateCharge'])->name('invoices.waive-late-charge');
+        });
+
         // Manual Invoice Payment / Override / Requery
         Route::middleware(['permission:manual_payment_override|verify_payments|manage_payments'])->group(function () {
             Route::post('invoices/{invoice}/mark-as-paid', [InvoiceController::class, 'markAsPaid'])->name('invoices.mark-as-paid');
