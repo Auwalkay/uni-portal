@@ -37,6 +37,8 @@ class Invoice extends Model
         'amount' => 'double',
         'paid_amount' => 'double',
         'late_fine_applied' => 'boolean',
+        'late_fine_waived' => 'boolean',
+        'late_fine_waived_at' => 'datetime',
         'due_date' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
@@ -80,6 +82,11 @@ class Invoice extends Model
     public function updater()
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function waivedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'late_fine_waived_by');
     }
 
     public function getHostel(): ?Hostel

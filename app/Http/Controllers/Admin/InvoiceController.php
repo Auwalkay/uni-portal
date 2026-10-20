@@ -508,7 +508,7 @@ class InvoiceController extends Controller
 
     public function show(Invoice $invoice)
     {
-        $invoice->load(['user.student', 'session', 'items', 'payments.user', 'payments.recorder', 'creator', 'updater']);
+        $invoice->load(['user.student', 'session', 'items', 'payments.user', 'payments.recorder', 'creator', 'updater', 'waivedBy']);
 
         return Inertia::render('Admin/Invoices/Show', [
             'invoice' => $invoice,
@@ -863,5 +863,84 @@ class InvoiceController extends Controller
         $adjustedFormatted = number_format(abs($discrepancy), 2);
         $typeWord = $discrepancy > 0 ? 'added' : 'credited';
         return back()->with('success', "Invoice recalculated successfully. Adjustment of ₦{$adjustedFormatted} {$typeWord}.");
+    }
+
+    public function waiveLateCharge(Request $request, Invoice $invoice)
+    {
+        if (!Auth::user()->can('waive_late_charges') && !Auth::user()->hasRole('super_admin')) {
+            abort(403, 'Unauthorized. You need the waive_late_charges permission to remove late charges.');
+        }
+
+        if ($invoice->late_fine_waived) {
+            return back()->with('error', 'Late payment fine has already been waived for this invoice.');
+        }
+
+        $request->validate([
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        // Find late fee items
+        $lateFineItems = $invoice->items->filter(function ($item) {
+            $desc = strtolower($item->description ?? '');
+            return str_contains($desc, 'late payment fine') || str_contains($desc, 'late fee');
+        });
+
+        $fineAmountSum = (float) $lateFineItems->sum('amount');
+
+        // If no line items found, but late_fine_applied is true, fallback to session's late fee amount
+        if ($fineAmountSum <= 0 && $invoice->late_fine_applied) {
+            $fineAmountSum = (float) ($invoice->session?->late_fee_amount ?? 0);
+        }
+
+        if ($fineAmountSum <= 0 && !$invoice->late_fine_applied) {
+            return back()->with('error', 'No active late payment charges found on this invoice to waive.');
+        }
+
+        DB::transaction(function () use ($request, $invoice, $lateFineItems, $fineAmountSum) {
+            // Delete late fine line items
+            foreach ($lateFineItems as $item) {
+                $item->delete();
+            }
+
+            $oldAmount = (float) $invoice->amount;
+            $newTotalAmount = max(0, $oldAmount - $fineAmountSum);
+            $paidAmount = (float) $invoice->paid_amount;
+
+            $newStatus = 'pending';
+            if ($paidAmount >= $newTotalAmount && $newTotalAmount > 0) {
+                $newStatus = 'paid';
+            } elseif ($paidAmount > 0) {
+                $newStatus = 'partial';
+            }
+
+            $reason = $request->input('reason');
+
+            $invoice->update([
+                'amount' => $newTotalAmount,
+                'status' => $newStatus,
+                'late_fine_applied' => false,
+                'late_fine_waived' => true,
+                'late_fine_waived_at' => now(),
+                'late_fine_waived_by' => Auth::id(),
+                'late_fine_waived_reason' => $reason,
+                'updated_by' => Auth::id(),
+            ]);
+
+            activity()
+                ->performedOn($invoice)
+                ->causedBy(Auth::user())
+                ->withProperties([
+                    'waived_amount' => $fineAmountSum,
+                    'reason' => $reason,
+                    'old_amount' => $oldAmount,
+                    'new_amount' => $newTotalAmount,
+                ])
+                ->log("Waived late payment fine of ₦" . number_format($fineAmountSum, 2));
+
+            \Illuminate\Support\Facades\Log::info("[LATE_FINE_WAIVED] Waived late fine of ₦{$fineAmountSum} on invoice {$invoice->id} (Ref: {$invoice->reference}) by user " . Auth::id() . ". Reason: {$reason}");
+        });
+
+        $formatted = number_format($fineAmountSum, 2);
+        return back()->with('success', "Late payment charge of ₦{$formatted} has been successfully waived.");
     }
 }

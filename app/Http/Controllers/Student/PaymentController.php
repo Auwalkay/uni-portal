@@ -212,7 +212,8 @@ class PaymentController extends Controller
         if ($invoice->type === 'school_fee') {
             $session = $invoice->session;
             if ($session && !$session->school_fee_payment_enabled) {
-                return back()->with('error', 'School fee payments are currently disabled for the ' . $session->name . ' session.');
+                $sessionSuffix = str_ends_with(strtolower(trim($session->name)), 'session') ? '.' : ' session.';
+                return back()->with('error', 'School fee payments are currently disabled for the ' . $session->name . $sessionSuffix);
             }
         }
 

@@ -37,6 +37,7 @@ class ApplyLatePaymentFines extends Command
             return 0;
         }
 
+        $globalFineAmount = (float) SystemSetting::get('late_fee_amount', 0);
         $now = now();
         $appliedCount = 0;
 
@@ -45,10 +46,13 @@ class ApplyLatePaymentFines extends Command
         $invoices = Invoice::where('type', 'school_fee')
             ->where('status', 'pending')
             ->where('late_fine_applied', false)
-            ->whereHas('session', function ($query) use ($now) {
+            ->where('late_fine_waived', false)
+            ->whereHas('session', function ($query) use ($now, $globalFineAmount) {
                 $query->whereNotNull('late_payment_deadline')
-                      ->where('late_payment_deadline', '<', $now)
-                      ->where('late_fee_amount', '>', 0);
+                      ->where('late_payment_deadline', '<', $now);
+                if ($globalFineAmount <= 0) {
+                    $query->where('late_fee_amount', '>', 0);
+                }
             })
             ->with('session')
             ->get();
@@ -68,7 +72,13 @@ class ApplyLatePaymentFines extends Command
                 continue;
             }
 
-            $fineAmount = (float) $invoice->session->late_fee_amount;
+            $fineAmount = $invoice->session->late_fee_amount > 0 
+                ? (float) $invoice->session->late_fee_amount 
+                : $globalFineAmount;
+
+            if ($fineAmount <= 0) {
+                continue;
+            }
             DB::transaction(function () use ($invoice, $fineAmount, &$appliedCount) {
                 // Add late payment fine line item
                 InvoiceItem::create([
