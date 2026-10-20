@@ -298,3 +298,34 @@ test('late fine is automatically waived if payment was initiated before late dea
     expect($invoice->status)->toBe('paid');
     expect((float)$invoice->paid_amount)->toEqual(100000.00);
 });
+
+test('student finance index loads successfully when student has no unpaid invoices', function () {
+    $user = createStudentUser();
+
+    $faculty = \App\Models\Faculty::create(['name' => 'Science', 'code' => 'SCI']);
+    $department = \App\Models\Department::create(['name' => 'Computer Science', 'code' => 'CSC', 'faculty_id' => $faculty->id]);
+    $programme = \App\Models\Programme::create(['name' => 'B.Sc Computer Science', 'department_id' => $department->id, 'is_active' => true]);
+
+    $student = \App\Models\Student::create([
+        'user_id' => $user->id,
+        'faculty_id' => $faculty->id,
+        'department_id' => $department->id,
+        'program_id' => $programme->id,
+        'level' => '100',
+        'matriculation_number' => 'MAT/TEST/' . uniqid(),
+    ]);
+
+    $session = \App\Models\Session::create([
+        'name' => '2026/2027',
+        'start_date' => now()->startOfYear(),
+        'end_date' => now()->endOfYear(),
+        'is_current' => true,
+        'school_fee_payment_enabled' => true,
+    ]);
+
+    $response = $this->actingAs($user)->get(route('student.payments.index'));
+
+    $response->assertStatus(200);
+    $response->assertInertia(fn ($page) => $page->component('Student/Finance/Index'));
+});
+

@@ -14,10 +14,21 @@ class AcademicCacheService
 {
     const TTL = 86400; // 24 hours
 
-    public static function getFaculties()
+    public static function getFaculties(bool $onlyActive = true)
     {
-        return Cache::remember('faculties_with_departments', self::TTL, function () {
-            return Faculty::with('departments:id,name,faculty_id')->orderBy('name')->get(['id', 'name']);
+        $cacheKey = $onlyActive ? 'faculties_with_active_departments' : 'faculties_with_departments';
+
+        return Cache::remember($cacheKey, self::TTL, function () use ($onlyActive) {
+            $query = Faculty::orderBy('name');
+            if ($onlyActive) {
+                $query->where('is_active', true);
+            }
+            return $query->with(['departments' => function ($q) use ($onlyActive) {
+                if ($onlyActive) {
+                    $q->where('is_active', true);
+                }
+                $q->orderBy('name');
+            }])->get(['id', 'name']);
         });
     }
 
@@ -104,29 +115,64 @@ class AcademicCacheService
         });
     }
 
-    public static function getAllFaculties()
+    public static function getAllFaculties(bool $onlyActive = true)
     {
-        return Cache::remember('all_faculties', self::TTL, fn() => Faculty::orderBy('name')->get());
+        $cacheKey = $onlyActive ? 'all_active_faculties' : 'all_faculties';
+        return Cache::remember($cacheKey, self::TTL, function () use ($onlyActive) {
+            $query = Faculty::orderBy('name');
+            if ($onlyActive) {
+                $query->where('is_active', true);
+            }
+            return $query->get();
+        });
     }
 
-    public static function getAllDepartments()
+    public static function getAllDepartments(bool $onlyActive = true)
     {
-        return Cache::remember('all_departments', self::TTL, fn() => Department::orderBy('name')->get());
+        $cacheKey = $onlyActive ? 'all_active_departments' : 'all_departments';
+        return Cache::remember($cacheKey, self::TTL, function () use ($onlyActive) {
+            $query = Department::orderBy('name');
+            if ($onlyActive) {
+                $query->where('is_active', true);
+            }
+            return $query->get();
+        });
     }
 
-    public static function getAcademicDepartments()
+    public static function getAcademicDepartments(bool $onlyActive = true)
     {
-        return Cache::remember('academic_departments', self::TTL, fn() => Department::where('is_academic', true)->orderBy('name')->get());
+        $cacheKey = $onlyActive ? 'active_academic_departments' : 'academic_departments';
+        return Cache::remember($cacheKey, self::TTL, function () use ($onlyActive) {
+            $query = Department::where('is_academic', true)->orderBy('name');
+            if ($onlyActive) {
+                $query->where('is_active', true);
+            }
+            return $query->get();
+        });
     }
 
-    public static function getAllProgrammes()
+    public static function getAllProgrammes(bool $onlyActive = true)
     {
-        return Cache::remember('all_programmes', self::TTL, fn() => Programme::orderBy('name')->get());
+        $cacheKey = $onlyActive ? 'all_active_programmes' : 'all_programmes';
+        return Cache::remember($cacheKey, self::TTL, function () use ($onlyActive) {
+            $query = Programme::orderBy('name');
+            if ($onlyActive) {
+                $query->where('is_active', true);
+            }
+            return $query->get();
+        });
     }
 
-    public static function getAllCourses()
+    public static function getAllCourses(bool $onlyActive = true)
     {
-        return Cache::remember('all_courses_lookup', self::TTL, fn() => \App\Models\Course::select('id', 'code', 'title', 'units')->orderBy('code')->get());
+        $cacheKey = $onlyActive ? 'all_active_courses_lookup' : 'all_courses_lookup';
+        return Cache::remember($cacheKey, self::TTL, function () use ($onlyActive) {
+            $query = \App\Models\Course::select('id', 'code', 'title', 'units')->orderBy('code');
+            if ($onlyActive) {
+                $query->where('is_active', true);
+            }
+            return $query->get();
+        });
     }
 
     public static function getAcademicStats()
@@ -283,6 +329,7 @@ class AcademicCacheService
     {
         self::clearTimetableCache();
         Cache::forget('faculties_with_departments');
+        Cache::forget('faculties_with_active_departments');
         Cache::forget('faculties_with_departments_and_programmes');
         Cache::forget('faculties_with_departments_and_active_programmes');
         Cache::forget('all_programmes_list');
@@ -295,15 +342,20 @@ class AcademicCacheService
         Cache::forget('current_semester');
         Cache::forget('all_semesters_list');
         Cache::forget('all_faculties');
+        Cache::forget('all_active_faculties');
         Cache::forget('all_departments');
+        Cache::forget('all_active_departments');
         Cache::forget('academic_departments');
+        Cache::forget('active_academic_departments');
         Cache::forget('all_programmes');
+        Cache::forget('all_active_programmes');
         Cache::forget('faculties_with_departments_full');
         Cache::forget('non_academic_departments');
         Cache::forget('all_system_settings');
         Cache::forget('system_settings_array');
         Cache::forget('staff_designations_list');
         Cache::forget('all_courses_lookup');
+        Cache::forget('all_active_courses_lookup');
         Cache::forget('staff_list_for_dropdowns');
         Cache::forget('exam_buildings_active');
         Cache::forget('academic_stats_summary');
