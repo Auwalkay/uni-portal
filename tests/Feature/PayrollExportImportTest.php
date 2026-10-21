@@ -361,4 +361,138 @@ class PayrollExportImportTest extends TestCase
         $response->assertStatus(200);
         $response->assertHeader('content-type', 'application/pdf');
     }
+
+    public function test_admin_can_view_payroll_index_with_filters_sorting_and_pagination()
+    {
+        $this->actingAs($this->admin);
+
+        $payroll2 = Payroll::create([
+            'month' => 8,
+            'year' => 2026,
+            'total_amount' => 50000.00,
+            'status' => 'paid',
+            'generated_by' => $this->admin->id,
+            'paid_at' => now(),
+        ]);
+
+        // Default index
+        $response = $this->get(route('admin.finance.payroll.index'));
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('Admin/Finance/Payroll/Index')
+            ->has('payrolls.data', 2)
+            ->has('stats')
+            ->where('stats.total_payrolls', 2)
+            ->where('stats.paid_count', 1)
+            ->where('stats.draft_count', 1)
+        );
+
+        // Filter by status = 'paid'
+        $responsePaid = $this->get(route('admin.finance.payroll.index', ['status' => 'paid']));
+        $responsePaid->assertStatus(200);
+        $responsePaid->assertInertia(fn ($page) => $page
+            ->component('Admin/Finance/Payroll/Index')
+            ->has('payrolls.data', 1)
+            ->where('payrolls.data.0.id', $payroll2->id)
+        );
+
+        // Sort by total_amount asc
+        $responseSort = $this->get(route('admin.finance.payroll.index', [
+            'sort_field' => 'total_amount',
+            'sort_direction' => 'asc',
+        ]));
+        $responseSort->assertStatus(200);
+        $responseSort->assertInertia(fn ($page) => $page
+            ->component('Admin/Finance/Payroll/Index')
+            ->where('payrolls.data.0.id', $payroll2->id)
+            ->where('payrolls.data.1.id', $this->payroll->id)
+        );
+    }
+
+    public function test_admin_can_view_payroll_show_with_sorting_options()
+    {
+        $this->actingAs($this->admin);
+
+        // Create second staff member with different name and salary
+        $secondUser = User::create([
+            'name' => 'Aaron Staff',
+            'email' => 'aaron.staff@test.com',
+            'password' => Hash::make('password'),
+        ]);
+        $secondStaff = Staff::create([
+            'user_id' => $secondUser->id,
+            'staff_number' => 'STF/2026/010',
+            'department_id' => $this->staff->department_id,
+            'basic_salary' => 300000.00,
+        ]);
+        $secondItem = PayrollItem::create([
+            'payroll_id' => $this->payroll->id,
+            'staff_id' => $secondStaff->id,
+            'basic_salary' => 300000.00,
+            'total_allowances' => 10000,
+            'total_deductions' => 5000,
+            'net_salary' => 305000.00,
+            'status' => 'pending',
+        ]);
+
+        // Default / Explicit sort: name asc ('Aaron Staff' before 'John Doe Staff')
+        $responseNameAsc = $this->get(route('admin.finance.payroll.show', [
+            'payroll' => $this->payroll->id,
+            'sort_field' => 'name',
+            'sort_direction' => 'asc',
+        ]));
+        $responseNameAsc->assertStatus(200);
+        $responseNameAsc->assertInertia(fn ($page) => $page
+            ->component('Admin/Finance/Payroll/Show')
+            ->where('filters.sort_field', 'name')
+            ->where('filters.sort_direction', 'asc')
+            ->where('items.data.0.id', $secondItem->id)
+            ->where('items.data.1.id', $this->item->id)
+        );
+
+        // Sort by name desc ('John Doe Staff' before 'Aaron Staff')
+        $responseNameDesc = $this->get(route('admin.finance.payroll.show', [
+            'payroll' => $this->payroll->id,
+            'sort_field' => 'name',
+            'sort_direction' => 'desc',
+        ]));
+        $responseNameDesc->assertStatus(200);
+        $responseNameDesc->assertInertia(fn ($page) => $page
+            ->component('Admin/Finance/Payroll/Show')
+            ->where('filters.sort_field', 'name')
+            ->where('filters.sort_direction', 'desc')
+            ->where('items.data.0.id', $this->item->id)
+            ->where('items.data.1.id', $secondItem->id)
+        );
+
+        // Sort by net_salary desc (secondItem with 305000 should be first)
+        $responseNetDesc = $this->get(route('admin.finance.payroll.show', [
+            'payroll' => $this->payroll->id,
+            'sort_field' => 'net_salary',
+            'sort_direction' => 'desc',
+        ]));
+        $responseNetDesc->assertStatus(200);
+        $responseNetDesc->assertInertia(fn ($page) => $page
+            ->component('Admin/Finance/Payroll/Show')
+            ->where('filters.sort_field', 'net_salary')
+            ->where('filters.sort_direction', 'desc')
+            ->where('items.data.0.id', $secondItem->id)
+            ->where('items.data.1.id', $this->item->id)
+        );
+
+        // Sort by net_salary asc (this->item with 110000 should be first)
+        $responseNetAsc = $this->get(route('admin.finance.payroll.show', [
+            'payroll' => $this->payroll->id,
+            'sort_field' => 'net_salary',
+            'sort_direction' => 'asc',
+        ]));
+        $responseNetAsc->assertStatus(200);
+        $responseNetAsc->assertInertia(fn ($page) => $page
+            ->component('Admin/Finance/Payroll/Show')
+            ->where('filters.sort_field', 'net_salary')
+            ->where('filters.sort_direction', 'asc')
+            ->where('items.data.0.id', $this->item->id)
+            ->where('items.data.1.id', $secondItem->id)
+        );
+    }
 }

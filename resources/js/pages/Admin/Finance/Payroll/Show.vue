@@ -41,6 +41,9 @@ import {
     Calculator,
     Filter,
     Loader2,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
 } from 'lucide-vue-next';
 import { ref, watch, computed } from 'vue';
 import Pagination from '@/components/Pagination.vue';
@@ -77,6 +80,8 @@ const props = defineProps<{
         status?: string;
         department_id?: string;
         attendance_status?: string;
+        sort_field?: string;
+        sort_direction?: string;
         per_page?: string;
     };
 }>();
@@ -88,15 +93,37 @@ const selectedStatus = ref(props.filters?.status || 'ALL_STATUS');
 const selectedDepartment = ref(props.filters?.department_id || 'ALL_DEPARTMENTS');
 const selectedAttendanceStatus = ref(props.filters?.attendance_status || 'ALL_ATTENDANCE');
 const selectedPerPage = ref(props.filters?.per_page || '20');
+const sortField = ref(props.filters?.sort_field || 'name');
+const sortDirection = ref(props.filters?.sort_direction || 'asc');
 const isFiltering = ref(false);
+
+const sortBy = (field: string) => {
+    if (sortField.value === field) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortField.value = field;
+        sortDirection.value = ['name', 'department', 'status'].includes(field) ? 'asc' : 'desc';
+    }
+    applyFilters();
+};
+
+const onSortOptionChange = (val: string) => {
+    if (!val) return;
+    const [field, dir] = val.split(':');
+    sortField.value = field;
+    sortDirection.value = dir;
+    applyFilters();
+};
 
 const applyFilters = () => {
     isFiltering.value = true;
     router.get(route('admin.finance.payroll.show', props.payroll.id), {
-        search: search.value,
-        status: selectedStatus.value,
-        department_id: selectedDepartment.value,
-        attendance_status: selectedAttendanceStatus.value,
+        search: search.value || undefined,
+        status: selectedStatus.value !== 'ALL_STATUS' ? selectedStatus.value : undefined,
+        department_id: selectedDepartment.value !== 'ALL_DEPARTMENTS' ? selectedDepartment.value : undefined,
+        attendance_status: selectedAttendanceStatus.value !== 'ALL_ATTENDANCE' ? selectedAttendanceStatus.value : undefined,
+        sort_field: sortField.value,
+        sort_direction: sortDirection.value,
         per_page: selectedPerPage.value,
     }, {
         preserveState: true,
@@ -114,6 +141,8 @@ const clearFilters = () => {
     selectedDepartment.value = 'ALL_DEPARTMENTS';
     selectedAttendanceStatus.value = 'ALL_ATTENDANCE';
     selectedPerPage.value = '20';
+    sortField.value = 'name';
+    sortDirection.value = 'asc';
     applyFilters();
 };
 
@@ -123,7 +152,9 @@ const hasActiveFilters = computed(() => {
         (selectedStatus.value && selectedStatus.value !== 'ALL_STATUS') ||
         (selectedDepartment.value && selectedDepartment.value !== 'ALL_DEPARTMENTS') ||
         (selectedAttendanceStatus.value && selectedAttendanceStatus.value !== 'ALL_ATTENDANCE') ||
-        selectedPerPage.value !== '20'
+        selectedPerPage.value !== '20' ||
+        sortField.value !== 'name' ||
+        sortDirection.value !== 'asc'
     );
 });
 
@@ -517,6 +548,26 @@ const submitImport = () => {
                         </SelectContent>
                     </Select>
 
+                    <!-- Quick Sort Order -->
+                    <Select :model-value="`${sortField}:${sortDirection}`" @update:model-value="onSortOptionChange">
+                        <SelectTrigger class="w-full sm:w-[190px] h-10">
+                            <SelectValue placeholder="Sort Order" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="name:asc">Name: A to Z</SelectItem>
+                            <SelectItem value="name:desc">Name: Z to A</SelectItem>
+                            <SelectItem value="net_salary:desc">Net Salary: High to Low</SelectItem>
+                            <SelectItem value="net_salary:asc">Net Salary: Low to High</SelectItem>
+                            <SelectItem value="basic_salary:desc">Basic Salary: High to Low</SelectItem>
+                            <SelectItem value="basic_salary:asc">Basic Salary: Low to High</SelectItem>
+                            <SelectItem value="total_allowances:desc">Allowances: High to Low</SelectItem>
+                            <SelectItem value="total_deductions:desc">Deductions: High to Low</SelectItem>
+                            <SelectItem value="attendance:desc">Most Absences First</SelectItem>
+                            <SelectItem value="department:asc">Department: A to Z</SelectItem>
+                            <SelectItem value="status:asc">Status: Pending to Paid</SelectItem>
+                        </SelectContent>
+                    </Select>
+
                     <!-- Per Page -->
                     <Select v-model="selectedPerPage">
                         <SelectTrigger class="w-full sm:w-[120px] h-10">
@@ -557,21 +608,111 @@ const submitImport = () => {
 
             <!-- Staff Payments Table -->
             <Card>
-                <CardHeader>
-                    <CardTitle class="text-lg font-bold">Staff Salary Breakdown & Deductions</CardTitle>
+                <CardHeader class="pb-3 border-b border-slate-100 dark:border-slate-800">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <CardTitle class="text-lg font-bold">Staff Salary Breakdown & Deductions</CardTitle>
+                            <CardDescription class="text-xs">
+                                Click column headers to sort by staff name, department, attendance, salary, or status.
+                            </CardDescription>
+                        </div>
+                        <Badge variant="outline" class="font-mono text-xs">
+                            Total Staff: {{ items.total }}
+                        </Badge>
+                    </div>
                 </CardHeader>
                 <CardContent class="p-0">
                     <Table>
                         <TableHeader>
-                            <TableRow>
-                                <TableHead>Staff Name</TableHead>
-                                <TableHead>Department</TableHead>
-                                <TableHead>Attendance (Month)</TableHead>
-                                <TableHead>Basic Salary</TableHead>
-                                <TableHead>Allowances</TableHead>
-                                <TableHead>Deductions</TableHead>
-                                <TableHead>Net Salary</TableHead>
-                                <TableHead>Status</TableHead>
+                            <TableRow class="bg-slate-50/70 dark:bg-slate-900/50">
+                                <TableHead 
+                                    class="cursor-pointer select-none font-bold text-xs" 
+                                    @click="sortBy('name')"
+                                >
+                                    <div class="flex items-center gap-1.5">
+                                        <span>Staff Name</span>
+                                        <ArrowUp v-if="sortField === 'name' && sortDirection === 'asc'" class="w-3.5 h-3.5 text-indigo-600" />
+                                        <ArrowDown v-else-if="sortField === 'name' && sortDirection === 'desc'" class="w-3.5 h-3.5 text-indigo-600" />
+                                        <ArrowUpDown v-else class="w-3.5 h-3.5 text-muted-foreground opacity-50" />
+                                    </div>
+                                </TableHead>
+                                <TableHead 
+                                    class="cursor-pointer select-none font-bold text-xs" 
+                                    @click="sortBy('department')"
+                                >
+                                    <div class="flex items-center gap-1.5">
+                                        <span>Department</span>
+                                        <ArrowUp v-if="sortField === 'department' && sortDirection === 'asc'" class="w-3.5 h-3.5 text-indigo-600" />
+                                        <ArrowDown v-else-if="sortField === 'department' && sortDirection === 'desc'" class="w-3.5 h-3.5 text-indigo-600" />
+                                        <ArrowUpDown v-else class="w-3.5 h-3.5 text-muted-foreground opacity-50" />
+                                    </div>
+                                </TableHead>
+                                <TableHead 
+                                    class="cursor-pointer select-none font-bold text-xs" 
+                                    @click="sortBy('attendance')"
+                                >
+                                    <div class="flex items-center gap-1.5">
+                                        <span>Attendance (Month)</span>
+                                        <ArrowUp v-if="sortField === 'attendance' && sortDirection === 'asc'" class="w-3.5 h-3.5 text-indigo-600" />
+                                        <ArrowDown v-else-if="sortField === 'attendance' && sortDirection === 'desc'" class="w-3.5 h-3.5 text-indigo-600" />
+                                        <ArrowUpDown v-else class="w-3.5 h-3.5 text-muted-foreground opacity-50" />
+                                    </div>
+                                </TableHead>
+                                <TableHead 
+                                    class="cursor-pointer select-none font-bold text-xs" 
+                                    @click="sortBy('basic_salary')"
+                                >
+                                    <div class="flex items-center gap-1.5">
+                                        <span>Basic Salary</span>
+                                        <ArrowUp v-if="sortField === 'basic_salary' && sortDirection === 'asc'" class="w-3.5 h-3.5 text-indigo-600" />
+                                        <ArrowDown v-else-if="sortField === 'basic_salary' && sortDirection === 'desc'" class="w-3.5 h-3.5 text-indigo-600" />
+                                        <ArrowUpDown v-else class="w-3.5 h-3.5 text-muted-foreground opacity-50" />
+                                    </div>
+                                </TableHead>
+                                <TableHead 
+                                    class="cursor-pointer select-none font-bold text-xs" 
+                                    @click="sortBy('total_allowances')"
+                                >
+                                    <div class="flex items-center gap-1.5">
+                                        <span>Allowances</span>
+                                        <ArrowUp v-if="sortField === 'total_allowances' && sortDirection === 'asc'" class="w-3.5 h-3.5 text-indigo-600" />
+                                        <ArrowDown v-else-if="sortField === 'total_allowances' && sortDirection === 'desc'" class="w-3.5 h-3.5 text-indigo-600" />
+                                        <ArrowUpDown v-else class="w-3.5 h-3.5 text-muted-foreground opacity-50" />
+                                    </div>
+                                </TableHead>
+                                <TableHead 
+                                    class="cursor-pointer select-none font-bold text-xs" 
+                                    @click="sortBy('total_deductions')"
+                                >
+                                    <div class="flex items-center gap-1.5">
+                                        <span>Deductions</span>
+                                        <ArrowUp v-if="sortField === 'total_deductions' && sortDirection === 'asc'" class="w-3.5 h-3.5 text-indigo-600" />
+                                        <ArrowDown v-else-if="sortField === 'total_deductions' && sortDirection === 'desc'" class="w-3.5 h-3.5 text-indigo-600" />
+                                        <ArrowUpDown v-else class="w-3.5 h-3.5 text-muted-foreground opacity-50" />
+                                    </div>
+                                </TableHead>
+                                <TableHead 
+                                    class="cursor-pointer select-none font-bold text-xs" 
+                                    @click="sortBy('net_salary')"
+                                >
+                                    <div class="flex items-center gap-1.5">
+                                        <span>Net Salary</span>
+                                        <ArrowUp v-if="sortField === 'net_salary' && sortDirection === 'asc'" class="w-3.5 h-3.5 text-indigo-600" />
+                                        <ArrowDown v-else-if="sortField === 'net_salary' && sortDirection === 'desc'" class="w-3.5 h-3.5 text-indigo-600" />
+                                        <ArrowUpDown v-else class="w-3.5 h-3.5 text-muted-foreground opacity-50" />
+                                    </div>
+                                </TableHead>
+                                <TableHead 
+                                    class="cursor-pointer select-none font-bold text-xs" 
+                                    @click="sortBy('status')"
+                                >
+                                    <div class="flex items-center gap-1.5">
+                                        <span>Status</span>
+                                        <ArrowUp v-if="sortField === 'status' && sortDirection === 'asc'" class="w-3.5 h-3.5 text-indigo-600" />
+                                        <ArrowDown v-else-if="sortField === 'status' && sortDirection === 'desc'" class="w-3.5 h-3.5 text-indigo-600" />
+                                        <ArrowUpDown v-else class="w-3.5 h-3.5 text-muted-foreground opacity-50" />
+                                    </div>
+                                </TableHead>
                                 <TableHead class="text-right no-print">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -700,8 +841,13 @@ const submitImport = () => {
                             </TableRow>
                         </TableBody>
                     </Table>
-                    <div class="p-4 border-t flex justify-end no-print">
-                        <Pagination :links="items.links" />
+                    <div class="p-4 border-t flex flex-col sm:flex-row items-center justify-between gap-4 no-print">
+                        <p class="text-xs text-muted-foreground order-2 sm:order-1">
+                            Showing {{ items.from ?? 0 }} to {{ items.to ?? 0 }} of {{ items.total }} staff records
+                        </p>
+                        <div class="order-1 sm:order-2">
+                            <Pagination :links="items.links" />
+                        </div>
                     </div>
                 </CardContent>
             </Card>

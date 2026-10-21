@@ -19,10 +19,105 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class PayrollController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $query = Payroll::with('generatedBy')->withCount('items');
+
+        // Search Filter (matches month, year, or generator name/email)
+        if ($request->filled('search')) {
+            $search = trim($request->search);
+            $query->where(function ($q) use ($search) {
+                $q->where('year', 'like', "%{$search}%")
+                    ->orWhereHas('generatedBy', function ($uq) use ($search) {
+                        $uq->where('name', 'like', "%{$search}%")
+                           ->orWhere('email', 'like', "%{$search}%");
+                    });
+
+                // Match month names (e.g. "January", "October", "Sep")
+                $matchedMonths = [];
+                for ($m = 1; $m <= 12; $m++) {
+                    $fullName = date('F', mktime(0, 0, 0, $m, 10));
+                    $shortName = date('M', mktime(0, 0, 0, $m, 10));
+                    if (stripos($fullName, $search) !== false || stripos($shortName, $search) !== false) {
+                        $matchedMonths[] = $m;
+                    }
+                }
+                if (!empty($matchedMonths)) {
+                    $q->orWhereIn('month', $matchedMonths);
+                }
+            });
+        }
+
+        // Status Filter
+        if ($request->filled('status') && $request->status !== 'all') {
+            $query->where('status', $request->status);
+        }
+
+        // Year Filter
+        if ($request->filled('year') && $request->year !== 'all') {
+            $query->where('year', (int) $request->year);
+        }
+
+        // Month Filter
+        if ($request->filled('month') && $request->month !== 'all') {
+            $query->where('month', (int) $request->month);
+        }
+
+        // Sorting
+        $sortField = $request->string('sort_field', 'period')->toString();
+        $sortDirection = strtolower($request->string('sort_direction', 'desc')->toString()) === 'asc' ? 'asc' : 'desc';
+
+        if ($sortField === 'total_amount') {
+            $query->orderBy('total_amount', $sortDirection);
+        } elseif ($sortField === 'generated_at') {
+            $query->orderBy('generated_at', $sortDirection);
+        } elseif ($sortField === 'status') {
+            $query->orderBy('status', $sortDirection);
+        } elseif ($sortField === 'items_count') {
+            $query->orderBy('items_count', $sortDirection);
+        } else {
+            // Default: Period (year, month)
+            $query->orderBy('year', $sortDirection)->orderBy('month', $sortDirection);
+        }
+
+        // Per page
+        $perPage = $request->integer('per_page', 10);
+        if (!in_array($perPage, [10, 20, 50, 100])) {
+            $perPage = 10;
+        }
+
+        $payrolls = $query->paginate($perPage)->withQueryString();
+
+        // Overall statistics
+        $stats = [
+            'total_payrolls' => Payroll::count(),
+            'total_paid' => (float) Payroll::where('status', 'paid')->sum('total_amount'),
+            'total_draft' => (float) Payroll::where('status', 'draft')->sum('total_amount'),
+            'paid_count' => Payroll::where('status', 'paid')->count(),
+            'draft_count' => Payroll::where('status', 'draft')->count(),
+        ];
+
+        // Available distinct years for filter dropdown
+        $availableYears = Payroll::distinct()->pluck('year')->filter()->sortDesc()->values()->toArray();
+        $currentYear = (int) date('Y');
+        if (!in_array($currentYear, $availableYears)) {
+            array_unshift($availableYears, $currentYear);
+            rsort($availableYears);
+        }
+
         return Inertia::render('Admin/Finance/Payroll/Index', [
-            'payrolls' => Payroll::with('generatedBy')->latest('generated_at')->paginate(10),
+            'payrolls' => $payrolls,
+            'stats' => $stats,
+            'availableYears' => $availableYears,
+            'filters' => [
+                'search' => $request->search ?? '',
+                'status' => $request->status ?? 'all',
+                'year' => $request->year ?? 'all',
+                'month' => $request->month ?? 'all',
+                'sort_field' => $sortField,
+                'sort_direction' => $sortDirection,
+                'per_page' => (string) $perPage,
+            ],
         ]);
     }
 
@@ -139,6 +234,48 @@ class PayrollController extends Controller
             }
         }
 
+        // Sorting
+        $sortField = $request->string('sort_field', 'name')->toString();
+        $sortDirection = strtolower($request->string('sort_direction', 'asc')->toString()) === 'desc' ? 'desc' : 'asc';
+
+        if ($sortField === 'basic_salary') {
+            $query->orderBy('payroll_items.basic_salary', $sortDirection);
+        } elseif ($sortField === 'total_allowances' || $sortField === 'allowances') {
+            $query->orderBy('payroll_items.total_allowances', $sortDirection);
+        } elseif ($sortField === 'total_deductions' || $sortField === 'deductions') {
+            $query->orderBy('payroll_items.total_deductions', $sortDirection);
+        } elseif ($sortField === 'net_salary') {
+            $query->orderBy('payroll_items.net_salary', $sortDirection);
+        } elseif ($sortField === 'status') {
+            $query->orderBy('payroll_items.status', $sortDirection);
+        } elseif ($sortField === 'department') {
+            $query->orderBy(
+                Staff::select('departments.name')
+                    ->leftJoin('departments', 'departments.id', '=', 'staff.department_id')
+                    ->whereColumn('staff.id', 'payroll_items.staff_id')
+                    ->limit(1),
+                $sortDirection
+            );
+        } elseif ($sortField === 'attendance') {
+            $query->orderBy(
+                Attendance::selectRaw('COUNT(*)')
+                    ->whereColumn('attendances.staff_id', 'payroll_items.staff_id')
+                    ->whereYear('date', $year)
+                    ->whereMonth('date', $month)
+                    ->where('status', 'absent'),
+                $sortDirection
+            );
+        } else {
+            $sortField = 'name';
+            $query->orderBy(
+                Staff::select('users.name')
+                    ->join('users', 'users.id', '=', 'staff.user_id')
+                    ->whereColumn('staff.id', 'payroll_items.staff_id')
+                    ->limit(1),
+                $sortDirection
+            );
+        }
+
         // Per Page
         $perPage = $request->integer('per_page', 20);
         if (!in_array($perPage, [10, 20, 50, 100])) {
@@ -206,7 +343,15 @@ class PayrollController extends Controller
             'attendanceStats' => $attendanceStats,
             'summary' => $summary,
             'departments' => \App\Services\AcademicCacheService::getAllDepartments(),
-            'filters' => $request->only(['search', 'status', 'department_id', 'attendance_status', 'per_page']),
+            'filters' => [
+                'search' => $request->search ?? '',
+                'status' => $request->status ?? 'ALL_STATUS',
+                'department_id' => $request->department_id ?? 'ALL_DEPARTMENTS',
+                'attendance_status' => $request->attendance_status ?? 'ALL_ATTENDANCE',
+                'sort_field' => $sortField,
+                'sort_direction' => $sortDirection,
+                'per_page' => (string) $perPage,
+            ],
         ]);
     }
 
