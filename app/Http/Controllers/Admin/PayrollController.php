@@ -76,6 +76,9 @@ class PayrollController extends Controller
 
     public function show(Payroll $payroll, Request $request)
     {
+        $month = $payroll->month;
+        $year = $payroll->year;
+
         $query = $payroll->items()->with(['staff.user', 'staff.department']);
 
         // Search Filter
@@ -96,6 +99,46 @@ class PayrollController extends Controller
             $query->where('status', $request->status);
         }
 
+        // Department Filter
+        if ($request->filled('department_id') && $request->department_id !== 'ALL_DEPARTMENTS') {
+            $query->whereHas('staff', function ($sq) use ($request) {
+                $sq->where('department_id', $request->department_id);
+            });
+        }
+
+        // Attendance Status Filter
+        if ($request->filled('attendance_status') && $request->attendance_status !== 'ALL_ATTENDANCE') {
+            if ($request->attendance_status === 'on_leave') {
+                $query->whereHas('staff.attendances', function ($aq) use ($year, $month) {
+                    $aq->whereYear('date', $year)
+                       ->whereMonth('date', $month)
+                       ->where('status', 'on_leave');
+                });
+            } elseif ($request->attendance_status === 'has_absent') {
+                $query->whereHas('staff.attendances', function ($aq) use ($year, $month) {
+                    $aq->whereYear('date', $year)
+                       ->whereMonth('date', $month)
+                       ->where('status', 'absent');
+                });
+            } elseif ($request->attendance_status === 'has_late') {
+                $query->whereHas('staff.attendances', function ($aq) use ($year, $month) {
+                    $aq->whereYear('date', $year)
+                       ->whereMonth('date', $month)
+                       ->where('status', 'late');
+                });
+            } elseif ($request->attendance_status === 'perfect') {
+                $query->whereHas('staff.attendances', function ($aq) use ($year, $month) {
+                    $aq->whereYear('date', $year)
+                       ->whereMonth('date', $month)
+                       ->where('status', 'present');
+                })->whereDoesntHave('staff.attendances', function ($aq) use ($year, $month) {
+                    $aq->whereYear('date', $year)
+                       ->whereMonth('date', $month)
+                       ->whereIn('status', ['absent', 'late', 'on_leave']);
+                });
+            }
+        }
+
         // Per Page
         $perPage = $request->integer('per_page', 20);
         if (!in_array($perPage, [10, 20, 50, 100])) {
@@ -105,13 +148,11 @@ class PayrollController extends Controller
         $items = $query->paginate($perPage)->withQueryString();
 
         // Fetch attendance stats for all staff members in this payroll month/year
-        $month = $payroll->month;
-        $year = $payroll->year;
-
         $allStaffIds = $payroll->items()->pluck('staff_id')->filter()->unique()->toArray();
         $attendanceStats = [];
         $totalAbsentDaysCount = 0;
         $totalLateDaysCount = 0;
+        $totalLeaveDaysCount = 0;
 
         if (!empty($allStaffIds)) {
             $stats = Attendance::whereIn('staff_id', $allStaffIds)
@@ -120,7 +161,8 @@ class PayrollController extends Controller
                 ->selectRaw('staff_id, 
                     SUM(CASE WHEN status = "absent" THEN 1 ELSE 0 END) as absent_days,
                     SUM(CASE WHEN status = "late" THEN 1 ELSE 0 END) as late_days,
-                    SUM(CASE WHEN status = "present" THEN 1 ELSE 0 END) as present_days')
+                    SUM(CASE WHEN status = "present" THEN 1 ELSE 0 END) as present_days,
+                    SUM(CASE WHEN status = "on_leave" THEN 1 ELSE 0 END) as leave_days')
                 ->groupBy('staff_id')
                 ->get()
                 ->keyBy('staff_id');
@@ -129,15 +171,18 @@ class PayrollController extends Controller
                 $absent = (int) ($stats[$sid]->absent_days ?? 0);
                 $late = (int) ($stats[$sid]->late_days ?? 0);
                 $present = (int) ($stats[$sid]->present_days ?? 0);
+                $leave = (int) ($stats[$sid]->leave_days ?? 0);
 
                 $attendanceStats[$sid] = [
                     'absent_days' => $absent,
                     'late_days' => $late,
                     'present_days' => $present,
+                    'leave_days' => $leave,
                 ];
 
                 $totalAbsentDaysCount += $absent;
                 $totalLateDaysCount += $late;
+                $totalLeaveDaysCount += $leave;
             }
         }
 
@@ -152,6 +197,7 @@ class PayrollController extends Controller
             'excluded_staff' => (int) $payroll->items()->where('status', 'excluded')->count(),
             'total_absent_days' => $totalAbsentDaysCount,
             'total_late_days' => $totalLateDaysCount,
+            'total_leave_days' => $totalLeaveDaysCount,
         ];
 
         return Inertia::render('Admin/Finance/Payroll/Show', [
@@ -159,7 +205,8 @@ class PayrollController extends Controller
             'items' => $items,
             'attendanceStats' => $attendanceStats,
             'summary' => $summary,
-            'filters' => $request->only(['search', 'status', 'per_page']),
+            'departments' => \App\Services\AcademicCacheService::getAllDepartments(),
+            'filters' => $request->only(['search', 'status', 'department_id', 'attendance_status', 'per_page']),
         ]);
     }
 
@@ -283,10 +330,23 @@ class PayrollController extends Controller
 
         $payrollItem->load(['staff.user', 'staff.department.faculty', 'payroll']);
 
+        // Fetch attendance stats for this staff for this payroll period
+        $attendance = Attendance::where('staff_id', $payrollItem->staff_id)
+            ->whereYear('date', $payroll->year)
+            ->whereMonth('date', $payroll->month)
+            ->selectRaw('
+                SUM(CASE WHEN status = "present" THEN 1 ELSE 0 END) as present_days,
+                SUM(CASE WHEN status = "late" THEN 1 ELSE 0 END) as late_days,
+                SUM(CASE WHEN status = "absent" THEN 1 ELSE 0 END) as absent_days,
+                SUM(CASE WHEN status = "on_leave" THEN 1 ELSE 0 END) as leave_days
+            ')
+            ->first();
+
         $pdf = Pdf::loadView('pdf.payslip', [
             'item' => $payrollItem,
             'staff' => $payrollItem->staff,
             'payroll' => $payrollItem->payroll,
+            'attendance' => $attendance,
         ]);
 
         $monthName = date('F', mktime(0, 0, 0, $payrollItem->payroll->month, 10));
@@ -296,12 +356,12 @@ class PayrollController extends Controller
         return $pdf->download($filename);
     }
 
-    public function export(Payroll $payroll)
+    public function export(Payroll $payroll, Request $request)
     {
         $monthName = date('F', mktime(0, 0, 0, $payroll->month, 10));
         $filename = "Payroll_{$monthName}_{$payroll->year}.xlsx";
 
-        return Excel::download(new PayrollExport($payroll), $filename);
+        return Excel::download(new PayrollExport($payroll, $request->all()), $filename);
     }
 
     public function import(Payroll $payroll, Request $request)

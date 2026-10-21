@@ -39,9 +39,10 @@ import {
     Download,
     Upload,
     Calculator,
+    Filter,
+    Loader2,
 } from 'lucide-vue-next';
 import { ref, watch, computed } from 'vue';
-import { debounce } from 'lodash';
 import Pagination from '@/components/Pagination.vue';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -57,7 +58,7 @@ import {
 const props = defineProps<{
     payroll: any;
     items: any;
-    attendanceStats?: Record<string, { absent_days: number; late_days: number; present_days: number }>;
+    attendanceStats?: Record<string, { absent_days: number; late_days: number; present_days: number; leave_days?: number }>;
     summary?: {
         gross_basic: number;
         total_allowances: number;
@@ -68,10 +69,14 @@ const props = defineProps<{
         excluded_staff: number;
         total_absent_days?: number;
         total_late_days?: number;
+        total_leave_days?: number;
     };
+    departments?: Array<{ id: string; name: string }>;
     filters?: {
         search?: string;
         status?: string;
+        department_id?: string;
+        attendance_status?: string;
         per_page?: string;
     };
 }>();
@@ -79,30 +84,52 @@ const props = defineProps<{
 const formatCurrency = (val: any) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(val || 0);
 
 const search = ref(props.filters?.search || '');
-const selectedStatus = ref(props.filters?.status || '');
+const selectedStatus = ref(props.filters?.status || 'ALL_STATUS');
+const selectedDepartment = ref(props.filters?.department_id || 'ALL_DEPARTMENTS');
+const selectedAttendanceStatus = ref(props.filters?.attendance_status || 'ALL_ATTENDANCE');
 const selectedPerPage = ref(props.filters?.per_page || '20');
+const isFiltering = ref(false);
 
-const updateFilters = debounce(() => {
+const applyFilters = () => {
+    isFiltering.value = true;
     router.get(route('admin.finance.payroll.show', props.payroll.id), {
         search: search.value,
         status: selectedStatus.value,
+        department_id: selectedDepartment.value,
+        attendance_status: selectedAttendanceStatus.value,
         per_page: selectedPerPage.value,
     }, {
         preserveState: true,
         replace: true,
         preserveScroll: true,
+        onFinish: () => {
+            isFiltering.value = false;
+        },
     });
-}, 300);
-
-watch([search, selectedStatus, selectedPerPage], () => {
-    updateFilters();
-});
+};
 
 const clearFilters = () => {
     search.value = '';
-    selectedStatus.value = '';
+    selectedStatus.value = 'ALL_STATUS';
+    selectedDepartment.value = 'ALL_DEPARTMENTS';
+    selectedAttendanceStatus.value = 'ALL_ATTENDANCE';
     selectedPerPage.value = '20';
+    applyFilters();
 };
+
+const hasActiveFilters = computed(() => {
+    return Boolean(
+        search.value || 
+        (selectedStatus.value && selectedStatus.value !== 'ALL_STATUS') ||
+        (selectedDepartment.value && selectedDepartment.value !== 'ALL_DEPARTMENTS') ||
+        (selectedAttendanceStatus.value && selectedAttendanceStatus.value !== 'ALL_ATTENDANCE') ||
+        selectedPerPage.value !== '20'
+    );
+});
+
+watch(selectedPerPage, () => {
+    applyFilters();
+});
 
 const markAsPaid = () => {
     if (confirm('Are you sure you want to mark this payroll as paid? This ends the workflow.')) {
@@ -339,7 +366,13 @@ const submitImport = () => {
                     </div>
                 </div>
                 <div class="flex gap-2">
-                    <a :href="route('admin.finance.payroll.export', payroll.id)" target="_blank">
+                    <a :href="route('admin.finance.payroll.export', {
+                        payroll: payroll.id,
+                        search: search || undefined,
+                        status: selectedStatus !== 'ALL_STATUS' ? selectedStatus : undefined,
+                        department_id: selectedDepartment !== 'ALL_DEPARTMENTS' ? selectedDepartment : undefined,
+                        attendance_status: selectedAttendanceStatus !== 'ALL_ATTENDANCE' ? selectedAttendanceStatus : undefined,
+                    })" target="_blank">
                         <Button variant="outline" class="font-semibold"><Download class="mr-2 h-4 w-4" /> Export Excel</Button>
                     </a>
                     <Button v-if="payroll.status !== 'paid'" variant="outline" @click="isImportModalOpen = true" class="font-semibold">
@@ -403,8 +436,10 @@ const submitImport = () => {
                             <span class="text-rose-600 font-extrabold">{{ summary?.total_absent_days ?? 0 }}</span>
                             <span class="text-xs text-muted-foreground">Absences</span>
                         </div>
-                        <p class="text-[11px] text-amber-700 dark:text-amber-400 mt-1 font-medium">
-                            {{ summary?.total_late_days ?? 0 }} Late arrival records
+                        <p class="text-[11px] text-muted-foreground mt-1 font-medium flex items-center gap-1.5 flex-wrap">
+                            <span class="text-amber-700 dark:text-amber-400">{{ summary?.total_late_days ?? 0 }} Late</span>
+                            <span>•</span>
+                            <span class="text-blue-700 dark:text-blue-400 font-bold">{{ summary?.total_leave_days ?? 0 }} On Leave</span>
                         </p>
                     </CardContent>
                 </Card>
@@ -424,56 +459,99 @@ const submitImport = () => {
             </div>
 
             <!-- Filters -->
-            <div class="bg-white dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row gap-4 items-center justify-between no-print">
-                <div class="flex flex-1 flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <div class="bg-white dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col gap-3 no-print">
+                <div class="flex flex-wrap items-center gap-3">
                     <!-- Search -->
-                    <div class="relative w-full sm:w-[300px]">
+                    <div class="relative w-full sm:w-[240px]">
                         <Search class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input
                             type="search"
-                            placeholder="Search staff name or ID..."
+                            placeholder="Search name or ID..."
                             class="pl-10 h-10"
                             v-model="search"
+                            @keyup.enter="applyFilters"
                         />
                     </div>
 
-                    <!-- Status -->
+                    <!-- Department -->
+                    <Select v-model="selectedDepartment">
+                        <SelectTrigger class="w-full sm:w-[200px] h-10">
+                            <SelectValue placeholder="All Departments" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="ALL_DEPARTMENTS">All Departments</SelectItem>
+                            <SelectItem 
+                                v-for="dept in (props.departments || [])" 
+                                :key="dept.id" 
+                                :value="dept.id"
+                            >
+                                {{ dept.name }}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <!-- Payment Status -->
                     <Select v-model="selectedStatus">
-                        <SelectTrigger class="w-full sm:w-[180px] h-10">
+                        <SelectTrigger class="w-full sm:w-[170px] h-10">
                             <SelectValue placeholder="Payment Status" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="ALL_STATUS">All Statuses</SelectItem>
+                            <SelectItem value="ALL_STATUS">All Payment Statuses</SelectItem>
                             <SelectItem value="pending">Pending / Eligible</SelectItem>
                             <SelectItem value="paid">Paid</SelectItem>
                             <SelectItem value="excluded">Excluded / Unpaid</SelectItem>
                         </SelectContent>
                     </Select>
 
+                    <!-- Attendance Status -->
+                    <Select v-model="selectedAttendanceStatus">
+                        <SelectTrigger class="w-full sm:w-[180px] h-10">
+                            <SelectValue placeholder="Attendance Filter" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="ALL_ATTENDANCE">All Attendance</SelectItem>
+                            <SelectItem value="on_leave">Staff On Leave</SelectItem>
+                            <SelectItem value="has_absent">Staff With Absences</SelectItem>
+                            <SelectItem value="has_late">Staff With Late Arrivals</SelectItem>
+                            <SelectItem value="perfect">Perfect Attendance</SelectItem>
+                        </SelectContent>
+                    </Select>
+
                     <!-- Per Page -->
                     <Select v-model="selectedPerPage">
-                        <SelectTrigger class="w-full sm:w-[130px] h-10">
+                        <SelectTrigger class="w-full sm:w-[120px] h-10">
                             <SelectValue placeholder="Per Page" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="10">10 per page</SelectItem>
-                            <SelectItem value="20">20 per page</SelectItem>
-                            <SelectItem value="50">50 per page</SelectItem>
-                            <SelectItem value="100">100 per page</SelectItem>
+                            <SelectItem value="10">10 / page</SelectItem>
+                            <SelectItem value="20">20 / page</SelectItem>
+                            <SelectItem value="50">50 / page</SelectItem>
+                            <SelectItem value="100">100 / page</SelectItem>
                         </SelectContent>
                     </Select>
-                </div>
 
-                <div class="flex gap-2 w-full sm:w-auto justify-end">
-                    <Button 
-                        v-if="search || (selectedStatus && selectedStatus !== 'ALL_STATUS') || selectedPerPage !== '20'" 
-                        variant="ghost" 
-                        @click="clearFilters"
-                        class="text-destructive hover:text-destructive hover:bg-destructive/10 h-10"
-                    >
-                        <X class="w-4 h-4 mr-2" />
-                        Reset
-                    </Button>
+                    <!-- Action Buttons -->
+                    <div class="flex items-center gap-2 ml-auto">
+                        <Button 
+                            type="button" 
+                            class="h-10 px-4 font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-1.5 shadow-sm"
+                            :disabled="isFiltering"
+                            @click="applyFilters"
+                        >
+                            <Loader2 v-if="isFiltering" class="w-4 h-4 animate-spin" />
+                            <Filter v-else class="w-4 h-4" />
+                            <span>Apply Filter</span>
+                        </Button>
+                        <Button 
+                            v-if="hasActiveFilters" 
+                            variant="ghost" 
+                            @click="clearFilters"
+                            class="text-destructive hover:text-destructive hover:bg-destructive/10 h-10"
+                        >
+                            <X class="w-4 h-4 mr-1.5" />
+                            Reset
+                        </Button>
+                    </div>
                 </div>
             </div>
 
@@ -511,12 +589,15 @@ const submitImport = () => {
                                 </TableCell>
                                 <TableCell>{{ item.staff?.department?.name || 'N/A' }}</TableCell>
                                 <TableCell>
-                                    <div v-if="props.attendanceStats?.[item.staff_id]" class="flex items-center gap-1 text-xs">
+                                    <div v-if="props.attendanceStats?.[item.staff_id]" class="flex items-center gap-1 text-xs flex-wrap">
                                         <span class="px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold" title="Present Days">
                                             {{ props.attendanceStats[item.staff_id].present_days || 0 }} P
                                         </span>
                                         <span v-if="props.attendanceStats[item.staff_id].late_days" class="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-bold" title="Late Days">
                                             {{ props.attendanceStats[item.staff_id].late_days }} L
+                                        </span>
+                                        <span v-if="props.attendanceStats[item.staff_id].leave_days" class="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 font-bold" title="On Leave Days">
+                                            {{ props.attendanceStats[item.staff_id].leave_days }} On Leave
                                         </span>
                                         <span v-if="props.attendanceStats[item.staff_id].absent_days" class="px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 font-bold" title="Absent Days">
                                             {{ props.attendanceStats[item.staff_id].absent_days }} A
@@ -605,6 +686,18 @@ const submitImport = () => {
                                     </div>
                                 </TableCell>
                             </TableRow>
+                            <TableRow v-if="items.data.length === 0">
+                                <TableCell colspan="9" class="text-center py-10 text-muted-foreground">
+                                    <div class="flex flex-col items-center justify-center gap-2">
+                                        <Search class="h-8 w-8 text-slate-300 dark:text-slate-600" />
+                                        <p class="font-semibold text-sm">No staff payroll records found</p>
+                                        <p class="text-xs text-muted-foreground">Try adjusting your search terms or filter criteria.</p>
+                                        <Button v-if="hasActiveFilters" variant="outline" size="sm" @click="clearFilters" class="mt-2 text-xs">
+                                            Reset Filters
+                                        </Button>
+                                    </div>
+                                </TableCell>
+                            </TableRow>
                         </TableBody>
                     </Table>
                     <div class="p-4 border-t flex justify-end no-print">
@@ -646,7 +739,7 @@ const submitImport = () => {
                                     Auto-Add Absence Deduction
                                 </Button>
                             </div>
-                            <div class="grid grid-cols-3 gap-2 text-center text-xs pt-1">
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs pt-1">
                                 <div class="bg-white dark:bg-slate-900 p-2 rounded-lg border border-indigo-100 dark:border-indigo-900">
                                     <span class="text-slate-500 text-[10px] uppercase font-bold block">Present</span>
                                     <span class="font-extrabold text-emerald-600 text-sm">{{ props.attendanceStats[editingItem.staff_id].present_days }} Days</span>
@@ -654,6 +747,10 @@ const submitImport = () => {
                                 <div class="bg-white dark:bg-slate-900 p-2 rounded-lg border border-indigo-100 dark:border-indigo-900">
                                     <span class="text-slate-500 text-[10px] uppercase font-bold block">Late</span>
                                     <span class="font-extrabold text-amber-600 text-sm">{{ props.attendanceStats[editingItem.staff_id].late_days }} Days</span>
+                                </div>
+                                <div class="bg-white dark:bg-slate-900 p-2 rounded-lg border border-indigo-100 dark:border-indigo-900">
+                                    <span class="text-slate-500 text-[10px] uppercase font-bold block">On Leave</span>
+                                    <span class="font-extrabold text-blue-600 text-sm">{{ props.attendanceStats[editingItem.staff_id].leave_days || 0 }} Days</span>
                                 </div>
                                 <div class="bg-white dark:bg-slate-900 p-2 rounded-lg border border-indigo-100 dark:border-indigo-900">
                                     <span class="text-slate-500 text-[10px] uppercase font-bold block">Absent</span>
