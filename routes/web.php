@@ -55,6 +55,7 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
             Route::put('expense-categories/{category}', [FinanceController::class, 'updateExpenseCategory'])->name('expense_categories.update');
             Route::delete('expense-categories/{category}', [FinanceController::class, 'destroyExpenseCategory'])->name('expense_categories.destroy');
 
+            Route::get('expenses/export', [ExpenseController::class, 'export'])->name('expenses.export');
             Route::resource('expenses', ExpenseController::class);
 
             // Approval Actions (Requires approve_expenses)
