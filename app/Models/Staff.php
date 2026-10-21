@@ -80,6 +80,11 @@ class Staff extends Model
         return $this->hasMany(PayrollItem::class);
     }
 
+    public function attendances()
+    {
+        return $this->hasMany(Attendance::class);
+    }
+
     protected static function booted()
     {
         static::creating(function ($model) {
