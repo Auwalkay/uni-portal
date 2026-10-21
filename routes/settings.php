@@ -236,6 +236,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware(['permission:view_results'])->prefix('teaching')->name('teaching.')->group(function () {
             Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
             Route::get('/courses/{course}', [CourseController::class, 'show'])->name('courses.show');
+            Route::post('/courses/{course}/students/upload', [CourseController::class, 'uploadStudents'])->name('courses.students.upload');
+            Route::get('/courses/{course}/students/template', [CourseController::class, 'downloadStudentTemplate'])->name('courses.students.template');
+            Route::get('/courses/{course}/students/export', [CourseController::class, 'exportStudents'])->name('courses.students.export');
         });
 
         // Finance & Payments

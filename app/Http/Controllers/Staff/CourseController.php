@@ -80,8 +80,129 @@ class CourseController extends Controller
 
         return Inertia::render('Staff/Course/Show', [
             'course' => $course->only(['id', 'code', 'title', 'units']),
-            'session' => $currentSession->only(['id', 'name']),
+            'session' => $currentSession ? $currentSession->only(['id', 'name']) : ['id' => '', 'name' => 'Current Session'],
             'students' => $registrations,
+            'importSummary' => fn () => session('import_summary'),
+        ]);
+    }
+
+    public function uploadStudents(Request $request, Course $course)
+    {
+        $user = auth()->user();
+        $isAllocated = CourseAllocation::where('course_id', $course->id)
+            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
+            ->exists();
+
+        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
+            abort(403, 'You are not assigned to this course.');
+        }
+
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls,csv|max:5120',
+            'skip_existing' => 'nullable|boolean',
+        ]);
+
+        $session = Session::current() ?? Session::latest()->first();
+        if (! $session) {
+            return back()->with('error', 'Active academic session not found.');
+        }
+
+        $skipExisting = $request->boolean('skip_existing', true);
+
+        try {
+            $import = new \App\Imports\CourseStudentImport($course, $session, null, $skipExisting);
+            \Maatwebsite\Excel\Facades\Excel::import($import, $request->file('file'));
+
+            $stats = $import->getStats();
+            $msg = "Import completed: {$stats['enrolled']} student(s) enrolled.";
+            if ($stats['skipped'] > 0) {
+                $msg .= " {$stats['skipped']} skipped.";
+            }
+
+            return back()
+                ->with('import_summary', $stats)
+                ->with('success', $msg);
+        } catch (\Exception $e) {
+            return back()->with('error', 'Error during upload: ' . $e->getMessage());
+        }
+    }
+
+    public function downloadStudentTemplate(Course $course)
+    {
+        $user = auth()->user();
+        $isAllocated = CourseAllocation::where('course_id', $course->id)
+            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
+            ->exists();
+
+        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
+            abort(403, 'You are not assigned to this course.');
+        }
+
+        $headers = ['matriculation_number', 'student_name'];
+
+        $callback = function () use ($headers) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, $headers);
+            fputcsv($file, ['MAT/2026/001', 'John Doe']);
+            fputcsv($file, ['MAT/2026/002', 'Jane Smith']);
+            fclose($file);
+        };
+
+        $fileName = "student_upload_template_{$course->code}.csv";
+
+        return response()->stream($callback, 200, [
+            "Content-type" => "text/csv",
+            "Content-Disposition" => "attachment; filename={$fileName}",
+            "Pragma" => "no-cache",
+            "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
+            "Expires" => "0"
+        ]);
+    }
+
+    public function exportStudents(Course $course)
+    {
+        $user = auth()->user();
+        $isAllocated = CourseAllocation::where('course_id', $course->id)
+            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
+            ->exists();
+
+        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
+            abort(403, 'You are not assigned to this course.');
+        }
+
+        $currentSession = Session::current() ?? Session::latest()->first();
+        $registrations = CourseRegistration::where('course_id', $course->id)
+            ->when($currentSession, fn($q) => $q->where('session_id', $currentSession->id))
+            ->with(['student.user', 'student.department'])
+            ->latest()
+            ->get();
+
+        $headers = ['Matric Number', 'Student Name', 'Email', 'Department', 'Level', 'Registered On'];
+
+        $callback = function () use ($headers, $registrations) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, $headers);
+            foreach ($registrations as $reg) {
+                fputcsv($file, [
+                    $reg->student?->matriculation_number ?? 'N/A',
+                    $reg->student?->user?->name ?? 'Unknown',
+                    $reg->student?->user?->email ?? 'N/A',
+                    $reg->student?->department?->name ?? 'N/A',
+                    $reg->student?->current_level ?? 'N/A',
+                    $reg->created_at ? $reg->created_at->format('Y-m-d') : 'N/A',
+                ]);
+            }
+            fclose($file);
+        };
+
+        $fileName = "students_{$course->code}_" . now()->format('Y_m_d') . ".csv";
+
+        return response()->stream($callback, 200, [
+            "Content-type" => "text/csv",
+            "Content-Disposition" => "attachment; filename={$fileName}",
+            "Pragma" => "no-cache",
+            "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
+            "Expires" => "0"
         ]);
     }
 }
