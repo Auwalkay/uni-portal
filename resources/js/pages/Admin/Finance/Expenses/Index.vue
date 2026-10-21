@@ -307,6 +307,8 @@ const openCreate = () => {
 };
 
 const openEdit = (expense: ExpenseItem) => {
+    isDetailsOpen.value = false;
+    cancelPendingAction();
     form.title = expense.title;
     form.description = expense.description || '';
     form.amount = String(expense.amount);
@@ -369,87 +371,98 @@ const submitExpense = () => {
     }
 };
 
-// Details Modal State
+// Details Modal State & Inline Actions (No stacked SweetAlert dialogs!)
 const selectedExpense = ref<ExpenseItem | null>(null);
 const isDetailsOpen = ref(false);
+const pendingAction = ref<'approve' | 'reject' | 'delete' | null>(null);
+const rejectionReason = ref('');
+const rejectionError = ref('');
+const isProcessingAction = ref(false);
 
-const openDetails = (expense: ExpenseItem) => {
+const openDetails = (expense: ExpenseItem, action: 'approve' | 'reject' | 'delete' | null = null) => {
     selectedExpense.value = expense;
+    pendingAction.value = action;
+    rejectionReason.value = '';
+    rejectionError.value = '';
     isDetailsOpen.value = true;
 };
 
-// Actions: Approve, Reject, Delete
-const approveExpense = (expense: ExpenseItem) => {
-    Swal.fire({
-        title: 'Approve Expense?',
-        text: `Are you sure you want to approve "${expense.title}" for ${formatCurrency(expense.amount)}?`,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, Approve',
-        confirmButtonColor: '#059669',
-        cancelButtonText: 'Cancel',
-    }).then((result) => {
-        if (result.isConfirmed) {
-            router.post(route('admin.finance.expenses.approve', expense.id), {}, {
-                onSuccess: () => {
-                    isDetailsOpen.value = false;
-                    Swal.fire({ icon: 'success', title: 'Approved', text: 'Expense approved successfully.', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
-                },
+const cancelPendingAction = () => {
+    pendingAction.value = null;
+    rejectionReason.value = '';
+    rejectionError.value = '';
+};
+
+const confirmApprove = (expense: ExpenseItem) => {
+    isProcessingAction.value = true;
+    router.post(route('admin.finance.expenses.approve', expense.id), {}, {
+        onSuccess: () => {
+            isDetailsOpen.value = false;
+            cancelPendingAction();
+            Swal.fire({
+                icon: 'success',
+                title: 'Approved',
+                text: `Expense "${expense.title}" approved successfully.`,
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000,
             });
-        }
+        },
+        onFinish: () => {
+            isProcessingAction.value = false;
+        },
     });
 };
 
-const rejectExpense = (expense: ExpenseItem) => {
-    Swal.fire({
-        title: 'Reject Expense Request',
-        text: `Please enter the reason for rejecting "${expense.title}":`,
-        input: 'textarea',
-        inputPlaceholder: 'Enter clear reason for rejection (e.g., Missing receipt, Budget exceeded)...',
-        inputAttributes: {
-            'aria-label': 'Reason for rejection',
-        },
-        showCancelButton: true,
-        confirmButtonText: 'Reject Expense',
-        confirmButtonColor: '#e11d48',
-        cancelButtonText: 'Cancel',
-        inputValidator: (value) => {
-            if (!value || !value.trim()) {
-                return 'You must specify a reason for rejecting this expense.';
-            }
-        },
-    }).then((result) => {
-        if (result.isConfirmed && result.value) {
-            router.post(route('admin.finance.expenses.reject', expense.id), {
-                rejection_reason: result.value.trim(),
-            }, {
-                onSuccess: () => {
-                    isDetailsOpen.value = false;
-                    Swal.fire({ icon: 'success', title: 'Rejected', text: 'Expense rejected.', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
-                },
+const confirmReject = (expense: ExpenseItem) => {
+    if (!rejectionReason.value || !rejectionReason.value.trim()) {
+        rejectionError.value = 'Please provide a clear reason for rejecting this expense.';
+        return;
+    }
+
+    isProcessingAction.value = true;
+    router.post(route('admin.finance.expenses.reject', expense.id), {
+        rejection_reason: rejectionReason.value.trim(),
+    }, {
+        onSuccess: () => {
+            isDetailsOpen.value = false;
+            cancelPendingAction();
+            Swal.fire({
+                icon: 'success',
+                title: 'Rejected',
+                text: `Expense "${expense.title}" has been rejected.`,
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000,
             });
-        }
+        },
+        onFinish: () => {
+            isProcessingAction.value = false;
+        },
     });
 };
 
-const deleteExpense = (expense: ExpenseItem) => {
-    Swal.fire({
-        title: 'Delete Expense?',
-        text: `Are you sure you want to permanently delete "${expense.title}"?`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, Delete',
-        confirmButtonColor: '#e11d48',
-        cancelButtonText: 'Cancel',
-    }).then((result) => {
-        if (result.isConfirmed) {
-            router.delete(route('admin.finance.expenses.destroy', expense.id), {
-                onSuccess: () => {
-                    isDetailsOpen.value = false;
-                    Swal.fire({ icon: 'success', title: 'Deleted', text: 'Expense deleted successfully.', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
-                },
+const confirmDelete = (expense: ExpenseItem) => {
+    isProcessingAction.value = true;
+    router.delete(route('admin.finance.expenses.destroy', expense.id), {
+        onSuccess: () => {
+            isDetailsOpen.value = false;
+            cancelPendingAction();
+            Swal.fire({
+                icon: 'success',
+                title: 'Deleted',
+                text: 'Expense deleted successfully.',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000,
             });
-        }
+        },
+        onFinish: () => {
+            isProcessingAction.value = false;
+        },
     });
 };
 
@@ -685,7 +698,7 @@ const getStatusBadgeVariant = (s: string) => {
                         </div>
                     </div>
 
-                    <!-- Custom Date Range Expandable (shown if activeDatePreset === 'custom' or dates filled) -->
+                    <!-- Custom Date Range Expandable -->
                     <div v-if="activeDatePreset === 'custom' || dateFrom || dateTo" class="pt-3 border-t flex flex-wrap items-center gap-3">
                         <div class="flex items-center gap-2 text-xs">
                             <span class="text-muted-foreground font-medium">From:</span>
@@ -840,34 +853,37 @@ const getStatusBadgeVariant = (s: string) => {
                                                 <Edit class="h-4 w-4" />
                                             </Button>
 
+                                            <!-- Direct Approve: Opens details in 'approve' confirm state -->
                                             <Button
                                                 v-if="canApproveExpenses"
                                                 size="icon"
                                                 variant="ghost"
                                                 class="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                                                 title="Approve"
-                                                @click="approveExpense(expense)"
+                                                @click="openDetails(expense, 'approve')"
                                             >
                                                 <CheckCircle class="h-4 w-4" />
                                             </Button>
 
+                                            <!-- Direct Reject: Opens details in 'reject' state -->
                                             <Button
                                                 v-if="canApproveExpenses"
                                                 size="icon"
                                                 variant="ghost"
                                                 class="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                                                 title="Reject"
-                                                @click="rejectExpense(expense)"
+                                                @click="openDetails(expense, 'reject')"
                                             >
                                                 <XCircle class="h-4 w-4" />
                                             </Button>
 
+                                            <!-- Direct Delete: Opens details in 'delete' state -->
                                             <Button
                                                 size="icon"
                                                 variant="ghost"
                                                 class="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                                                 title="Delete"
-                                                @click="deleteExpense(expense)"
+                                                @click="openDetails(expense, 'delete')"
                                             >
                                                 <Trash2 class="h-4 w-4" />
                                             </Button>
@@ -943,7 +959,7 @@ const getStatusBadgeVariant = (s: string) => {
                 </CardContent>
             </Card>
 
-            <!-- Expense Details Modal / Drawer -->
+            <!-- Expense Details Modal with Inline Confirmation (No Stacked Modals!) -->
             <Dialog v-model:open="isDetailsOpen">
                 <DialogContent class="max-w-xl">
                     <DialogHeader>
@@ -962,11 +978,11 @@ const getStatusBadgeVariant = (s: string) => {
                             </Badge>
                         </DialogTitle>
                         <DialogDescription class="text-xs">
-                            Complete details and audit trail for this expenditure request.
+                            Complete details, breakdown, and audit trail for this expenditure request.
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div v-if="selectedExpense" class="space-y-5 py-2">
+                    <div v-if="selectedExpense" class="space-y-4 py-1">
                         <!-- Top Banner / Amount Highlight -->
                         <div class="rounded-2xl bg-muted/50 border p-4 flex items-center justify-between">
                             <div>
@@ -1030,7 +1046,7 @@ const getStatusBadgeVariant = (s: string) => {
                             </div>
                         </div>
 
-                        <!-- Rejection Reason Callout (if rejected) -->
+                        <!-- Rejection Reason Callout (if already rejected) -->
                         <div v-if="selectedExpense.status === 'rejected' && selectedExpense.rejection_reason" class="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-800 dark:text-rose-300">
                             <div class="flex items-center gap-1.5 font-bold mb-1">
                                 <AlertCircle class="h-4 w-4 shrink-0" />
@@ -1039,25 +1055,113 @@ const getStatusBadgeVariant = (s: string) => {
                             <p class="leading-normal">{{ selectedExpense.rejection_reason }}</p>
                         </div>
 
-                        <!-- Approver Audit Notice (if approved) -->
+                        <!-- Approver Audit Notice (if already approved) -->
                         <div v-if="selectedExpense.status === 'approved' && selectedExpense.approver" class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
                             <CheckCircle class="h-4 w-4 shrink-0 text-emerald-600" />
                             <span>Approved by <strong>{{ selectedExpense.approver.name }}</strong> ({{ selectedExpense.approver.email }}).</span>
                         </div>
+
+                        <!-- INLINE ACTION: Approve Confirmation -->
+                        <div v-if="pendingAction === 'approve'" class="rounded-2xl border-2 border-emerald-500/40 bg-emerald-500/10 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                            <div class="flex items-start gap-3">
+                                <div class="h-9 w-9 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                    <CheckCircle class="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h5 class="text-sm font-bold text-foreground">Confirm Expense Approval</h5>
+                                    <p class="text-xs text-muted-foreground mt-0.5">
+                                        Are you sure you want to approve "{{ selectedExpense.title }}" for <strong>{{ formatCurrency(selectedExpense.amount) }}</strong>? This will record your approval and update the claim status.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-end gap-2 pt-2 border-t border-emerald-500/20">
+                                <Button size="sm" variant="outline" @click="cancelPendingAction" :disabled="isProcessingAction" class="text-xs">
+                                    Cancel
+                                </Button>
+                                <Button size="sm" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-sm" :disabled="isProcessingAction" @click="confirmApprove(selectedExpense)">
+                                    <Check class="h-3.5 w-3.5" />
+                                    {{ isProcessingAction ? 'Approving...' : 'Yes, Confirm Approval' }}
+                                </Button>
+                            </div>
+                        </div>
+
+                        <!-- INLINE ACTION: Reject Form -->
+                        <div v-if="pendingAction === 'reject'" class="rounded-2xl border-2 border-rose-500/40 bg-rose-500/10 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                            <div class="flex items-start gap-3">
+                                <div class="h-9 w-9 rounded-xl bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                                    <XCircle class="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h5 class="text-sm font-bold text-foreground">Reject Expense Request</h5>
+                                    <p class="text-xs text-muted-foreground mt-0.5">
+                                        Please specify the reason for rejection. This reason will be recorded and displayed to the claimant.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="space-y-1">
+                                <Textarea
+                                    v-model="rejectionReason"
+                                    placeholder="Enter reason for rejection (e.g., Incomplete receipt documentation, Expenditure exceeds approved limit)..."
+                                    rows="3"
+                                    class="text-xs bg-background"
+                                    required
+                                />
+                                <p v-if="rejectionError" class="text-[11px] text-destructive font-medium">{{ rejectionError }}</p>
+                            </div>
+                            <div class="flex items-center justify-end gap-2 pt-2 border-t border-rose-500/20">
+                                <Button size="sm" variant="outline" @click="cancelPendingAction" :disabled="isProcessingAction" class="text-xs">
+                                    Cancel
+                                </Button>
+                                <Button size="sm" variant="destructive" class="font-bold text-xs gap-1.5 shadow-sm" :disabled="isProcessingAction" @click="confirmReject(selectedExpense)">
+                                    <X class="h-3.5 w-3.5" />
+                                    {{ isProcessingAction ? 'Rejecting...' : 'Yes, Reject Expense' }}
+                                </Button>
+                            </div>
+                        </div>
+
+                        <!-- INLINE ACTION: Delete Confirmation -->
+                        <div v-if="pendingAction === 'delete'" class="rounded-2xl border-2 border-rose-500/40 bg-rose-500/10 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                            <div class="flex items-start gap-3">
+                                <div class="h-9 w-9 rounded-xl bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                                    <Trash2 class="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h5 class="text-sm font-bold text-foreground">Delete Expense Record</h5>
+                                    <p class="text-xs text-muted-foreground mt-0.5">
+                                        Are you sure you want to permanently delete "{{ selectedExpense.title }}"? This action cannot be undone.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-end gap-2 pt-2 border-t border-rose-500/20">
+                                <Button size="sm" variant="outline" @click="cancelPendingAction" :disabled="isProcessingAction" class="text-xs">
+                                    Cancel
+                                </Button>
+                                <Button size="sm" variant="destructive" class="font-bold text-xs gap-1.5 shadow-sm" :disabled="isProcessingAction" @click="confirmDelete(selectedExpense)">
+                                    <Trash2 class="h-3.5 w-3.5" />
+                                    {{ isProcessingAction ? 'Deleting...' : 'Yes, Delete Record' }}
+                                </Button>
+                            </div>
+                        </div>
                     </div>
 
+                    <!-- Dialog Footer -->
                     <DialogFooter class="flex flex-col sm:flex-row items-center justify-between gap-2 border-t pt-4">
-                        <Button variant="outline" size="sm" @click="isDetailsOpen = false" class="w-full sm:w-auto text-xs">
-                            Close
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            @click="() => { cancelPendingAction(); isDetailsOpen = false; }" 
+                            class="w-full sm:w-auto text-xs"
+                        >
+                            {{ pendingAction ? 'Back' : 'Close' }}
                         </Button>
 
-                        <!-- Quick Actions inside Details Modal -->
-                        <div v-if="selectedExpense && selectedExpense.status === 'pending'" class="flex items-center gap-2 w-full sm:w-auto">
+                        <!-- Standard Action Buttons (when no inline confirmation is active) -->
+                        <div v-if="selectedExpense && selectedExpense.status === 'pending' && !pendingAction" class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                             <Button
                                 v-if="canApproveExpenses"
                                 size="sm"
                                 class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 flex-1 sm:flex-initial"
-                                @click="approveExpense(selectedExpense)"
+                                @click="pendingAction = 'approve'"
                             >
                                 <Check class="h-3.5 w-3.5" /> Approve
                             </Button>
@@ -1066,7 +1170,7 @@ const getStatusBadgeVariant = (s: string) => {
                                 size="sm"
                                 variant="destructive"
                                 class="font-bold text-xs gap-1.5 flex-1 sm:flex-initial"
-                                @click="rejectExpense(selectedExpense)"
+                                @click="pendingAction = 'reject'"
                             >
                                 <X class="h-3.5 w-3.5" /> Reject
                             </Button>
@@ -1077,6 +1181,14 @@ const getStatusBadgeVariant = (s: string) => {
                                 @click="openEdit(selectedExpense)"
                             >
                                 <Edit class="h-3.5 w-3.5" /> Edit
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                class="text-xs text-destructive hover:bg-destructive/10"
+                                @click="pendingAction = 'delete'"
+                            >
+                                <Trash2 class="h-3.5 w-3.5" />
                             </Button>
                         </div>
                     </DialogFooter>
