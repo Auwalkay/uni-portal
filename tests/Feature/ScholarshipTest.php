@@ -18,6 +18,7 @@ class ScholarshipTest extends TestCase
     {
         parent::setUp();
         $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
+        $this->withoutMiddleware(\App\Http\Middleware\EnsureStudentProfileCompleted::class);
     }
 
     public function test_admin_can_create_scholarship_with_coverages()
@@ -70,9 +71,14 @@ class ScholarshipTest extends TestCase
         ]);
         $user->assignRole('student');
 
+        $faculty = \App\Models\Faculty::create(['name' => 'Science', 'code' => 'SCI']);
+        $department = \App\Models\Department::create(['name' => 'Computer Science', 'code' => 'CSC', 'faculty_id' => $faculty->id]);
+
         $student = \App\Models\Student::create([
             'user_id' => $user->id,
             'matriculation_number' => 'STU2026001',
+            'department_id' => $department->id,
+            'faculty_id' => $faculty->id,
             'scholarship_id' => $scholarship->id,
             'status' => 'active',
             'current_level' => '100',

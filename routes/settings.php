@@ -337,6 +337,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('exam-invigilators/{invigilator}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'removeInvigilator'])->name('exams.invigilators.remove')->middleware('permission:manage_exams|assign_invigilators');
             Route::post('exams/{exam}/incidents', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'logIncident'])->name('exams.incidents.store')->middleware('permission:manage_exams|log_exam_incidents');
             Route::put('exam-incidents/{incident}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'updateIncident'])->name('exams.incidents.update')->middleware('permission:manage_exams|log_exam_incidents');
+
+            // Course Registrations & Enrolments Explorer for Exams Office
+            Route::get('exams/courses/students', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'courseStudentsIndex'])->name('exams.courses.students')->middleware('permission:manage_exams|view_exams');
+            Route::get('exams/courses/{course}/students', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'courseStudents'])->name('exams.courses.show_students')->middleware('permission:manage_exams|view_exams');
+            Route::get('exams/courses/{course}/export-students', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'exportCourseStudents'])->name('exams.courses.export_students')->middleware('permission:manage_exams|view_exams');
+            Route::get('exams/api/course-enrolment-counts', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'apiCourseEnrolmentCounts'])->name('exams.api.enrolment_counts')->middleware('permission:manage_exams|view_exams|create_exams');
         });
 
         // Campus Buildings Management

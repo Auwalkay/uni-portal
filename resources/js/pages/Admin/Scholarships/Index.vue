@@ -17,7 +17,10 @@ import {
     GraduationCap,
     BarChart3,
     LayoutGrid,
-    List
+    List,
+    Sparkles,
+    Clock,
+    AlertCircle
 } from 'lucide-vue-next';
 import { Checkbox } from '@/components/ui/checkbox';
 import { route } from 'ziggy-js';
@@ -50,6 +53,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
+interface FeeTypeItem {
+    id: string;
+    name: string;
+    slug: string;
+    is_one_time: boolean;
+}
+
 interface ScholarshipItem {
     id: string;
     name: string;
@@ -58,6 +68,9 @@ interface ScholarshipItem {
     amount: number | string;
     covers_admin_charges: boolean;
     covers_hostel_fees: boolean;
+    covers_all_expenses: boolean;
+    waives_late_fees: boolean;
+    excluded_fee_type_ids: string[] | null;
     is_active: boolean;
     students_count: number;
     applicants_count: number;
@@ -65,6 +78,7 @@ interface ScholarshipItem {
 
 const props = defineProps<{
     scholarships: Array<ScholarshipItem>;
+    feeTypes: Array<FeeTypeItem>;
     summaryStats: {
         total_schemes: number;
         active_schemes: number;
@@ -91,10 +105,18 @@ const filteredScholarships = computed(() => {
 });
 
 const formatDiscount = (scholarship: ScholarshipItem) => {
+    if (scholarship.covers_all_expenses) {
+        return 'All Expenses (100%)';
+    }
     if (scholarship.type === 'fixed') {
         return '₦' + Number(scholarship.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
     return Number(scholarship.percentage).toString() + '%';
+};
+
+const getExcludedFeeNames = (excludedIds: string[] | null) => {
+    if (!excludedIds || !excludedIds.length || !props.feeTypes) return [];
+    return props.feeTypes.filter(ft => excludedIds.includes(ft.id)).map(ft => ft.name);
 };
 
 // Create Modal State
@@ -106,10 +128,32 @@ const createForm = useForm({
     amount: '',
     covers_admin_charges: false,
     covers_hostel_fees: false,
+    covers_all_expenses: false,
+    waives_late_fees: true,
+    excluded_fee_type_ids: [] as string[],
     is_active: true,
 });
 
+const isCreateExcluded = (id: string | number) => {
+    return createForm.excluded_fee_type_ids.map(String).includes(String(id));
+};
+
+const toggleCreateExcludedFee = (feeTypeId: string | number) => {
+    const id = String(feeTypeId);
+    const idx = createForm.excluded_fee_type_ids.map(String).indexOf(id);
+    if (idx === -1) {
+        createForm.excluded_fee_type_ids.push(id);
+    } else {
+        createForm.excluded_fee_type_ids.splice(idx, 1);
+    }
+};
+
 const submitCreate = () => {
+    if (createForm.covers_all_expenses) {
+        createForm.type = 'percentage';
+        createForm.percentage = '100';
+        createForm.amount = '0';
+    }
     createForm.post(route('admin.scholarships.store'), {
         onSuccess: () => {
             showCreateModal.value = false;
@@ -128,10 +172,27 @@ const editForm = useForm({
     amount: '',
     covers_admin_charges: false,
     covers_hostel_fees: false,
+    covers_all_expenses: false,
+    waives_late_fees: true,
+    excluded_fee_type_ids: [] as string[],
     is_active: true,
     students_count: 0,
     applicants_count: 0,
 });
+
+const isEditExcluded = (id: string | number) => {
+    return editForm.excluded_fee_type_ids.map(String).includes(String(id));
+};
+
+const toggleEditExcludedFee = (feeTypeId: string | number) => {
+    const id = String(feeTypeId);
+    const idx = editForm.excluded_fee_type_ids.map(String).indexOf(id);
+    if (idx === -1) {
+        editForm.excluded_fee_type_ids.push(id);
+    } else {
+        editForm.excluded_fee_type_ids.splice(idx, 1);
+    }
+};
 
 const openEditModal = (scholarship: ScholarshipItem) => {
     editForm.id = scholarship.id;
@@ -141,6 +202,9 @@ const openEditModal = (scholarship: ScholarshipItem) => {
     editForm.amount = String(scholarship.amount || '');
     editForm.covers_admin_charges = !!scholarship.covers_admin_charges;
     editForm.covers_hostel_fees = !!scholarship.covers_hostel_fees;
+    editForm.covers_all_expenses = !!scholarship.covers_all_expenses;
+    editForm.waives_late_fees = scholarship.waives_late_fees !== false;
+    editForm.excluded_fee_type_ids = Array.isArray(scholarship.excluded_fee_type_ids) ? [...scholarship.excluded_fee_type_ids] : [];
     editForm.is_active = !!scholarship.is_active;
     editForm.students_count = scholarship.students_count || 0;
     editForm.applicants_count = scholarship.applicants_count || 0;
@@ -148,6 +212,11 @@ const openEditModal = (scholarship: ScholarshipItem) => {
 };
 
 const submitEdit = () => {
+    if (editForm.covers_all_expenses) {
+        editForm.type = 'percentage';
+        editForm.percentage = '100';
+        editForm.amount = '0';
+    }
     editForm.put(route('admin.scholarships.update', editForm.id), {
         onSuccess: () => {
             showEditModal.value = false;
@@ -335,14 +404,23 @@ const deleteScholarship = (id: string, name: string) => {
                             </div>
 
                             <!-- Coverage Badges -->
-                            <div class="flex flex-wrap items-center gap-2 pt-1">
-                                <span v-if="sch.covers_admin_charges" class="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100 text-[9px] font-black uppercase tracking-tight flex items-center gap-1">
+                            <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                                <span v-if="sch.covers_all_expenses" class="px-2 py-0.5 rounded-md bg-purple-100 text-purple-800 border border-purple-200 text-[9px] font-black uppercase tracking-tight flex items-center gap-1">
+                                    <Sparkles class="w-3 h-3 text-purple-600" /> All Expenses
+                                </span>
+                                <span v-if="sch.waives_late_fees" class="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black uppercase tracking-tight flex items-center gap-1">
+                                    <Clock class="w-3 h-3 text-emerald-600" /> No Late Fees
+                                </span>
+                                <span v-if="sch.covers_all_expenses && sch.excluded_fee_type_ids && sch.excluded_fee_type_ids.length > 0" class="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-[9px] font-bold tracking-tight flex items-center gap-1">
+                                    <AlertCircle class="w-3 h-3 text-amber-600" /> Excludes: {{ getExcludedFeeNames(sch.excluded_fee_type_ids).join(', ') }}
+                                </span>
+                                <span v-if="!sch.covers_all_expenses && sch.covers_admin_charges" class="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100 text-[9px] font-black uppercase tracking-tight flex items-center gap-1">
                                     <ShieldCheck class="w-3 h-3 text-blue-600" /> Admin Fee Covered
                                 </span>
                                 <span v-if="sch.covers_hostel_fees" class="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100 text-[9px] font-black uppercase tracking-tight flex items-center gap-1">
                                     <Building2 class="w-3 h-3 text-indigo-600" /> Hostel Fee Covered
                                 </span>
-                                <span v-if="!sch.covers_admin_charges && !sch.covers_hostel_fees" class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 text-[9px] font-bold uppercase tracking-tight">
+                                <span v-if="!sch.covers_all_expenses && !sch.covers_admin_charges && !sch.covers_hostel_fees" class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 text-[9px] font-bold uppercase tracking-tight">
                                     Tuition Only
                                 </span>
                             </div>
@@ -444,10 +522,19 @@ const deleteScholarship = (id: string, name: string) => {
                                     <TableCell class="py-5 px-6">
                                         <div class="flex flex-col">
                                             <span class="font-black text-slate-900 text-sm uppercase tracking-tight">{{ scholarship.name }}</span>
-                                            <div class="flex items-center gap-1.5 mt-1">
-                                                <span v-if="scholarship.covers_admin_charges" class="text-[9px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 font-bold uppercase border border-blue-100">Admin Fee</span>
+                                            <div class="flex flex-wrap items-center gap-1.5 mt-1">
+                                                <span v-if="scholarship.covers_all_expenses" class="text-[9px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-bold uppercase border border-purple-200 flex items-center gap-1">
+                                                    <Sparkles class="w-2.5 h-2.5 text-purple-600" /> All Expenses
+                                                </span>
+                                                <span v-if="scholarship.waives_late_fees" class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold uppercase border border-emerald-200 flex items-center gap-1">
+                                                    <Clock class="w-2.5 h-2.5 text-emerald-600" /> No Late Fees
+                                                </span>
+                                                <span v-if="scholarship.covers_all_expenses && scholarship.excluded_fee_type_ids && scholarship.excluded_fee_type_ids.length > 0" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 font-bold border border-amber-200">
+                                                    Excludes: {{ getExcludedFeeNames(scholarship.excluded_fee_type_ids).join(', ') }}
+                                                </span>
+                                                <span v-if="!scholarship.covers_all_expenses && scholarship.covers_admin_charges" class="text-[9px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 font-bold uppercase border border-blue-100">Admin Fee</span>
                                                 <span v-if="scholarship.covers_hostel_fees" class="text-[9px] px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 font-bold uppercase border border-indigo-100">Hostel Fee</span>
-                                                <span v-if="!scholarship.covers_admin_charges && !scholarship.covers_hostel_fees" class="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 font-bold uppercase">Tuition Only</span>
+                                                <span v-if="!scholarship.covers_all_expenses && !scholarship.covers_admin_charges && !scholarship.covers_hostel_fees" class="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 font-bold uppercase">Tuition Only</span>
                                             </div>
                                         </div>
                                     </TableCell>
@@ -499,13 +586,13 @@ const deleteScholarship = (id: string, name: string) => {
 
             <!-- Create Modal -->
             <Dialog v-model:open="showCreateModal">
-                <DialogContent class="sm:max-w-[480px] rounded-3xl p-6">
+                <DialogContent class="sm:max-w-[560px] max-h-[90vh] overflow-y-auto rounded-3xl p-6">
                     <DialogHeader class="space-y-1">
                         <DialogTitle class="text-xl font-black text-slate-900 flex items-center gap-2">
                             <Award class="w-5 h-5 text-purple-600" /> Create Scholarship Scheme
                         </DialogTitle>
                         <DialogDescription class="text-xs font-medium text-slate-500">
-                            Configure a new scholarship scheme for students and applicants.
+                            Configure coverage rules and out-of-pocket fee exclusions for this scheme.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -516,35 +603,94 @@ const deleteScholarship = (id: string, name: string) => {
                             <p v-if="createForm.errors.name" class="text-xs text-red-500 font-bold">{{ createForm.errors.name }}</p>
                         </div>
 
-                        <div class="space-y-1.5">
-                            <Label for="type" class="text-xs font-bold text-slate-700">Discount Model</Label>
-                            <select id="type" v-model="createForm.type" class="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-purple-500" required>
-                                <option value="percentage">Percentage Discount (%)</option>
-                                <option value="fixed">Fixed Lump Sum Amount (₦)</option>
-                            </select>
-                            <p v-if="createForm.errors.type" class="text-xs text-red-500 font-bold">{{ createForm.errors.type }}</p>
+                        <!-- All Expenses Coverage Toggle -->
+                        <div 
+                            class="p-4 rounded-2xl border-2 transition-all cursor-pointer select-none"
+                            :class="createForm.covers_all_expenses ? 'bg-purple-50/80 border-purple-400 shadow-sm' : 'bg-slate-50 border-slate-200 hover:border-slate-300'"
+                            @click="createForm.covers_all_expenses = !createForm.covers_all_expenses"
+                        >
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="space-y-1">
+                                    <div class="flex items-center gap-2">
+                                        <Sparkles class="w-4 h-4 text-purple-600" />
+                                        <span class="text-sm font-black text-slate-900">Cover All School Expenses</span>
+                                        <span class="px-2 py-0.5 rounded-full bg-purple-600 text-[10px] font-black text-white uppercase tracking-wider">Comprehensive</span>
+                                    </div>
+                                    <p class="text-xs text-slate-500 font-medium leading-relaxed">
+                                        Covers 100% of all tuition, administrative charges, and one-time fees, except any fee types explicitly excluded below.
+                                    </p>
+                                </div>
+                                <Checkbox id="covers_all_expenses" :checked="createForm.covers_all_expenses" class="pointer-events-none mt-1" />
+                            </div>
                         </div>
 
-                        <div v-if="createForm.type === 'percentage'" class="space-y-1.5">
-                            <Label for="percentage" class="text-xs font-bold text-slate-700">Discount Percentage (%)</Label>
-                            <Input id="percentage" type="number" step="0.01" min="0" max="100" v-model="createForm.percentage" placeholder="e.g. 50" class="h-11 rounded-xl font-bold text-sm" required />
-                            <p v-if="createForm.errors.percentage" class="text-xs text-red-500 font-bold">{{ createForm.errors.percentage }}</p>
-                        </div>
-
-                        <div v-if="createForm.type === 'fixed'" class="space-y-1.5">
-                            <Label for="amount" class="text-xs font-bold text-slate-700">Discount Amount (₦)</Label>
-                            <Input id="amount" type="number" step="0.01" min="0" v-model="createForm.amount" placeholder="e.g. 150000" class="h-11 rounded-xl font-bold text-sm" required />
-                            <p v-if="createForm.errors.amount" class="text-xs text-red-500 font-bold">{{ createForm.errors.amount }}</p>
-                        </div>
-
-                        <div class="space-y-3 pt-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                            <div class="flex items-center space-x-2">
-                                <Checkbox id="covers_admin" v-model:checked="createForm.covers_admin_charges" />
-                                <Label for="covers_admin" class="text-xs font-bold text-slate-700 cursor-pointer">
-                                    Covers Administrative Charges
-                                </Label>
+                        <!-- Out-of-Pocket Exclusions (Visible when All Expenses is checked) -->
+                        <div v-if="createForm.covers_all_expenses" class="space-y-2.5 p-4 bg-amber-50/60 rounded-2xl border border-amber-200 animate-in fade-in duration-300">
+                            <div class="space-y-0.5">
+                                <div class="flex items-center gap-1.5 text-xs font-black text-amber-900">
+                                    <AlertCircle class="w-4 h-4 text-amber-600" />
+                                    <span>Out-of-Pocket Fee Exclusions (Student Pays These)</span>
+                                </div>
+                                <p class="text-[11px] text-amber-700 font-medium leading-relaxed">
+                                    Check any fees below that this scholarship does <strong>NOT</strong> cover. The student must pay these themselves (e.g. Drug Test, Acceptance Fee). Unchecked fees are 100% covered.
+                                </p>
                             </div>
 
+                            <div v-if="feeTypes && feeTypes.length > 0" class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 max-h-48 overflow-y-auto pr-1">
+                                <div 
+                                    v-for="ft in feeTypes" 
+                                    :key="ft.id" 
+                                    @click="toggleCreateExcludedFee(ft.id)"
+                                    class="flex items-center space-x-2.5 p-2 rounded-xl border cursor-pointer select-none transition-colors"
+                                    :class="isCreateExcluded(ft.id) ? 'bg-amber-100 border-amber-300 text-amber-950 font-bold' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'"
+                                >
+                                    <Checkbox :checked="isCreateExcluded(ft.id)" class="pointer-events-none" />
+                                    <span class="text-xs select-none leading-tight">
+                                        {{ ft.name }}
+                                        <span v-if="ft.is_one_time" class="text-[9px] text-slate-400 block font-normal">One-time fee</span>
+                                    </span>
+                                </div>
+                            </div>
+                            <div v-else class="text-xs text-slate-400 italic py-1">
+                                No fee types currently available in the database.
+                            </div>
+                        </div>
+
+                        <!-- Standard Discount Inputs (When NOT covers_all_expenses) -->
+                        <template v-if="!createForm.covers_all_expenses">
+                            <div class="space-y-1.5">
+                                <Label for="type" class="text-xs font-bold text-slate-700">Discount Model</Label>
+                                <select id="type" v-model="createForm.type" class="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-purple-500" required>
+                                    <option value="percentage">Percentage Discount (%)</option>
+                                    <option value="fixed">Fixed Lump Sum Amount (₦)</option>
+                                </select>
+                                <p v-if="createForm.errors.type" class="text-xs text-red-500 font-bold">{{ createForm.errors.type }}</p>
+                            </div>
+
+                            <div v-if="createForm.type === 'percentage'" class="space-y-1.5">
+                                <Label for="percentage" class="text-xs font-bold text-slate-700">Discount Percentage (%)</Label>
+                                <Input id="percentage" type="number" step="0.01" min="0" max="100" v-model="createForm.percentage" placeholder="e.g. 50" class="h-11 rounded-xl font-bold text-sm" required />
+                                <p v-if="createForm.errors.percentage" class="text-xs text-red-500 font-bold">{{ createForm.errors.percentage }}</p>
+                            </div>
+
+                            <div v-if="createForm.type === 'fixed'" class="space-y-1.5">
+                                <Label for="amount" class="text-xs font-bold text-slate-700">Discount Amount (₦)</Label>
+                                <Input id="amount" type="number" step="0.01" min="0" v-model="createForm.amount" placeholder="e.g. 150000" class="h-11 rounded-xl font-bold text-sm" required />
+                                <p v-if="createForm.errors.amount" class="text-xs text-red-500 font-bold">{{ createForm.errors.amount }}</p>
+                            </div>
+
+                            <div class="space-y-1.5 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                <div class="flex items-center space-x-2">
+                                    <Checkbox id="covers_admin" v-model:checked="createForm.covers_admin_charges" />
+                                    <Label for="covers_admin" class="text-xs font-bold text-slate-700 cursor-pointer">
+                                        Covers Administrative Charges
+                                    </Label>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Additional Options -->
+                        <div class="space-y-3 pt-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                             <div class="flex items-center space-x-2">
                                 <Checkbox id="covers_hostel" v-model:checked="createForm.covers_hostel_fees" />
                                 <Label for="covers_hostel" class="text-xs font-bold text-slate-700 cursor-pointer">
@@ -552,10 +698,22 @@ const deleteScholarship = (id: string, name: string) => {
                                 </Label>
                             </div>
 
-                            <div class="flex items-center space-x-2">
+                            <div class="flex items-start space-x-2">
+                                <Checkbox id="waives_late_fees" v-model:checked="createForm.waives_late_fees" class="mt-0.5" />
+                                <div class="space-y-0.5">
+                                    <Label for="waives_late_fees" class="text-xs font-bold text-slate-700 cursor-pointer">
+                                        Waive Late Registration Fees & Overdue Fines
+                                    </Label>
+                                    <p class="text-[10px] text-slate-500 font-medium">
+                                        Exempts beneficiary students from late payment penalties on past-deadline invoices.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center space-x-2 pt-1 border-t border-slate-200">
                                 <Checkbox id="is_active" v-model:checked="createForm.is_active" />
                                 <Label for="is_active" class="text-xs font-bold text-slate-700 cursor-pointer">
-                                    Activate Scholarship Immediately
+                                    Activate Scholarship Scheme Immediately
                                 </Label>
                             </div>
                         </div>
@@ -570,13 +728,13 @@ const deleteScholarship = (id: string, name: string) => {
 
             <!-- Edit Modal -->
             <Dialog v-model:open="showEditModal">
-                <DialogContent class="sm:max-w-[480px] rounded-3xl p-6">
+                <DialogContent class="sm:max-w-[560px] max-h-[90vh] overflow-y-auto rounded-3xl p-6">
                     <DialogHeader class="space-y-1">
                         <DialogTitle class="text-xl font-black text-slate-900 flex items-center gap-2">
                             <Edit class="w-5 h-5 text-purple-600" /> Edit Scholarship Scheme
                         </DialogTitle>
                         <DialogDescription class="text-xs font-medium text-slate-500">
-                            Update rules and coverage for this scholarship.
+                            Update rules, exclusions, and coverage for this scholarship.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -587,66 +745,128 @@ const deleteScholarship = (id: string, name: string) => {
                             <p v-if="editForm.errors.name" class="text-xs text-red-500 font-bold">{{ editForm.errors.name }}</p>
                         </div>
 
-                        <div class="space-y-1.5">
-                            <Label for="edit-type" class="text-xs font-bold text-slate-700">Discount Model</Label>
-                            <select 
-                                id="edit-type" 
-                                v-model="editForm.type" 
-                                class="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-purple-500 disabled:bg-slate-100 disabled:cursor-not-allowed" 
-                                :disabled="editForm.students_count > 0 || editForm.applicants_count > 0"
-                                required
-                            >
-                                <option value="percentage">Percentage Discount (%)</option>
-                                <option value="fixed">Fixed Lump Sum Amount (₦)</option>
-                            </select>
-                            <p v-if="editForm.errors.type" class="text-xs text-red-500 font-bold">{{ editForm.errors.type }}</p>
-                        </div>
-
-                        <div v-if="editForm.type === 'percentage'" class="space-y-1.5">
-                            <Label for="edit-percentage" class="text-xs font-bold text-slate-700">Discount Percentage (%)</Label>
-                            <Input 
-                                id="edit-percentage" 
-                                type="number" 
-                                step="0.01" 
-                                min="0" 
-                                max="100" 
-                                v-model="editForm.percentage" 
-                                class="h-11 rounded-xl font-bold text-sm"
-                                :disabled="editForm.students_count > 0 || editForm.applicants_count > 0"
-                                required 
-                            />
-                            <p v-if="editForm.students_count > 0 || editForm.applicants_count > 0" class="text-[10px] text-amber-600 font-bold uppercase leading-tight">
-                                Value locked: Currently in use by {{ editForm.students_count + editForm.applicants_count }} scholars.
+                        <!-- All Expenses Coverage Toggle -->
+                        <div 
+                            class="p-4 rounded-2xl border-2 transition-all cursor-pointer select-none"
+                            :class="[
+                                editForm.covers_all_expenses ? 'bg-purple-50/80 border-purple-400 shadow-sm' : 'bg-slate-50 border-slate-200 hover:border-slate-300',
+                                (editForm.students_count > 0 || editForm.applicants_count > 0) ? 'opacity-80 pointer-events-none' : ''
+                            ]"
+                            @click="!(editForm.students_count > 0 || editForm.applicants_count > 0) && (editForm.covers_all_expenses = !editForm.covers_all_expenses)"
+                        >
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="space-y-1">
+                                    <div class="flex items-center gap-2">
+                                        <Sparkles class="w-4 h-4 text-purple-600" />
+                                        <span class="text-sm font-black text-slate-900">Cover All School Expenses</span>
+                                        <span class="px-2 py-0.5 rounded-full bg-purple-600 text-[10px] font-black text-white uppercase tracking-wider">Comprehensive</span>
+                                    </div>
+                                    <p class="text-xs text-slate-500 font-medium leading-relaxed">
+                                        Covers 100% of all tuition, administrative charges, and one-time fees, except any fee types explicitly excluded below.
+                                    </p>
+                                </div>
+                                <Checkbox id="edit_covers_all_expenses" :checked="editForm.covers_all_expenses" :disabled="editForm.students_count > 0 || editForm.applicants_count > 0" class="pointer-events-none mt-1" />
+                            </div>
+                            <p v-if="editForm.students_count > 0 || editForm.applicants_count > 0" class="text-[10px] text-amber-600 font-bold uppercase mt-2">
+                                Mode locked: In use by {{ editForm.students_count + editForm.applicants_count }} scholars.
                             </p>
-                            <p v-if="editForm.errors.percentage" class="text-xs text-red-500 font-bold">{{ editForm.errors.percentage }}</p>
                         </div>
 
-                        <div v-if="editForm.type === 'fixed'" class="space-y-1.5">
-                            <Label for="edit-amount" class="text-xs font-bold text-slate-700">Discount Amount (₦)</Label>
-                            <Input 
-                                id="edit-amount" 
-                                type="number" 
-                                step="0.01" 
-                                min="0" 
-                                v-model="editForm.amount" 
-                                class="h-11 rounded-xl font-bold text-sm"
-                                :disabled="editForm.students_count > 0 || editForm.applicants_count > 0"
-                                required 
-                            />
-                            <p v-if="editForm.students_count > 0 || editForm.applicants_count > 0" class="text-[10px] text-amber-600 font-bold uppercase leading-tight">
-                                Value locked: Currently in use by {{ editForm.students_count + editForm.applicants_count }} scholars.
-                            </p>
-                            <p v-if="editForm.errors.amount" class="text-xs text-red-500 font-bold">{{ editForm.errors.amount }}</p>
-                        </div>
-
-                        <div class="space-y-3 pt-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                            <div class="flex items-center space-x-2">
-                                <Checkbox id="edit_covers_admin" v-model:checked="editForm.covers_admin_charges" />
-                                <Label for="edit_covers_admin" class="text-xs font-bold text-slate-700 cursor-pointer">
-                                    Covers Administrative Charges
-                                </Label>
+                        <!-- Out-of-Pocket Exclusions (Visible when All Expenses is checked) -->
+                        <div v-if="editForm.covers_all_expenses" class="space-y-2.5 p-4 bg-amber-50/60 rounded-2xl border border-amber-200 animate-in fade-in duration-300">
+                            <div class="space-y-0.5">
+                                <div class="flex items-center gap-1.5 text-xs font-black text-amber-900">
+                                    <AlertCircle class="w-4 h-4 text-amber-600" />
+                                    <span>Out-of-Pocket Fee Exclusions (Student Pays These)</span>
+                                </div>
+                                <p class="text-[11px] text-amber-700 font-medium leading-relaxed">
+                                    Check any fees below that this scholarship does <strong>NOT</strong> cover. The student will be invoiced and required to pay for them out-of-pocket (e.g. Drug Test, Acceptance Fee). Unchecked fees are 100% covered.
+                                </p>
                             </div>
 
+                            <div v-if="feeTypes && feeTypes.length > 0" class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 max-h-48 overflow-y-auto pr-1">
+                                <div 
+                                    v-for="ft in feeTypes" 
+                                    :key="ft.id" 
+                                    @click="toggleEditExcludedFee(ft.id)"
+                                    class="flex items-center space-x-2.5 p-2 rounded-xl border cursor-pointer select-none transition-colors"
+                                    :class="isEditExcluded(ft.id) ? 'bg-amber-100 border-amber-300 text-amber-950 font-bold' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'"
+                                >
+                                    <Checkbox :checked="isEditExcluded(ft.id)" class="pointer-events-none" />
+                                    <span class="text-xs select-none leading-tight">
+                                        {{ ft.name }}
+                                        <span v-if="ft.is_one_time" class="text-[9px] text-slate-400 block font-normal">One-time fee</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Standard Discount Inputs (When NOT covers_all_expenses) -->
+                        <template v-if="!editForm.covers_all_expenses">
+                            <div class="space-y-1.5">
+                                <Label for="edit-type" class="text-xs font-bold text-slate-700">Discount Model</Label>
+                                <select 
+                                    id="edit-type" 
+                                    v-model="editForm.type" 
+                                    class="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-purple-500 disabled:bg-slate-100 disabled:cursor-not-allowed" 
+                                    :disabled="editForm.students_count > 0 || editForm.applicants_count > 0"
+                                    required
+                                >
+                                    <option value="percentage">Percentage Discount (%)</option>
+                                    <option value="fixed">Fixed Lump Sum Amount (₦)</option>
+                                </select>
+                                <p v-if="editForm.errors.type" class="text-xs text-red-500 font-bold">{{ editForm.errors.type }}</p>
+                            </div>
+
+                            <div v-if="editForm.type === 'percentage'" class="space-y-1.5">
+                                <Label for="edit-percentage" class="text-xs font-bold text-slate-700">Discount Percentage (%)</Label>
+                                <Input 
+                                    id="edit-percentage" 
+                                    type="number" 
+                                    step="0.01" 
+                                    min="0" 
+                                    max="100" 
+                                    v-model="editForm.percentage" 
+                                    class="h-11 rounded-xl font-bold text-sm"
+                                    :disabled="editForm.students_count > 0 || editForm.applicants_count > 0"
+                                    required 
+                                />
+                                <p v-if="editForm.students_count > 0 || editForm.applicants_count > 0" class="text-[10px] text-amber-600 font-bold uppercase leading-tight">
+                                    Value locked: Currently in use by {{ editForm.students_count + editForm.applicants_count }} scholars.
+                                </p>
+                                <p v-if="editForm.errors.percentage" class="text-xs text-red-500 font-bold">{{ editForm.errors.percentage }}</p>
+                            </div>
+
+                            <div v-if="editForm.type === 'fixed'" class="space-y-1.5">
+                                <Label for="edit-amount" class="text-xs font-bold text-slate-700">Discount Amount (₦)</Label>
+                                <Input 
+                                    id="edit-amount" 
+                                    type="number" 
+                                    step="0.01" 
+                                    min="0" 
+                                    v-model="editForm.amount" 
+                                    class="h-11 rounded-xl font-bold text-sm"
+                                    :disabled="editForm.students_count > 0 || editForm.applicants_count > 0"
+                                    required 
+                                />
+                                <p v-if="editForm.students_count > 0 || editForm.applicants_count > 0" class="text-[10px] text-amber-600 font-bold uppercase leading-tight">
+                                    Value locked: Currently in use by {{ editForm.students_count + editForm.applicants_count }} scholars.
+                                </p>
+                                <p v-if="editForm.errors.amount" class="text-xs text-red-500 font-bold">{{ editForm.errors.amount }}</p>
+                            </div>
+
+                            <div class="space-y-1.5 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                <div class="flex items-center space-x-2">
+                                    <Checkbox id="edit_covers_admin" v-model:checked="editForm.covers_admin_charges" />
+                                    <Label for="edit_covers_admin" class="text-xs font-bold text-slate-700 cursor-pointer">
+                                        Covers Administrative Charges
+                                    </Label>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Additional Options -->
+                        <div class="space-y-3 pt-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                             <div class="flex items-center space-x-2">
                                 <Checkbox id="edit_covers_hostel" v-model:checked="editForm.covers_hostel_fees" />
                                 <Label for="edit_covers_hostel" class="text-xs font-bold text-slate-700 cursor-pointer">
@@ -654,7 +874,19 @@ const deleteScholarship = (id: string, name: string) => {
                                 </Label>
                             </div>
 
-                            <div class="flex items-center space-x-2">
+                            <div class="flex items-start space-x-2">
+                                <Checkbox id="edit_waives_late_fees" v-model:checked="editForm.waives_late_fees" class="mt-0.5" />
+                                <div class="space-y-0.5">
+                                    <Label for="edit_waives_late_fees" class="text-xs font-bold text-slate-700 cursor-pointer">
+                                        Waive Late Registration Fees & Overdue Fines
+                                    </Label>
+                                    <p class="text-[10px] text-slate-500 font-medium">
+                                        Exempts beneficiary students from late payment penalties on past-deadline invoices.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center space-x-2 pt-1 border-t border-slate-200">
                                 <Checkbox id="edit_is_active" v-model:checked="editForm.is_active" />
                                 <Label for="edit_is_active" class="text-xs font-bold text-slate-700 cursor-pointer">
                                     Scholarship Scheme Active

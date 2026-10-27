@@ -14,6 +14,16 @@ class FeeType extends Model
     {
         return LogOptions::defaults()->logFillable()->logOnlyDirty()->dontLogEmptyChanges();
     }
+
+    protected static function booted()
+    {
+        static::creating(function ($feeType) {
+            if (empty($feeType->slug) && !empty($feeType->name)) {
+                $feeType->slug = \Illuminate\Support\Str::slug($feeType->name);
+            }
+        });
+    }
+
     protected $fillable = ['name', 'slug', 'description', 'is_one_time', 'is_per_course'];
 
     protected $casts = [
