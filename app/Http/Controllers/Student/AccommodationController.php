@@ -379,7 +379,7 @@ class AccommodationController extends Controller
 
                 $cappedPaidAmount = min($finalAmount, $totalPaid);
 
-                if ($cappedPaidAmount >= $finalAmount && $finalAmount > 0) {
+                if ($finalAmount <= 0 || ($cappedPaidAmount >= $finalAmount && $finalAmount > 0)) {
                     $invoiceStatus = 'paid';
                     $bookingStatus = 'confirmed';
                 } elseif ($cappedPaidAmount > 0) {
@@ -391,23 +391,41 @@ class AccommodationController extends Controller
                 }
 
                 $invoice->update([
-                    'amount' => $finalAmount,
+                    'amount' => max(0, $finalAmount),
                     'paid_amount' => $cappedPaidAmount,
                     'status' => $invoiceStatus,
                     'due_date' => $invoiceStatus === 'paid' ? null : $dueDate,
                 ]);
+
+                if ($finalAmount <= 0 && !$invoice->payments()->where('status', 'success')->exists()) {
+                    \App\Models\Payment::create([
+                        'transaction_id' => \App\Models\Payment::generateTransactionId('HST'),
+                        'invoice_id' => $invoice->id,
+                        'user_id' => $user->id,
+                        'gateway' => 'scholarship',
+                        'gateway_reference' => 'SCHOLARSHIP-HST-' . strtoupper(uniqid()),
+                        'amount' => 0.00,
+                        'status' => 'success',
+                        'channel' => 'scholarship',
+                        'paid_at' => now(),
+                    ]);
+                }
             } else {
                 // Generate Invoice
                 $reference = 'HST-'.strtoupper(uniqid());
+                $isZeroBalance = $finalAmount <= 0;
+                $invoiceStatus = $isZeroBalance ? 'paid' : 'pending';
+                $bookingStatus = $isZeroBalance ? 'confirmed' : 'pending';
 
                 $invoice = Invoice::create([
                     'user_id' => $user->id,
                     'session_id' => $currentSession->id,
                     'reference' => $reference,
                     'type' => 'hostel_fee',
-                    'amount' => $finalAmount,
-                    'status' => 'pending',
-                    'due_date' => $dueDate,
+                    'amount' => max(0, $finalAmount),
+                    'paid_amount' => 0.00,
+                    'status' => $invoiceStatus,
+                    'due_date' => $invoiceStatus === 'paid' ? null : $dueDate,
                 ]);
 
                 InvoiceItem::create([
@@ -427,7 +445,19 @@ class AccommodationController extends Controller
                     ]);
                 }
                 
-                $bookingStatus = 'pending';
+                if ($isZeroBalance) {
+                    \App\Models\Payment::create([
+                        'transaction_id' => \App\Models\Payment::generateTransactionId('HST'),
+                        'invoice_id' => $invoice->id,
+                        'user_id' => $user->id,
+                        'gateway' => 'scholarship',
+                        'gateway_reference' => 'SCHOLARSHIP-HST-' . strtoupper(uniqid()),
+                        'amount' => 0.00,
+                        'status' => 'success',
+                        'channel' => 'scholarship',
+                        'paid_at' => now(),
+                    ]);
+                }
             }
 
             if ($existingBooking) {

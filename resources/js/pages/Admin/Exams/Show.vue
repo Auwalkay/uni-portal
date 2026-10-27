@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { 
     Calendar, Clock, Building, Building2, Plus, Search, Trash2, Edit3, ShieldAlert, 
     UserCheck, AlertTriangle, FileText, CheckCircle, Eye, EyeOff, Users,
-    LayoutList, CalendarRange, QrCode, ArrowLeft, Layers
+    LayoutList, CalendarRange, QrCode, ArrowLeft, Layers, Download
 } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { ref, computed } from 'vue';
@@ -180,6 +180,16 @@ const deleteSchedule = (id: string) => {
     if (confirm('Are you sure you want to delete this scheduled course slot?')) {
         router.delete(route('admin.exams.destroy', id));
     }
+};
+
+const downloadSlotRoster = (slot: any) => {
+    if (!slot.course_id) return;
+    const url = route('admin.exams.courses.export_students', {
+        course: slot.course_id,
+        session_id: slot.session_id,
+        semester_id: slot.semester_id,
+    });
+    window.location.href = url;
 };
 
 const staffModalOptions = computed(() => [
@@ -406,6 +416,12 @@ const breadcrumbs = [
                                     <span class="flex items-center gap-1.5 font-medium text-slate-400"><Building class="w-3.5 h-3.5 text-emerald-500" /> Venue:</span>
                                     <span class="font-semibold text-slate-800 dark:text-slate-200">{{ slot.venue }} ({{ slot.max_capacity }} seats)</span>
                                 </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="flex items-center gap-1.5 font-medium text-slate-400"><Users class="w-3.5 h-3.5 text-indigo-500" /> Registered:</span>
+                                    <Badge class="bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border-indigo-200 text-xs font-bold px-2 py-0.5">
+                                        {{ slot.registered_students_count ?? 0 }} Students
+                                    </Badge>
+                                </div>
                             </div>
 
                             <div class="pt-2 border-t border-slate-100 dark:border-slate-800 text-xs space-y-1.5">
@@ -425,11 +441,33 @@ const breadcrumbs = [
                         </CardContent>
 
                         <div class="p-3 bg-slate-50/80 dark:bg-slate-950/60 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1 text-xs">
-                            <Button size="sm" variant="outline" class="h-8 text-xs border-emerald-300 text-emerald-700 dark:border-emerald-800 dark:text-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/30 font-semibold rounded-lg" @click="router.visit(route('admin.exams.scanner', { schedule_id: slot.id }))">
-                                <QrCode class="w-3.5 h-3.5 mr-1" /> Scan
-                            </Button>
+                            <div class="flex items-center gap-1">
+                                <Button size="sm" variant="outline" class="h-8 text-xs border-emerald-300 text-emerald-700 dark:border-emerald-800 dark:text-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/30 font-semibold rounded-lg" @click="router.visit(route('admin.exams.scanner', { schedule_id: slot.id }))">
+                                    <QrCode class="w-3.5 h-3.5 mr-1" /> Scan
+                                </Button>
+                                <Button 
+                                    v-if="slot.course_id" 
+                                    size="sm" 
+                                    variant="outline" 
+                                    class="h-8 text-xs border-indigo-200 text-indigo-700 dark:border-indigo-800 dark:text-indigo-300 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-lg"
+                                    @click="router.visit(route('admin.exams.courses.students', { course_id: slot.course_id, session_id: slot.session_id, semester_id: slot.semester_id }))"
+                                    title="View registered student candidates"
+                                >
+                                    <Users class="w-3.5 h-3.5 mr-1" /> Roster
+                                </Button>
+                            </div>
 
                             <div class="flex items-center gap-1">
+                                <Button 
+                                    v-if="slot.course_id" 
+                                    size="sm" 
+                                    variant="ghost" 
+                                    class="h-8 w-8 p-0 text-slate-400 hover:text-emerald-600 rounded-lg"
+                                    @click="downloadSlotRoster(slot)"
+                                    title="Export registered candidates CSV"
+                                >
+                                    <Download class="w-3.5 h-3.5" />
+                                </Button>
                                 <Button size="sm" variant="outline" class="h-8 text-xs border-rose-200 text-rose-700 dark:border-rose-900 dark:text-rose-400 rounded-lg" @click="openIncidentModal(slot)">
                                     <ShieldAlert class="w-3.5 h-3.5 mr-1" /> Incident
                                 </Button>

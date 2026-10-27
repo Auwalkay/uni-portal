@@ -12,6 +12,7 @@ class ScholarshipController extends Controller
     public function index()
     {
         $scholarships = Scholarship::withCount(['students', 'applicants'])->latest()->get();
+        $feeTypes = \App\Models\FeeType::select('id', 'name', 'slug', 'is_one_time')->orderBy('name')->get();
 
         $totalStudentsOnScholarship = $scholarships->sum('students_count');
         $totalApplicantsOnScholarship = $scholarships->sum('applicants_count');
@@ -28,6 +29,7 @@ class ScholarshipController extends Controller
 
         return Inertia::render('Admin/Scholarships/Index', [
             'scholarships' => $scholarships,
+            'feeTypes' => $feeTypes,
             'summaryStats' => $summaryStats,
         ]);
     }
@@ -41,13 +43,28 @@ class ScholarshipController extends Controller
             'amount' => 'required_if:type,fixed|nullable|numeric|min:0',
             'covers_admin_charges' => 'required|boolean',
             'covers_hostel_fees' => 'required|boolean',
+            'covers_all_expenses' => 'nullable|boolean',
+            'waives_late_fees' => 'nullable|boolean',
+            'excluded_fee_type_ids' => 'nullable|array',
+            'excluded_fee_type_ids.*' => 'exists:fee_types,id',
             'is_active' => 'required|boolean',
         ]);
+
+        $validated['covers_all_expenses'] = (bool) ($validated['covers_all_expenses'] ?? false);
+        $validated['waives_late_fees'] = array_key_exists('waives_late_fees', $validated) ? (bool) $validated['waives_late_fees'] : true;
 
         if ($validated['type'] === 'fixed') {
             $validated['percentage'] = 0;
         } else {
             $validated['amount'] = 0;
+        }
+
+        if ($validated['covers_all_expenses']) {
+            $validated['percentage'] = 100;
+            $validated['type'] = 'percentage';
+            $validated['amount'] = 0;
+        } else {
+            $validated['excluded_fee_type_ids'] = [];
         }
 
         Scholarship::create($validated);
@@ -66,8 +83,15 @@ class ScholarshipController extends Controller
             'amount' => 'required_if:type,fixed|nullable|numeric|min:0',
             'covers_admin_charges' => 'required|boolean',
             'covers_hostel_fees' => 'required|boolean',
+            'covers_all_expenses' => 'nullable|boolean',
+            'waives_late_fees' => 'nullable|boolean',
+            'excluded_fee_type_ids' => 'nullable|array',
+            'excluded_fee_type_ids.*' => 'exists:fee_types,id',
             'is_active' => 'required|boolean',
         ]);
+
+        $validated['covers_all_expenses'] = (bool) ($validated['covers_all_expenses'] ?? false);
+        $validated['waives_late_fees'] = array_key_exists('waives_late_fees', $validated) ? (bool) $validated['waives_late_fees'] : true;
 
         if ($validated['type'] === 'fixed') {
             $validated['percentage'] = 0;
@@ -75,17 +99,26 @@ class ScholarshipController extends Controller
             $validated['amount'] = 0;
         }
 
-        // If percentage, amount or type is changing, check for associated students/applicants
+        if ($validated['covers_all_expenses']) {
+            $validated['percentage'] = 100;
+            $validated['type'] = 'percentage';
+            $validated['amount'] = 0;
+        } else {
+            $validated['excluded_fee_type_ids'] = [];
+        }
+
+        // If percentage, amount, type, or coverage mode is changing, check for associated students/applicants
         $percentageChanged = (float) ($validated['percentage'] ?? 0) !== (float) $scholarship->percentage;
         $amountChanged = (float) ($validated['amount'] ?? 0) !== (float) $scholarship->amount;
         $typeChanged = $validated['type'] !== $scholarship->type;
+        $coverageChanged = (bool) ($validated['covers_all_expenses'] ?? false) !== (bool) $scholarship->covers_all_expenses;
 
-        if ($percentageChanged || $amountChanged || $typeChanged) {
+        if ($percentageChanged || $amountChanged || $typeChanged || $coverageChanged) {
             $hasUsers = \App\Models\Student::where('scholarship_id', $id)->exists()
                      || \App\Models\Applicant::where('scholarship_id', $id)->exists();
 
             if ($hasUsers) {
-                return redirect()->back()->with('error', 'The scholarship configuration (percentage, amount, or type) cannot be modified once students or applicants have been assigned to it.');
+                return redirect()->back()->with('error', 'The scholarship configuration (percentage, amount, type, or coverage mode) cannot be modified once students or applicants have been assigned to it.');
             }
         }
 

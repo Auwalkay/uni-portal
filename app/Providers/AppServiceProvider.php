@@ -2,9 +2,12 @@
 
 namespace App\Providers;
 
+use App\Listeners\LoginListener;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Events\Login;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -17,12 +20,12 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->bind(\App\Contracts\PaymentGatewayInterface::class, function ($app) {
             $gateway = \App\Models\SystemSetting::get('payment_gateway', env('PAYMENT_GATEWAY', 'squadco'));
-            
+
             if ($gateway === 'squadco') {
-                return new \App\Services\SquadcoService();
+                return new \App\Services\SquadcoService;
             }
-            
-            return new \App\Services\PaystackService();
+
+            return new \App\Services\PaystackService;
         });
     }
 
@@ -34,9 +37,9 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
 
         // Register Login Event Listener
-        \Illuminate\Support\Facades\Event::listen(
-            \Illuminate\Auth\Events\Login::class,
-            \App\Listeners\LoginListener::class
+        Event::listen(
+            Login::class,
+            LoginListener::class
         );
 
         // Implicitly grant "Super Admin" and "Admin" roles all permissions

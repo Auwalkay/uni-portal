@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\ExamCourseRosterExport;
 use App\Http\Controllers\Controller;
+use App\Models\Course;
+use App\Models\CourseRegistration;
 use App\Models\Department;
 use App\Models\Exam;
 use App\Models\ExamIncident;
@@ -16,6 +19,7 @@ use App\Services\AcademicCacheService;
 use App\Services\ExamManagementService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ExamScheduleController extends Controller
 {
@@ -281,6 +285,20 @@ class ExamScheduleController extends Controller
             });
 
         $schedules = (clone $schedulesQuery)->orderBy('exam_date', 'asc')->orderBy('start_time', 'asc')->get();
+
+        $courseIds = $schedules->pluck('course_id')->filter()->unique();
+        if ($courseIds->isNotEmpty()) {
+            $registrationCounts = CourseRegistration::whereIn('course_id', $courseIds)
+                ->where('session_id', $exam->session_id)
+                ->where('semester_id', $exam->semester_id)
+                ->selectRaw('course_id, count(*) as count')
+                ->groupBy('course_id')
+                ->pluck('count', 'course_id');
+
+            $schedules->each(function ($schedule) use ($registrationCounts) {
+                $schedule->registered_students_count = (int) ($registrationCounts[$schedule->course_id] ?? 0);
+            });
+        }
 
         $incidents = ExamIncident::with(['schedule.course', 'student.user', 'invigilator.user', 'logger'])
             ->whereHas('schedule', function ($q) use ($exam) {
@@ -920,5 +938,139 @@ class ExamScheduleController extends Controller
         } catch (\InvalidArgumentException $e) {
             return back()->with('error', 'Verification Blocked: '.$e->getMessage());
         }
+    }
+
+    /**
+     * Dedicated Course Registrations & Enrolments Explorer for Exam Officers
+     */
+    public function courseStudentsIndex(Request $request)
+    {
+        if (! $this->canManageExams()) {
+            abort(403, 'Unauthorized: Only Exams Office can access course enrolments.');
+        }
+
+        $currentSession = AcademicCacheService::getCurrentSession();
+        $currentSemester = AcademicCacheService::getCurrentSemester();
+
+        $sessionId = $request->query('session_id', $currentSession?->id);
+        $semesterId = $request->query('semester_id', $currentSemester?->id);
+        $courseId = $request->query('course_id');
+        $search = $request->query('search');
+        $level = $request->query('level');
+
+        $courses = AcademicCacheService::getAllCourses();
+        $sessions = AcademicCacheService::getSessions();
+        $semesters = Semester::when($sessionId, fn ($q) => $q->where('session_id', $sessionId))
+            ->orderBy('name', 'asc')
+            ->get();
+
+        $registrations = null;
+        $selectedCourse = null;
+        $stats = [
+            'total_registered' => 0,
+        ];
+
+        if ($courseId) {
+            $selectedCourse = Course::with('department')->find($courseId);
+
+            $query = CourseRegistration::with([
+                'student.user',
+                'student.academicDepartment.faculty',
+                'student.programme',
+                'session',
+                'semester',
+            ])
+                ->where('course_id', $courseId)
+                ->when($sessionId, fn ($q) => $q->where('session_id', $sessionId))
+                ->when($semesterId, fn ($q) => $q->where('semester_id', $semesterId))
+                ->when($level, fn ($q) => $q->whereHas('student', fn ($sq) => $sq->where('current_level', $level)))
+                ->when($search, function ($q, $search) {
+                    $q->whereHas('student', function ($sq) use ($search) {
+                        $sq->where('matriculation_number', 'like', "%{$search}%")
+                            ->orWhereHas('user', fn ($uq) => $uq->where('name', 'like', "%{$search}%"));
+                    });
+                })
+                ->orderBy('created_at', 'desc');
+
+            $stats['total_registered'] = (clone $query)->count();
+            $registrations = $query->paginate(25)->withQueryString();
+        }
+
+        return Inertia::render('Admin/Exams/CourseStudents', [
+            'courses' => $courses,
+            'sessions' => $sessions,
+            'semesters' => $semesters,
+            'selectedCourse' => $selectedCourse,
+            'registrations' => $registrations,
+            'stats' => $stats,
+            'filters' => [
+                'course_id' => $courseId ?? '',
+                'session_id' => $sessionId ?? '',
+                'semester_id' => $semesterId ?? '',
+                'level' => $level ?? '',
+                'search' => $search ?? '',
+            ],
+            'canManageExams' => $this->canManageExams(),
+        ]);
+    }
+
+    /**
+     * Convenience redirect / route for a specific course
+     */
+    public function courseStudents(Course $course, Request $request)
+    {
+        return $this->courseStudentsIndex($request->merge(['course_id' => $course->id]));
+    }
+
+    /**
+     * API to fetch enrolment counts for course IDs, session, and semester
+     */
+    public function apiCourseEnrolmentCounts(Request $request)
+    {
+        $courseIds = array_filter((array) $request->input('course_ids', []));
+        $sessionId = $request->input('session_id') ?: AcademicCacheService::getCurrentSession()?->id;
+        $semesterId = $request->input('semester_id') ?: AcademicCacheService::getCurrentSemester()?->id;
+
+        if (empty($courseIds)) {
+            return response()->json(['counts' => (object) [], 'total' => 0]);
+        }
+
+        $counts = CourseRegistration::whereIn('course_id', $courseIds)
+            ->when($sessionId, fn ($q) => $q->where('session_id', $sessionId))
+            ->when($semesterId, fn ($q) => $q->where('semester_id', $semesterId))
+            ->selectRaw('course_id, count(*) as count')
+            ->groupBy('course_id')
+            ->pluck('count', 'course_id');
+
+        $total = (int) $counts->sum();
+
+        return response()->json([
+            'counts' => $counts,
+            'total' => $total,
+        ]);
+    }
+
+    /**
+     * Export student roster for a course
+     */
+    public function exportCourseStudents(Course $course, Request $request)
+    {
+        if (! $this->canManageExams()) {
+            abort(403, 'Unauthorized.');
+        }
+
+        $currentSession = AcademicCacheService::getCurrentSession();
+        $currentSemester = AcademicCacheService::getCurrentSemester();
+
+        $sessionId = $request->query('session_id', $currentSession?->id);
+        $semesterId = $request->query('semester_id', $currentSemester?->id);
+
+        $cleanCode = preg_replace('/[^A-Za-z0-9_-]/', '', $course->code);
+        $fileName = sprintf('Exam_Roster_%s_%s.csv', $cleanCode, now()->format('Y_m_d'));
+
+        return Excel::download(
+            new ExamCourseRosterExport($course->id, $sessionId, $semesterId),
+            $fileName
+        );
     }
 }

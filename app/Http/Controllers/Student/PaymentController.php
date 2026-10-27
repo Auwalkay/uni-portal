@@ -187,7 +187,7 @@ class PaymentController extends Controller
         $invoice = $feeService->refreshInvoiceIfUnpaid($invoice);
 
         if ($invoice->status === 'paid') {
-            return back()->with('error', 'Invoice already paid.');
+            return redirect()->route('student.payments.index')->with('success', 'This invoice is already fully cleared and paid.');
         }
 
         if ($invoice->status === 'cancelled') {
