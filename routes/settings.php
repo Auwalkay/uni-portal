@@ -221,6 +221,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::middleware(['permission:manage_student_registrations|fix_course_registration'])->group(function () {
             Route::get('/course-registration', [CourseRegistrationController::class, 'index'])->name('course_registration.index');
+            Route::get('/course-registration/export', [CourseRegistrationController::class, 'exportReport'])->name('course_registration.export');
             Route::get('/course-registration/{student}', [CourseRegistrationController::class, 'manage'])->name('course_registration.manage');
             Route::get('/course-registration/{student}/form', [CourseRegistrationController::class, 'downloadForm'])->name('course_registration.form');
             Route::post('/course-registration/{student}', [CourseRegistrationController::class, 'store'])->name('course_registration.store');

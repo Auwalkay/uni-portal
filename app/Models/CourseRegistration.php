@@ -12,11 +12,17 @@ class CourseRegistration extends Model
     protected static function booted()
     {
         static::saved(function ($reg) {
+            if ($reg->session_id) {
+                \Illuminate\Support\Facades\Cache::forget("admin_crs_reg_stats_{$reg->session_id}");
+            }
             if ($reg->student && $reg->student->user_id) {
                 \Illuminate\Support\Facades\Cache::forget("student_results_index_{$reg->student->user_id}");
             }
         });
         static::deleted(function ($reg) {
+            if ($reg->session_id) {
+                \Illuminate\Support\Facades\Cache::forget("admin_crs_reg_stats_{$reg->session_id}");
+            }
             if ($reg->student && $reg->student->user_id) {
                 \Illuminate\Support\Facades\Cache::forget("student_results_index_{$reg->student->user_id}");
             }
