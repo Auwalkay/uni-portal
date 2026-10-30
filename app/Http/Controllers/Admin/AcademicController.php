@@ -109,10 +109,18 @@ class AcademicController extends Controller
         $semester = $request->input('semester');
 
         $courses = Course::with('department.faculty', 'programme')
-            ->when(! $user->can('manage_courses') && ! $user->can('view_courses') && ! $user->can('manage_academic_sessions'), function ($q) use ($user) {
-                $q->whereHas('allocations', function ($aq) use ($user) {
-                    $aq->whereHas('staff', fn ($sq) => $sq->where('user_id', $user->id));
-                });
+            ->when(! $user->can('manage_courses') && ! $user->can('manage_academic_sessions') && ! $user->hasRole('super_admin'), function ($q) use ($user) {
+                if ($user->hasRole('dean') || $user->can('view_faculty_courses')) {
+                    $facultyId = $user->staff?->department?->faculty_id;
+                    $q->whereHas('department', fn ($d) => $d->where('faculty_id', $facultyId));
+                } elseif ($user->hasRole('hod') || $user->can('view_department_courses')) {
+                    $departmentId = $user->staff?->department_id;
+                    $q->where('department_id', $departmentId);
+                } elseif (! $user->can('view_courses')) {
+                    $q->whereHas('allocations', function ($aq) use ($user) {
+                        $aq->whereHas('staff', fn ($sq) => $sq->where('user_id', $user->id));
+                    });
+                }
             })
             ->when($search, fn ($q) => $q->where('title', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
             ->when($facultyId, fn ($q) => $q->whereHas('department', fn ($d) => $d->where('faculty_id', $facultyId)))

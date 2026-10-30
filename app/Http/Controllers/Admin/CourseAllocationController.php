@@ -17,38 +17,72 @@ class CourseAllocationController extends Controller
         $sessionId = $request->input('session_id', $currentSessionId);
 
         $allocations = \App\Models\CourseAllocation::query()
-            ->with(['course', 'staff.user', 'session'])
+            ->with([
+                'course.department.faculty',
+                'staff.user',
+                'staff.department',
+                'session',
+                'department.faculty',
+                'programme',
+            ])
             ->when($sessionId, fn($q) => $q->where('session_id', $sessionId))
             ->when($request->department_id && $request->department_id !== 'ALL', function ($q, $deptId) {
-                $q->whereHas('course', fn($c) => $c->where('department_id', $deptId));
+                $q->where(function ($sub) use ($deptId) {
+                    $sub->where('department_id', $deptId)
+                        ->orWhereHas('course', fn($c) => $c->where('department_id', $deptId));
+                });
             })
             ->when($request->faculty_id && $request->faculty_id !== 'ALL' && (!$request->department_id || $request->department_id === 'ALL'), function ($q, $facultyId) {
-                $q->whereHas('course.department', fn($d) => $d->where('faculty_id', $facultyId));
+                $q->where(function ($sub) use ($facultyId) {
+                    $sub->whereHas('department', fn($d) => $d->where('faculty_id', $facultyId))
+                        ->orWhereHas('course.department', fn($d) => $d->where('faculty_id', $facultyId));
+                });
             })
             ->when($request->search, function ($q, $search) {
-                $q->whereHas('course', fn($c) => $c->where('title', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
-                    ->orWhereHas('staff.user', fn($u) => $u->where('name', 'like', "%{$search}%"));
+                $q->where(function ($sub) use ($search) {
+                    $sub->whereHas('course', fn($c) => $c->where('title', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
+                        ->orWhereHas('staff.user', fn($u) => $u->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"))
+                        ->orWhereHas('staff', fn($s) => $s->where('staff_number', 'like', "%{$search}%"));
+                });
             })
             ->latest()
             ->paginate(15)
             ->withQueryString();
 
+        $statsBase = \App\Models\CourseAllocation::query()
+            ->when($sessionId, fn($q) => $q->where('session_id', $sessionId));
+
+        $pendingRequestsCount = \App\Models\CourseAllocationRequest::query()
+            ->when($sessionId, fn($q) => $q->where('session_id', $sessionId))
+            ->where('status', 'pending')
+            ->count();
+
+        $stats = [
+            'total_allocations' => (clone $statsBase)->count(),
+            'unique_courses' => (clone $statsBase)->distinct('course_id')->count('course_id'),
+            'unique_lecturers' => (clone $statsBase)->distinct('staff_id')->count('staff_id'),
+            'pending_requests' => $pendingRequestsCount,
+        ];
+
         return Inertia::render('Admin/CourseAllocation/Index', [
             'allocations' => $allocations,
+            'stats' => $stats,
             'sessions' => fn() => \App\Services\AcademicCacheService::getSessions(),
             'faculties' => fn() => \App\Services\AcademicCacheService::getFaculties(),
             'filters' => $request->only(['session_id', 'department_id', 'search', 'faculty_id']),
             'currentSessionId' => $currentSessionId,
-            'courses' => fn() => Course::select('id', 'code', 'title', 'department_id')->orderBy('code')->get(),
+            'courses' => fn() => Course::select('id', 'code', 'title', 'units', 'level', 'semester', 'department_id')->orderBy('code')->get(),
             'programmes' => fn() => \App\Services\AcademicCacheService::getProgrammes(),
-            'lecturers' => fn() => Staff::with(['user:id,name', 'department:id,code'])
+            'lecturers' => fn() => Staff::with(['user:id,name,email', 'department:id,name,code'])
                 ->whereHas('user', function ($q) {
                     $q->role('lecturer');
                 })
                 ->get()->map(function ($s) {
                     return [
                         'id' => $s->id,
-                        'name' => $s->user?->name . ' (' . ($s->department?->code ?? '') . ')',
+                        'name' => $s->user?->name . ' (' . ($s->department?->code ?? 'Dept') . ')',
+                        'email' => $s->user?->email,
+                        'staff_number' => $s->staff_number,
                     ];
                 }),
         ]);

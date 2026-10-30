@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Search, BookOpen, Calendar, ArrowRight, Filter } from 'lucide-vue-next';
+import { Search, BookOpen, Calendar, ArrowRight, Filter, BookPlus } from 'lucide-vue-next';
 import debounce from 'lodash/debounce';
 import { route } from 'ziggy-js';
 
@@ -62,7 +62,12 @@ watch(selectedSession, (value) => {
                     <p class="text-muted-foreground mt-1">Manage your allocated courses and view student registrations.</p>
                 </div>
                 
-                <div class="flex items-center gap-3">
+                <div class="flex flex-wrap items-center gap-3">
+                    <Button as-child class="bg-indigo-600 hover:bg-indigo-700 text-white">
+                        <Link :href="route('admin.teaching.courses.self_allocation')">
+                            <BookPlus class="w-4 h-4 mr-2" /> Self Course Allocation
+                        </Link>
+                    </Button>
                     <div class="relative w-full md:w-64">
                         <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input

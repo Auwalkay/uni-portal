@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AttendanceController;
 use App\Http\Controllers\Admin\BursaryController;
 use App\Http\Controllers\Admin\CourseAllocationController;
+use App\Http\Controllers\Admin\CourseAllocationRequestController;
 use App\Http\Controllers\Admin\DesignationController;
 use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\FinanceController;
@@ -147,7 +148,12 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
 
 
     // COURSE ALLOCATIONS
-    Route::middleware(['permission:assign_coordinators'])->group(function () {
+    Route::middleware(['permission:assign_coordinators|approve_course_allocations'])->group(function () {
+        Route::get('course-allocations/requests', [CourseAllocationRequestController::class, 'index'])->name('course-allocations.requests.index');
+        Route::post('course-allocations/requests/{id}/approve', [CourseAllocationRequestController::class, 'approve'])->name('course-allocations.requests.approve');
+        Route::post('course-allocations/requests/{id}/reject', [CourseAllocationRequestController::class, 'reject'])->name('course-allocations.requests.reject');
+        Route::post('course-allocations/requests/batch-approve', [CourseAllocationRequestController::class, 'batchApprove'])->name('course-allocations.requests.batch-approve');
+
         Route::post('course-allocations/import', [CourseAllocationController::class, 'import'])->name('course-allocations.import');
         Route::get('course-allocations/template', [CourseAllocationController::class, 'downloadTemplate'])->name('course-allocations.template');
         Route::resource('course-allocations', CourseAllocationController::class);
