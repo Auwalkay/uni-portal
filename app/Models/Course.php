@@ -59,6 +59,11 @@ class Course extends Model
         return $this->hasMany(CourseAllocation::class);
     }
 
+    public function allocationRequests()
+    {
+        return $this->hasMany(CourseAllocationRequest::class);
+    }
+
     public function scopeActive($query)
     {
         return $query->where('is_active', true);

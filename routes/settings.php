@@ -26,6 +26,7 @@ use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
 use App\Http\Controllers\Staff\CourseController;
+use App\Http\Controllers\Staff\SelfCourseAllocationController;
 use App\Http\Controllers\Student\AccommodationController;
 use App\Http\Controllers\Student\IdCardController;
 use App\Http\Controllers\Student\PaymentController;
@@ -235,6 +236,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Staff Course Management (Teaching)
         Route::middleware(['permission:view_results'])->prefix('teaching')->name('teaching.')->group(function () {
             Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
+            Route::get('/courses-self-allocation', [SelfCourseAllocationController::class, 'index'])->name('courses.self_allocation');
+            Route::post('/courses-self-allocation', [SelfCourseAllocationController::class, 'store'])->name('courses.self_allocation.store');
+            Route::delete('/courses-self-allocation/{id}', [SelfCourseAllocationController::class, 'cancel'])->name('courses.self_allocation.cancel');
             Route::get('/courses/{course}', [CourseController::class, 'show'])->name('courses.show');
             Route::post('/courses/{course}/students/upload', [CourseController::class, 'uploadStudents'])->name('courses.students.upload');
             Route::get('/courses/{course}/students/template', [CourseController::class, 'downloadStudentTemplate'])->name('courses.students.template');
@@ -257,7 +261,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 
         // General Academics & Sessions
-        Route::middleware(['permission:manage_faculties|manage_departments|manage_programmes|manage_courses|manage_academic_sessions'])->group(function () {
+        Route::middleware(['permission:manage_faculties|manage_departments|manage_programmes|manage_courses|manage_academic_sessions|view_courses|view_department_courses|view_faculty_courses'])->group(function () {
             Route::get('/academics', fn () => redirect()->route('admin.academics.faculties'))->name('academics.index');
             Route::get('/academics/faculties', [AcademicController::class, 'faculties'])->name('academics.faculties');
             Route::get('/academics/departments', [AcademicController::class, 'departments'])->name('academics.departments');

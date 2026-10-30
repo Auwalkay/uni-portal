@@ -38,6 +38,10 @@ class SystemSettingsController extends Controller
                 'late_fee_enabled' => filter_var(SystemSetting::get('late_fee_enabled', true), FILTER_VALIDATE_BOOLEAN),
                 'publish_class_timetable' => filter_var(SystemSetting::get('publish_class_timetable', false), FILTER_VALIDATE_BOOLEAN),
                 'publish_exam_timetable' => filter_var(SystemSetting::get('publish_exam_timetable', false), FILTER_VALIDATE_BOOLEAN),
+                'enable_lecturer_self_course_allocation' => filter_var(SystemSetting::get('enable_lecturer_self_course_allocation', true), FILTER_VALIDATE_BOOLEAN),
+                'lecturer_self_allocation_min_units' => intval(SystemSetting::get('lecturer_self_allocation_min_units', 6)),
+                'lecturer_self_allocation_max_units' => intval(SystemSetting::get('lecturer_self_allocation_max_units', 24)),
+                'lecturer_self_allocation_max_courses' => intval(SystemSetting::get('lecturer_self_allocation_max_courses', 5)),
             ]
         ]);
     }

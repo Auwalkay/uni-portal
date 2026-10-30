@@ -75,6 +75,11 @@ class Staff extends Model
         return $this->hasMany(CourseAllocation::class);
     }
 
+    public function courseAllocationRequests()
+    {
+        return $this->hasMany(CourseAllocationRequest::class);
+    }
+
     public function payrollItems()
     {
         return $this->hasMany(PayrollItem::class);

@@ -39,16 +39,27 @@ class StaffController extends Controller
         $query = User::role('staff')
             ->with(['staff.department.faculty', 'roles']);
 
-        // Scope to HOD department if user is HOD without global manage_staff permission
+        // Scope to Dean faculty or HOD department if user does not have global manage_staff permission
         $authUser = auth()->user();
-        if ($authUser->hasRole('hod') && !$authUser->can('manage_staff') && !$authUser->hasRole('super_admin')) {
-            $hodDepartmentId = $authUser->staff?->department_id;
-            if ($hodDepartmentId) {
-                $query->whereHas('staff', function ($q) use ($hodDepartmentId) {
-                    $q->where('department_id', $hodDepartmentId);
-                });
-            } else {
-                $query->whereRaw('1 = 0');
+        if (!$authUser->can('manage_staff') && !$authUser->hasRole('super_admin')) {
+            if ($authUser->hasRole('dean') || $authUser->can('view_faculty_staff')) {
+                $deanFacultyId = $authUser->staff?->department?->faculty_id;
+                if ($deanFacultyId) {
+                    $query->whereHas('staff.department', function ($q) use ($deanFacultyId) {
+                        $q->where('faculty_id', $deanFacultyId);
+                    });
+                } else {
+                    $query->whereRaw('1 = 0');
+                }
+            } elseif ($authUser->hasRole('hod') || $authUser->can('view_department_staff')) {
+                $hodDepartmentId = $authUser->staff?->department_id;
+                if ($hodDepartmentId) {
+                    $query->whereHas('staff', function ($q) use ($hodDepartmentId) {
+                        $q->where('department_id', $hodDepartmentId);
+                    });
+                } else {
+                    $query->whereRaw('1 = 0');
+                }
             }
         }
 
@@ -360,10 +371,17 @@ class StaffController extends Controller
         }
 
         $authUser = auth()->user();
-        if ($authUser->hasRole('hod') && !$authUser->can('manage_staff') && !$authUser->hasRole('super_admin')) {
-            $hodDepartmentId = $authUser->staff?->department_id;
-            if (!$hodDepartmentId || $staff->staff?->department_id !== $hodDepartmentId) {
-                abort(403, 'Unauthorized access to staff profile outside your department.');
+        if (!$authUser->can('manage_staff') && !$authUser->hasRole('super_admin')) {
+            if ($authUser->hasRole('dean') || $authUser->can('view_faculty_staff')) {
+                $deanFacultyId = $authUser->staff?->department?->faculty_id;
+                if (!$deanFacultyId || $staff->staff?->department?->faculty_id !== $deanFacultyId) {
+                    abort(403, 'Unauthorized access to staff profile outside your faculty.');
+                }
+            } elseif ($authUser->hasRole('hod') || $authUser->can('view_department_staff')) {
+                $hodDepartmentId = $authUser->staff?->department_id;
+                if (!$hodDepartmentId || $staff->staff?->department_id !== $hodDepartmentId) {
+                    abort(403, 'Unauthorized access to staff profile outside your department.');
+                }
             }
         }
 
