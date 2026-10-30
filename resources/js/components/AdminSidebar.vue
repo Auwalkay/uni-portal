@@ -353,9 +353,9 @@ const inventoryItems = computed(() => {
             show: hasPermission('view_inventory') || hasPermission('view_inventory_requisitions'),
         },
         {
-            title: 'Staff Assignments',
+            title: 'Building Deployments',
             href: route().has('admin.inventory.assignments.index') ? route('admin.inventory.assignments.index') : '/admin/inventory/assignments',
-            icon: UserCheck,
+            icon: Building,
             show: hasPermission('view_inventory') || hasPermission('view_inventory_assignments'),
         },
         {

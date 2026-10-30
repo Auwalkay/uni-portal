@@ -198,7 +198,7 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
     });
 
     // INVENTORY MANAGEMENT
-    Route::middleware(['permission:view_inventory'])->group(function () {
+    Route::middleware(['permission:view_inventory|view_inventory_requisitions|view_inventory_assignments|manage_inventory'])->group(function () {
         Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
         Route::get('inventory/requisitions', [InventoryRequisitionController::class, 'index'])->name('inventory.requisitions.index');
         Route::get('inventory/assignments', [InventoryAssignmentController::class, 'index'])->name('inventory.assignments.index');

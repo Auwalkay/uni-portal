@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { Head, useForm, router } from '@inertiajs/vue3';
+import { Head, useForm, router, Link } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { 
     FileText, Plus, Search, Filter, CheckCircle2, XCircle, 
@@ -166,6 +166,27 @@ const formatDate = (d: string) => {
         <div class="py-8 min-h-screen bg-slate-50/50 dark:bg-slate-900/50">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
                 
+                <!-- Sub Navigation Pills -->
+                <div class="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-500">
+                    <Link :href="route('admin.inventory.index')" class="px-3.5 py-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-all">
+                        Inventory Catalog
+                    </Link>
+                    <Link :href="route('admin.inventory.assignments.index')" class="px-3.5 py-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-all flex items-center gap-1.5">
+                        <Building2 class="w-3.5 h-3.5" />
+                        Building Deployments
+                    </Link>
+                    <Link :href="route('admin.inventory.requisitions.index')" class="px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white font-extrabold shadow-sm transition-all flex items-center gap-1.5">
+                        <FileText class="w-3.5 h-3.5" />
+                        Store Requisitions (SIV)
+                    </Link>
+                    <Link :href="route('admin.inventory.categories.index')" class="px-3.5 py-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-all">
+                        Categories
+                    </Link>
+                    <Link :href="route('admin.inventory.audit-logs.index')" class="px-3.5 py-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-all">
+                        Audit Logs
+                    </Link>
+                </div>
+
                 <!-- Hero Section -->
                 <div class="relative overflow-hidden bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-2xl border border-slate-800">
                     <div class="absolute -right-10 -bottom-10 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
