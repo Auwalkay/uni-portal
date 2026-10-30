@@ -259,7 +259,7 @@ const exportExpenses = () => {
     if (sortBy.value) params.append('sort_by', sortBy.value);
     if (sortDir.value) params.append('sort_dir', sortDir.value);
 
-    window.location.href = `${route('admin.finance.expenses.export')}?${params.toString()}`;
+    window.location.href = `${route('admin.finance.expenses.export', undefined, false)}?${params.toString()}`;
 };
 
 // Currency Formatter
@@ -479,38 +479,50 @@ const getStatusBadgeVariant = (s: string) => {
 <template>
     <Head title="Expense Management" />
     <AdminLayout>
-        <div class="p-6 space-y-6 max-w-[1700px] mx-auto">
+        <div class="w-full min-w-0 max-w-[1700px] mx-auto p-3 sm:p-5 md:p-6 space-y-4 sm:space-y-6 overflow-x-hidden">
             <!-- Header Section -->
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h2 class="text-3xl font-extrabold tracking-tight">Expenses Management</h2>
-                    <p class="text-sm text-muted-foreground mt-0.5">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 w-full min-w-0">
+                <div class="min-w-0 flex-1">
+                    <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Expenses Management</h2>
+                    <p class="text-xs sm:text-sm text-muted-foreground mt-0.5">
                         Track, review, and approve institution-wide operational expenditures and claims.
                     </p>
                 </div>
-                <div class="flex items-center gap-2">
-                    <Button variant="outline" @click="exportExpenses" class="shadow-xs font-semibold">
-                        <Download class="mr-2 h-4 w-4" /> Export CSV
+                <div class="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto min-w-0">
+                    <Button variant="outline" @click="exportExpenses" class="shadow-xs font-semibold text-xs sm:text-sm h-9 sm:h-10 min-w-0 px-2 sm:px-4">
+                        <Download class="mr-1.5 sm:mr-2 h-4 w-4 shrink-0" />
+                        <span class="truncate">Export CSV</span>
                     </Button>
-                    <Button @click="openCreate" class="shadow-xs font-semibold">
-                        <Plus class="mr-2 h-4 w-4" /> New Expense
+                    <Button @click="openCreate" class="shadow-xs font-semibold text-xs sm:text-sm h-9 sm:h-10 min-w-0 px-2 sm:px-4">
+                        <Plus class="mr-1.5 sm:mr-2 h-4 w-4 shrink-0" />
+                        <span class="truncate">New Expense</span>
                     </Button>
                 </div>
             </div>
 
-            <!-- Smart KPI Summary Analytics Cards -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatsCard
-                    title="Total Approved Outflow"
-                    :value="formatCurrency(stats.total_approved_amount)"
-                    :icon="Wallet"
-                    description="Cumulative approved expenditures"
-                />
+            <!-- Smart KPI Summary Analytics Cards (2x2 Mobile, 4-Col Desktop) -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 w-full min-w-0">
+                <!-- Card 1: Total Approved Outflow -->
+                <div class="rounded-xl border border-sidebar-border bg-sidebar p-3 sm:p-5 shadow-xs transition-all hover:shadow-md min-w-0 overflow-hidden">
+                    <div class="flex items-center justify-between gap-1">
+                        <h3 class="text-xs sm:text-sm font-medium text-muted-foreground truncate">Total Approved</h3>
+                        <Wallet class="h-4 w-4 text-muted-foreground shrink-0" />
+                    </div>
+                    <div class="mt-1.5 sm:mt-2 flex items-baseline gap-1.5 min-w-0">
+                        <span class="text-sm sm:text-xl md:text-2xl font-bold tracking-tight text-sidebar-foreground truncate font-mono">
+                            {{ formatCurrency(stats.total_approved_amount) }}
+                        </span>
+                    </div>
+                    <p class="mt-1 text-[10px] sm:text-xs text-muted-foreground truncate">
+                        Cumulative approved outflow
+                    </p>
+                </div>
 
-                <div class="rounded-xl border border-sidebar-border bg-sidebar p-6 shadow-xs transition-all hover:shadow-md">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-sm font-medium text-muted-foreground">Pending Approvals</h3>
-                        <div class="relative">
+                <!-- Card 2: Pending Approvals with Live Pulse -->
+                <div class="rounded-xl border border-sidebar-border bg-sidebar p-3 sm:p-5 shadow-xs transition-all hover:shadow-md min-w-0 overflow-hidden">
+                    <div class="flex items-center justify-between gap-1">
+                        <h3 class="text-xs sm:text-sm font-medium text-muted-foreground truncate">Pending Approvals</h3>
+                        <div class="relative shrink-0">
                             <Clock class="h-4 w-4 text-amber-500" />
                             <span v-if="stats.pending_count > 0" class="absolute -top-1 -right-1 flex h-2 w-2">
                                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
@@ -518,45 +530,66 @@ const getStatusBadgeVariant = (s: string) => {
                             </span>
                         </div>
                     </div>
-                    <div class="mt-2 flex items-baseline gap-2">
-                        <span class="text-2xl font-bold tracking-tight text-sidebar-foreground">
+                    <div class="mt-1.5 sm:mt-2 flex flex-wrap items-baseline gap-1 sm:gap-2 min-w-0">
+                        <span class="text-sm sm:text-xl md:text-2xl font-bold tracking-tight text-sidebar-foreground">
                             {{ stats.pending_count }}
                         </span>
-                        <span class="text-xs font-semibold text-amber-600 dark:text-amber-400">
-                            {{ formatCurrency(stats.pending_amount) }}
+                        <span class="text-[10px] sm:text-xs font-semibold text-amber-600 dark:text-amber-400 font-mono truncate">
+                            ({{ formatCurrency(stats.pending_amount) }})
                         </span>
                     </div>
-                    <p class="mt-1 text-xs text-muted-foreground">
+                    <p class="mt-1 text-[10px] sm:text-xs text-muted-foreground truncate">
                         Awaiting managerial review
                     </p>
                 </div>
 
-                <StatsCard
-                    title="This Month's Spending"
-                    :value="formatCurrency(stats.this_month_approved_amount)"
-                    :icon="Calendar"
-                    description="Approved outflow for current calendar month"
-                />
+                <!-- Card 3: This Month's Spending -->
+                <div class="rounded-xl border border-sidebar-border bg-sidebar p-3 sm:p-5 shadow-xs transition-all hover:shadow-md min-w-0 overflow-hidden">
+                    <div class="flex items-center justify-between gap-1">
+                        <h3 class="text-xs sm:text-sm font-medium text-muted-foreground truncate">This Month</h3>
+                        <Calendar class="h-4 w-4 text-muted-foreground shrink-0" />
+                    </div>
+                    <div class="mt-1.5 sm:mt-2 flex items-baseline gap-1.5 min-w-0">
+                        <span class="text-sm sm:text-xl md:text-2xl font-bold tracking-tight text-sidebar-foreground truncate font-mono">
+                            {{ formatCurrency(stats.this_month_approved_amount) }}
+                        </span>
+                    </div>
+                    <p class="mt-1 text-[10px] sm:text-xs text-muted-foreground truncate">
+                        Approved for current month
+                    </p>
+                </div>
 
-                <StatsCard
-                    title="Rejected Claims"
-                    :value="stats.rejected_count"
-                    :icon="AlertCircle"
-                    :description="`Totaling ${formatCurrency(stats.rejected_amount)}`"
-                />
+                <!-- Card 4: Rejected Claims -->
+                <div class="rounded-xl border border-sidebar-border bg-sidebar p-3 sm:p-5 shadow-xs transition-all hover:shadow-md min-w-0 overflow-hidden">
+                    <div class="flex items-center justify-between gap-1">
+                        <h3 class="text-xs sm:text-sm font-medium text-muted-foreground truncate">Rejected Claims</h3>
+                        <AlertCircle class="h-4 w-4 text-muted-foreground shrink-0" />
+                    </div>
+                    <div class="mt-1.5 sm:mt-2 flex flex-wrap items-baseline gap-1 sm:gap-2 min-w-0">
+                        <span class="text-sm sm:text-xl md:text-2xl font-bold tracking-tight text-sidebar-foreground">
+                            {{ stats.rejected_count }}
+                        </span>
+                        <span class="text-[10px] sm:text-xs font-semibold text-rose-600 dark:text-rose-400 font-mono truncate">
+                            ({{ formatCurrency(stats.rejected_amount) }})
+                        </span>
+                    </div>
+                    <p class="mt-1 text-[10px] sm:text-xs text-muted-foreground truncate">
+                        Declined expenditures
+                    </p>
+                </div>
             </div>
 
             <!-- Status Tabs & Filter Controls Card -->
-            <Card class="shadow-xs border-border/80">
-                <CardContent class="p-4 sm:p-5 space-y-4">
-                    <!-- Status Filter Tabs -->
-                    <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border/60">
-                        <div class="flex flex-wrap items-center gap-1.5">
+            <Card class="shadow-xs border-border/80 w-full min-w-0 overflow-hidden">
+                <CardContent class="p-3 sm:p-5 space-y-3 sm:space-y-4 w-full min-w-0">
+                    <!-- Status Filter Tabs with Horizontal Scroll for Mobile -->
+                    <div class="flex items-center justify-between gap-2 pb-2.5 sm:pb-3 border-b border-border/60 w-full min-w-0">
+                        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth pb-0.5 sm:pb-0 sm:flex-wrap flex-1 min-w-0">
                             <button
                                 type="button"
                                 @click="setStatusTab('all')"
                                 :class="[
-                                    'px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2',
+                                    'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0',
                                     status === 'all'
                                         ? 'bg-primary text-primary-foreground shadow-xs'
                                         : 'bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground'
@@ -572,7 +605,7 @@ const getStatusBadgeVariant = (s: string) => {
                                 type="button"
                                 @click="setStatusTab('pending')"
                                 :class="[
-                                    'px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2',
+                                    'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0',
                                     status === 'pending'
                                         ? 'bg-amber-500 text-slate-950 shadow-xs'
                                         : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400'
@@ -589,7 +622,7 @@ const getStatusBadgeVariant = (s: string) => {
                                 type="button"
                                 @click="setStatusTab('approved')"
                                 :class="[
-                                    'px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2',
+                                    'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0',
                                     status === 'approved'
                                         ? 'bg-emerald-600 text-white shadow-xs'
                                         : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
@@ -606,7 +639,7 @@ const getStatusBadgeVariant = (s: string) => {
                                 type="button"
                                 @click="setStatusTab('rejected')"
                                 :class="[
-                                    'px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2',
+                                    'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0',
                                     status === 'rejected'
                                         ? 'bg-rose-600 text-white shadow-xs'
                                         : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-400'
@@ -626,21 +659,22 @@ const getStatusBadgeVariant = (s: string) => {
                             variant="ghost"
                             size="sm"
                             @click="resetFilters"
-                            class="text-xs text-muted-foreground hover:text-foreground h-8 px-2.5 gap-1.5"
+                            class="text-xs text-muted-foreground hover:text-foreground h-8 px-2 shrink-0 gap-1"
                         >
-                            <RotateCcw class="h-3.5 w-3.5" /> Reset Filters
+                            <RotateCcw class="h-3.5 w-3.5" />
+                            <span class="hidden sm:inline">Reset</span>
                         </Button>
                     </div>
 
                     <!-- Search and Advanced Filters Grid -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3 w-full min-w-0">
                         <!-- Search Box -->
-                        <div class="relative lg:col-span-2">
+                        <div class="relative sm:col-span-2 lg:col-span-2 w-full min-w-0">
                             <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
                                 v-model="search"
-                                placeholder="Search title, claimant, staff #, description..."
-                                class="pl-9 h-9 text-xs"
+                                placeholder="Search title, claimant, staff #..."
+                                class="pl-9 h-9 text-xs w-full"
                             />
                             <button
                                 v-if="search"
@@ -652,9 +686,9 @@ const getStatusBadgeVariant = (s: string) => {
                         </div>
 
                         <!-- Category Selector -->
-                        <div>
+                        <div class="w-full min-w-0">
                             <Select v-model="categoryId">
-                                <SelectTrigger class="h-9 text-xs">
+                                <SelectTrigger class="h-9 text-xs w-full">
                                     <SelectValue placeholder="All Categories" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -667,9 +701,9 @@ const getStatusBadgeVariant = (s: string) => {
                         </div>
 
                         <!-- Date Preset / Date Range -->
-                        <div>
+                        <div class="w-full min-w-0">
                             <Select v-model="activeDatePreset" @update:modelValue="setDatePreset">
-                                <SelectTrigger class="h-9 text-xs">
+                                <SelectTrigger class="h-9 text-xs w-full">
                                     <SelectValue placeholder="Date Range" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -684,9 +718,9 @@ const getStatusBadgeVariant = (s: string) => {
                         </div>
 
                         <!-- Sorting -->
-                        <div>
+                        <div class="w-full min-w-0">
                             <Select v-model="sortBy">
-                                <SelectTrigger class="h-9 text-xs">
+                                <SelectTrigger class="h-9 text-xs w-full">
                                     <SelectValue placeholder="Sort By" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -699,19 +733,19 @@ const getStatusBadgeVariant = (s: string) => {
                     </div>
 
                     <!-- Custom Date Range Expandable -->
-                    <div v-if="activeDatePreset === 'custom' || dateFrom || dateTo" class="pt-3 border-t flex flex-wrap items-center gap-3">
-                        <div class="flex items-center gap-2 text-xs">
-                            <span class="text-muted-foreground font-medium">From:</span>
-                            <Input type="date" v-model="dateFrom" class="h-8 text-xs w-36" />
+                    <div v-if="activeDatePreset === 'custom' || dateFrom || dateTo" class="pt-3 border-t grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2.5 sm:gap-3 w-full min-w-0">
+                        <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-xs min-w-0">
+                            <span class="text-muted-foreground font-medium text-[11px] sm:text-xs">From:</span>
+                            <Input type="date" v-model="dateFrom" class="h-8 text-xs w-full sm:w-36" />
                         </div>
-                        <div class="flex items-center gap-2 text-xs">
-                            <span class="text-muted-foreground font-medium">To:</span>
-                            <Input type="date" v-model="dateTo" class="h-8 text-xs w-36" />
+                        <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-xs min-w-0">
+                            <span class="text-muted-foreground font-medium text-[11px] sm:text-xs">To:</span>
+                            <Input type="date" v-model="dateTo" class="h-8 text-xs w-full sm:w-36" />
                         </div>
-                        <div class="flex items-center gap-2 text-xs">
-                            <span class="text-muted-foreground font-medium">Order:</span>
+                        <div class="col-span-2 sm:col-span-1 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-xs min-w-0">
+                            <span class="text-muted-foreground font-medium text-[11px] sm:text-xs">Order:</span>
                             <Select v-model="sortDir">
-                                <SelectTrigger class="h-8 text-xs w-28">
+                                <SelectTrigger class="h-8 text-xs w-full sm:w-28">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -724,209 +758,356 @@ const getStatusBadgeVariant = (s: string) => {
                 </CardContent>
             </Card>
 
-            <!-- Table Card with Integrated Pagination -->
-            <Card class="shadow-xs border-border/80 overflow-hidden">
-                <CardContent class="p-0">
-                    <Table>
-                        <TableHeader class="bg-muted/30">
-                            <TableRow>
-                                <TableHead class="w-[120px]">Date</TableHead>
-                                <TableHead class="min-w-[220px]">Expense Details</TableHead>
-                                <TableHead class="w-[140px]">Category</TableHead>
-                                <TableHead class="w-[140px]">Amount</TableHead>
-                                <TableHead class="w-[130px]">Status</TableHead>
-                                <TableHead class="min-w-[160px]">Beneficiary</TableHead>
-                                <TableHead class="min-w-[160px]">Requester</TableHead>
-                                <TableHead class="text-right w-[150px]">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            <TableRow 
-                                v-for="expense in expenses.data" 
-                                :key="expense.id"
-                                class="hover:bg-muted/40 transition-colors cursor-pointer group"
-                                @click="openDetails(expense)"
-                            >
-                                <!-- Date -->
-                                <TableCell class="font-medium whitespace-nowrap">
-                                    <div class="text-xs font-bold text-foreground">
+            <!-- Main Content Container: Desktop Table vs. Mobile Cards -->
+            <Card class="shadow-xs border-border/80 overflow-hidden w-full min-w-0">
+                <CardContent class="p-0 w-full min-w-0">
+                    <!-- 1. DESKTOP / TABLET DATA TABLE (>= md) -->
+                    <div class="hidden md:block overflow-x-auto">
+                        <Table>
+                            <TableHeader class="bg-muted/30">
+                                <TableRow>
+                                    <TableHead class="w-[120px]">Date</TableHead>
+                                    <TableHead class="min-w-[220px]">Expense Details</TableHead>
+                                    <TableHead class="w-[140px]">Category</TableHead>
+                                    <TableHead class="w-[140px]">Amount</TableHead>
+                                    <TableHead class="w-[130px]">Status</TableHead>
+                                    <TableHead class="min-w-[160px]">Beneficiary</TableHead>
+                                    <TableHead class="min-w-[160px]">Requester</TableHead>
+                                    <TableHead class="text-right w-[150px]">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                <TableRow 
+                                    v-for="expense in expenses.data" 
+                                    :key="expense.id"
+                                    class="hover:bg-muted/40 transition-colors cursor-pointer group"
+                                    @click="openDetails(expense)"
+                                >
+                                    <!-- Date -->
+                                    <TableCell class="font-medium whitespace-nowrap">
+                                        <div class="text-xs font-bold text-foreground">
+                                            {{ expense.date ? format(new Date(expense.date), 'MMM d, yyyy') : 'N/A' }}
+                                        </div>
+                                        <div class="text-[10px] text-muted-foreground font-mono">
+                                            {{ expense.created_at ? formatDistanceToNow(new Date(expense.created_at), { addSuffix: true }) : '' }}
+                                        </div>
+                                    </TableCell>
+
+                                    <!-- Title & Description -->
+                                    <TableCell>
+                                        <div class="font-bold text-sm text-foreground group-hover:text-primary transition-colors">
+                                            {{ expense.title }}
+                                        </div>
+                                        <div v-if="expense.description" class="text-xs text-muted-foreground line-clamp-1 max-w-[280px]">
+                                            {{ expense.description }}
+                                        </div>
+                                    </TableCell>
+
+                                    <!-- Category -->
+                                    <TableCell>
+                                        <Badge variant="outline" class="font-semibold text-[11px] bg-background">
+                                            {{ expense.category?.name || 'Uncategorized' }}
+                                        </Badge>
+                                    </TableCell>
+
+                                    <!-- Amount -->
+                                    <TableCell>
+                                        <div class="font-extrabold text-sm text-foreground font-mono">
+                                            {{ formatCurrency(expense.amount) }}
+                                        </div>
+                                    </TableCell>
+
+                                    <!-- Status Badge -->
+                                    <TableCell>
+                                        <div class="flex flex-col gap-0.5">
+                                            <Badge 
+                                                :variant="getStatusBadgeVariant(expense.status)" 
+                                                :class="[
+                                                    'capitalize text-[11px] font-bold w-fit flex items-center gap-1',
+                                                    expense.status === 'approved' ? 'bg-emerald-600 hover:bg-emerald-600 text-white' : '',
+                                                    expense.status === 'pending' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30' : '',
+                                                    expense.status === 'rejected' ? 'bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30' : ''
+                                                ]"
+                                            >
+                                                <CheckCircle v-if="expense.status === 'approved'" class="h-3 w-3" />
+                                                <Clock v-else-if="expense.status === 'pending'" class="h-3 w-3" />
+                                                <XCircle v-else class="h-3 w-3" />
+                                                {{ expense.status }}
+                                            </Badge>
+                                            <span v-if="expense.status === 'approved' && expense.approver?.name" class="text-[10px] text-muted-foreground line-clamp-1">
+                                                By {{ expense.approver.name }}
+                                            </span>
+                                            <span v-else-if="expense.status === 'rejected' && expense.rejection_reason" class="text-[10px] text-rose-600 dark:text-rose-400 line-clamp-1" :title="expense.rejection_reason">
+                                                {{ expense.rejection_reason }}
+                                            </span>
+                                        </div>
+                                    </TableCell>
+
+                                    <!-- Beneficiary -->
+                                    <TableCell>
+                                        <div class="text-xs font-semibold text-foreground">
+                                            {{ expense.user?.name || 'Unknown' }}
+                                        </div>
+                                        <div v-if="expense.user?.staff?.staff_number" class="text-[10px] text-muted-foreground font-mono">
+                                            {{ expense.user.staff.staff_number }}
+                                        </div>
+                                    </TableCell>
+
+                                    <!-- Requester -->
+                                    <TableCell>
+                                        <div class="text-xs text-foreground font-medium">
+                                            {{ expense.requester?.name || expense.user?.name || 'Self' }}
+                                        </div>
+                                        <div v-if="(expense.requester?.staff?.staff_number || expense.user?.staff?.staff_number)" class="text-[10px] text-muted-foreground font-mono">
+                                            {{ expense.requester?.staff?.staff_number || expense.user?.staff?.staff_number }}
+                                        </div>
+                                    </TableCell>
+
+                                    <!-- Action Buttons -->
+                                    <TableCell class="text-right" @click.stop>
+                                        <div class="flex items-center justify-end gap-1">
+                                            <!-- Quick View Button -->
+                                            <Button
+                                                size="icon"
+                                                variant="ghost"
+                                                class="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                                title="View Details"
+                                                @click="openDetails(expense)"
+                                            >
+                                                <Eye class="h-4 w-4" />
+                                            </Button>
+
+                                            <!-- Actions for Pending Expenses -->
+                                            <template v-if="expense.status === 'pending'">
+                                                <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    class="h-8 w-8 text-muted-foreground hover:text-primary"
+                                                    title="Edit"
+                                                    @click="openEdit(expense)"
+                                                >
+                                                    <Edit class="h-4 w-4" />
+                                                </Button>
+
+                                                <Button
+                                                    v-if="canApproveExpenses"
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    class="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                                    title="Approve"
+                                                    @click="openDetails(expense, 'approve')"
+                                                >
+                                                    <CheckCircle class="h-4 w-4" />
+                                                </Button>
+
+                                                <Button
+                                                    v-if="canApproveExpenses"
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    class="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                                                    title="Reject"
+                                                    @click="openDetails(expense, 'reject')"
+                                                >
+                                                    <XCircle class="h-4 w-4" />
+                                                </Button>
+
+                                                <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    class="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                    title="Delete"
+                                                    @click="openDetails(expense, 'delete')"
+                                                >
+                                                    <Trash2 class="h-4 w-4" />
+                                                </Button>
+                                            </template>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+
+                                <!-- Desktop Empty State -->
+                                <TableRow v-if="expenses.data.length === 0">
+                                    <TableCell colspan="8" class="text-center py-12">
+                                        <div class="flex flex-col items-center justify-center space-y-3">
+                                            <div class="h-12 w-12 rounded-2xl bg-muted/60 flex items-center justify-center text-muted-foreground">
+                                                <Wallet class="h-6 w-6" />
+                                            </div>
+                                            <div>
+                                                <h4 class="text-base font-bold">No expenses found</h4>
+                                                <p class="text-xs text-muted-foreground mt-0.5 max-w-sm">
+                                                    {{ hasActiveFilters ? 'No expenses match your active filter criteria. Try clearing some filters.' : 'There are no expense records logged in the system yet.' }}
+                                                </p>
+                                            </div>
+                                            <Button v-if="hasActiveFilters" variant="outline" size="sm" @click="resetFilters" class="text-xs">
+                                                <RotateCcw class="mr-1.5 h-3.5 w-3.5" /> Clear Filters
+                                            </Button>
+                                            <Button v-else size="sm" @click="openCreate" class="text-xs">
+                                                <Plus class="mr-1.5 h-3.5 w-3.5" /> Submit First Expense
+                                            </Button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            </TableBody>
+                        </Table>
+                    </div>
+
+                    <!-- 2. MOBILE FINANCIAL CARDS VIEW (< md) -->
+                    <div class="block md:hidden divide-y divide-border/60 w-full min-w-0">
+                        <div
+                            v-for="expense in expenses.data"
+                            :key="expense.id"
+                            class="p-3 sm:p-4 space-y-3 hover:bg-muted/30 transition-colors active:bg-muted/40 cursor-pointer w-full min-w-0 overflow-hidden"
+                            @click="openDetails(expense)"
+                        >
+                            <!-- Top: Date & Status Badge -->
+                            <div class="flex items-center justify-between gap-2 min-w-0">
+                                <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                                    <span class="text-xs font-bold text-foreground truncate">
                                         {{ expense.date ? format(new Date(expense.date), 'MMM d, yyyy') : 'N/A' }}
-                                    </div>
-                                    <div class="text-[10px] text-muted-foreground font-mono">
+                                    </span>
+                                    <span class="text-[10px] text-muted-foreground font-mono shrink-0">
                                         {{ expense.created_at ? formatDistanceToNow(new Date(expense.created_at), { addSuffix: true }) : '' }}
-                                    </div>
-                                </TableCell>
+                                    </span>
+                                </div>
+                                <Badge
+                                    :variant="getStatusBadgeVariant(expense.status)"
+                                    :class="[
+                                        'capitalize text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 shrink-0',
+                                        expense.status === 'approved' ? 'bg-emerald-600 text-white' : '',
+                                        expense.status === 'pending' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30' : '',
+                                        expense.status === 'rejected' ? 'bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30' : ''
+                                    ]"
+                                >
+                                    <CheckCircle v-if="expense.status === 'approved'" class="h-2.5 w-2.5" />
+                                    <Clock v-else-if="expense.status === 'pending'" class="h-2.5 w-2.5" />
+                                    <XCircle v-else class="h-2.5 w-2.5" />
+                                    {{ expense.status }}
+                                </Badge>
+                            </div>
 
-                                <!-- Title & Description -->
-                                <TableCell>
-                                    <div class="font-bold text-sm text-foreground group-hover:text-primary transition-colors">
+                            <!-- Title, Description & Category Pill -->
+                            <div class="space-y-1 min-w-0">
+                                <div class="flex items-start justify-between gap-2 min-w-0">
+                                    <h4 class="font-bold text-sm text-foreground line-clamp-1 leading-snug min-w-0 flex-1">
                                         {{ expense.title }}
-                                    </div>
-                                    <div v-if="expense.description" class="text-xs text-muted-foreground line-clamp-1 max-w-[280px]">
-                                        {{ expense.description }}
-                                    </div>
-                                </TableCell>
-
-                                <!-- Category -->
-                                <TableCell>
-                                    <Badge variant="outline" class="font-semibold text-[11px] bg-background">
+                                    </h4>
+                                    <Badge variant="outline" class="text-[10px] font-semibold shrink-0 bg-background px-1.5 py-0 max-w-[120px] truncate">
                                         {{ expense.category?.name || 'Uncategorized' }}
                                     </Badge>
-                                </TableCell>
+                                </div>
+                                <p v-if="expense.description" class="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                                    {{ expense.description }}
+                                </p>
+                            </div>
 
-                                <!-- Amount -->
-                                <TableCell>
-                                    <div class="font-extrabold text-sm text-foreground font-mono">
+                            <!-- Financial Amount & Beneficiary / Requester Row -->
+                            <div class="flex items-end justify-between gap-2 pt-1 min-w-0">
+                                <div class="min-w-0 flex-1">
+                                    <span class="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">
+                                        Claimant
+                                    </span>
+                                    <div class="text-xs font-semibold text-foreground flex items-center gap-1 mt-0.5 min-w-0">
+                                        <UserIcon class="h-3 w-3 text-muted-foreground shrink-0" />
+                                        <span class="truncate">{{ expense.user?.name || 'Unknown' }}</span>
+                                        <span v-if="expense.user?.staff?.staff_number" class="text-[10px] text-muted-foreground font-mono shrink-0">
+                                            ({{ expense.user.staff.staff_number }})
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="text-right shrink-0">
+                                    <span class="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">
+                                        Amount
+                                    </span>
+                                    <div class="font-black text-base font-mono text-foreground mt-0.5">
                                         {{ formatCurrency(expense.amount) }}
                                     </div>
-                                </TableCell>
+                                </div>
+                            </div>
 
-                                <!-- Status Badge -->
-                                <TableCell>
-                                    <div class="flex flex-col gap-0.5">
-                                        <Badge 
-                                            :variant="getStatusBadgeVariant(expense.status)" 
-                                            :class="[
-                                                'capitalize text-[11px] font-bold w-fit flex items-center gap-1',
-                                                expense.status === 'approved' ? 'bg-emerald-600 hover:bg-emerald-600 text-white' : '',
-                                                expense.status === 'pending' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30' : '',
-                                                expense.status === 'rejected' ? 'bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30' : ''
-                                            ]"
-                                        >
-                                            <CheckCircle v-if="expense.status === 'approved'" class="h-3 w-3" />
-                                            <Clock v-else-if="expense.status === 'pending'" class="h-3 w-3" />
-                                            <XCircle v-else class="h-3 w-3" />
-                                            {{ expense.status }}
-                                        </Badge>
-                                        <span v-if="expense.status === 'approved' && expense.approver?.name" class="text-[10px] text-muted-foreground line-clamp-1">
-                                            By {{ expense.approver.name }}
-                                        </span>
-                                        <span v-else-if="expense.status === 'rejected' && expense.rejection_reason" class="text-[10px] text-rose-600 dark:text-rose-400 line-clamp-1" :title="expense.rejection_reason">
-                                            {{ expense.rejection_reason }}
-                                        </span>
-                                    </div>
-                                </TableCell>
+                            <!-- Rejection Reason Callout if rejected -->
+                            <div v-if="expense.status === 'rejected' && expense.rejection_reason" class="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[11px] text-rose-700 dark:text-rose-400 break-words">
+                                <span class="font-bold">Reason:</span> {{ expense.rejection_reason }}
+                            </div>
 
-                                <!-- Beneficiary -->
-                                <TableCell>
-                                    <div class="text-xs font-semibold text-foreground">
-                                        {{ expense.user?.name || 'Unknown' }}
-                                    </div>
-                                    <div v-if="expense.user?.staff?.staff_number" class="text-[10px] text-muted-foreground font-mono">
-                                        {{ expense.user.staff.staff_number }}
-                                    </div>
-                                </TableCell>
+                            <!-- Touch-Friendly Card Actions Bar -->
+                            <div class="flex items-center justify-between gap-1.5 sm:gap-2 pt-2 border-t border-border/50 min-w-0" @click.stop>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    class="h-8 text-xs font-medium px-2 flex-1 min-w-0"
+                                    @click="openDetails(expense)"
+                                >
+                                    <Eye class="mr-1 h-3.5 w-3.5 shrink-0" />
+                                    <span class="truncate">Details</span>
+                                </Button>
 
-                                <!-- Requester -->
-                                <TableCell>
-                                    <div class="text-xs text-foreground font-medium">
-                                        {{ expense.requester?.name || expense.user?.name || 'Self' }}
-                                    </div>
-                                    <div v-if="(expense.requester?.staff?.staff_number || expense.user?.staff?.staff_number)" class="text-[10px] text-muted-foreground font-mono">
-                                        {{ expense.requester?.staff?.staff_number || expense.user?.staff?.staff_number }}
-                                    </div>
-                                </TableCell>
+                                <template v-if="expense.status === 'pending'">
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        class="h-8 w-8 p-0 text-muted-foreground hover:text-primary shrink-0"
+                                        title="Edit"
+                                        @click="openEdit(expense)"
+                                    >
+                                        <Edit class="h-3.5 w-3.5" />
+                                    </Button>
 
-                                <!-- Action Buttons -->
-                                <TableCell class="text-right" @click.stop>
-                                    <div class="flex items-center justify-end gap-1">
-                                        <!-- Quick View Button -->
-                                        <Button
-                                            size="icon"
-                                            variant="ghost"
-                                            class="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                            title="View Details"
-                                            @click="openDetails(expense)"
-                                        >
-                                            <Eye class="h-4 w-4" />
-                                        </Button>
+                                    <Button
+                                        v-if="canApproveExpenses"
+                                        size="sm"
+                                        class="h-8 text-xs font-bold px-2 bg-emerald-600 hover:bg-emerald-700 text-white gap-1 shadow-xs shrink-0"
+                                        @click="openDetails(expense, 'approve')"
+                                    >
+                                        <Check class="h-3.5 w-3.5 shrink-0" />
+                                        <span>Approve</span>
+                                    </Button>
 
-                                        <!-- Actions for Pending Expenses -->
-                                        <template v-if="expense.status === 'pending'">
-                                            <Button
-                                                size="icon"
-                                                variant="ghost"
-                                                class="h-8 w-8 text-muted-foreground hover:text-primary"
-                                                title="Edit"
-                                                @click="openEdit(expense)"
-                                            >
-                                                <Edit class="h-4 w-4" />
-                                            </Button>
+                                    <Button
+                                        v-if="canApproveExpenses"
+                                        size="sm"
+                                        variant="destructive"
+                                        class="h-8 text-xs font-bold px-2 gap-1 shadow-xs shrink-0"
+                                        @click="openDetails(expense, 'reject')"
+                                    >
+                                        <X class="h-3.5 w-3.5 shrink-0" />
+                                        <span>Reject</span>
+                                    </Button>
+                                </template>
+                            </div>
+                        </div>
 
-                                            <!-- Direct Approve: Opens details in 'approve' confirm state -->
-                                            <Button
-                                                v-if="canApproveExpenses"
-                                                size="icon"
-                                                variant="ghost"
-                                                class="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                                                title="Approve"
-                                                @click="openDetails(expense, 'approve')"
-                                            >
-                                                <CheckCircle class="h-4 w-4" />
-                                            </Button>
+                        <!-- Mobile Empty State -->
+                        <div v-if="expenses.data.length === 0" class="text-center py-10 px-4">
+                            <div class="flex flex-col items-center justify-center space-y-3">
+                                <div class="h-12 w-12 rounded-2xl bg-muted/60 flex items-center justify-center text-muted-foreground">
+                                    <Wallet class="h-6 w-6" />
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold">No expenses found</h4>
+                                    <p class="text-xs text-muted-foreground mt-0.5 max-w-xs">
+                                        {{ hasActiveFilters ? 'No expenses match your active filter criteria.' : 'There are no expense records logged in the system yet.' }}
+                                    </p>
+                                </div>
+                                <Button v-if="hasActiveFilters" variant="outline" size="sm" @click="resetFilters" class="text-xs">
+                                    <RotateCcw class="mr-1.5 h-3.5 w-3.5" /> Clear Filters
+                                </Button>
+                                <Button v-else size="sm" @click="openCreate" class="text-xs">
+                                    <Plus class="mr-1.5 h-3.5 w-3.5" /> Submit First Expense
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
 
-                                            <!-- Direct Reject: Opens details in 'reject' state -->
-                                            <Button
-                                                v-if="canApproveExpenses"
-                                                size="icon"
-                                                variant="ghost"
-                                                class="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                                                title="Reject"
-                                                @click="openDetails(expense, 'reject')"
-                                            >
-                                                <XCircle class="h-4 w-4" />
-                                            </Button>
-
-                                            <!-- Direct Delete: Opens details in 'delete' state -->
-                                            <Button
-                                                size="icon"
-                                                variant="ghost"
-                                                class="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                title="Delete"
-                                                @click="openDetails(expense, 'delete')"
-                                            >
-                                                <Trash2 class="h-4 w-4" />
-                                            </Button>
-                                        </template>
-                                    </div>
-                                </TableCell>
-                            </TableRow>
-
-                            <!-- Empty State -->
-                            <TableRow v-if="expenses.data.length === 0">
-                                <TableCell colspan="8" class="text-center py-12">
-                                    <div class="flex flex-col items-center justify-center space-y-3">
-                                        <div class="h-12 w-12 rounded-2xl bg-muted/60 flex items-center justify-center text-muted-foreground">
-                                            <Wallet class="h-6 w-6" />
-                                        </div>
-                                        <div>
-                                            <h4 class="text-base font-bold">No expenses found</h4>
-                                            <p class="text-xs text-muted-foreground mt-0.5 max-w-sm">
-                                                {{ hasActiveFilters ? 'No expenses match your active filter criteria. Try clearing some filters.' : 'There are no expense records logged in the system yet.' }}
-                                            </p>
-                                        </div>
-                                        <Button v-if="hasActiveFilters" variant="outline" size="sm" @click="resetFilters" class="text-xs">
-                                            <RotateCcw class="mr-1.5 h-3.5 w-3.5" /> Clear Filters
-                                        </Button>
-                                        <Button v-else size="sm" @click="openCreate" class="text-xs">
-                                            <Plus class="mr-1.5 h-3.5 w-3.5" /> Submit First Expense
-                                        </Button>
-                                    </div>
-                                </TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
-
-                    <!-- Integrated Pagination Footer -->
-                    <div v-if="expenses.total > 0" class="flex flex-col sm:flex-row items-center justify-between border-t p-4 px-6 gap-4 bg-muted/20">
-                        <div class="flex flex-wrap items-center gap-4 text-xs text-muted-foreground font-medium">
-                            <span>
-                                Showing <strong class="text-foreground">{{ expenses.from || 0 }}</strong> to <strong class="text-foreground">{{ expenses.to || 0 }}</strong> of <strong class="text-foreground">{{ expenses.total }}</strong> expenses
+                    <!-- 3. RESPONSIVE INTEGRATED PAGINATION FOOTER -->
+                    <div v-if="expenses.total > 0" class="flex flex-col sm:flex-row items-center justify-between border-t p-3 sm:p-4 px-3 sm:px-6 gap-3 sm:gap-4 bg-muted/20 w-full min-w-0">
+                        <div class="flex flex-wrap items-center justify-between sm:justify-start w-full sm:w-auto gap-3 text-xs text-muted-foreground font-medium min-w-0">
+                            <span class="text-center sm:text-left truncate">
+                                Showing <strong class="text-foreground">{{ expenses.from || 0 }}</strong> to <strong class="text-foreground">{{ expenses.to || 0 }}</strong> of <strong class="text-foreground">{{ expenses.total }}</strong>
                             </span>
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-1.5 shrink-0">
                                 <span>Per page:</span>
                                 <Select v-model="perPage">
-                                    <SelectTrigger class="h-8 w-20 text-xs">
+                                    <SelectTrigger class="h-8 w-18 text-xs">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -940,30 +1121,64 @@ const getStatusBadgeVariant = (s: string) => {
                             </div>
                         </div>
 
-                        <!-- Numbered Pagination Buttons -->
-                        <div v-if="expenses.links && expenses.links.length > 3" class="flex flex-wrap items-center gap-1">
-                            <Button 
-                                v-for="(link, i) in expenses.links" 
-                                :key="i"
-                                :variant="link.active ? 'default' : 'outline'"
-                                size="sm"
-                                :disabled="!link.url"
-                                as-child
-                                class="h-8 min-w-[32px] px-2 text-xs font-semibold rounded-md"
-                            >
-                                <Link v-if="link.url" :href="link.url" preserve-scroll preserve-state v-html="link.label" />
-                                <span v-else v-html="link.label"></span>
-                            </Button>
+                        <!-- Pagination Links: Mobile Prev/Next vs Desktop Full Numbers -->
+                        <div v-if="expenses.links && expenses.links.length > 3" class="w-full sm:w-auto flex items-center justify-center gap-1 min-w-0">
+                            <!-- Desktop full links -->
+                            <div class="hidden sm:flex flex-wrap items-center gap-1">
+                                <Button 
+                                    v-for="(link, i) in expenses.links" 
+                                    :key="i"
+                                    :variant="link.active ? 'default' : 'outline'"
+                                    size="sm"
+                                    :disabled="!link.url"
+                                    as-child
+                                    class="h-8 min-w-[32px] px-2 text-xs font-semibold rounded-md"
+                                >
+                                    <Link v-if="link.url" :href="link.url" preserve-scroll preserve-state v-html="link.label" />
+                                    <span v-else v-html="link.label"></span>
+                                </Button>
+                            </div>
+
+                            <!-- Mobile Compact Prev / Next links -->
+                            <div class="flex sm:hidden items-center justify-between w-full gap-2 min-w-0">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    :disabled="!expenses.links[0]?.url"
+                                    as-child
+                                    class="h-8 flex-1 text-xs font-semibold min-w-0 truncate"
+                                >
+                                    <Link v-if="expenses.links[0]?.url" :href="expenses.links[0].url" preserve-scroll preserve-state>
+                                        &larr; Previous
+                                    </Link>
+                                    <span v-else>&larr; Previous</span>
+                                </Button>
+                                <span class="text-xs font-bold text-muted-foreground px-2 shrink-0">
+                                    {{ expenses.current_page }} / {{ expenses.last_page }}
+                                </span>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    :disabled="!expenses.links[expenses.links.length - 1]?.url"
+                                    as-child
+                                    class="h-8 flex-1 text-xs font-semibold min-w-0 truncate"
+                                >
+                                    <Link v-if="expenses.links[expenses.links.length - 1]?.url" :href="expenses.links[expenses.links.length - 1].url" preserve-scroll preserve-state>
+                                        Next &rarr;
+                                    </Link>
+                                    <span v-else>Next &rarr;</span>
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </CardContent>
             </Card>
 
-            <!-- Expense Details Modal with Inline Confirmation (No Stacked Modals!) -->
+            <!-- Expense Details Modal with Inline Confirmation (Responsive & Touch Scrollable) -->
             <Dialog v-model:open="isDetailsOpen">
-                <DialogContent class="max-w-xl">
+                <DialogContent class="max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
                     <DialogHeader>
-                        <DialogTitle class="text-xl font-bold flex items-center justify-between">
+                        <DialogTitle class="text-lg sm:text-xl font-bold flex items-center justify-between">
                             <span>Expense Overview</span>
                             <Badge 
                                 :variant="getStatusBadgeVariant(selectedExpense?.status || '')"
@@ -982,18 +1197,18 @@ const getStatusBadgeVariant = (s: string) => {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div v-if="selectedExpense" class="space-y-4 py-1">
+                    <div v-if="selectedExpense" class="space-y-3 sm:space-y-4 py-1">
                         <!-- Top Banner / Amount Highlight -->
-                        <div class="rounded-2xl bg-muted/50 border p-4 flex items-center justify-between">
+                        <div class="rounded-xl sm:rounded-2xl bg-muted/50 border p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                             <div>
                                 <span class="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">
                                     Total Amount
                                 </span>
-                                <div class="text-2xl font-black text-foreground font-mono mt-0.5">
+                                <div class="text-xl sm:text-2xl font-black text-foreground font-mono mt-0.5">
                                     {{ formatCurrency(selectedExpense.amount) }}
                                 </div>
                             </div>
-                            <div class="text-right">
+                            <div class="text-left sm:text-right">
                                 <span class="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">
                                     Category
                                 </span>
@@ -1014,7 +1229,7 @@ const getStatusBadgeVariant = (s: string) => {
                         </div>
 
                         <!-- Claimant and Requester Cards -->
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 text-xs">
                             <div class="rounded-xl border p-3 space-y-1">
                                 <span class="text-[10px] uppercase font-bold text-muted-foreground block">
                                     Beneficiary (Claimant)
@@ -1062,23 +1277,23 @@ const getStatusBadgeVariant = (s: string) => {
                         </div>
 
                         <!-- INLINE ACTION: Approve Confirmation -->
-                        <div v-if="pendingAction === 'approve'" class="rounded-2xl border-2 border-emerald-500/40 bg-emerald-500/10 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-200">
-                            <div class="flex items-start gap-3">
-                                <div class="h-9 w-9 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                                    <CheckCircle class="h-5 w-5" />
+                        <div v-if="pendingAction === 'approve'" class="rounded-xl sm:rounded-2xl border-2 border-emerald-500/40 bg-emerald-500/10 p-3.5 sm:p-4 space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                            <div class="flex items-start gap-2.5 sm:gap-3">
+                                <div class="h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                    <CheckCircle class="h-4 w-4 sm:h-5 sm:w-5" />
                                 </div>
                                 <div>
                                     <h5 class="text-sm font-bold text-foreground">Confirm Expense Approval</h5>
                                     <p class="text-xs text-muted-foreground mt-0.5">
-                                        Are you sure you want to approve "{{ selectedExpense.title }}" for <strong>{{ formatCurrency(selectedExpense.amount) }}</strong>? This will record your approval and update the claim status.
+                                        Are you sure you want to approve "{{ selectedExpense.title }}" for <strong>{{ formatCurrency(selectedExpense.amount) }}</strong>?
                                     </p>
                                 </div>
                             </div>
-                            <div class="flex items-center justify-end gap-2 pt-2 border-t border-emerald-500/20">
-                                <Button size="sm" variant="outline" @click="cancelPendingAction" :disabled="isProcessingAction" class="text-xs">
+                            <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-2 pt-2 border-t border-emerald-500/20">
+                                <Button size="sm" variant="outline" @click="cancelPendingAction" :disabled="isProcessingAction" class="w-full sm:w-auto text-xs">
                                     Cancel
                                 </Button>
-                                <Button size="sm" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-sm" :disabled="isProcessingAction" @click="confirmApprove(selectedExpense)">
+                                <Button size="sm" class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-sm" :disabled="isProcessingAction" @click="confirmApprove(selectedExpense)">
                                     <Check class="h-3.5 w-3.5" />
                                     {{ isProcessingAction ? 'Approving...' : 'Yes, Confirm Approval' }}
                                 </Button>
@@ -1086,33 +1301,33 @@ const getStatusBadgeVariant = (s: string) => {
                         </div>
 
                         <!-- INLINE ACTION: Reject Form -->
-                        <div v-if="pendingAction === 'reject'" class="rounded-2xl border-2 border-rose-500/40 bg-rose-500/10 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-200">
-                            <div class="flex items-start gap-3">
-                                <div class="h-9 w-9 rounded-xl bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
-                                    <XCircle class="h-5 w-5" />
+                        <div v-if="pendingAction === 'reject'" class="rounded-xl sm:rounded-2xl border-2 border-rose-500/40 bg-rose-500/10 p-3.5 sm:p-4 space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                            <div class="flex items-start gap-2.5 sm:gap-3">
+                                <div class="h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                                    <XCircle class="h-4 w-4 sm:h-5 sm:w-5" />
                                 </div>
                                 <div>
                                     <h5 class="text-sm font-bold text-foreground">Reject Expense Request</h5>
                                     <p class="text-xs text-muted-foreground mt-0.5">
-                                        Please specify the reason for rejection. This reason will be recorded and displayed to the claimant.
+                                        Please specify the reason for rejection. This will be displayed to the claimant.
                                     </p>
                                 </div>
                             </div>
                             <div class="space-y-1">
                                 <Textarea
                                     v-model="rejectionReason"
-                                    placeholder="Enter reason for rejection (e.g., Incomplete receipt documentation, Expenditure exceeds approved limit)..."
+                                    placeholder="Enter reason for rejection..."
                                     rows="3"
                                     class="text-xs bg-background"
                                     required
                                 />
                                 <p v-if="rejectionError" class="text-[11px] text-destructive font-medium">{{ rejectionError }}</p>
                             </div>
-                            <div class="flex items-center justify-end gap-2 pt-2 border-t border-rose-500/20">
-                                <Button size="sm" variant="outline" @click="cancelPendingAction" :disabled="isProcessingAction" class="text-xs">
+                            <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-2 pt-2 border-t border-rose-500/20">
+                                <Button size="sm" variant="outline" @click="cancelPendingAction" :disabled="isProcessingAction" class="w-full sm:w-auto text-xs">
                                     Cancel
                                 </Button>
-                                <Button size="sm" variant="destructive" class="font-bold text-xs gap-1.5 shadow-sm" :disabled="isProcessingAction" @click="confirmReject(selectedExpense)">
+                                <Button size="sm" variant="destructive" class="w-full sm:w-auto font-bold text-xs gap-1.5 shadow-sm" :disabled="isProcessingAction" @click="confirmReject(selectedExpense)">
                                     <X class="h-3.5 w-3.5" />
                                     {{ isProcessingAction ? 'Rejecting...' : 'Yes, Reject Expense' }}
                                 </Button>
@@ -1120,10 +1335,10 @@ const getStatusBadgeVariant = (s: string) => {
                         </div>
 
                         <!-- INLINE ACTION: Delete Confirmation -->
-                        <div v-if="pendingAction === 'delete'" class="rounded-2xl border-2 border-rose-500/40 bg-rose-500/10 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-200">
-                            <div class="flex items-start gap-3">
-                                <div class="h-9 w-9 rounded-xl bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
-                                    <Trash2 class="h-5 w-5" />
+                        <div v-if="pendingAction === 'delete'" class="rounded-xl sm:rounded-2xl border-2 border-rose-500/40 bg-rose-500/10 p-3.5 sm:p-4 space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                            <div class="flex items-start gap-2.5 sm:gap-3">
+                                <div class="h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                                    <Trash2 class="h-4 w-4 sm:h-5 sm:w-5" />
                                 </div>
                                 <div>
                                     <h5 class="text-sm font-bold text-foreground">Delete Expense Record</h5>
@@ -1132,11 +1347,11 @@ const getStatusBadgeVariant = (s: string) => {
                                     </p>
                                 </div>
                             </div>
-                            <div class="flex items-center justify-end gap-2 pt-2 border-t border-rose-500/20">
-                                <Button size="sm" variant="outline" @click="cancelPendingAction" :disabled="isProcessingAction" class="text-xs">
+                            <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-2 pt-2 border-t border-rose-500/20">
+                                <Button size="sm" variant="outline" @click="cancelPendingAction" :disabled="isProcessingAction" class="w-full sm:w-auto text-xs">
                                     Cancel
                                 </Button>
-                                <Button size="sm" variant="destructive" class="font-bold text-xs gap-1.5 shadow-sm" :disabled="isProcessingAction" @click="confirmDelete(selectedExpense)">
+                                <Button size="sm" variant="destructive" class="w-full sm:w-auto font-bold text-xs gap-1.5 shadow-sm" :disabled="isProcessingAction" @click="confirmDelete(selectedExpense)">
                                     <Trash2 class="h-3.5 w-3.5" />
                                     {{ isProcessingAction ? 'Deleting...' : 'Yes, Delete Record' }}
                                 </Button>
@@ -1145,7 +1360,7 @@ const getStatusBadgeVariant = (s: string) => {
                     </div>
 
                     <!-- Dialog Footer -->
-                    <DialogFooter class="flex flex-col sm:flex-row items-center justify-between gap-2 border-t pt-4">
+                    <DialogFooter class="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2 border-t pt-4">
                         <Button 
                             variant="outline" 
                             size="sm" 
@@ -1156,7 +1371,7 @@ const getStatusBadgeVariant = (s: string) => {
                         </Button>
 
                         <!-- Standard Action Buttons (when no inline confirmation is active) -->
-                        <div v-if="selectedExpense && selectedExpense.status === 'pending' && !pendingAction" class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                        <div v-if="selectedExpense && selectedExpense.status === 'pending' && !pendingAction" class="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
                             <Button
                                 v-if="canApproveExpenses"
                                 size="sm"
@@ -1177,7 +1392,7 @@ const getStatusBadgeVariant = (s: string) => {
                             <Button
                                 size="sm"
                                 variant="outline"
-                                class="text-xs"
+                                class="text-xs flex-1 sm:flex-initial"
                                 @click="openEdit(selectedExpense)"
                             >
                                 <Edit class="h-3.5 w-3.5" /> Edit
@@ -1185,19 +1400,19 @@ const getStatusBadgeVariant = (s: string) => {
                             <Button
                                 size="sm"
                                 variant="ghost"
-                                class="text-xs text-destructive hover:bg-destructive/10"
+                                class="text-xs text-destructive hover:bg-destructive/10 flex-1 sm:flex-initial"
                                 @click="pendingAction = 'delete'"
                             >
-                                <Trash2 class="h-3.5 w-3.5" />
+                                <Trash2 class="h-3.5 w-3.5" /> Delete
                             </Button>
                         </div>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
-            <!-- Create / Edit Expense Modal -->
+            <!-- Create / Edit Expense Modal (Responsive & Scrollable) -->
             <Dialog v-model:open="isModalOpen">
-                <DialogContent class="max-w-lg">
+                <DialogContent class="max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
                     <DialogHeader>
                         <DialogTitle class="text-lg font-bold">
                             {{ isEditing ? 'Edit Expense Record' : 'Submit New Expense' }}
@@ -1207,7 +1422,7 @@ const getStatusBadgeVariant = (s: string) => {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <form @submit.prevent="submitExpense" class="space-y-4 py-2">
+                    <form @submit.prevent="submitExpense" class="space-y-3 sm:space-y-4 py-2">
                         <!-- Title -->
                         <div class="space-y-1">
                             <Label for="exp-title" class="text-xs font-bold">Expense Title *</Label>
@@ -1221,8 +1436,8 @@ const getStatusBadgeVariant = (s: string) => {
                             <p v-if="form.errors.title" class="text-[11px] text-destructive">{{ form.errors.title }}</p>
                         </div>
 
-                        <!-- Amount & Date -->
-                        <div class="grid grid-cols-2 gap-3">
+                        <!-- Amount & Date (Stack on small screens, 2-col on sm) -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div class="space-y-1">
                                 <Label for="exp-amount" class="text-xs font-bold">Amount (₦) *</Label>
                                 <div class="relative">
@@ -1296,11 +1511,11 @@ const getStatusBadgeVariant = (s: string) => {
                             <p v-if="form.errors.description" class="text-[11px] text-destructive">{{ form.errors.description }}</p>
                         </div>
 
-                        <DialogFooter class="border-t pt-4">
-                            <Button type="button" variant="outline" @click="isModalOpen = false" class="text-xs">
+                        <DialogFooter class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 border-t pt-4">
+                            <Button type="button" variant="outline" @click="isModalOpen = false" class="w-full sm:w-auto text-xs">
                                 Cancel
                             </Button>
-                            <Button type="submit" :disabled="form.processing" class="text-xs font-bold">
+                            <Button type="submit" :disabled="form.processing" class="w-full sm:w-auto text-xs font-bold">
                                 {{ form.processing ? 'Saving...' : (isEditing ? 'Update Expense' : 'Submit Request') }}
                             </Button>
                         </DialogFooter>

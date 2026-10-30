@@ -82,6 +82,8 @@ class HandleInertiaRequests extends Middleware
             'ziggy' => function () use ($request) {
                 return array_merge((new \Tighten\Ziggy\Ziggy)->toArray(), [
                     'location' => $request->url(),
+                    'url' => $request->schemeAndHttpHost(),
+                    'port' => (int) $request->getPort() ?: null,
                 ]);
             },
         ];
