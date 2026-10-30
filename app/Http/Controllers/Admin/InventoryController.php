@@ -19,56 +19,60 @@ class InventoryController extends Controller
     {
         Gate::authorize('view_inventory');
 
-        $query = InventoryItem::with([
-            'category',
-            'requisitionItems' => function ($q) {
-                $q->whereHas('requisition', function ($reqQ) {
-                    $reqQ->whereIn('status', ['issued', 'approved']);
-                })->with(['requisition.department', 'requisition.user']);
-            }
-        ]);
+        $query = InventoryItem::with('category');
 
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where('name', 'like', "%{$search}%")
-                  ->orWhere('sku', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('sku', 'like', "%{$search}%")
+                  ->orWhere('supplier_name', 'like', "%{$search}%");
+            });
         }
 
-        if ($request->filled('category_id')) {
+        if ($request->filled('category_id') && $request->category_id !== 'ALL') {
             $query->where('inventory_category_id', $request->category_id);
         }
 
-        $items = $query->latest()->paginate(15)->withQueryString();
+        if ($request->filled('stock_status')) {
+            if ($request->stock_status === 'low') {
+                $query->whereRaw('available_quantity <= min_stock_level')->where('available_quantity', '>', 0);
+            } elseif ($request->stock_status === 'out') {
+                $query->where('available_quantity', '<=', 0);
+            } elseif ($request->stock_status === 'in_stock') {
+                $query->whereRaw('available_quantity > min_stock_level');
+            }
+        }
+
+        $items = $query->latest('id')->paginate(15)->withQueryString();
+
         $categories = Cache::remember('inventory_categories', 3600, function () {
-            return InventoryCategory::withCount('items')->get();
+            return InventoryCategory::withCount('items')->orderBy('name')->get();
+        });
+
+        $buildings = Cache::remember('inventory_buildings_quick', 300, function () {
+            return \App\Models\Building::orderBy('name')->get(['id', 'name', 'code', 'building_type']);
         });
 
         $stats = Cache::remember('inventory_stats', 60, function () {
             return [
-                'total_items' => InventoryItem::sum('total_quantity'),
-                'available_items' => InventoryItem::sum('available_quantity'),
-                'assigned_items' => InventoryAssignment::where('status', 'assigned')->count(),
+                'total_items' => (int) InventoryItem::sum('total_quantity'),
+                'available_items' => (int) InventoryItem::sum('available_quantity'),
+                'assigned_items' => (int) InventoryAssignment::where('status', 'assigned')->sum('quantity'),
                 'categories_count' => InventoryCategory::count(),
                 'low_stock_count' => InventoryItem::whereRaw('available_quantity <= min_stock_level')->count(),
-                'total_valuation' => InventoryItem::selectRaw('SUM(available_quantity * COALESCE(unit_cost, 0)) as val')->value('val') ?? 0,
+                'total_valuation' => (float) (InventoryItem::selectRaw('SUM(available_quantity * COALESCE(unit_cost, 0)) as val')->value('val') ?? 0),
                 'pending_requisitions' => \App\Models\InventoryRequisition::where('status', 'pending')->count(),
                 'pending_complaints' => \App\Models\InventoryComplaint::where('status', 'pending')->count(),
             ];
         });
 
-        $recentLogs = \App\Models\InventoryStockLog::with(['item', 'user'])->latest()->limit(10)->get();
-        $recentRequisitions = \App\Models\InventoryRequisition::with(['user', 'department', 'items.item'])->latest()->limit(10)->get();
-        $recentAssignments = \App\Models\InventoryAssignment::with(['item', 'assignable.user', 'assignable.department'])->latest()->get();
-
         return Inertia::render('Admin/Inventory/Index', [
             'items' => $items,
             'categories' => $categories,
-            'complaints_count' => \App\Models\InventoryComplaint::count(),
+            'buildings' => $buildings,
             'stats' => $stats,
-            'recent_logs' => $recentLogs,
-            'recent_requisitions' => $recentRequisitions,
-            'recent_assignments' => $recentAssignments,
-            'filters' => $request->only(['search', 'category_id']),
+            'filters' => $request->only(['search', 'category_id', 'stock_status']),
             'permissions' => [
                 'can_manage' => $request->user()->hasRole(['super_admin', 'admin', 'bursar', 'store_officer']) || $request->user()->can('manage_inventory'),
                 'can_create' => $request->user()->hasRole(['super_admin', 'admin', 'bursar', 'store_officer']) || $request->user()->can('create_inventory_items') || $request->user()->can('manage_inventory'),

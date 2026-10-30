@@ -1,28 +1,34 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { Head, useForm, router } from '@inertiajs/vue3';
+import { Head, useForm, router, Link } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { 
-    UserCheck, UserPlus, Search, Filter, RotateCcw, 
-    X, CheckCircle2, AlertTriangle, Monitor, Calendar,
-    Laptop, Sparkles, Building2, Package, ShieldCheck, Check,
-    AlertCircle
+    Building2, Search, Filter, RotateCcw, 
+    X, CheckCircle2, AlertTriangle, Calendar,
+    Package, ShieldCheck, Download, Plus, ArrowUpRight,
+    MapPin, Layers, Check, Info, Box
 } from 'lucide-vue-next';
+
+interface AssignmentItem {
+    id: number;
+    inventory_item_id: number;
+    building_id?: string;
+    quantity: number;
+    location_details?: string;
+    assigned_at: string;
+    expected_return_date?: string;
+    returned_at?: string;
+    status: 'assigned' | 'returned' | 'lost' | 'damaged';
+    condition_on_assignment?: string;
+    condition_on_return?: string;
+    item?: { id: number; name: string; sku?: string; available_quantity?: number; total_quantity?: number; unit_of_measure?: string };
+    building?: { id: string; name: string; code: string; building_type: string };
+    assignable?: { id: string; name?: string; user?: { name: string; email: string }; department?: { name: string } };
+}
 
 const props = defineProps<{
     assignments: {
-        data: Array<{
-            id: number;
-            inventory_item_id: number;
-            assigned_at: string;
-            expected_return_date?: string;
-            returned_at?: string;
-            status: 'assigned' | 'returned' | 'lost' | 'damaged';
-            condition_on_assignment?: string;
-            condition_on_return?: string;
-            item?: { id: number; name: string; sku?: string; available_quantity?: number; total_quantity?: number };
-            assignable?: { id: string; user?: { name: string; email: string }; department?: { name: string } };
-        }>;
+        data: AssignmentItem[];
         links: Array<any>;
         total: number;
     };
@@ -32,10 +38,25 @@ const props = defineProps<{
         sku?: string;
         available_quantity: number;
         total_quantity: number;
+        unit_of_measure?: string;
+        condition?: string;
     }>;
+    buildings?: Array<{
+        id: string;
+        name: string;
+        code: string;
+        building_type: string;
+    }>;
+    stats?: {
+        total_deployments: number;
+        active_deployed_units: number;
+        returned_units: number;
+        damaged_lost_units: number;
+    };
     filters?: {
         search?: string;
         status?: string;
+        building_id?: string;
     };
     permissions?: {
         can_manage?: boolean;
@@ -44,80 +65,66 @@ const props = defineProps<{
 
 const searchQuery = ref(props.filters?.search || '');
 const statusFilter = ref(props.filters?.status || 'ALL');
-
-const stats = computed(() => {
-    const list = props.assignments.data || [];
-    return {
-        total: props.assignments.total || list.length,
-        assigned: list.filter(a => a.status === 'assigned').length,
-        returned: list.filter(a => a.status === 'returned').length,
-        damaged_lost: list.filter(a => a.status === 'damaged' || a.status === 'lost').length,
-    };
-});
+const buildingFilter = ref(props.filters?.building_id || 'ALL');
 
 const handleSearch = () => {
     router.get(
         route('admin.inventory.assignments.index'),
-        { search: searchQuery.value, status: statusFilter.value },
+        { 
+            search: searchQuery.value, 
+            status: statusFilter.value,
+            building_id: buildingFilter.value 
+        },
         { preserveState: true, replace: true }
     );
 };
 
-// Modal State
-const showAssignModal = ref(false);
-const showReturnModal = ref(false);
-const selectedAssignment = ref<any>(null);
+const resetFilters = () => {
+    searchQuery.value = '';
+    statusFilter.value = 'ALL';
+    buildingFilter.value = 'ALL';
+    handleSearch();
+};
 
-// Assign Form
-const assignForm = useForm({
+// Modals State
+const showDeployModal = ref(false);
+const showReturnModal = ref(false);
+const selectedAssignment = ref<AssignmentItem | null>(null);
+
+// Deploy Form
+const deployForm = useForm({
     inventory_item_id: props.items && props.items.length > 0 ? props.items[0].id : '',
-    staff_id: '',
+    building_id: props.buildings && props.buildings.length > 0 ? props.buildings[0].id : '',
+    quantity: 1,
+    location_details: '',
     expected_return_date: '',
     condition_on_assignment: 'good',
 });
 
-// Staff Search State
-const staffSearchQuery = ref('');
-const staffSearchResults = ref<any[]>([]);
-const selectedStaff = ref<any>(null);
+// Selected Item for Quantity Validation
+const selectedItemStock = computed(() => {
+    if (!props.items) return null;
+    return props.items.find(i => i.id === Number(deployForm.inventory_item_id)) || null;
+});
 
-const searchStaff = async () => {
-    if (staffSearchQuery.value.length < 2) {
-        staffSearchResults.value = [];
-        return;
+const openDeployModal = (preselectedItemId: number | null = null) => {
+    if (preselectedItemId) {
+        deployForm.inventory_item_id = preselectedItemId;
+    } else if (props.items && props.items.length > 0 && !deployForm.inventory_item_id) {
+        deployForm.inventory_item_id = props.items[0].id;
     }
-    const response = await fetch(`/admin/inventory/staff/search?query=${staffSearchQuery.value}`);
-    const data = await response.json();
-    staffSearchResults.value = data;
+    deployForm.quantity = 1;
+    deployForm.location_details = '';
+    deployForm.expected_return_date = '';
+    deployForm.condition_on_assignment = 'good';
+    showDeployModal.value = true;
 };
 
-const selectStaffMember = (st: any) => {
-    assignForm.staff_id = st.id;
-    selectedStaff.value = st;
-    staffSearchQuery.value = st.name;
-    staffSearchResults.value = [];
-};
-
-const clearSelectedStaff = () => {
-    assignForm.staff_id = '';
-    selectedStaff.value = null;
-    staffSearchQuery.value = '';
-    staffSearchResults.value = [];
-};
-
-const openAssignModal = () => {
-    assignForm.reset();
-    selectedStaff.value = null;
-    staffSearchQuery.value = '';
-    staffSearchResults.value = [];
-    showAssignModal.value = true;
-};
-
-const submitAssign = () => {
-    assignForm.post(route('admin.inventory.assignments.store'), {
+const submitDeploy = () => {
+    deployForm.post(route('admin.inventory.assignments.store'), {
         onSuccess: () => {
-            showAssignModal.value = false;
-            assignForm.reset();
+            showDeployModal.value = false;
+            deployForm.reset();
         },
     });
 };
@@ -128,219 +135,325 @@ const returnForm = useForm({
     condition_on_return: 'good',
 });
 
-const openReturnModal = (asg: any) => {
-    selectedAssignment.value = asg;
+const openReturnModal = (assignment: AssignmentItem) => {
+    selectedAssignment.value = assignment;
     returnForm.status = 'returned';
-    returnForm.condition_on_return = asg.condition_on_assignment || 'good';
+    returnForm.condition_on_return = assignment.condition_on_assignment || 'good';
     showReturnModal.value = true;
 };
 
-const submitReturnItem = () => {
+const submitReturn = () => {
+    if (!selectedAssignment.value) return;
     returnForm.put(route('admin.inventory.assignments.return', selectedAssignment.value.id), {
         onSuccess: () => {
             showReturnModal.value = false;
+            selectedAssignment.value = null;
         },
     });
 };
 
-const formatDate = (d: string) => {
-    if (!d) return 'N/A';
-    return new Date(d).toLocaleDateString('en-US', {
+const formatDate = (dateStr?: string) => {
+    if (!dateStr) return 'N/A';
+    return new Date(dateStr).toLocaleDateString('en-US', {
+        year: 'numeric',
         month: 'short',
         day: 'numeric',
-        year: 'numeric',
     });
 };
 </script>
 
 <template>
-    <Head title="Staff Equipment Allocations — Central Store" />
+    <Head title="Building Deployments — Inventory Management" />
 
     <AdminLayout>
-        <div class="py-8 min-h-screen bg-slate-50/50 dark:bg-slate-900/50">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+        <div class="py-6 sm:py-8 min-h-screen bg-slate-50/60 dark:bg-slate-900/60">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 sm:space-y-8">
                 
-                <!-- Hero Header -->
-                <div class="relative overflow-hidden bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-2xl border border-slate-800">
-                    <div class="absolute -right-10 -bottom-10 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <!-- Sub Navigation Pills -->
+                <div class="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-500">
+                    <Link :href="route('admin.inventory.index')" class="px-3.5 py-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-all">
+                        Inventory Catalog
+                    </Link>
+                    <Link :href="route('admin.inventory.assignments.index')" class="px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white font-extrabold shadow-sm transition-all">
+                        Building Deployments
+                    </Link>
+                    <Link :href="route('admin.inventory.requisitions.index')" class="px-3.5 py-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-all">
+                        Store Requisitions (SIV)
+                    </Link>
+                    <Link :href="route('admin.inventory.categories.index')" class="px-3.5 py-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-all">
+                        Categories
+                    </Link>
+                    <Link :href="route('admin.inventory.audit-logs.index')" class="px-3.5 py-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-all">
+                        Audit Logs
+                    </Link>
+                </div>
+
+                <!-- Hero Section -->
+                <div class="relative overflow-hidden bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-slate-800">
+                    <div class="absolute -right-10 -bottom-10 w-72 h-72 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none"></div>
                     <div class="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                        <div class="space-y-2">
-                            <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-semibold">
-                                <UserCheck class="w-3.5 h-3.5 text-indigo-400" />
-                                Staff Asset Custody Management
+                        <div class="space-y-2 max-w-2xl">
+                            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-bold">
+                                <Building2 class="w-3.5 h-3.5 text-indigo-400" />
+                                Campus Facilities & Infrastructure
                             </div>
-                            <h1 class="text-3xl sm:text-4xl font-black tracking-tight">
-                                Staff Equipment Allocations
+                            <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-white">
+                                Building Inventory Deployments
                             </h1>
-                            <p class="text-slate-300 text-sm max-w-2xl leading-relaxed">
-                                Manage laptops, desktop computers, printers, and laboratory devices assigned to individual university staff members.
+                            <p class="text-slate-300 text-xs sm:text-sm leading-relaxed">
+                                Track, deploy, and audit university equipment, lab apparatus, computers, and furniture assigned directly to campus buildings, lecture halls, and facilities.
                             </p>
                         </div>
-                        <div class="flex items-center gap-3 shrink-0">
+                        <div class="flex flex-wrap items-center gap-3 shrink-0">
+                            <a
+                                :href="route('admin.inventory.export-assignments')"
+                                class="inline-flex items-center px-4 py-2.5 rounded-xl text-xs font-bold text-slate-200 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 shadow-sm transition-all gap-1.5"
+                            >
+                                <Download class="w-4 h-4" />
+                                Export Excel
+                            </a>
                             <button
                                 v-if="permissions?.can_manage || true"
-                                @click="openAssignModal"
-                                class="inline-flex items-center px-5 py-3 rounded-2xl text-xs font-extrabold text-white bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 shadow-xl shadow-indigo-500/20 active:scale-95 transition-all border border-indigo-400/30 gap-2"
+                                @click="openDeployModal()"
+                                class="inline-flex items-center px-5 py-2.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all gap-2 active:scale-95"
                             >
-                                <UserPlus class="w-4 h-4" />
-                                Assign Equipment to Staff
+                                <Plus class="w-4 h-4" />
+                                Deploy to Building
                             </button>
                         </div>
                     </div>
                 </div>
 
                 <!-- Metric Cards -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                    <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-700/80">
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-700/80">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Allocations</p>
-                                <p class="text-3xl font-black text-slate-900 dark:text-white mt-1">{{ stats.total }}</p>
+                                <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Deployments</p>
+                                <p class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-1">
+                                    {{ stats?.total_deployments ?? assignments.total }}
+                                </p>
                             </div>
-                            <div class="h-12 w-12 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold">
-                                <Laptop class="w-6 h-6" />
+                            <div class="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                                <Building2 class="w-5 h-5 sm:w-6 sm:h-6" />
                             </div>
                         </div>
                     </div>
 
-                    <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-700/80">
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-700/80">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Currently Issued</p>
-                                <p class="text-3xl font-black text-indigo-600 dark:text-indigo-400 mt-1">{{ stats.assigned }}</p>
+                                <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Units In Active Use</p>
+                                <p class="text-2xl sm:text-3xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
+                                    {{ stats?.active_deployed_units ?? 0 }}
+                                </p>
                             </div>
-                            <div class="h-12 w-12 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold">
-                                <UserCheck class="w-6 h-6" />
+                            <div class="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                                <Box class="w-5 h-5 sm:w-6 sm:h-6" />
                             </div>
                         </div>
                     </div>
 
-                    <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-700/80">
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-700/80">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Returned to Store</p>
-                                <p class="text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{{ stats.returned }}</p>
+                                <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Returned Units</p>
+                                <p class="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+                                    {{ stats?.returned_units ?? 0 }}
+                                </p>
                             </div>
-                            <div class="h-12 w-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold">
-                                <RotateCcw class="w-6 h-6" />
+                            <div class="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                                <RotateCcw class="w-5 h-5 sm:w-6 sm:h-6" />
                             </div>
                         </div>
                     </div>
 
-                    <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-700/80">
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-700/80">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Damaged / Lost</p>
-                                <p class="text-3xl font-black text-red-600 dark:text-red-400 mt-1">{{ stats.damaged_lost }}</p>
+                                <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Damaged / Lost</p>
+                                <p class="text-2xl sm:text-3xl font-black text-rose-600 dark:text-rose-400 mt-1">
+                                    {{ stats?.damaged_lost_units ?? 0 }}
+                                </p>
                             </div>
-                            <div class="h-12 w-12 rounded-xl bg-red-50 dark:bg-red-950/50 flex items-center justify-center text-red-600 dark:text-red-400 font-bold">
-                                <AlertTriangle class="w-6 h-6" />
+                            <div class="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-rose-50 dark:bg-rose-950/60 flex items-center justify-center text-rose-600 dark:text-rose-400">
+                                <AlertTriangle class="w-5 h-5 sm:w-6 sm:h-6" />
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Filters Bar -->
-                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-700/80 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div class="relative w-full sm:w-80">
-                        <Search class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                            v-model="searchQuery"
-                            @keyup.enter="handleSearch"
-                            type="text"
-                            placeholder="Search equipment or staff member..."
-                            class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all outline-none"
-                        />
+                <!-- Filters & Search Toolbar -->
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-700/80 flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div class="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto flex-1">
+                        <div class="relative w-full sm:w-72">
+                            <Search class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input
+                                v-model="searchQuery"
+                                @keyup.enter="handleSearch"
+                                type="text"
+                                placeholder="Search item, SKU, or room..."
+                                class="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
+                            />
+                        </div>
+
+                        <!-- Building Filter -->
+                        <select
+                            v-model="buildingFilter"
+                            @change="handleSearch"
+                            class="w-full sm:w-56 px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
+                        >
+                            <option value="ALL">All Campus Buildings</option>
+                            <option v-for="b in buildings" :key="b.id" :value="b.id">
+                                [{{ b.code }}] {{ b.name }}
+                            </option>
+                        </select>
+
+                        <!-- Status Filter -->
+                        <select
+                            v-model="statusFilter"
+                            @change="handleSearch"
+                            class="w-full sm:w-44 px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
+                        >
+                            <option value="ALL">All Statuses</option>
+                            <option value="assigned">Active (Deployed)</option>
+                            <option value="returned">Returned to Store</option>
+                            <option value="damaged">Damaged</option>
+                            <option value="lost">Lost</option>
+                        </select>
                     </div>
 
-                    <div class="flex items-center gap-3 w-full sm:w-auto">
-                        <div class="flex items-center gap-2">
-                            <Filter class="w-3.5 h-3.5 text-slate-400" />
-                            <select
-                                v-model="statusFilter"
-                                @change="handleSearch"
-                                class="px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all outline-none"
-                            >
-                                <option value="ALL">All Statuses</option>
-                                <option value="assigned">Currently Assigned</option>
-                                <option value="returned">Returned to Store</option>
-                                <option value="damaged">Damaged / Repair Needed</option>
-                                <option value="lost">Lost / Unreturned</option>
-                            </select>
-                        </div>
+                    <div class="flex items-center gap-2 self-end md:self-center">
+                        <button
+                            v-if="searchQuery || statusFilter !== 'ALL' || buildingFilter !== 'ALL'"
+                            @click="resetFilters"
+                            class="px-3 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white"
+                        >
+                            Reset
+                        </button>
+                        <button
+                            @click="handleSearch"
+                            class="px-4 py-2 bg-slate-900 text-white dark:bg-slate-700 dark:hover:bg-slate-600 rounded-xl text-xs font-bold transition-all"
+                        >
+                            Filter
+                        </button>
                     </div>
                 </div>
 
-                <!-- Datatable -->
-                <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200/80 dark:border-slate-700/80 overflow-hidden">
+                <!-- Deployments Table -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-700/80 overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-                            <thead class="bg-slate-50/80 dark:bg-slate-900/80">
-                                <tr>
-                                    <th class="px-6 py-4 text-left text-xs font-extrabold text-slate-500 uppercase">Equipment / Asset</th>
-                                    <th class="px-6 py-4 text-left text-xs font-extrabold text-slate-500 uppercase">Assigned Staff Member</th>
-                                    <th class="px-6 py-4 text-left text-xs font-extrabold text-slate-500 uppercase">Condition</th>
-                                    <th class="px-6 py-4 text-left text-xs font-extrabold text-slate-500 uppercase">Issue & Return Schedule</th>
-                                    <th class="px-6 py-4 text-left text-xs font-extrabold text-slate-500 uppercase">Status</th>
-                                    <th class="px-6 py-4 text-right text-xs font-extrabold text-slate-500 uppercase">Action</th>
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-slate-200/80 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-[11px] font-extrabold uppercase tracking-wider">
+                                    <th class="px-6 py-4">Item & SKU</th>
+                                    <th class="px-6 py-4">Campus Building & Room</th>
+                                    <th class="px-6 py-4 text-center">Deployed Qty</th>
+                                    <th class="px-6 py-4">Condition</th>
+                                    <th class="px-6 py-4">Deployed Date</th>
+                                    <th class="px-6 py-4">Status</th>
+                                    <th class="px-6 py-4 text-right">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-                                <tr v-for="asg in assignments.data" :key="asg.id" class="hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors">
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <div class="flex items-center gap-3">
-                                            <div class="h-10 w-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs shrink-0 border border-indigo-200 dark:border-indigo-800">
-                                                💻
-                                            </div>
-                                            <div>
-                                                <p class="font-extrabold text-slate-900 dark:text-white text-xs">{{ asg.item?.name || 'Equipment' }}</p>
-                                                <p class="text-[11px] text-slate-400 font-mono mt-0.5">SKU: {{ asg.item?.sku || 'N/A' }}</p>
-                                            </div>
+                            <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50 text-xs">
+                                <tr 
+                                    v-for="asg in assignments.data" 
+                                    :key="asg.id"
+                                    class="hover:bg-slate-50/70 dark:hover:bg-slate-700/30 transition-colors"
+                                >
+                                    <!-- Item Name & SKU -->
+                                    <td class="px-6 py-4">
+                                        <div class="font-extrabold text-slate-900 dark:text-white">
+                                            {{ asg.item?.name || 'Unknown Item' }}
+                                        </div>
+                                        <div class="text-[11px] text-slate-400 font-mono mt-0.5">
+                                            SKU: {{ asg.item?.sku || 'N/A' }}
                                         </div>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <div>
-                                            <p class="font-bold text-slate-900 dark:text-white text-xs">{{ asg.assignable?.user?.name || 'Staff Member' }}</p>
-                                            <p class="text-[11px] text-slate-500 mt-0.5">{{ asg.assignable?.department?.name || 'University Staff' }}</p>
+
+                                    <!-- Destination Building & Room -->
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-1.5">
+                                            <span 
+                                                v-if="asg.building?.code" 
+                                                class="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 font-extrabold text-[10px] border border-indigo-200 dark:border-indigo-800"
+                                            >
+                                                {{ asg.building.code }}
+                                            </span>
+                                            <span class="font-bold text-slate-900 dark:text-white">
+                                                {{ asg.building?.name || asg.assignable?.name || asg.assignable?.user?.name || 'Building' }}
+                                            </span>
+                                        </div>
+                                        <div class="flex items-center gap-1 text-[11px] text-slate-500 mt-1">
+                                            <MapPin class="w-3 h-3 text-slate-400 shrink-0" />
+                                            <span>{{ asg.location_details || 'General Hall / Room' }}</span>
                                         </div>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-xs font-semibold text-slate-700 dark:text-slate-300 capitalize">
-                                        {{ asg.condition_on_assignment || 'Good' }}
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-xs text-slate-500 font-medium">
-                                        <div>Issued: <strong>{{ formatDate(asg.assigned_at) }}</strong></div>
-                                        <div v-if="asg.expected_return_date" class="text-[11px] text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">
-                                            Return By: {{ formatDate(asg.expected_return_date) }}
-                                        </div>
-                                        <div v-else class="text-[10px] text-slate-400">Permanent Issue</div>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <span 
-                                            class="px-3 py-1 rounded-full text-xs font-extrabold capitalize border"
-                                            :class="{
-                                                'bg-indigo-50 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800': asg.status === 'assigned',
-                                                'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800': asg.status === 'returned',
-                                                'bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-300 border-red-200 dark:border-red-800': asg.status === 'lost',
-                                                'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800': asg.status === 'damaged',
-                                            }"
-                                        >
-                                            {{ asg.status }}
+
+                                    <!-- Deployed Quantity -->
+                                    <td class="px-6 py-4 text-center">
+                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-black bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white">
+                                            {{ asg.quantity ?? 1 }} {{ asg.item?.unit_of_measure || 'units' }}
                                         </span>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-right text-xs font-medium">
-                                        <button 
-                                            v-if="asg.status === 'assigned' && (permissions?.can_manage || true)" 
-                                            @click="openReturnModal(asg)" 
-                                            class="px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 font-bold transition-all border border-slate-200 dark:border-slate-600"
+
+                                    <!-- Condition -->
+                                    <td class="px-6 py-4 capitalize font-medium text-slate-600 dark:text-slate-300">
+                                        {{ asg.condition_on_assignment || 'Good' }}
+                                    </td>
+
+                                    <!-- Dates -->
+                                    <td class="px-6 py-4">
+                                        <div class="font-bold text-slate-800 dark:text-slate-200">
+                                            {{ formatDate(asg.assigned_at) }}
+                                        </div>
+                                        <div v-if="asg.expected_return_date" class="text-[11px] text-slate-400 mt-0.5">
+                                            Return: {{ formatDate(asg.expected_return_date) }}
+                                        </div>
+                                    </td>
+
+                                    <!-- Status -->
+                                    <td class="px-6 py-4">
+                                        <span 
+                                            class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-extrabold capitalize border"
+                                            :class="{
+                                                'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800': asg.status === 'assigned',
+                                                'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800': asg.status === 'returned',
+                                                'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200 dark:border-rose-800': asg.status === 'damaged',
+                                                'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700': asg.status === 'lost',
+                                            }"
                                         >
+                                            <span class="w-1.5 h-1.5 rounded-full mr-1.5" :class="{
+                                                'bg-indigo-500': asg.status === 'assigned',
+                                                'bg-emerald-500': asg.status === 'returned',
+                                                'bg-rose-500': asg.status === 'damaged',
+                                                'bg-slate-500': asg.status === 'lost',
+                                            }"></span>
+                                            {{ asg.status === 'assigned' ? 'Deployed' : asg.status }}
+                                        </span>
+                                    </td>
+
+                                    <!-- Actions -->
+                                    <td class="px-6 py-4 text-right">
+                                        <button
+                                            v-if="asg.status === 'assigned' && (permissions?.can_manage || true)"
+                                            @click="openReturnModal(asg)"
+                                            class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-bold transition-all inline-flex items-center gap-1.5"
+                                        >
+                                            <RotateCcw class="w-3.5 h-3.5 text-indigo-500" />
                                             Process Return
                                         </button>
-                                        <span v-else class="text-slate-400 text-xs">—</span>
+                                        <span v-else-if="asg.status === 'returned'" class="text-[11px] text-slate-400 font-medium">
+                                            Returned on {{ formatDate(asg.returned_at) }}
+                                        </span>
                                     </td>
                                 </tr>
-                                <tr v-if="!assignments.data || assignments.data.length === 0">
-                                    <td colspan="6" class="px-6 py-12 text-center text-slate-400 text-xs">
-                                        No staff equipment assignments found matching your filter.
+
+                                <tr v-if="assignments.data.length === 0">
+                                    <td colspan="7" class="px-6 py-12 text-center text-slate-400">
+                                        <Building2 class="w-10 h-10 mx-auto mb-2 opacity-40 text-slate-400" />
+                                        <p class="font-extrabold text-sm text-slate-600 dark:text-slate-300">No building deployments found</p>
+                                        <p class="text-xs text-slate-400 mt-1">Deploy items to campus buildings using the "Deploy to Building" button above.</p>
                                     </td>
                                 </tr>
                             </tbody>
@@ -348,19 +461,23 @@ const formatDate = (d: string) => {
                     </div>
 
                     <!-- Pagination -->
-                    <div v-if="assignments.links && assignments.links.length > 3" class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+                    <div v-if="assignments.links && assignments.links.length > 3" class="px-6 py-4 border-t border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                        <div class="text-xs text-slate-500">
+                            Showing {{ assignments.data.length }} of {{ assignments.total }} deployments
+                        </div>
                         <div class="flex gap-1">
-                            <component
-                                v-for="(link, i) in assignments.links"
-                                :key="i"
-                                :is="link.url ? 'Link' : 'span'"
+                            <Component
+                                :is="link.url ? Link : 'span'"
+                                v-for="(link, index) in assignments.links"
+                                :key="index"
                                 :href="link.url"
                                 v-html="link.label"
-                                class="px-3.5 py-2 rounded-xl text-xs font-bold transition-colors"
-                                :class="[
-                                    link.active ? 'bg-indigo-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700',
-                                    !link.url ? 'opacity-50 cursor-not-allowed' : ''
-                                ]"
+                                class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                :class="{
+                                    'bg-indigo-600 text-white': link.active,
+                                    'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700': link.url && !link.active,
+                                    'text-slate-300 dark:text-slate-600 cursor-not-allowed': !link.url
+                                }"
                             />
                         </div>
                     </div>
@@ -369,117 +486,197 @@ const formatDate = (d: string) => {
             </div>
         </div>
 
-        <!-- ASSIGN EQUIPMENT MODAL -->
-        <div v-if="showAssignModal" class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-6 relative">
-                <div class="flex justify-between items-start">
+        <!-- MODAL: DEPLOY ITEM TO BUILDING -->
+        <div v-if="showDeployModal" class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-6">
+                <div class="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
                     <div class="flex items-center gap-3">
-                        <div class="h-12 w-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-lg shadow-indigo-500/30">
-                            <UserPlus class="w-6 h-6" />
+                        <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold">
+                            <Building2 class="w-5 h-5" />
                         </div>
                         <div>
-                            <h3 class="text-xl font-black text-slate-900 dark:text-white">Assign Equipment to Staff</h3>
-                            <p class="text-xs text-slate-500">Allocate reusable store assets to an individual staff member.</p>
+                            <h3 class="text-lg font-black text-slate-900 dark:text-white">Deploy Item to Building</h3>
+                            <p class="text-xs text-slate-500">Assign inventory stock to a campus building or lab</p>
                         </div>
                     </div>
-                    <button @click="showAssignModal = false" class="text-slate-400 hover:text-slate-600"><X class="w-5 h-5" /></button>
+                    <button @click="showDeployModal = false" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                        <X class="w-5 h-5" />
+                    </button>
                 </div>
 
-                <form @submit.prevent="submitAssign" class="space-y-4 text-xs">
+                <form @submit.prevent="submitDeploy" class="space-y-4 text-xs">
+                    <!-- Select Item -->
                     <div>
-                        <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Equipment / Item *</label>
-                        <select v-model="assignForm.inventory_item_id" required class="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold">
-                            <option v-for="it in items" :key="it.id" :value="it.id">
-                                {{ it.name }} (SKU: {{ it.sku }}) — {{ it.available_quantity }} Available
+                        <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Select Store Item *</label>
+                        <select
+                            v-model="deployForm.inventory_item_id"
+                            required
+                            class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                        >
+                            <option v-for="item in items" :key="item.id" :value="item.id">
+                                {{ item.name }} ({{ item.sku || 'No SKU' }}) — Available: {{ item.available_quantity }} {{ item.unit_of_measure || 'units' }}
+                            </option>
+                        </select>
+                        <div v-if="selectedItemStock" class="mt-1 text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">
+                            Stock Available: <strong>{{ selectedItemStock.available_quantity }} {{ selectedItemStock.unit_of_measure || 'units' }}</strong>
+                        </div>
+                    </div>
+
+                    <!-- Select Campus Building -->
+                    <div>
+                        <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Target Campus Building *</label>
+                        <select
+                            v-model="deployForm.building_id"
+                            required
+                            class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                        >
+                            <option v-for="bldg in buildings" :key="bldg.id" :value="bldg.id">
+                                [{{ bldg.code }}] {{ bldg.name }} ({{ bldg.building_type.replace('_', ' ') }})
                             </option>
                         </select>
                     </div>
 
-                    <!-- Staff Search Input -->
-                    <div>
-                        <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Select Assignee Staff Member *</label>
-                        <div v-if="selectedStaff" class="p-3 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 rounded-xl flex items-center justify-between">
-                            <div class="flex items-center gap-2.5">
-                                <CheckCircle2 class="w-5 h-5 text-indigo-600" />
-                                <div>
-                                    <p class="font-bold text-slate-900 dark:text-white text-xs">{{ selectedStaff.name }}</p>
-                                    <p class="text-[10px] text-slate-500">{{ selectedStaff.email }}</p>
-                                </div>
-                            </div>
-                            <button type="button" @click="clearSelectedStaff" class="text-xs text-indigo-600 font-bold hover:underline">✕ Change</button>
-                        </div>
-                        <div v-else class="relative">
+                    <!-- Room / Location Details & Quantity -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Room / Location Details</label>
                             <input
-                                v-model="staffSearchQuery"
-                                @input="searchStaff"
+                                v-model="deployForm.location_details"
                                 type="text"
-                                placeholder="Type staff name or email to search..."
-                                class="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                                placeholder="e.g. Room 204, Lab B, Stage"
+                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 dark:text-white"
                             />
-                            <div v-if="staffSearchResults.length > 0" class="absolute z-10 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                <div
-                                    v-for="st in staffSearchResults"
-                                    :key="st.id"
-                                    @click="selectStaffMember(st)"
-                                    class="p-2.5 hover:bg-indigo-50 dark:hover:bg-slate-700 cursor-pointer border-b border-slate-100 dark:border-slate-700/50 flex justify-between items-center"
-                                >
-                                    <div>
-                                        <p class="font-bold text-xs text-slate-900 dark:text-white">{{ st.name }}</p>
-                                        <p class="text-[10px] text-slate-400">{{ st.email }}</p>
-                                    </div>
-                                    <span class="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">Select →</span>
-                                </div>
-                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Quantity to Deploy *</label>
+                            <input
+                                v-model.number="deployForm.quantity"
+                                type="number"
+                                min="1"
+                                :max="selectedItemStock?.available_quantity || 9999"
+                                required
+                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                            />
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Initial Condition & Expected Return Date -->
+                    <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Condition on Issue</label>
-                            <select v-model="assignForm.condition_on_assignment" class="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs">
-                                <option value="brand_new">Brand New</option>
-                                <option value="good">Good Condition</option>
-                                <option value="fair">Fair / Operational</option>
+                            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Initial Condition</label>
+                            <select
+                                v-model="deployForm.condition_on_assignment"
+                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 dark:text-white capitalize"
+                            >
+                                <option value="new">Brand New</option>
+                                <option value="good">Good / Functional</option>
+                                <option value="fair">Fair</option>
                             </select>
                         </div>
+
                         <div>
                             <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Expected Return Date</label>
-                            <input v-model="assignForm.expected_return_date" type="date" class="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs" />
-                            <span class="text-[10px] text-slate-400">Leave blank for permanent issue</span>
+                            <input
+                                v-model="deployForm.expected_return_date"
+                                type="date"
+                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                            />
                         </div>
                     </div>
 
-                    <div class="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
-                        <button type="button" @click="showAssignModal = false" class="px-4 py-2 font-bold text-slate-500">Cancel</button>
-                        <button type="submit" :disabled="!assignForm.staff_id" class="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl shadow-lg disabled:opacity-50 hover:bg-indigo-500">Confirm Assignment</button>
+                    <div class="pt-4 flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800">
+                        <button
+                            type="button"
+                            @click="showDeployModal = false"
+                            class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            :disabled="deployForm.processing"
+                            class="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition-all disabled:opacity-50"
+                        >
+                            {{ deployForm.processing ? 'Deploying...' : 'Confirm Deployment' }}
+                        </button>
                     </div>
                 </form>
             </div>
         </div>
 
-        <!-- RETURN ITEM MODAL -->
-        <div v-if="showReturnModal && selectedAssignment" class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
-                <div class="flex justify-between items-center">
-                    <h3 class="font-black text-slate-900 dark:text-white text-base">Process Equipment Return</h3>
-                    <button @click="showReturnModal = false" class="text-slate-400 hover:text-slate-600"><X class="w-5 h-5" /></button>
+        <!-- MODAL: PROCESS ITEM RETURN -->
+        <div v-if="showReturnModal && selectedAssignment" class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6">
+                <div class="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold">
+                            <RotateCcw class="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-black text-slate-900 dark:text-white">Process Item Return</h3>
+                            <p class="text-xs text-slate-500">Restore or update status of deployed equipment</p>
+                        </div>
+                    </div>
+                    <button @click="showReturnModal = false" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                        <X class="w-5 h-5" />
+                    </button>
                 </div>
-                <form @submit.prevent="submitReturnItem" class="space-y-4 text-xs">
+
+                <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-xs space-y-1">
+                    <p class="font-extrabold text-slate-900 dark:text-white">{{ selectedAssignment.item?.name }}</p>
+                    <p class="text-slate-500">
+                        From: <strong>{{ selectedAssignment.building?.name || 'Building' }}</strong> 
+                        ({{ selectedAssignment.location_details || 'General' }})
+                    </p>
+                    <p class="text-slate-500">
+                        Quantity: <strong>{{ selectedAssignment.quantity ?? 1 }} {{ selectedAssignment.item?.unit_of_measure || 'units' }}</strong>
+                    </p>
+                </div>
+
+                <form @submit.prevent="submitReturn" class="space-y-4 text-xs">
                     <div>
-                        <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Return Outcome *</label>
-                        <select v-model="returnForm.status" required class="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold">
-                            <option value="returned">Returned to Central Store (Stock +1)</option>
-                            <option value="damaged">Damaged / Requires Repair</option>
-                            <option value="lost">Lost / Unreturned</option>
+                        <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Return Status *</label>
+                        <select
+                            v-model="returnForm.status"
+                            required
+                            class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                        >
+                            <option value="returned">Returned to Store (Increments available stock)</option>
+                            <option value="damaged">Damaged (Requires repair / write-off)</option>
+                            <option value="lost">Lost / Missing</option>
                         </select>
                     </div>
+
                     <div>
                         <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Condition on Return</label>
-                        <input v-model="returnForm.condition_on_return" type="text" placeholder="e.g. Good condition, minor scratch" class="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs" />
+                        <select
+                            v-model="returnForm.condition_on_return"
+                            class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-indigo-500 dark:text-white capitalize"
+                        >
+                            <option value="new">Brand New</option>
+                            <option value="good">Good / Functional</option>
+                            <option value="fair">Fair (Minor wear)</option>
+                            <option value="poor">Poor (Needs attention)</option>
+                            <option value="damaged">Damaged / Broken</option>
+                        </select>
                     </div>
-                    <div class="flex justify-end gap-3 pt-2">
-                        <button type="button" @click="showReturnModal = false" class="px-4 py-2 text-xs font-bold text-slate-500">Cancel</button>
-                        <button type="submit" class="px-5 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-md hover:bg-emerald-500">Complete Return</button>
+
+                    <div class="pt-4 flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800">
+                        <button
+                            type="button"
+                            @click="showReturnModal = false"
+                            class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            :disabled="returnForm.processing"
+                            class="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-600/30 transition-all disabled:opacity-50"
+                        >
+                            {{ returnForm.processing ? 'Processing...' : 'Complete Return' }}
+                        </button>
                     </div>
                 </form>
             </div>

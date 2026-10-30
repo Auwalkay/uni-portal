@@ -139,11 +139,14 @@ class InventoryRequisitionController extends Controller
         return redirect()->back()->with('success', "Requisition #{$requisition->requisition_number} marked as rejected.");
     }
 
-    public function downloadVoucher(InventoryRequisition $requisition)
+    public function downloadVoucher(Request $request, InventoryRequisition $requisition)
     {
-        Gate::authorize('view_inventory');
+        $user = $request->user();
+        if (!$user || (!$user->can('view_inventory') && !$user->can('view_inventory_requisitions') && !$user->can('manage_inventory') && $requisition->user_id !== $user->id)) {
+            abort(403, 'Unauthorized access to this Store Issue Voucher.');
+        }
 
-        $requisition->load(['user', 'department', 'approvedBy', 'items.item']);
+        $requisition->load(['user', 'department', 'approvedBy', 'items.item.category']);
 
         $pdf = Pdf::loadView('documents.store_issue_voucher', [
             'requisition' => $requisition,
@@ -153,6 +156,13 @@ class InventoryRequisitionController extends Controller
             'isRemoteEnabled' => true,
         ]);
 
-        return $pdf->download("Store_Issue_Voucher_{$requisition->requisition_number}.pdf");
+        $cleanNumber = preg_replace('/[^A-Za-z0-9_-]/', '-', $requisition->requisition_number) ?: $requisition->id;
+        $filename = "Store_Issue_Voucher_{$cleanNumber}.pdf";
+
+        if ($request->boolean('download') || $request->query('download') === '1') {
+            return $pdf->download($filename);
+        }
+
+        return $pdf->stream($filename);
     }
 }
