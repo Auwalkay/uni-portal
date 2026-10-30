@@ -29,7 +29,8 @@ class CourseRegistrationController extends Controller
         $student = Student::where('user_id', Auth::id())->with('program')->firstOrFail();
 
         $registrations = CourseRegistration::where('student_id', $student->id)
-            ->with(['session', 'semester', 'course'])
+            ->whereHas('course', fn ($q) => $q->where('is_active', true))
+            ->with(['session', 'semester', 'course' => fn ($q) => $q->where('is_active', true)])
             ->get();
 
         $programme = $student->program;
@@ -142,11 +143,13 @@ class CourseRegistrationController extends Controller
 
         $registeredCourses = CourseRegistration::where('student_id', $student->id)
             ->where('session_id', $currentSession->id)
-            ->with('course')
+            ->whereHas('course', fn ($q) => $q->where('is_active', true))
+            ->with(['course' => fn ($q) => $q->where('is_active', true)])
             ->get()
-            ->pluck('course');
+            ->pluck('course')
+            ->filter();
 
-        $registeredCourseIds = $registeredCourses->pluck('id');
+        $registeredCourseIds = $registeredCourses->pluck('id')->values()->all();
 
         $perCourseFeeConfig = FeeConfiguration::where('session_id', $currentSession->id)
             ->where('is_per_course', true)
