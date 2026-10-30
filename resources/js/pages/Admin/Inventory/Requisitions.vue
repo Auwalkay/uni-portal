@@ -354,7 +354,7 @@ const formatDate = (d: string) => {
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-right text-xs font-medium space-x-2">
                                         <a
-                                            :href="route('admin.inventory.requisitions.voucher', req.id)"
+                                            :href="route('admin.inventory.requisitions.voucher', req.id, false)"
                                             target="_blank"
                                             class="px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-300 font-bold inline-flex items-center gap-1.5 transition-all border border-indigo-200 dark:border-indigo-800"
                                         >

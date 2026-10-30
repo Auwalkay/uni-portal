@@ -267,7 +267,7 @@ const formatDate = (dateStr?: string) => {
                         </div>
                         <div class="flex flex-wrap items-center gap-3 shrink-0">
                             <a
-                                :href="route('admin.inventory.export-assignments')"
+                                :href="route('admin.inventory.export-assignments', undefined, false)"
                                 class="inline-flex items-center px-4 py-2.5 rounded-xl text-xs font-bold text-slate-200 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 shadow-sm transition-all gap-1.5"
                             >
                                 <Download class="w-4 h-4" />

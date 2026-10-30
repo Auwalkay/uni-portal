@@ -280,7 +280,7 @@ const exportCsvUrl = computed(() => {
     if (semesterId.value) params.append('semester_id', semesterId.value);
     if (status.value !== 'all') params.append('status', status.value);
 
-    return `${route('admin.course_registration.export')}?${params.toString()}`;
+    return `${route('admin.course_registration.export', undefined, false)}?${params.toString()}`;
 });
 
 const breadcrumbs = [
