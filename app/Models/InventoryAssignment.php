@@ -12,6 +12,7 @@ class InventoryAssignment extends Model
     protected $fillable = [
         'inventory_item_id',
         'building_id',
+        'staff_id',
         'quantity',
         'location_details',
         'assignable_type',
@@ -39,6 +40,11 @@ class InventoryAssignment extends Model
     public function building()
     {
         return $this->belongsTo(Building::class, 'building_id');
+    }
+
+    public function staff()
+    {
+        return $this->belongsTo(Staff::class, 'staff_id');
     }
 
     public function assignable()

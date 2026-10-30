@@ -6,7 +6,8 @@ import {
     Package, Plus, Search, Upload, Trash2, Edit, Filter, 
     Download, AlertTriangle, RefreshCw, FileText,
     Building2, CheckCircle2, ArrowUpRight, ArrowDownRight,
-    Tag, Inbox, Sparkles, ShieldCheck, X, Box, Layers, RotateCcw
+    Tag, Inbox, Sparkles, ShieldCheck, X, Box, Layers, RotateCcw,
+    User, Users, UserCheck, Loader2, Check
 } from 'lucide-vue-next';
 import Swal from 'sweetalert2';
 import { formatCurrency, formatCompactCurrency } from '@/lib/utils';
@@ -221,10 +222,54 @@ const submitRestock = () => {
     });
 };
 
-// DEPLOY TO BUILDING FORM
+// DEPLOY / ASSIGNMENT FORM (DUAL-MODE: BUILDING & STAFF)
+const staffSearchQuery = ref('');
+const isSearchingStaff = ref(false);
+const staffSearchResults = ref<Array<{ id: string; name: string; staff_number: string; email?: string; department: string; label: string }>>([]);
+const selectedStaff = ref<{ id: string; name: string; staff_number: string; email?: string; department: string; label: string } | null>(null);
+
+let staffSearchTimer: any = null;
+const onStaffSearchInput = () => {
+    if (staffSearchTimer) clearTimeout(staffSearchTimer);
+    const q = staffSearchQuery.value ? staffSearchQuery.value.trim() : '';
+    if (q.length < 1) {
+        staffSearchResults.value = [];
+        return;
+    }
+    isSearchingStaff.value = true;
+    staffSearchTimer = setTimeout(async () => {
+        try {
+            const res = await fetch(route('admin.inventory.staff.search', { query: q }));
+            const data = await res.json();
+            staffSearchResults.value = data;
+        } catch (e) {
+            console.error('Failed to search staff:', e);
+            staffSearchResults.value = [];
+        } finally {
+            isSearchingStaff.value = false;
+        }
+    }, 250);
+};
+
+const selectStaffMember = (staff: any) => {
+    selectedStaff.value = staff;
+    deployForm.staff_id = staff.id;
+    staffSearchQuery.value = staff.name;
+    staffSearchResults.value = [];
+};
+
+const clearSelectedStaff = () => {
+    selectedStaff.value = null;
+    deployForm.staff_id = '';
+    staffSearchQuery.value = '';
+    staffSearchResults.value = [];
+};
+
 const deployForm = useForm({
     inventory_item_id: null as number | null,
+    assignment_target: 'building' as 'building' | 'staff',
     building_id: props.buildings && props.buildings.length > 0 ? props.buildings[0].id : '',
+    staff_id: '',
     quantity: 1,
     location_details: '',
     expected_return_date: '',
@@ -234,9 +279,12 @@ const deployForm = useForm({
 const openDeployModal = (item: InventoryItemData) => {
     selectedItem.value = item;
     deployForm.inventory_item_id = item.id;
+    deployForm.assignment_target = 'building';
     if (props.buildings && props.buildings.length > 0 && !deployForm.building_id) {
         deployForm.building_id = props.buildings[0].id;
     }
+    deployForm.staff_id = '';
+    clearSelectedStaff();
     deployForm.quantity = 1;
     deployForm.location_details = '';
     deployForm.expected_return_date = '';
@@ -250,6 +298,7 @@ const submitDeploy = () => {
             showDeployModal.value = false;
             selectedItem.value = null;
             deployForm.reset();
+            clearSelectedStaff();
         },
     });
 };
@@ -652,26 +701,32 @@ const submitImport = () => {
             </div>
         </div>
 
-        <!-- MODAL: ADD NEW ITEM -->
-        <div v-if="showAddModal" class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl space-y-6">
-                <div class="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+        <!-- MODAL: ADD NEW ITEM (RESPONSIVE) -->
+        <div 
+            v-if="showAddModal" 
+            class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 md:p-6"
+            @click.self="showAddModal = false"
+        >
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl max-w-xl w-full shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] overflow-hidden my-auto">
+                <!-- Fixed Header -->
+                <div class="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold shrink-0">
                             <Package class="w-5 h-5" />
                         </div>
                         <div>
-                            <h3 class="text-lg font-black text-slate-900 dark:text-white">Add New Store Item</h3>
-                            <p class="text-xs text-slate-500">Register new equipment or consumables to store catalog</p>
+                            <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Add New Store Item</h3>
+                            <p class="text-[11px] sm:text-xs text-slate-500">Register new equipment or consumables to store catalog</p>
                         </div>
                     </div>
-                    <button @click="showAddModal = false" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                    <button @click="showAddModal = false" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                         <X class="w-5 h-5" />
                     </button>
                 </div>
 
-                <form @submit.prevent="submitAdd" class="space-y-4 text-xs">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Scrollable Body -->
+                <form @submit.prevent="submitAdd" id="addItemForm" class="flex-1 overflow-y-auto px-5 sm:px-6 py-4 overscroll-contain text-xs">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
                         <div class="sm:col-span-2">
                             <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Item Name *</label>
                             <input
@@ -804,47 +859,55 @@ const submitImport = () => {
                             ></textarea>
                         </div>
                     </div>
-
-                    <div class="pt-4 flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800">
-                        <button
-                            type="button"
-                            @click="showAddModal = false"
-                            class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            :disabled="itemForm.processing"
-                            class="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition-all disabled:opacity-50"
-                        >
-                            {{ itemForm.processing ? 'Saving...' : 'Add Item to Store' }}
-                        </button>
-                    </div>
                 </form>
+
+                <!-- Fixed Footer -->
+                <div class="flex items-center justify-end gap-3 px-5 sm:px-6 py-3.5 sm:py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90 shrink-0">
+                    <button
+                        type="button"
+                        @click="showAddModal = false"
+                        class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        form="addItemForm"
+                        :disabled="itemForm.processing"
+                        class="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition-all disabled:opacity-50 active:scale-95"
+                    >
+                        {{ itemForm.processing ? 'Saving...' : 'Add Item to Store' }}
+                    </button>
+                </div>
             </div>
         </div>
 
-        <!-- MODAL: EDIT ITEM -->
-        <div v-if="showEditModal && selectedItem" class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl space-y-6">
-                <div class="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+        <!-- MODAL: EDIT ITEM (RESPONSIVE) -->
+        <div 
+            v-if="showEditModal && selectedItem" 
+            class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 md:p-6"
+            @click.self="showEditModal = false"
+        >
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl max-w-xl w-full shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] overflow-hidden my-auto">
+                <!-- Fixed Header -->
+                <div class="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold shrink-0">
                             <Edit class="w-5 h-5" />
                         </div>
                         <div>
-                            <h3 class="text-lg font-black text-slate-900 dark:text-white">Edit Store Item</h3>
-                            <p class="text-xs text-slate-500">Update specifications and parameters for {{ selectedItem.name }}</p>
+                            <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Edit Store Item</h3>
+                            <p class="text-[11px] sm:text-xs text-slate-500">Update specifications and parameters for {{ selectedItem.name }}</p>
                         </div>
                     </div>
-                    <button @click="showEditModal = false" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                    <button @click="showEditModal = false" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                         <X class="w-5 h-5" />
                     </button>
                 </div>
 
-                <form @submit.prevent="submitEdit" class="space-y-4 text-xs">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Scrollable Body -->
+                <form @submit.prevent="submitEdit" id="editItemForm" class="flex-1 overflow-y-auto px-5 sm:px-6 py-4 overscroll-contain text-xs">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
                         <div class="sm:col-span-2">
                             <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Item Name *</label>
                             <input
@@ -922,57 +985,65 @@ const submitImport = () => {
                             </select>
                         </div>
                     </div>
-
-                    <div class="pt-4 flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800">
-                        <button
-                            type="button"
-                            @click="showEditModal = false"
-                            class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            :disabled="itemForm.processing"
-                            class="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition-all disabled:opacity-50"
-                        >
-                            {{ itemForm.processing ? 'Saving...' : 'Update Item' }}
-                        </button>
-                    </div>
                 </form>
+
+                <!-- Fixed Footer -->
+                <div class="flex items-center justify-end gap-3 px-5 sm:px-6 py-3.5 sm:py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90 shrink-0">
+                    <button
+                        type="button"
+                        @click="showEditModal = false"
+                        class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        form="editItemForm"
+                        :disabled="itemForm.processing"
+                        class="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition-all disabled:opacity-50 active:scale-95"
+                    >
+                        {{ itemForm.processing ? 'Saving...' : 'Update Item' }}
+                    </button>
+                </div>
             </div>
         </div>
 
-        <!-- MODAL: QUICK RESTOCK -->
-        <div v-if="showRestockModal && selectedItem" class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6">
-                <div class="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+        <!-- MODAL: QUICK RESTOCK (RESPONSIVE) -->
+        <div 
+            v-if="showRestockModal && selectedItem" 
+            class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 md:p-6"
+            @click.self="showRestockModal = false"
+        >
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl max-w-md w-full shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] overflow-hidden my-auto">
+                <!-- Fixed Header -->
+                <div class="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold shrink-0">
                             <Plus class="w-5 h-5" />
                         </div>
                         <div>
-                            <h3 class="text-lg font-black text-slate-900 dark:text-white">Quick Restock Units</h3>
-                            <p class="text-xs text-slate-500">Replenish store inventory for {{ selectedItem.name }}</p>
+                            <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Quick Restock Units</h3>
+                            <p class="text-[11px] sm:text-xs text-slate-500">Replenish store inventory for {{ selectedItem.name }}</p>
                         </div>
                     </div>
-                    <button @click="showRestockModal = false" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                    <button @click="showRestockModal = false" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                         <X class="w-5 h-5" />
                     </button>
                 </div>
 
-                <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-xs">
-                    <div class="flex items-center justify-between">
-                        <span class="text-slate-500">Current Available:</span>
-                        <span class="font-black text-slate-900 dark:text-white">{{ selectedItem.available_quantity }} {{ selectedItem.unit_of_measure }}</span>
+                <!-- Scrollable Body -->
+                <form @submit.prevent="submitRestock" id="restockItemForm" class="flex-1 overflow-y-auto px-5 sm:px-6 py-4 space-y-4 overscroll-contain text-xs">
+                    <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-xs">
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-500">Current Available:</span>
+                            <span class="font-black text-slate-900 dark:text-white">{{ selectedItem.available_quantity }} {{ selectedItem.unit_of_measure }}</span>
+                        </div>
+                        <div class="flex items-center justify-between mt-1">
+                            <span class="text-slate-500">Total in System:</span>
+                            <span class="font-bold text-slate-900 dark:text-white">{{ selectedItem.total_quantity }} {{ selectedItem.unit_of_measure }}</span>
+                        </div>
                     </div>
-                    <div class="flex items-center justify-between mt-1">
-                        <span class="text-slate-500">Total in System:</span>
-                        <span class="font-bold text-slate-900 dark:text-white">{{ selectedItem.total_quantity }} {{ selectedItem.unit_of_measure }}</span>
-                    </div>
-                </div>
 
-                <form @submit.prevent="submitRestock" class="space-y-4 text-xs">
                     <div>
                         <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Additional Quantity to Add *</label>
                         <input
@@ -1014,73 +1085,112 @@ const submitImport = () => {
                             class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 dark:text-white"
                         />
                     </div>
-
-                    <div class="pt-4 flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800">
-                        <button
-                            type="button"
-                            @click="showRestockModal = false"
-                            class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            :disabled="restockForm.processing"
-                            class="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-600/30 transition-all disabled:opacity-50"
-                        >
-                            {{ restockForm.processing ? 'Adding Stock...' : 'Confirm Restock' }}
-                        </button>
-                    </div>
                 </form>
+
+                <!-- Fixed Footer -->
+                <div class="flex items-center justify-end gap-3 px-5 sm:px-6 py-3.5 sm:py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90 shrink-0">
+                    <button
+                        type="button"
+                        @click="showRestockModal = false"
+                        class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        form="restockItemForm"
+                        :disabled="restockForm.processing"
+                        class="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-600/30 transition-all disabled:opacity-50 active:scale-95"
+                    >
+                        {{ restockForm.processing ? 'Adding Stock...' : 'Confirm Restock' }}
+                    </button>
+                </div>
             </div>
         </div>
 
-        <!-- MODAL: QUICK DEPLOY TO BUILDING -->
-        <div v-if="showDeployModal && selectedItem" class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-6">
-                <div class="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+        <!-- MODAL: QUICK DEPLOY / ASSIGN (DUAL-MODE: BUILDING & STAFF) (RESPONSIVE) -->
+        <div 
+            v-if="showDeployModal && selectedItem" 
+            class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 md:p-6"
+            @click.self="showDeployModal = false"
+        >
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl max-w-xl w-full shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] overflow-hidden my-auto">
+                <!-- Fixed Header -->
+                <div class="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold">
-                            <Building2 class="w-5 h-5" />
+                        <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold shrink-0">
+                            <Layers class="w-5 h-5" />
                         </div>
                         <div>
-                            <h3 class="text-lg font-black text-slate-900 dark:text-white">Deploy to Campus Building</h3>
-                            <p class="text-xs text-slate-500">Deploy {{ selectedItem.name }} to a university facility</p>
+                            <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Assign / Deploy Item</h3>
+                            <p class="text-[11px] sm:text-xs text-slate-500">Deploy {{ selectedItem.name }} to a facility or assign to staff</p>
                         </div>
                     </div>
-                    <button @click="showDeployModal = false" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                    <button @click="showDeployModal = false" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                         <X class="w-5 h-5" />
                     </button>
                 </div>
 
-                <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-xs flex items-center justify-between">
-                    <div>
-                        <p class="font-bold text-slate-900 dark:text-white">{{ selectedItem.name }}</p>
-                        <p class="text-[11px] text-slate-400 font-mono mt-0.5">SKU: {{ selectedItem.sku || 'N/A' }}</p>
-                    </div>
-                    <div class="text-right">
-                        <span class="text-slate-400">Available:</span>
-                        <span class="font-black text-indigo-600 dark:text-indigo-400 text-sm ml-1">
-                            {{ selectedItem.available_quantity }} {{ selectedItem.unit_of_measure }}
-                        </span>
-                    </div>
-                </div>
-
-                <form @submit.prevent="submitDeploy" class="space-y-4 text-xs">
-                    <div>
-                        <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Target Campus Building *</label>
-                        <select
-                            v-model="deployForm.building_id"
-                            required
-                            class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-indigo-500 dark:text-white"
-                        >
-                            <option v-for="bldg in buildings" :key="bldg.id" :value="bldg.id">
-                                [{{ bldg.code }}] {{ bldg.name }} ({{ bldg.building_type.replace('_', ' ') }})
-                            </option>
-                        </select>
+                <!-- Scrollable Body -->
+                <form @submit.prevent="submitDeploy" id="quickDeployForm" class="flex-1 overflow-y-auto px-5 sm:px-6 py-4 space-y-4 overscroll-contain text-xs">
+                    <!-- Item Overview Card -->
+                    <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between">
+                        <div>
+                            <p class="font-bold text-slate-900 dark:text-white">{{ selectedItem.name }}</p>
+                            <p class="text-[11px] text-slate-400 font-mono mt-0.5">SKU: {{ selectedItem.sku || 'N/A' }}</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-slate-400">Available:</span>
+                            <span class="font-black text-indigo-600 dark:text-indigo-400 text-sm ml-1">
+                                {{ selectedItem.available_quantity }} {{ selectedItem.unit_of_measure }}
+                            </span>
+                        </div>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-4">
+                    <!-- Target Selector Toggle -->
+                    <div>
+                        <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1.5">Assignment Destination Type *</label>
+                        <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <button
+                                type="button"
+                                @click="deployForm.assignment_target = 'building'"
+                                class="flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-black transition-all"
+                                :class="deployForm.assignment_target === 'building' 
+                                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-sm' 
+                                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'"
+                            >
+                                <Building2 class="w-4 h-4" />
+                                <span>Campus Building</span>
+                            </button>
+                            <button
+                                type="button"
+                                @click="deployForm.assignment_target = 'staff'"
+                                class="flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-black transition-all"
+                                :class="deployForm.assignment_target === 'staff' 
+                                    ? 'bg-white dark:bg-slate-700 text-violet-600 dark:text-white shadow-sm' 
+                                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'"
+                            >
+                                <User class="w-4 h-4" />
+                                <span>Individual Staff</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- IF BUILDING TARGET -->
+                    <div v-if="deployForm.assignment_target === 'building'" class="space-y-4">
+                        <div>
+                            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Target Campus Building *</label>
+                            <select
+                                v-model="deployForm.building_id"
+                                required
+                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                            >
+                                <option v-for="bldg in buildings" :key="bldg.id" :value="bldg.id">
+                                    [{{ bldg.code }}] {{ bldg.name }} ({{ bldg.building_type.replace('_', ' ') }})
+                                </option>
+                            </select>
+                        </div>
+
                         <div>
                             <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Room / Location Details</label>
                             <input
@@ -1090,9 +1200,97 @@ const submitImport = () => {
                                 class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 dark:text-white"
                             />
                         </div>
+                    </div>
+
+                    <!-- IF STAFF TARGET -->
+                    <div v-if="deployForm.assignment_target === 'staff'" class="space-y-3">
+                        <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Search & Select Staff Member *</label>
+                        
+                        <!-- Selected Staff Card -->
+                        <div v-if="selectedStaff" class="p-3.5 rounded-xl bg-violet-50 dark:bg-violet-950/50 border border-violet-200 dark:border-violet-800 flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg bg-violet-600 text-white flex items-center justify-center font-black text-sm shrink-0">
+                                    <User class="w-4 h-4" />
+                                </div>
+                                <div>
+                                    <p class="font-extrabold text-slate-900 dark:text-white text-xs">{{ selectedStaff.name }}</p>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                        ID: <strong>{{ selectedStaff.staff_number || 'N/A' }}</strong> • {{ selectedStaff.department }}
+                                    </p>
+                                </div>
+                            </div>
+                            <button 
+                                type="button" 
+                                @click="clearSelectedStaff"
+                                class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                                title="Change staff member"
+                            >
+                                <X class="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <!-- Search Autocomplete Input -->
+                        <div v-else class="relative">
+                            <div class="relative">
+                                <Search class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input
+                                    v-model="staffSearchQuery"
+                                    @input="onStaffSearchInput"
+                                    type="text"
+                                    placeholder="Type staff name, email, or staff number..."
+                                    class="w-full pl-10 pr-9 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-violet-500 dark:text-white"
+                                />
+                                <div v-if="isSearchingStaff" class="absolute right-3 top-1/2 -translate-y-1/2">
+                                    <Loader2 class="w-4 h-4 text-violet-500 animate-spin" />
+                                </div>
+                            </div>
+
+                            <!-- Dropdown Results -->
+                            <div 
+                                v-if="staffSearchResults.length > 0" 
+                                class="absolute z-20 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl divide-y divide-slate-100 dark:divide-slate-700"
+                            >
+                                <button
+                                    v-for="staff in staffSearchResults"
+                                    :key="staff.id"
+                                    type="button"
+                                    @click="selectStaffMember(staff)"
+                                    class="w-full px-3.5 py-2.5 text-left hover:bg-violet-50 dark:hover:bg-violet-950/50 flex items-center justify-between transition-colors"
+                                >
+                                    <div>
+                                        <p class="font-bold text-slate-900 dark:text-white text-xs">{{ staff.name }}</p>
+                                        <p class="text-[10px] text-slate-500 dark:text-slate-400">
+                                            {{ staff.staff_number ? `ID: ${staff.staff_number}` : '' }} • {{ staff.department }}
+                                        </p>
+                                    </div>
+                                    <Check class="w-4 h-4 text-violet-600 opacity-0 group-hover:opacity-100" />
+                                </button>
+                            </div>
+
+                            <p v-if="!isSearchingStaff && staffSearchQuery.length >= 2 && staffSearchResults.length === 0" class="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+                                No staff members found matching "{{ staffSearchQuery }}".
+                            </p>
+                        </div>
 
                         <div>
-                            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Quantity to Deploy *</label>
+                            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Office / Desk Notes</label>
+                            <input
+                                v-model="deployForm.location_details"
+                                type="text"
+                                placeholder="e.g. Office 3A, Desk 2, Personal Custody"
+                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-violet-500 dark:text-white"
+                            />
+                        </div>
+
+                        <div class="p-2.5 rounded-xl bg-violet-50/60 dark:bg-violet-950/30 border border-violet-200/60 dark:border-violet-800/40 text-[11px] text-violet-700 dark:text-violet-300">
+                            💡 Assigned items will appear on the staff member's <strong>"My Inventory"</strong> portal and an email confirmation will be sent.
+                        </div>
+                    </div>
+
+                    <!-- Quantity & Initial Condition -->
+                    <div class="grid grid-cols-2 gap-3 sm:gap-4">
+                        <div>
+                            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Quantity *</label>
                             <input
                                 v-model.number="deployForm.quantity"
                                 type="number"
@@ -1102,70 +1300,77 @@ const submitImport = () => {
                                 class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 dark:text-white font-bold"
                             />
                         </div>
-                    </div>
 
-                    <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Condition</label>
+                            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Condition on Handover</label>
                             <select
                                 v-model="deployForm.condition_on_assignment"
-                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 dark:text-white capitalize"
+                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 dark:text-white capitalize font-semibold"
                             >
                                 <option value="new">Brand New</option>
                                 <option value="good">Good / Functional</option>
                                 <option value="fair">Fair</option>
                             </select>
                         </div>
-
-                        <div>
-                            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Expected Return Date</label>
-                            <input
-                                v-model="deployForm.expected_return_date"
-                                type="date"
-                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 dark:text-white"
-                            />
-                        </div>
                     </div>
 
-                    <div class="pt-4 flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800">
-                        <button
-                            type="button"
-                            @click="showDeployModal = false"
-                            class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            :disabled="deployForm.processing"
-                            class="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition-all disabled:opacity-50"
-                        >
-                            {{ deployForm.processing ? 'Deploying...' : 'Deploy to Building' }}
-                        </button>
+                    <!-- Expected Return Date -->
+                    <div>
+                        <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Expected Return Date (Optional)</label>
+                        <input
+                            v-model="deployForm.expected_return_date"
+                            type="date"
+                            class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                        />
                     </div>
                 </form>
+
+                <!-- Fixed Footer -->
+                <div class="flex items-center justify-end gap-3 px-5 sm:px-6 py-3.5 sm:py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90 shrink-0">
+                    <button
+                        type="button"
+                        @click="showDeployModal = false"
+                        class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        form="quickDeployForm"
+                        :disabled="deployForm.processing || (deployForm.assignment_target === 'staff' && !deployForm.staff_id)"
+                        class="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition-all disabled:opacity-50 active:scale-95"
+                    >
+                        {{ deployForm.processing ? 'Assigning...' : (deployForm.assignment_target === 'staff' ? 'Confirm Staff Assignment' : 'Confirm Deployment') }}
+                    </button>
+                </div>
             </div>
         </div>
 
-        <!-- MODAL: IMPORT ITEMS -->
-        <div v-if="showImportModal" class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6">
-                <div class="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+        <!-- MODAL: IMPORT ITEMS (RESPONSIVE) -->
+        <div 
+            v-if="showImportModal" 
+            class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 md:p-6"
+            @click.self="showImportModal = false"
+        >
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl max-w-md w-full shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] overflow-hidden my-auto">
+                <!-- Fixed Header -->
+                <div class="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold shrink-0">
                             <Upload class="w-5 h-5" />
                         </div>
                         <div>
-                            <h3 class="text-lg font-black text-slate-900 dark:text-white">Import Inventory CSV/Excel</h3>
-                            <p class="text-xs text-slate-500">Bulk upload store inventory items</p>
+                            <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Import Inventory CSV/Excel</h3>
+                            <p class="text-[11px] sm:text-xs text-slate-500">Bulk upload store inventory items</p>
                         </div>
                     </div>
-                    <button @click="showImportModal = false" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                    <button @click="showImportModal = false" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                         <X class="w-5 h-5" />
                     </button>
                 </div>
 
-                <form @submit.prevent="submitImport" class="space-y-4 text-xs">
+                <!-- Scrollable Body -->
+                <form @submit.prevent="submitImport" id="importItemsForm" class="flex-1 overflow-y-auto px-5 sm:px-6 py-4 space-y-4 overscroll-contain text-xs">
                     <div>
                         <label class="block font-bold text-slate-700 dark:text-slate-300 mb-2">Select Spreadsheet (.xlsx, .csv)</label>
                         <input
@@ -1176,24 +1381,26 @@ const submitImport = () => {
                             class="w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-300"
                         />
                     </div>
-
-                    <div class="pt-4 flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800">
-                        <button
-                            type="button"
-                            @click="showImportModal = false"
-                            class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            :disabled="importForm.processing || !importForm.file"
-                            class="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition-all disabled:opacity-50"
-                        >
-                            {{ importForm.processing ? 'Importing...' : 'Upload & Import' }}
-                        </button>
-                    </div>
                 </form>
+
+                <!-- Fixed Footer -->
+                <div class="flex items-center justify-end gap-3 px-5 sm:px-6 py-3.5 sm:py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90 shrink-0">
+                    <button
+                        type="button"
+                        @click="showImportModal = false"
+                        class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        form="importItemsForm"
+                        :disabled="importForm.processing || !importForm.file"
+                        class="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition-all disabled:opacity-50 active:scale-95"
+                    >
+                        {{ importForm.processing ? 'Importing...' : 'Upload & Import' }}
+                    </button>
+                </div>
             </div>
         </div>
 
