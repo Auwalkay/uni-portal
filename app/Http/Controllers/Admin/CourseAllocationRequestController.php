@@ -29,6 +29,7 @@ class CourseAllocationRequestController extends Controller
         $query = CourseAllocationRequest::query()
             ->with([
                 'staff.user:id,name,email',
+                'staff.department:id,name,code',
                 'course:id,code,title,units,level,semester',
                 'department:id,name,code,faculty_id',
                 'department.faculty:id,name',

@@ -35,6 +35,11 @@ interface AllocationRequestItem {
             name: string;
             email: string;
         };
+        department?: {
+            id: string;
+            name: string;
+            code: string;
+        } | null;
     };
     course?: {
         id: string;
@@ -330,6 +335,9 @@ const batchApprove = () => {
                             <TableCell>
                                 <div class="font-medium text-foreground">{{ req.staff?.user?.name || 'N/A' }}</div>
                                 <div class="text-xs text-muted-foreground">{{ req.staff?.staff_number }} &bull; {{ req.staff?.user?.email }}</div>
+                                <div v-if="req.staff?.department" class="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5 font-medium">
+                                    Dept: {{ req.staff.department.name }}
+                                </div>
                             </TableCell>
                             <TableCell>
                                 <div class="text-sm font-medium">{{ req.department?.name }}</div>

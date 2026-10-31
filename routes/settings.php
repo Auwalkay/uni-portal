@@ -277,6 +277,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/academics/units', [AcademicController::class, 'units'])->name('academics.units');
 
             Route::post('/academics/store', [AcademicController::class, 'store'])->name('academics.store');
+            Route::post('/academics/update', [AcademicController::class, 'update'])->name('academics.update');
             Route::post('/academics/toggle', [AcademicController::class, 'toggle'])->name('academics.toggle');
             Route::post('/academics/bulk-toggle', [AcademicController::class, 'bulkToggle'])->name('academics.bulk_toggle');
             Route::get('/academics/programmes/{programme}/courses', [AcademicController::class, 'programmeCourses'])->name('academics.programmes.courses');
