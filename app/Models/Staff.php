@@ -75,9 +75,19 @@ class Staff extends Model
         return $this->hasMany(CourseAllocation::class);
     }
 
+    public function courseAllocationRequests()
+    {
+        return $this->hasMany(CourseAllocationRequest::class);
+    }
+
     public function payrollItems()
     {
         return $this->hasMany(PayrollItem::class);
+    }
+
+    public function attendances()
+    {
+        return $this->hasMany(Attendance::class);
     }
 
     protected static function booted()
@@ -104,5 +114,12 @@ class Staff extends Model
     public function updater(): BelongsTo
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->whereHas('user', function ($q) {
+            $q->where('is_active', true)->whereNull('deleted_at');
+        });
     }
 }

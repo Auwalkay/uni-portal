@@ -6,6 +6,7 @@ use App\Models\Student;
 use App\Models\Session;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\Payment;
 use App\Models\FeeConfiguration;
 use App\Models\SystemSetting;
 use App\Models\StudentSession;
@@ -102,54 +103,21 @@ class FeeService
                 }
             }
 
-            $adminChargeEnabled = SystemSetting::get('admin_charge_enabled', true);
-            $adminChargeAmount = SystemSetting::get('admin_charge_amount', 250000);
+            $adminChargeEnabled = filter_var(SystemSetting::get('admin_charge_enabled', true), FILTER_VALIDATE_BOOLEAN);
+            $adminChargeAmount = (float) SystemSetting::get('admin_charge_amount', 250000);
             
             $totalAmountBeforeDiscount = $academicTotal;
             if ($adminChargeEnabled) {
                 $totalAmountBeforeDiscount += $adminChargeAmount;
             }
 
-            $discountAmount = 0;
-            if ($student->scholarship && ($student->program?->scholarship_eligible ?? true)) {
-                $scholarship = $student->scholarship;
-                
-                // Exclude "Drug Test" fee type from scholarship discount calculations
-                $baseForDiscount = 0;
-                foreach ($resolvedConfigs as $config) {
-                    if (!$config->feeType || !$config->feeType->is_one_time) {
-                        if ($config->feeType) {
-                            $feeName = strtolower($config->feeType->name);
-                            $feeSlug = $config->feeType->slug;
-                            $isExcluded = str_contains($feeName, 'drug test') || 
-                                          str_contains($feeSlug, 'drug-test') ||
-                                          str_contains($feeName, 'acceptance') || 
-                                          str_contains($feeSlug, 'acceptance') ||
-                                          str_contains($feeName, 'matriculation') || 
-                                          str_contains($feeSlug, 'matriculation');
-                            if ($isExcluded) {
-                                continue;
-                            }
-                        }
-                        $baseForDiscount += $config->amount;
-                    }
-                }
-
-                if ($adminChargeEnabled && $scholarship->covers_admin_charges) {
-                    $baseForDiscount += $adminChargeAmount;
-                }
-
-                if ($scholarship->type === 'fixed') {
-                    $discountAmount = max(0, $baseForDiscount - $scholarship->amount);
-                } else {
-                    $discountAmount = $baseForDiscount * ($scholarship->percentage / 100);
-                }
-            }
+            $discountAmount = $this->calculateScholarshipDiscount($student, $resolvedConfigs, $adminChargeEnabled, $adminChargeAmount);
 
             // Check if late payment fine should be applied immediately (returning students only)
             $lateFineAmount = 0;
             $applyLateFine = false;
-            if ($student->isReturningStudent($session) && $session->late_payment_deadline && $session->late_payment_deadline->isPast() && $session->late_fee_amount > 0) {
+            $isLateFeeWaived = (bool) ($student->scholarship?->waives_late_fees);
+            if (!$isLateFeeWaived && $student->isReturningStudent($session) && $session->late_payment_deadline && $session->late_payment_deadline->isPast() && $session->late_fee_amount > 0) {
                 $isEnabled = filter_var(\App\Models\SystemSetting::get('late_fee_enabled', true), FILTER_VALIDATE_BOOLEAN);
                 if ($isEnabled) {
                     $lateFineAmount = (float) $session->late_fee_amount;
@@ -157,7 +125,8 @@ class FeeService
                 }
             }
 
-            $finalAmount = $totalAmountBeforeDiscount - $discountAmount + $lateFineAmount;
+            $finalAmount = max(0.0, $totalAmountBeforeDiscount - $discountAmount + $lateFineAmount);
+            $isPaidInFull = $finalAmount <= 0;
 
             $studentSession = StudentSession::firstOrCreate(
                 ['student_id' => $student->id, 'session_id' => $session->id],
@@ -172,7 +141,8 @@ class FeeService
                 'reference' => 'SCH-' . strtoupper(uniqid()),
                 'invoice_number' => 'INV-' . strtoupper(Str::random(10)),
                 'amount' => $finalAmount,
-                'status' => 'pending',
+                'paid_amount' => 0.00,
+                'status' => $isPaidInFull ? 'paid' : 'pending',
                 'due_date' => now()->addWeeks(4),
                 'late_fine_applied' => $applyLateFine,
             ]);
@@ -195,9 +165,14 @@ class FeeService
             }
 
             if ($discountAmount > 0) {
-                $discountDesc = $student->scholarship->type === 'fixed'
-                    ? 'Scholarship Discount (' . $student->scholarship->name . ' - Fixed ₦' . number_format($student->scholarship->amount, 2) . ')'
-                    : 'Scholarship Discount (' . $student->scholarship->name . ' - ' . floatval($student->scholarship->percentage) . '%)';
+                $scholarship = $student->scholarship;
+                if ($scholarship->covers_all_expenses) {
+                    $discountDesc = 'Scholarship Discount (' . $scholarship->name . ' - All School Expenses Covered)';
+                } elseif ($scholarship->type === 'fixed') {
+                    $discountDesc = 'Scholarship Discount (' . $scholarship->name . ' - Fixed ₦' . number_format($scholarship->amount, 2) . ')';
+                } else {
+                    $discountDesc = 'Scholarship Discount (' . $scholarship->name . ' - ' . floatval($scholarship->percentage) . '%)';
+                }
                 InvoiceItem::create([
                     'invoice_id' => $invoice->id,
                     'description' => $discountDesc,
@@ -213,6 +188,20 @@ class FeeService
                 ]);
             }
 
+            if ($isPaidInFull) {
+                Payment::create([
+                    'transaction_id' => Payment::generateTransactionId('SCH'),
+                    'invoice_id' => $invoice->id,
+                    'user_id' => $student->user_id,
+                    'gateway' => 'scholarship',
+                    'gateway_reference' => 'SCHOLARSHIP-' . strtoupper(uniqid()),
+                    'amount' => 0.00,
+                    'status' => 'success',
+                    'channel' => 'scholarship',
+                    'paid_at' => now(),
+                ]);
+            }
+
             return $invoice;
         });
     }
@@ -222,8 +211,8 @@ class FeeService
      */
     public function calculateExpectedSchoolFee(Student $student, Session $session): float
     {
-        $adminChargeEnabled = SystemSetting::get('admin_charge_enabled', true);
-        $adminChargeAmount = SystemSetting::get('admin_charge_amount', 250000);
+        $adminChargeEnabled = filter_var(SystemSetting::get('admin_charge_enabled', true), FILTER_VALIDATE_BOOLEAN);
+        $adminChargeAmount = (float) SystemSetting::get('admin_charge_amount', 250000);
 
         $targetSessionId = ($student->fee_policy === 'admission_session' && $student->admitted_session_id) 
             ? $student->admitted_session_id 
@@ -282,39 +271,7 @@ class FeeService
             $totalAmountBeforeDiscount += $adminChargeAmount;
         }
 
-        $discountAmount = 0;
-        if ($student->scholarship && ($student->program?->scholarship_eligible ?? true)) {
-            $scholarship = $student->scholarship;
-            $baseForDiscount = 0;
-            foreach ($resolvedConfigs as $config) {
-                if (!$config->feeType || !$config->feeType->is_one_time) {
-                    if ($config->feeType) {
-                        $feeName = strtolower($config->feeType->name);
-                        $feeSlug = $config->feeType->slug;
-                        $isExcluded = str_contains($feeName, 'drug test') || 
-                                      str_contains($feeSlug, 'drug-test') ||
-                                      str_contains($feeName, 'acceptance') || 
-                                      str_contains($feeSlug, 'acceptance') ||
-                                      str_contains($feeName, 'matriculation') || 
-                                      str_contains($feeSlug, 'matriculation');
-                        if ($isExcluded) {
-                            continue;
-                        }
-                    }
-                    $baseForDiscount += $config->amount;
-                }
-            }
-
-            if ($adminChargeEnabled && $scholarship->covers_admin_charges) {
-                $baseForDiscount += $adminChargeAmount;
-            }
-
-            if ($scholarship->type === 'fixed') {
-                $discountAmount = max(0, $baseForDiscount - $scholarship->amount);
-            } else {
-                $discountAmount = $baseForDiscount * ($scholarship->percentage / 100);
-            }
-        }
+        $discountAmount = $this->calculateScholarshipDiscount($student, $resolvedConfigs, $adminChargeEnabled, $adminChargeAmount);
 
         return max(0, $totalAmountBeforeDiscount - $discountAmount);
     }
@@ -380,45 +337,14 @@ class FeeService
             $adminChargeEnabled = filter_var(SystemSetting::get('admin_charge_enabled', true), FILTER_VALIDATE_BOOLEAN);
             $adminChargeAmount = (float) SystemSetting::get('admin_charge_amount', 250000);
 
-            $discountAmount = 0;
-            if ($student->scholarship && ($student->program?->scholarship_eligible ?? true)) {
-                $scholarship = $student->scholarship;
-                $baseForDiscount = 0;
-                foreach ($resolvedConfigs as $config) {
-                    if (!$config->feeType || !$config->feeType->is_one_time) {
-                        if ($config->feeType) {
-                            $feeName = strtolower($config->feeType->name);
-                            $feeSlug = $config->feeType->slug;
-                            $isExcluded = str_contains($feeName, 'drug test') || 
-                                          str_contains($feeSlug, 'drug-test') ||
-                                          str_contains($feeName, 'acceptance') || 
-                                          str_contains($feeSlug, 'acceptance') ||
-                                          str_contains($feeName, 'matriculation') || 
-                                          str_contains($feeSlug, 'matriculation');
-                            if ($isExcluded) {
-                                continue;
-                            }
-                        }
-                        $baseForDiscount += $config->amount;
-                    }
-                }
-
-                if ($adminChargeEnabled && $scholarship->covers_admin_charges) {
-                    $baseForDiscount += $adminChargeAmount;
-                }
-
-                if ($scholarship->type === 'fixed') {
-                    $discountAmount = max(0, $baseForDiscount - $scholarship->amount);
-                } else {
-                    $discountAmount = $baseForDiscount * ($scholarship->percentage / 100);
-                }
-            }
+            $discountAmount = $this->calculateScholarshipDiscount($student, $resolvedConfigs, $adminChargeEnabled, $adminChargeAmount);
 
             // Check if late payment fine should be included (returning students only, if not previously waived)
             $session = $invoice->session;
             $lateFineAmount = 0;
             $applyLateFine = false;
-            if (!$invoice->late_fine_waived && $student->isReturningStudent($session) && $session && $session->late_payment_deadline && $session->late_payment_deadline->isPast() && $session->late_fee_amount > 0) {
+            $isLateFeeWaived = (bool) ($student->scholarship?->waives_late_fees);
+            if (!$isLateFeeWaived && !$invoice->late_fine_waived && $student->isReturningStudent($session) && $session && $session->late_payment_deadline && $session->late_payment_deadline->isPast() && $session->late_fee_amount > 0) {
                 $isEnabled = filter_var(SystemSetting::get('late_fee_enabled', true), FILTER_VALIDATE_BOOLEAN);
                 if ($isEnabled) {
                     $lateFineAmount = (float) $session->late_fee_amount;
@@ -430,12 +356,15 @@ class FeeService
             if ($adminChargeEnabled) $totalAmountBeforeDiscount += $adminChargeAmount;
             if ($applyLateFine) $totalAmountBeforeDiscount += $lateFineAmount;
 
-            $finalAmount = $totalAmountBeforeDiscount - $discountAmount;
+            $finalAmount = max(0.0, $totalAmountBeforeDiscount - $discountAmount);
+            $isPaidInFull = $finalAmount <= 0;
+            $newStatus = $isPaidInFull ? 'paid' : ($invoice->paid_amount > 0 ? 'partial' : 'pending');
 
-            // Only update if the amount actually changed
-            if (abs($invoice->amount - $finalAmount) > 0.01 || $invoice->late_fine_applied !== $applyLateFine) {
+            // Only update if the amount actually changed, late fine status changed, or paid status changed
+            if (abs($invoice->amount - $finalAmount) > 0.01 || $invoice->late_fine_applied !== $applyLateFine || ($isPaidInFull && $invoice->status !== 'paid')) {
                 $invoice->update([
                     'amount' => $finalAmount,
+                    'status' => $newStatus,
                     'late_fine_applied' => $applyLateFine,
                 ]);
 
@@ -457,9 +386,14 @@ class FeeService
                     ]);
                 }
                 if ($discountAmount > 0) {
-                    $discountDesc = $student->scholarship->type === 'fixed'
-                        ? 'Scholarship Discount (' . $student->scholarship->name . ' - Fixed ₦' . number_format($student->scholarship->amount, 2) . ')'
-                        : 'Scholarship Discount (' . $student->scholarship->name . ' - ' . floatval($student->scholarship->percentage) . '%)';
+                    $scholarship = $student->scholarship;
+                    if ($scholarship->covers_all_expenses) {
+                        $discountDesc = 'Scholarship Discount (' . $scholarship->name . ' - All School Expenses Covered)';
+                    } elseif ($scholarship->type === 'fixed') {
+                        $discountDesc = 'Scholarship Discount (' . $scholarship->name . ' - Fixed ₦' . number_format($scholarship->amount, 2) . ')';
+                    } else {
+                        $discountDesc = 'Scholarship Discount (' . $scholarship->name . ' - ' . floatval($scholarship->percentage) . '%)';
+                    }
                     InvoiceItem::create([
                         'invoice_id' => $invoice->id,
                         'description' => $discountDesc,
@@ -471,6 +405,20 @@ class FeeService
                         'invoice_id' => $invoice->id,
                         'description' => 'Late Payment Fine (' . $session->name . ')',
                         'amount' => $lateFineAmount,
+                    ]);
+                }
+
+                if ($isPaidInFull && !$invoice->payments()->where('status', 'success')->exists()) {
+                    Payment::create([
+                        'transaction_id' => Payment::generateTransactionId('SCH'),
+                        'invoice_id' => $invoice->id,
+                        'user_id' => $student->user_id,
+                        'gateway' => 'scholarship',
+                        'gateway_reference' => 'SCHOLARSHIP-' . strtoupper(uniqid()),
+                        'amount' => 0.00,
+                        'status' => 'success',
+                        'channel' => 'scholarship',
+                        'paid_at' => now(),
                     ]);
                 }
             }
@@ -677,5 +625,68 @@ class FeeService
 
             return $invoice;
         });
+    }
+
+    /**
+     * Calculate scholarship discount amount for a student given resolved configurations and admin charge settings.
+     */
+    private function calculateScholarshipDiscount(
+        Student $student,
+        $resolvedConfigs,
+        bool $adminChargeEnabled,
+        float $adminChargeAmount
+    ): float {
+        if (!$student->scholarship || !($student->program?->scholarship_eligible ?? true)) {
+            return 0.0;
+        }
+
+        $scholarship = $student->scholarship;
+        $baseForDiscount = 0.0;
+
+        if ($scholarship->covers_all_expenses) {
+            // Covers all expenses except specifically excluded fee types
+            foreach ($resolvedConfigs as $config) {
+                if ($config->fee_type_id && $scholarship->isFeeTypeExcluded($config->fee_type_id)) {
+                    continue;
+                }
+                $baseForDiscount += (float) $config->amount;
+            }
+
+            if ($adminChargeEnabled) {
+                $baseForDiscount += (float) $adminChargeAmount;
+            }
+
+            return $baseForDiscount;
+        }
+
+        // Standard scholarship coverage (tuition / recurring academic fees)
+        foreach ($resolvedConfigs as $config) {
+            if (!$config->feeType || !$config->feeType->is_one_time) {
+                if ($config->feeType) {
+                    $feeName = strtolower($config->feeType->name);
+                    $feeSlug = $config->feeType->slug;
+                    $isExcluded = str_contains($feeName, 'drug test') || 
+                                  str_contains($feeSlug, 'drug-test') ||
+                                  str_contains($feeName, 'acceptance') || 
+                                  str_contains($feeSlug, 'acceptance') ||
+                                  str_contains($feeName, 'matriculation') || 
+                                  str_contains($feeSlug, 'matriculation');
+                    if ($isExcluded) {
+                        continue;
+                    }
+                }
+                $baseForDiscount += (float) $config->amount;
+            }
+        }
+
+        if ($adminChargeEnabled && $scholarship->covers_admin_charges) {
+            $baseForDiscount += (float) $adminChargeAmount;
+        }
+
+        if ($scholarship->type === 'fixed') {
+            return max(0.0, (float) ($baseForDiscount - $scholarship->amount));
+        }
+
+        return (float) ($baseForDiscount * ($scholarship->percentage / 100));
     }
 }

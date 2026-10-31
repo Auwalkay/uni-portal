@@ -596,7 +596,7 @@ class HostelBookingController extends Controller
 
             if ($invoice) {
                 // Check if invoice is already paid or marked as paid
-                $isPaid = in_array($invoice->status, ['paid', 'partial']) || $isPaidInput;
+                $isPaid = in_array($invoice->status, ['paid', 'partial']) || $isPaidInput || $finalAmount <= 0;
                 
                 // Clear old items and recreate with new room details
                 $invoice->items()->delete();
@@ -618,11 +618,11 @@ class HostelBookingController extends Controller
                     ]);
                 }
 
-                if ($isPaidInput && !in_array($invoice->status, ['paid', 'partial'])) {
+                if (($isPaidInput || $finalAmount <= 0) && !in_array($invoice->status, ['paid', 'partial'])) {
                     $invoice->update([
                         'status' => 'paid',
-                        'paid_amount' => $finalAmount,
-                        'amount' => $finalAmount,
+                        'paid_amount' => max(0, $finalAmount),
+                        'amount' => max(0, $finalAmount),
                     ]);
 
                     Payment::create([
@@ -630,20 +630,20 @@ class HostelBookingController extends Controller
                         'invoice_id' => $invoice->id,
                         'user_id' => $invoice->user_id,
                         'recorded_by' => Auth::id(),
-                        'gateway_reference' => 'MANUAL-' . strtoupper(uniqid()),
-                        'amount' => $finalAmount,
+                        'gateway_reference' => ($finalAmount <= 0 ? 'SCHOLARSHIP-HST-' : 'MANUAL-') . strtoupper(uniqid()),
+                        'amount' => max(0, $finalAmount),
                         'status' => 'success',
-                        'channel' => 'manual',
+                        'channel' => $finalAmount <= 0 ? 'scholarship' : 'manual',
                         'paid_at' => now(),
                     ]);
                 } elseif (!$isPaid) {
-                    $invoice->update(['amount' => $finalAmount]);
+                    $invoice->update(['amount' => max(0, $finalAmount)]);
                 }
                 
                 $bookingStatus = $isPaid ? 'confirmed' : 'pending';
             } else {
                 $reference = 'HST-' . strtoupper(uniqid());
-                $isPaid = $isPaidInput;
+                $isPaid = $isPaidInput || $finalAmount <= 0;
 
                 $expiryDays = intval(SystemSetting::get('hostel_booking_expiry_days', 2));
 
@@ -652,9 +652,9 @@ class HostelBookingController extends Controller
                     'session_id' => $currentSession->id,
                     'reference' => $reference,
                     'type' => 'hostel_fee',
-                    'amount' => $finalAmount,
+                    'amount' => max(0, $finalAmount),
                     'status' => $isPaid ? 'paid' : 'pending',
-                    'paid_amount' => $isPaid ? $finalAmount : 0,
+                    'paid_amount' => $isPaid ? max(0, $finalAmount) : 0,
                     'due_date' => now()->addDays($expiryDays),
                 ]);
 
@@ -681,10 +681,10 @@ class HostelBookingController extends Controller
                         'invoice_id' => $invoice->id,
                         'user_id' => $invoice->user_id,
                         'recorded_by' => Auth::id(),
-                        'gateway_reference' => 'MANUAL-' . strtoupper(uniqid()),
-                        'amount' => $finalAmount,
+                        'gateway_reference' => ($finalAmount <= 0 ? 'SCHOLARSHIP-HST-' : 'MANUAL-') . strtoupper(uniqid()),
+                        'amount' => max(0, $finalAmount),
                         'status' => 'success',
-                        'channel' => 'manual',
+                        'channel' => $finalAmount <= 0 ? 'scholarship' : 'manual',
                         'paid_at' => now(),
                     ]);
                 }

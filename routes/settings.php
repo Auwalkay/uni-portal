@@ -1,8 +1,8 @@
 <?php
 
 use App\Http\Controllers\Admin\AcademicController;
-use App\Http\Controllers\Admin\AdmissionController;
 use App\Http\Controllers\Admin\ActivityLogController;
+use App\Http\Controllers\Admin\AdmissionController;
 use App\Http\Controllers\Admin\CourseRegistrationController;
 use App\Http\Controllers\Admin\DocumentController;
 use App\Http\Controllers\Admin\FrontDesk\ComplaintController;
@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\ResultController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\ScholarshipController;
 use App\Http\Controllers\Admin\SessionController;
+use App\Http\Controllers\Admin\SickbayController;
 use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Applicant\ApplicationController;
@@ -26,9 +27,14 @@ use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
 use App\Http\Controllers\Staff\CourseController;
+use App\Http\Controllers\Staff\SelfCourseAllocationController;
 use App\Http\Controllers\Student\AccommodationController;
+use App\Http\Controllers\Student\ExamDocketController;
 use App\Http\Controllers\Student\IdCardController;
+use App\Http\Controllers\Student\LibraryController;
 use App\Http\Controllers\Student\PaymentController;
+use App\Http\Controllers\Student\StudentAnnouncementController;
+use App\Http\Controllers\Student\SupportTicketController;
 use App\Http\Controllers\Student\TimetableController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -105,8 +111,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/courses/exam-card', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'downloadExamCard'])->name('courses.exam_card');
 
             Route::get('/timetable', [TimetableController::class, 'index'])->name('timetable.index');
-            Route::get('/exam-docket', [\App\Http\Controllers\Student\ExamDocketController::class, 'index'])->name('exam_docket.index');
-            Route::get('/exam-docket-alt', [\App\Http\Controllers\Student\ExamDocketController::class, 'index'])->name('exam-docket.index');
+            Route::get('/exam-docket', [ExamDocketController::class, 'index'])->name('exam_docket.index');
+            Route::get('/exam-docket-alt', [ExamDocketController::class, 'index'])->name('exam-docket.index');
 
             Route::get('/results', [\App\Http\Controllers\Student\ResultController::class, 'index'])->name('results.index');
 
@@ -120,21 +126,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/admission-letter', [\App\Http\Controllers\Student\ProfileController::class, 'downloadAdmissionLetter'])->name('admission_letter.download');
 
             // Library routes
-            Route::get('/library', [\App\Http\Controllers\Student\LibraryController::class, 'index'])->name('library.index');
-            Route::post('/library/request', [\App\Http\Controllers\Student\LibraryController::class, 'requestBook'])->name('library.request');
-            Route::get('/library/books/{book}/download', [\App\Http\Controllers\Student\LibraryController::class, 'downloadEbook'])->name('library.books.download');
+            Route::get('/library', [LibraryController::class, 'index'])->name('library.index');
+            Route::post('/library/request', [LibraryController::class, 'requestBook'])->name('library.request');
+            Route::get('/library/books/{book}/download', [LibraryController::class, 'downloadEbook'])->name('library.books.download');
 
             // Sickbay routes
             Route::get('/sickbay', [\App\Http\Controllers\Student\SickbayController::class, 'index'])->name('sickbay.index');
 
             // Support routes
-            Route::get('/support', [\App\Http\Controllers\Student\SupportTicketController::class, 'index'])->name('support.index');
-            Route::post('/support', [\App\Http\Controllers\Student\SupportTicketController::class, 'store'])->name('support.store');
-            Route::get('/support/{ticket}', [\App\Http\Controllers\Student\SupportTicketController::class, 'show'])->name('support.show');
-            Route::post('/support/{ticket}/reply', [\App\Http\Controllers\Student\SupportTicketController::class, 'reply'])->name('support.reply');
+            Route::get('/support', [SupportTicketController::class, 'index'])->name('support.index');
+            Route::post('/support', [SupportTicketController::class, 'store'])->name('support.store');
+            Route::get('/support/{ticket}', [SupportTicketController::class, 'show'])->name('support.show');
+            Route::post('/support/{ticket}/reply', [SupportTicketController::class, 'reply'])->name('support.reply');
 
             // Announcements routes
-            Route::get('/announcements', [\App\Http\Controllers\Student\StudentAnnouncementController::class, 'index'])->name('announcements.index');
+            Route::get('/announcements', [StudentAnnouncementController::class, 'index'])->name('announcements.index');
 
             // User Manual route
         });
@@ -149,7 +155,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 
         Route::middleware(['permission:view_sickbay_portal'])->group(function () {
-            Route::get('/sickbay/history', [\App\Http\Controllers\Admin\SickbayController::class, 'history'])->name('sickbay.history');
+            Route::get('/sickbay/history', [SickbayController::class, 'history'])->name('sickbay.history');
         });
     });
 
@@ -215,6 +221,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::middleware(['permission:manage_student_registrations|fix_course_registration'])->group(function () {
             Route::get('/course-registration', [CourseRegistrationController::class, 'index'])->name('course_registration.index');
+            Route::get('/course-registration/export', [CourseRegistrationController::class, 'exportReport'])->name('course_registration.export');
             Route::get('/course-registration/{student}', [CourseRegistrationController::class, 'manage'])->name('course_registration.manage');
             Route::get('/course-registration/{student}/form', [CourseRegistrationController::class, 'downloadForm'])->name('course_registration.form');
             Route::post('/course-registration/{student}', [CourseRegistrationController::class, 'store'])->name('course_registration.store');
@@ -235,7 +242,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Staff Course Management (Teaching)
         Route::middleware(['permission:view_results'])->prefix('teaching')->name('teaching.')->group(function () {
             Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
+            Route::get('/courses-self-allocation', [SelfCourseAllocationController::class, 'index'])->name('courses.self_allocation');
+            Route::post('/courses-self-allocation', [SelfCourseAllocationController::class, 'store'])->name('courses.self_allocation.store');
+            Route::delete('/courses-self-allocation/{id}', [SelfCourseAllocationController::class, 'cancel'])->name('courses.self_allocation.cancel');
             Route::get('/courses/{course}', [CourseController::class, 'show'])->name('courses.show');
+            Route::post('/courses/{course}/students/upload', [CourseController::class, 'uploadStudents'])->name('courses.students.upload');
+            Route::get('/courses/{course}/students/template', [CourseController::class, 'downloadStudentTemplate'])->name('courses.students.template');
+            Route::get('/courses/{course}/students/export', [CourseController::class, 'exportStudents'])->name('courses.students.export');
         });
 
         // Finance & Payments
@@ -254,7 +267,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 
         // General Academics & Sessions
-        Route::middleware(['permission:manage_faculties|manage_departments|manage_programmes|manage_courses|manage_academic_sessions'])->group(function () {
+        Route::middleware(['permission:manage_faculties|manage_departments|manage_programmes|manage_courses|manage_academic_sessions|view_courses|view_department_courses|view_faculty_courses'])->group(function () {
             Route::get('/academics', fn () => redirect()->route('admin.academics.faculties'))->name('academics.index');
             Route::get('/academics/faculties', [AcademicController::class, 'faculties'])->name('academics.faculties');
             Route::get('/academics/departments', [AcademicController::class, 'departments'])->name('academics.departments');
@@ -264,8 +277,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/academics/units', [AcademicController::class, 'units'])->name('academics.units');
 
             Route::post('/academics/store', [AcademicController::class, 'store'])->name('academics.store');
-            Route::post('/academics/update', [AcademicController::class, 'update'])->name('academics.update');
             Route::post('/academics/toggle', [AcademicController::class, 'toggle'])->name('academics.toggle');
+            Route::post('/academics/bulk-toggle', [AcademicController::class, 'bulkToggle'])->name('academics.bulk_toggle');
             Route::get('/academics/programmes/{programme}/courses', [AcademicController::class, 'programmeCourses'])->name('academics.programmes.courses');
             Route::post('/academics/programmes/{programme}/courses', [AcademicController::class, 'storeProgrammeCourse'])->name('academics.programmes.courses.store');
             Route::post('/academics/programmes/{programme}/courses/import', [AcademicController::class, 'importProgrammeCourses'])->name('academics.programmes.courses.import');
@@ -334,6 +347,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('exam-invigilators/{invigilator}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'removeInvigilator'])->name('exams.invigilators.remove')->middleware('permission:manage_exams|assign_invigilators');
             Route::post('exams/{exam}/incidents', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'logIncident'])->name('exams.incidents.store')->middleware('permission:manage_exams|log_exam_incidents');
             Route::put('exam-incidents/{incident}', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'updateIncident'])->name('exams.incidents.update')->middleware('permission:manage_exams|log_exam_incidents');
+
+            // Course Registrations & Enrolments Explorer for Exams Office
+            Route::get('exams/courses/students', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'courseStudentsIndex'])->name('exams.courses.students')->middleware('permission:manage_exams|view_exams');
+            Route::get('exams/courses/{course}/students', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'courseStudents'])->name('exams.courses.show_students')->middleware('permission:manage_exams|view_exams');
+            Route::get('exams/courses/{course}/export-students', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'exportCourseStudents'])->name('exams.courses.export_students')->middleware('permission:manage_exams|view_exams');
+            Route::get('exams/api/course-enrolment-counts', [\App\Http\Controllers\Admin\ExamScheduleController::class, 'apiCourseEnrolmentCounts'])->name('exams.api.enrolment_counts')->middleware('permission:manage_exams|view_exams|create_exams');
         });
 
         // Campus Buildings Management
@@ -356,7 +375,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('hostels/bookings/{booking}/download-slip', [HostelBookingController::class, 'downloadSlip'])->name('hostels.bookings.download-slip');
             Route::get('hostels/search-students', [HostelBookingController::class, 'searchStudents'])->name('hostels.search-students');
             Route::get('hostels/rooms/available', [HostelBookingController::class, 'getAvailableRooms'])->name('hostels.rooms.available');
-            
+
             // Hostel Room Excel Import
             Route::get('hostels/rooms/import-template', [HostelController::class, 'downloadRoomImportTemplate'])->name('hostels.rooms.import-template');
             Route::post('hostels/rooms/import', [HostelController::class, 'importRooms'])->name('hostels.rooms.import');
@@ -369,7 +388,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('hostels', [HostelController::class, 'store'])->name('hostels.store')->middleware('permission:create_hostels');
             Route::put('hostels/{hostel}', [HostelController::class, 'update'])->name('hostels.update')->middleware('permission:create_hostels');
             Route::delete('hostels/{hostel}', [HostelController::class, 'destroy'])->name('hostels.destroy')->middleware('permission:create_hostels');
-            
+
             Route::post('hostels/{hostel}/toggle-visibility', [HostelController::class, 'toggleVisibility'])->name('hostels.toggle-visibility')->middleware('permission:toggle_hostels');
 
             Route::post('hostels/{hostel}/blocks', [HostelBlockController::class, 'store'])->name('hostels.blocks.store')->middleware('permission:create_hostels');
@@ -383,7 +402,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms', [HostelRoomController::class, 'store'])->name('hostels.rooms.store')->middleware('permission:create_hostels');
             Route::put('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [HostelRoomController::class, 'update'])->name('hostels.rooms.update')->middleware('permission:create_hostels');
             Route::delete('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}', [HostelRoomController::class, 'destroy'])->name('hostels.rooms.destroy')->middleware('permission:create_hostels');
-            
+
             Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}/toggle-visibility', [HostelRoomController::class, 'toggleVisibility'])->name('hostels.rooms.toggle-visibility')->middleware('permission:toggle_hostels');
             Route::post('hostels/{hostel}/blocks/{block}/floors/{floor}/rooms/{room}/toggle-suspension', [HostelRoomController::class, 'toggleSuspension'])->name('hostels.rooms.toggle-suspension')->middleware('permission:toggle_hostels');
         });
@@ -394,7 +413,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::put('hostels/fees/{fee}', [HostelFeeController::class, 'update'])->name('hostels.fees.update');
             Route::delete('hostels/fees/{fee}', [HostelFeeController::class, 'destroy'])->name('hostels.fees.destroy');
         });
-
 
         // System Settings & RBAC Management
         Route::middleware(['permission:manage_system_settings'])->group(function () {
@@ -442,22 +460,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Sickbay Management
         Route::middleware(['permission:view_sickbay_portal'])->group(function () {
-            Route::get('/sickbay', [\App\Http\Controllers\Admin\SickbayController::class, 'index'])->name('sickbay.index');
-            Route::get('/sickbay/beds', [\App\Http\Controllers\Admin\SickbayController::class, 'bedsIndex'])->name('sickbay.beds.index');
-            Route::get('/sickbay/logs', [\App\Http\Controllers\Admin\SickbayController::class, 'logsIndex'])->name('sickbay.logs.index');
-            Route::get('/sickbay/supplies', [\App\Http\Controllers\Admin\SickbayController::class, 'suppliesIndex'])->name('sickbay.supplies.index');
-            Route::get('/sickbay/patients', [\App\Http\Controllers\Admin\SickbayController::class, 'patientsIndex'])->name('sickbay.patients.index');
-            Route::get('/sickbay/reports', [\App\Http\Controllers\Admin\SickbayController::class, 'reportsIndex'])->name('sickbay.reports.index');
-            Route::get('/sickbay/visits/{visit}/prescription', [\App\Http\Controllers\Admin\SickbayController::class, 'prescriptionSlip'])->name('sickbay.prescription');
+            Route::get('/sickbay', [SickbayController::class, 'index'])->name('sickbay.index');
+            Route::get('/sickbay/beds', [SickbayController::class, 'bedsIndex'])->name('sickbay.beds.index');
+            Route::get('/sickbay/logs', [SickbayController::class, 'logsIndex'])->name('sickbay.logs.index');
+            Route::get('/sickbay/supplies', [SickbayController::class, 'suppliesIndex'])->name('sickbay.supplies.index');
+            Route::get('/sickbay/patients', [SickbayController::class, 'patientsIndex'])->name('sickbay.patients.index');
+            Route::get('/sickbay/reports', [SickbayController::class, 'reportsIndex'])->name('sickbay.reports.index');
+            Route::get('/sickbay/visits/{visit}/prescription', [SickbayController::class, 'prescriptionSlip'])->name('sickbay.prescription');
 
-            Route::get('/sickbay/students/search', [\App\Http\Controllers\Admin\SickbayController::class, 'searchStudents'])->name('sickbay.students.search')->middleware('permission:register_walk_in');
-            Route::post('/sickbay/check-in', [\App\Http\Controllers\Admin\SickbayController::class, 'registerPatient'])->name('sickbay.check_in')->middleware('permission:register_walk_in');
-            Route::post('/sickbay/treatment/{visit}', [\App\Http\Controllers\Admin\SickbayController::class, 'updateVitalsAndTreatment'])->name('sickbay.treatment.store')->middleware('permission:write_sickbay_medical_logs');
-            Route::post('/sickbay/beds/{visit}/assign', [\App\Http\Controllers\Admin\SickbayController::class, 'assignBed'])->name('sickbay.beds.assign')->middleware('permission:manage_observation_beds');
-            Route::post('/sickbay/beds/{visit}/discharge', [\App\Http\Controllers\Admin\SickbayController::class, 'dischargeBed'])->name('sickbay.beds.discharge')->middleware('permission:manage_observation_beds');
-            Route::post('/sickbay/inventory', [\App\Http\Controllers\Admin\SickbayController::class, 'storeInventory'])->name('sickbay.inventory.store')->middleware('permission:manage_sickbay_inventory');
-            Route::get('/sickbay/patients/{user}/history', [\App\Http\Controllers\Admin\SickbayController::class, 'patientHistory'])->name('sickbay.patient_history');
-            Route::post('/sickbay/beds', [\App\Http\Controllers\Admin\SickbayController::class, 'storeBed'])->name('sickbay.beds.store')->middleware('permission:manage_observation_beds');
+            Route::get('/sickbay/students/search', [SickbayController::class, 'searchStudents'])->name('sickbay.students.search')->middleware('permission:register_walk_in');
+            Route::post('/sickbay/check-in', [SickbayController::class, 'registerPatient'])->name('sickbay.check_in')->middleware('permission:register_walk_in');
+            Route::post('/sickbay/treatment/{visit}', [SickbayController::class, 'updateVitalsAndTreatment'])->name('sickbay.treatment.store')->middleware('permission:write_sickbay_medical_logs');
+            Route::post('/sickbay/beds/{visit}/assign', [SickbayController::class, 'assignBed'])->name('sickbay.beds.assign')->middleware('permission:manage_observation_beds');
+            Route::post('/sickbay/beds/{visit}/discharge', [SickbayController::class, 'dischargeBed'])->name('sickbay.beds.discharge')->middleware('permission:manage_observation_beds');
+            Route::post('/sickbay/inventory', [SickbayController::class, 'storeInventory'])->name('sickbay.inventory.store')->middleware('permission:manage_sickbay_inventory');
+            Route::get('/sickbay/patients/{user}/history', [SickbayController::class, 'patientHistory'])->name('sickbay.patient_history');
+            Route::post('/sickbay/beds', [SickbayController::class, 'storeBed'])->name('sickbay.beds.store')->middleware('permission:manage_observation_beds');
         });
 
         // Bulk Communications

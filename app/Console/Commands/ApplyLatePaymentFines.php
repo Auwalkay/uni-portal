@@ -65,10 +65,16 @@ class ApplyLatePaymentFines extends Command
         $this->info("Found {$invoices->count()} overdue invoice(s). Appending late payment fines...");
 
         foreach ($invoices as $invoice) {
-            $student = \App\Models\Student::where('user_id', $invoice->user_id)->first();
+            $student = \App\Models\Student::with('scholarship')->where('user_id', $invoice->user_id)->first();
 
             // Late payment fines apply to returning students only (admission session != current session)
             if (!$student || !$student->isReturningStudent($invoice->session_id)) {
+                continue;
+            }
+
+            // Skip students whose scholarship waives late fees
+            if ($student->scholarship && $student->scholarship->waives_late_fees) {
+                Log::info("Skipped late payment fine for student {$student->matric_number} due to scholarship ({$student->scholarship->name}) late fee waiver.");
                 continue;
             }
 

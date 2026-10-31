@@ -19,7 +19,7 @@ class IdCardController extends Controller
         // Ensure user has paid school fees
         $hasPaidSchoolFee = Invoice::where('user_id', $request->user()->id)
             ->where('type', 'school_fee')
-            ->where('status', 'paid')
+            ->whereIn('status', ['paid', 'partial'])
             ->exists();
 
         if (! $hasPaidSchoolFee) {

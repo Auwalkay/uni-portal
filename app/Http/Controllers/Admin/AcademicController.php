@@ -10,6 +10,7 @@ use App\Models\Programme;
 use App\Models\Unit;
 use App\Services\AcademicCacheService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class AcademicController extends Controller
@@ -109,10 +110,18 @@ class AcademicController extends Controller
         $semester = $request->input('semester');
 
         $courses = Course::with('department.faculty', 'programme')
-            ->when(! $user->can('manage_courses') && ! $user->can('view_courses') && ! $user->can('manage_academic_sessions'), function ($q) use ($user) {
-                $q->whereHas('allocations', function ($aq) use ($user) {
-                    $aq->whereHas('staff', fn ($sq) => $sq->where('user_id', $user->id));
-                });
+            ->when(! $user->can('manage_courses') && ! $user->can('manage_academic_sessions') && ! $user->hasRole('super_admin'), function ($q) use ($user) {
+                if ($user->hasRole('dean') || $user->can('view_faculty_courses')) {
+                    $facultyId = $user->staff?->department?->faculty_id;
+                    $q->whereHas('department', fn ($d) => $d->where('faculty_id', $facultyId));
+                } elseif ($user->hasRole('hod') || $user->can('view_department_courses')) {
+                    $departmentId = $user->staff?->department_id;
+                    $q->where('department_id', $departmentId);
+                } elseif (! $user->can('view_courses')) {
+                    $q->whereHas('allocations', function ($aq) use ($user) {
+                        $aq->whereHas('staff', fn ($sq) => $sq->where('user_id', $user->id));
+                    });
+                }
             })
             ->when($search, fn ($q) => $q->where('title', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
             ->when($facultyId, fn ($q) => $q->whereHas('department', fn ($d) => $d->where('faculty_id', $facultyId)))
@@ -186,6 +195,48 @@ class AcademicController extends Controller
         $item->update(['is_active' => $request->is_active]);
 
         return back()->with('success', ucfirst($request->type).' status updated.');
+    }
+
+    public function bulkToggle(Request $request)
+    {
+        $request->validate([
+            'type' => 'required|in:faculty,department,programme,course,unit',
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'required|uuid',
+            'is_active' => 'required|boolean',
+        ]);
+
+        $user = $request->user();
+        if ($request->type === 'faculty' && ! $user->can('manage_faculties') && ! $user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'department' && ! $user->can('manage_departments') && ! $user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'unit' && ! $user->can('manage_departments') && ! $user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'programme' && ! $user->can('manage_programmes') && ! $user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'course' && ! $user->can('manage_courses') && ! $user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $modelClass = match ($request->type) {
+            'faculty' => Faculty::class,
+            'department' => Department::class,
+            'programme' => Programme::class,
+            'course' => Course::class,
+            'unit' => Unit::class,
+        };
+
+        $updatedCount = $modelClass::whereIn('id', $request->ids)->update([
+            'is_active' => $request->is_active,
+        ]);
+
+        AcademicCacheService::clearAll();
+
+        $action = $request->is_active ? 'activated' : 'deactivated';
+        $label = Str::plural(ucfirst($request->type), $updatedCount);
+
+        return back()->with('success', "{$updatedCount} {$label} {$action} successfully.");
     }
 
     public function store(Request $request)

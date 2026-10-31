@@ -39,16 +39,27 @@ class StaffController extends Controller
         $query = User::role('staff')
             ->with(['staff.department.faculty', 'roles']);
 
-        // Scope to HOD department if user is HOD without global manage_staff permission
+        // Scope to Dean faculty or HOD department if user does not have global manage_staff permission
         $authUser = auth()->user();
-        if ($authUser->hasRole('hod') && !$authUser->can('manage_staff') && !$authUser->hasRole('super_admin')) {
-            $hodDepartmentId = $authUser->staff?->department_id;
-            if ($hodDepartmentId) {
-                $query->whereHas('staff', function ($q) use ($hodDepartmentId) {
-                    $q->where('department_id', $hodDepartmentId);
-                });
-            } else {
-                $query->whereRaw('1 = 0');
+        if (!$authUser->can('manage_staff') && !$authUser->hasRole('super_admin')) {
+            if ($authUser->hasRole('dean') || $authUser->can('view_faculty_staff')) {
+                $deanFacultyId = $authUser->staff?->department?->faculty_id;
+                if ($deanFacultyId) {
+                    $query->whereHas('staff.department', function ($q) use ($deanFacultyId) {
+                        $q->where('faculty_id', $deanFacultyId);
+                    });
+                } else {
+                    $query->whereRaw('1 = 0');
+                }
+            } elseif ($authUser->hasRole('hod') || $authUser->can('view_department_staff')) {
+                $hodDepartmentId = $authUser->staff?->department_id;
+                if ($hodDepartmentId) {
+                    $query->whereHas('staff', function ($q) use ($hodDepartmentId) {
+                        $q->where('department_id', $hodDepartmentId);
+                    });
+                } else {
+                    $query->whereRaw('1 = 0');
+                }
             }
         }
 
@@ -360,14 +371,31 @@ class StaffController extends Controller
         }
 
         $authUser = auth()->user();
-        if ($authUser->hasRole('hod') && !$authUser->can('manage_staff') && !$authUser->hasRole('super_admin')) {
-            $hodDepartmentId = $authUser->staff?->department_id;
-            if (!$hodDepartmentId || $staff->staff?->department_id !== $hodDepartmentId) {
-                abort(403, 'Unauthorized access to staff profile outside your department.');
+        if (!$authUser->can('manage_staff') && !$authUser->hasRole('super_admin')) {
+            if ($authUser->hasRole('dean') || $authUser->can('view_faculty_staff')) {
+                $deanFacultyId = $authUser->staff?->department?->faculty_id;
+                if (!$deanFacultyId || $staff->staff?->department?->faculty_id !== $deanFacultyId) {
+                    abort(403, 'Unauthorized access to staff profile outside your faculty.');
+                }
+            } elseif ($authUser->hasRole('hod') || $authUser->can('view_department_staff')) {
+                $hodDepartmentId = $authUser->staff?->department_id;
+                if (!$hodDepartmentId || $staff->staff?->department_id !== $hodDepartmentId) {
+                    abort(403, 'Unauthorized access to staff profile outside your department.');
+                }
             }
         }
 
-        $staff->load(['staff.department.faculty', 'roles', 'staff.allocations.course', 'staff.allocations.session']);
+        $staff->load([
+            'roles',
+            'staff.department.faculty',
+            'staff.unit',
+            'staff.state',
+            'staff.lga',
+            'staff.creator:id,name,email',
+            'staff.updater:id,name,email',
+            'staff.allocations.course',
+            'staff.allocations.session',
+        ]);
 
         $timetable = [];
         if ($staff->staff && $staff->staff->is_academic) {
@@ -453,11 +481,54 @@ class StaffController extends Controller
             }
         }
 
+        // Fetch Comprehensive Staff Activity Logs
+        $staffRecord = $staff->staff;
+        $activityLogs = \Spatie\Activitylog\Models\Activity::where(function ($q) use ($staff, $staffRecord) {
+            $q->where(function ($c) use ($staff) {
+                $c->where('causer_type', \App\Models\User::class)
+                  ->where('causer_id', $staff->id);
+            })->orWhere(function ($s) use ($staff) {
+                $s->where('subject_type', \App\Models\User::class)
+                  ->where('subject_id', $staff->id);
+            });
+
+            if ($staffRecord) {
+                $q->orWhere(function ($st) use ($staffRecord) {
+                    $st->where('subject_type', \App\Models\Staff::class)
+                       ->where('subject_id', $staffRecord->id);
+                });
+            }
+        })
+        ->with('causer:id,name,email')
+        ->orderBy('id', 'desc')
+        ->limit(100)
+        ->get()
+        ->map(function ($log) {
+            return [
+                'id' => $log->id,
+                'log_name' => $log->log_name,
+                'description' => $log->description,
+                'event' => $log->event ?? ($log->description ?: 'activity'),
+                'subject_type' => class_basename($log->subject_type),
+                'subject_id' => $log->subject_id,
+                'causer' => $log->causer ? [
+                    'id' => $log->causer->id,
+                    'name' => $log->causer->name,
+                    'email' => $log->causer->email,
+                ] : null,
+                'properties' => $log->properties,
+                'created_at' => $log->created_at?->toISOString(),
+                'created_at_human' => $log->created_at?->diffForHumans(),
+                'created_at_formatted' => $log->created_at?->format('d M Y, h:i A'),
+            ];
+        });
+
         return Inertia::render('Admin/Staff/Show', [
             'staff' => $staff,
             'timetable' => $timetable,
             'payslips' => $payslips,
             'canViewSalary' => $canViewSalary,
+            'activityLogs' => $activityLogs,
             'attendanceData' => [
                 'weekly' => $weeklyAttendance,
                 'stats' => $attendanceStats,

@@ -15,6 +15,7 @@ import {
 } from 'lucide-vue-next';
 import { ref, computed, watch } from 'vue';
 import Swal from 'sweetalert2';
+import axios from 'axios';
 
 interface Props {
     sessions: any[];
@@ -79,6 +80,45 @@ watch(() => form.exam_id, (newExamId) => {
         }
     }
 }, { immediate: true });
+
+// Live Course Enrolment Counter
+const enrolmentCounts = ref<Record<string, number>>({});
+const isFetchingEnrolment = ref(false);
+
+const fetchEnrolmentCounts = async () => {
+    if (selectedCourseIds.value.length === 0) {
+        enrolmentCounts.value = {};
+        return;
+    }
+
+    try {
+        isFetchingEnrolment.value = true;
+        const res = await axios.get(route('admin.exams.api.enrolment_counts'), {
+            params: {
+                course_ids: selectedCourseIds.value,
+                session_id: form.session_id,
+                semester_id: form.semester_id,
+            }
+        });
+        enrolmentCounts.value = res.data.counts || {};
+    } catch (e) {
+        console.error('Failed to fetch enrolment counts', e);
+    } finally {
+        isFetchingEnrolment.value = false;
+    }
+};
+
+watch(
+    [selectedCourseIds, () => form.session_id, () => form.semester_id],
+    () => {
+        fetchEnrolmentCounts();
+    },
+    { deep: true, immediate: true }
+);
+
+const totalRegisteredCount = computed(() => {
+    return Object.values(enrolmentCounts.value).reduce((sum, count) => sum + (Number(count) || 0), 0);
+});
 
 // Auto-filter Semesters based on selected Session
 const semesterOptions = computed(() => {
@@ -411,9 +451,9 @@ const breadcrumbs = [
                             @update:model-value="addCoursePill"
                         />
 
-                        <!-- Selected Courses Pills -->
-                        <div v-if="selectedCourseIds.length > 0" class="space-y-2 pt-1">
-                            <Label class="text-[11px] font-semibold text-slate-400">Selected Courses</Label>
+                        <!-- Selected Courses Pills with Live Enrolment Counts -->
+                        <div v-if="selectedCourseIds.length > 0" class="space-y-3 pt-1">
+                            <Label class="text-[11px] font-semibold text-slate-400">Selected Courses & Enrolment</Label>
                             <div class="flex flex-wrap gap-2">
                                 <div
                                     v-for="cId in selectedCourseIds"
@@ -422,6 +462,9 @@ const breadcrumbs = [
                                 >
                                     <BookOpen class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                                     <span>{{ getCourseLabel(cId) }}</span>
+                                    <Badge variant="secondary" class="bg-indigo-200/80 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 text-[10px] font-bold px-1.5 py-0">
+                                        {{ enrolmentCounts[cId] !== undefined ? `${enrolmentCounts[cId]} candidates` : '...' }}
+                                    </Badge>
                                     <button
                                         type="button"
                                         @click="removeCoursePill(cId)"
@@ -430,6 +473,65 @@ const breadcrumbs = [
                                     >
                                         &times;
                                     </button>
+                                </div>
+                            </div>
+
+                            <!-- Live Enrolment vs Venue Capacity Feedback Banner -->
+                            <div class="pt-1">
+                                <!-- Capacity Shortfall Alert -->
+                                <div 
+                                    v-if="totalRegisteredCount > totalSeatingCapacity" 
+                                    class="p-4 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-200 dark:border-rose-900 text-xs text-rose-800 dark:text-rose-300 space-y-2 animate-in fade-in duration-300"
+                                >
+                                    <div class="flex items-start gap-2.5">
+                                        <AlertCircle class="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                                        <div class="space-y-1">
+                                            <span class="font-bold text-rose-900 dark:text-rose-100 block text-xs">
+                                                Seating Capacity Shortfall: {{ totalRegisteredCount }} Candidates Registered
+                                            </span>
+                                            <p class="leading-relaxed text-[11px]">
+                                                Total registered candidates (<strong>{{ totalRegisteredCount }}</strong>) exceed planned venue capacity (<strong>{{ totalSeatingCapacity }} seats</strong>) by <strong>{{ totalRegisteredCount - totalSeatingCapacity }} seats</strong>. Please add another hall venue below or split courses across slots.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-3 pt-1 border-t border-rose-200/60 dark:border-rose-900/60 text-[11px]">
+                                        <a 
+                                            :href="route('admin.exams.courses.students', { course_id: selectedCourseIds[0], session_id: form.session_id, semester_id: form.semester_id })" 
+                                            target="_blank" 
+                                            class="font-bold text-rose-700 dark:text-rose-300 underline hover:text-rose-900"
+                                        >
+                                            View registered student list ↗
+                                        </a>
+                                    </div>
+                                </div>
+
+                                <!-- Sufficient Capacity OK Notice -->
+                                <div 
+                                    v-else-if="totalRegisteredCount > 0" 
+                                    class="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-900 text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between gap-3 animate-in fade-in duration-300"
+                                >
+                                    <div class="flex items-center gap-2">
+                                        <CheckCircle2 class="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                        <span class="text-[11px]">
+                                            <strong>{{ totalRegisteredCount }}</strong> candidates registered. Planned venue capacity (<strong>{{ totalSeatingCapacity }} seats</strong>) covers all candidates with <strong>{{ totalSeatingCapacity - totalRegisteredCount }} surplus seats</strong>.
+                                        </span>
+                                    </div>
+                                    <a 
+                                        :href="route('admin.exams.courses.students', { course_id: selectedCourseIds[0], session_id: form.session_id, semester_id: form.semester_id })" 
+                                        target="_blank" 
+                                        class="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 underline shrink-0 hover:text-emerald-900"
+                                    >
+                                        View students ↗
+                                    </a>
+                                </div>
+
+                                <!-- Zero Enrolment Notice -->
+                                <div 
+                                    v-else-if="!isFetchingEnrolment" 
+                                    class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-500 flex items-center gap-2"
+                                >
+                                    <AlertCircle class="w-4 h-4 text-slate-400 shrink-0" />
+                                    <span class="text-[11px]">No students have registered for this course yet in the selected session/semester.</span>
                                 </div>
                             </div>
                         </div>

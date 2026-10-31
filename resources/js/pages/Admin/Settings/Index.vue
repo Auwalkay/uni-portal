@@ -16,7 +16,8 @@ import {
     Award,
     Hash,
     CreditCard,
-    Home
+    Home,
+    BookOpen
 } from 'lucide-vue-next';
 import { route } from 'ziggy-js';
 import {
@@ -56,6 +57,10 @@ const props = defineProps<{
         hostel_booking_expiry_days?: number;
         promote_pending_payments: boolean;
         late_fee_enabled: boolean;
+        enable_lecturer_self_course_allocation?: boolean;
+        lecturer_self_allocation_min_units?: number;
+        lecturer_self_allocation_max_units?: number;
+        lecturer_self_allocation_max_courses?: number;
     }
 }>();
 
@@ -104,6 +109,57 @@ const promotionForm = useForm({
 const lateFeeForm = useForm({
     enabled: props.settings.late_fee_enabled
 });
+
+const selfAllocationForm = useForm({
+    enabled: props.settings.enable_lecturer_self_course_allocation ?? true,
+    min_units: props.settings.lecturer_self_allocation_min_units ?? 6,
+    max_units: props.settings.lecturer_self_allocation_max_units ?? 24,
+    max_courses: props.settings.lecturer_self_allocation_max_courses ?? 5,
+});
+
+const submitSelfAllocationSettings = () => {
+    router.post(route('admin.settings.update'), { 
+        key: 'enable_lecturer_self_course_allocation', 
+        value: selfAllocationForm.enabled ? '1' : '0' 
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            router.post(route('admin.settings.update'), { 
+                key: 'lecturer_self_allocation_min_units', 
+                value: String(selfAllocationForm.min_units) 
+            }, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    router.post(route('admin.settings.update'), { 
+                        key: 'lecturer_self_allocation_max_units', 
+                        value: String(selfAllocationForm.max_units) 
+                    }, {
+                        preserveScroll: true,
+                        onSuccess: () => {
+                            router.post(route('admin.settings.update'), { 
+                                key: 'lecturer_self_allocation_max_courses', 
+                                value: String(selfAllocationForm.max_courses) 
+                            }, {
+                                preserveScroll: true,
+                                onSuccess: () => {
+                                    Swal.fire({
+                                        icon: 'success',
+                                        title: 'Updated',
+                                        text: 'Lecturer self-allocation settings saved successfully.',
+                                        toast: true,
+                                        position: 'top-end',
+                                        showConfirmButton: false,
+                                        timer: 3000
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        }
+    });
+};
 
 const submitLateFeeSetting = () => {
     router.post(route('admin.settings.update'), { 
@@ -645,6 +701,73 @@ const settingsModules = [
                         </div>
                         <Button @click="submitLateFeeSetting" class="w-full bg-orange-600 hover:bg-orange-700 text-white">
                             Update Fine Policy
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                <!-- Lecturer Self-Allocation Settings Card -->
+                <Card class="border-indigo-200 bg-indigo-50/20">
+                    <CardHeader class="flex flex-row items-center gap-4">
+                        <div class="bg-indigo-100 p-3 rounded-xl text-indigo-600">
+                            <BookOpen class="w-6 h-6" />
+                        </div>
+                        <div>
+                            <CardTitle>Lecturer Self-Allocation & Workload</CardTitle>
+                            <CardDescription>Control lecturer self-allocation window and credit unit workload limits.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent class="space-y-4">
+                        <div class="flex items-center justify-between pb-3 border-b">
+                            <div>
+                                <Label for="enable_self_allocation" class="font-medium">Enable Self-Allocation Window</Label>
+                                <p class="text-xs text-muted-foreground">Allow lecturers to pick courses for the active session.</p>
+                            </div>
+                            <Switch 
+                                id="enable_self_allocation" 
+                                v-model:checked="selfAllocationForm.enabled" 
+                            />
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+                            <div class="space-y-1.5">
+                                <Label for="min_units">Min Units Required</Label>
+                                <Input
+                                    id="min_units"
+                                    type="number"
+                                    min="0"
+                                    max="50"
+                                    v-model="selfAllocationForm.min_units"
+                                />
+                                <p class="text-[11px] text-muted-foreground">Target minimum teaching load.</p>
+                            </div>
+
+                            <div class="space-y-1.5">
+                                <Label for="max_units">Max Units Allowed</Label>
+                                <Input
+                                    id="max_units"
+                                    type="number"
+                                    min="1"
+                                    max="50"
+                                    v-model="selfAllocationForm.max_units"
+                                />
+                                <p class="text-[11px] text-muted-foreground">Hard cap on lecturer units.</p>
+                            </div>
+
+                            <div class="space-y-1.5">
+                                <Label for="max_courses">Max Courses Allowed</Label>
+                                <Input
+                                    id="max_courses"
+                                    type="number"
+                                    min="1"
+                                    max="20"
+                                    v-model="selfAllocationForm.max_courses"
+                                />
+                                <p class="text-[11px] text-muted-foreground">Maximum courses per session.</p>
+                            </div>
+                        </div>
+
+                        <Button @click="submitSelfAllocationSettings" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white mt-2">
+                            Update Self-Allocation Settings
                         </Button>
                     </CardContent>
                 </Card>

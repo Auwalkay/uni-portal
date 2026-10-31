@@ -86,6 +86,11 @@ class Building extends Model
         return $this->belongsTo(User::class, 'updated_by');
     }
 
+    public function inventoryAssignments()
+    {
+        return $this->hasMany(InventoryAssignment::class, 'building_id');
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()->logFillable()->logOnlyDirty();

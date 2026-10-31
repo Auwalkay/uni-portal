@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building, Package, LifeBuoy, Library, Activity, Megaphone, UserCheck, FolderTree, QrCode, ShieldAlert } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building, Package, LifeBuoy, Library, Activity, Megaphone, UserCheck, FolderTree, QrCode, ShieldAlert, BookPlus, Inbox } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -103,13 +103,19 @@ const academicsItems = computed(() => {
             title: 'Students',
             href: '/admin/students',
             icon: GraduationCap,
-            show: hasPermission('view_students'),
+            show: hasRole(['admin', 'dean', 'hod']) || hasPermission('view_students') || hasPermission('view_department_students') || hasPermission('view_faculty_students'),
         },
         {
             title: 'My Courses',
             href: route().has('admin.teaching.courses.index') ? route('admin.teaching.courses.index') : '#',
             icon: BookOpen,
             show: hasRole(['admin', 'lecturer', 'course_coordinator', 'dean', 'hod']) || hasPermission('manage_courses'),
+        },
+        {
+            title: 'Self Course Allocation',
+            href: route().has('admin.teaching.courses.self_allocation') ? route('admin.teaching.courses.self_allocation') : '/teaching/courses-self-allocation',
+            icon: BookPlus,
+            show: hasRole(['lecturer', 'course_coordinator']) || hasPermission('request_course_allocation'),
         },
         {
             title: 'Timetables',
@@ -127,13 +133,19 @@ const academicsItems = computed(() => {
             title: 'Academic Structure',
             href: route().has('admin.academics.faculties') ? route('admin.academics.faculties') : '/admin/academics/faculties',
             icon: Folder,
-            show: hasPermission('manage_courses') || hasPermission('manage_faculties') || hasPermission('manage_departments') || hasPermission('manage_programmes') || hasPermission('manage_academic_sessions'),
+            show: hasRole(['admin', 'dean', 'hod']) || hasPermission('manage_courses') || hasPermission('view_courses') || hasPermission('view_department_courses') || hasPermission('view_faculty_courses') || hasPermission('manage_faculties') || hasPermission('manage_departments') || hasPermission('manage_programmes') || hasPermission('manage_academic_sessions'),
         },
         {
             title: 'Course Allocations',
             href: route().has('admin.course-allocations.index') ? route('admin.course-allocations.index') : '#',
             icon: CalendarRange,
-            show: hasPermission('assign_coordinators'),
+            show: hasRole(['admin', 'dean', 'hod']) || hasPermission('assign_coordinators') || hasPermission('approve_course_allocations'),
+        },
+        {
+            title: 'Allocation Requests',
+            href: route().has('admin.course-allocations.requests.index') ? route('admin.course-allocations.requests.index') : '/admin/course-allocations/requests',
+            icon: Inbox,
+            show: hasRole(['admin', 'dean', 'hod']) || hasPermission('assign_coordinators') || hasPermission('approve_course_allocations'),
         },
         {
             title: 'Session & Semester',
@@ -250,7 +262,7 @@ const administrationItems = computed(() => {
             title: 'Staff Management',
             href: route().has('admin.staff.index') ? route('admin.staff.index') : '#',
             icon: Users,
-            show: hasRole('admin') || hasPermission('manage_staff') || hasPermission('view_staff'),
+            show: hasRole(['admin', 'dean', 'hod']) || hasPermission('manage_staff') || hasPermission('view_staff') || hasPermission('view_department_staff') || hasPermission('view_faculty_staff'),
         },
         {
             title: 'Support Tickets',
@@ -341,9 +353,9 @@ const inventoryItems = computed(() => {
             show: hasPermission('view_inventory') || hasPermission('view_inventory_requisitions'),
         },
         {
-            title: 'Staff Assignments',
+            title: 'Deployments & Custody',
             href: route().has('admin.inventory.assignments.index') ? route('admin.inventory.assignments.index') : '/admin/inventory/assignments',
-            icon: UserCheck,
+            icon: Building,
             show: hasPermission('view_inventory') || hasPermission('view_inventory_assignments'),
         },
         {

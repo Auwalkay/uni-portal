@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { 
     Calendar, Clock, Plus, Search, Trash2, Edit3, ShieldAlert, 
     FileText, CheckCircle, Eye, CalendarRange, QrCode, Sparkles, ArrowRight, Layers,
-    Upload, Download
+    Upload, Download, Users
 } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { ref, computed } from 'vue';
@@ -239,6 +239,15 @@ const breadcrumbs = [
                     >
                         <Upload class="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                         <span>Import Schedule</span>
+                    </Button>
+
+                    <Button 
+                        variant="outline"
+                        class="border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-700 dark:text-slate-200 font-medium gap-2 text-xs h-10 px-4 rounded-xl transition-all" 
+                        @click="router.visit(route('admin.exams.courses.students'))"
+                    >
+                        <Users class="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                        <span>Course Enrolments</span>
                     </Button>
 
                     <Button 
