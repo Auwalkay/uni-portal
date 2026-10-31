@@ -13,6 +13,15 @@ class Programme extends Model
 
     protected static function booted()
     {
+        static::saving(function ($programme) {
+            if (empty($programme->academic_stream)) {
+                $programme->academic_stream = in_array(strtoupper($programme->type ?? 'UG'), ['PG', 'PHD', 'MASTERS', 'PGD', 'MBA', 'MIM']) ? 'PG' : 'UG';
+            }
+            if (empty($programme->calendar_type)) {
+                $programme->calendar_type = 'semester';
+            }
+        });
+
         static::saved(fn() => \App\Services\AcademicCacheService::clearAll());
         static::deleted(fn() => \App\Services\AcademicCacheService::clearAll());
     }
@@ -39,5 +48,22 @@ class Programme extends Model
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    public function scopeForStream($query, string $stream)
+    {
+        $isPg = in_array(strtoupper($stream), ['PG', 'PHD', 'MASTERS', 'PGD', 'MBA', 'MIM']);
+        return $query->where('academic_stream', $isPg ? 'PG' : 'UG');
+    }
+
+    public function isPostgraduate(): bool
+    {
+        return strtoupper($this->academic_stream ?? '') === 'PG'
+            || in_array(strtoupper($this->type ?? ''), ['PG', 'PHD', 'MASTERS', 'PGD', 'MBA', 'MIM']);
+    }
+
+    public function isUndergraduate(): bool
+    {
+        return ! $this->isPostgraduate();
     }
 }

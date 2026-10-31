@@ -37,7 +37,8 @@ class EnrollmentService
             $facCode  = $programme?->department?->faculty?->code ?? 'GEN';
             $deptCode = $programme?->department?->code ?? 'GEN';
 
-            $currentSession = \App\Models\Session::current();
+            $currentSession = ($programme ? \App\Models\Session::currentForProgram($programme) : null)
+                ?: \App\Models\Session::current();
             if (!$currentSession) {
                 throw new \Exception('No active academic session found.');
             }
@@ -49,10 +50,15 @@ class EnrollmentService
                 ? (int) $applicant->admitted_level
                 : (($applicant->application_mode === 'DE') ? 200 : 100);
 
-            $matricNo = \App\Helpers\MatriculationNumberHelper::generate([
-                'dept_code' => $programme?->department?->code,
-                'level'     => $currentLevel,
-            ]);
+            $matricNo = $programme
+                ? \App\Helpers\MatriculationNumberHelper::generateForProgram($programme, [
+                    'dept_code' => $programme->department?->code,
+                    'level'     => $currentLevel,
+                ])
+                : \App\Helpers\MatriculationNumberHelper::generate([
+                    'dept_code' => $programme?->department?->code,
+                    'level'     => $currentLevel,
+                ]);
 
             $student = Student::create([
                 'user_id'              => $userId,
@@ -63,8 +69,8 @@ class EnrollmentService
                 'state_id'             => $applicant->state_id,
                 'lga_id'               => $applicant->lga_id,
                 'current_level'        => $currentLevel,
-                'gender'               => $applicant->gender,
-                'entry_mode'           => $applicant->application_mode,
+                'gender'               => $applicant->gender ?? 'other',
+                'entry_mode'           => $applicant->application_mode ?? ($programme?->isPostgraduate() ? 'POSTGRADUATE' : 'UTME'),
                 'admitted_session_id'  => $currentSession->id,
                 'program_duration'     => max(($programme?->duration ?? 4) - ($currentLevel === 200 ? 1 : ($currentLevel === 300 ? 2 : 0)), 1),
                 'scholarship_id'       => $applicant->scholarship_id,

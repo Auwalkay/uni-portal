@@ -122,6 +122,9 @@ const form = useForm({
     id: '',
     name: '',
     program_type: 'UG',
+    academic_stream: 'UG',
+    calendar_type: 'semester',
+    matric_format: '',
     department_id: '',
     scholarship_eligible: true,
 })
@@ -131,6 +134,9 @@ const openCreateModal = () => {
     form.reset()
     form.type = 'programme'
     form.program_type = 'UG'
+    form.academic_stream = 'UG'
+    form.calendar_type = 'semester'
+    form.matric_format = ''
     form.scholarship_eligible = true
     form.clearErrors()
     isModalOpen.value = true
@@ -142,6 +148,9 @@ const openEditModal = (prog: any) => {
     form.id = prog.id
     form.name = prog.name
     form.program_type = prog.type || 'UG'
+    form.academic_stream = prog.academic_stream || (prog.type === 'PG' || prog.type === 'PHD' ? 'PG' : 'UG')
+    form.calendar_type = prog.calendar_type || 'semester'
+    form.matric_format = prog.matric_format || ''
     form.department_id = prog.department_id || ''
     form.scholarship_eligible = Boolean(prog.scholarship_eligible)
     form.clearErrors()
@@ -404,6 +413,29 @@ const toggleStatus = (id: string, currentStatus: boolean) => {
                                 </SelectContent>
                             </Select>
                             <p v-if="form.errors.department_id" class="text-xs text-rose-500">{{ form.errors.department_id }}</p>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <Label for="calendar_type">Calendar System</Label>
+                            <Select v-model="form.calendar_type">
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select Calendar" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="semester">Standard Semester (2 Terms)</SelectItem>
+                                    <SelectItem value="trimester">Executive Trimester (3 Terms)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <Label for="matric_format">Matriculation Format (Optional)</Label>
+                            <Input
+                                id="matric_format"
+                                v-model="form.matric_format"
+                                placeholder="e.g. MIU/{PROG_CODE}/{YEAR}/{SEQUENCE}"
+                            />
+                            <p class="text-[11px] text-muted-foreground">Placeholders: {YEAR}, {PROG_CODE}, {DEPT_CODE}, {STREAM}, {SEQUENCE}</p>
                         </div>
 
                         <div class="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800">

@@ -91,12 +91,19 @@ class StudentController extends Controller
 
             // Generate Matric Number
             $dept = \App\Models\Department::find($validated['department_id']);
+            $prog = !empty($validated['program_id']) ? \App\Models\Programme::find($validated['program_id']) : null;
+
             $matricNumber = !empty($validated['matriculation_number'])
                 ? strtoupper(trim($validated['matriculation_number']))
-                : MatriculationNumberHelper::generate([
-                    'dept_code' => $dept?->code,
-                    'level' => $validated['current_level'],
-                ]);
+                : ($prog
+                    ? MatriculationNumberHelper::generateForProgram($prog, [
+                        'dept_code' => $dept?->code,
+                        'level' => $validated['current_level'],
+                    ])
+                    : MatriculationNumberHelper::generate([
+                        'dept_code' => $dept?->code,
+                        'level' => $validated['current_level'],
+                    ]));
 
             // Handle Passport
             $passportPath = null;
@@ -104,7 +111,6 @@ class StudentController extends Controller
                 $passportPath = $request->file('passport_photo')->store('passports', 'public');
             }
 
-            $prog = \App\Models\Programme::find($validated['program_id']);
             $entryLevel = (int) $validated['current_level'];
             $duration = max(($prog?->duration ?? 4) - ($entryLevel === 200 ? 1 : ($entryLevel === 300 ? 2 : 0)), 1);
 

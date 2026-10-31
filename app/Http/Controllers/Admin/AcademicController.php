@@ -285,11 +285,20 @@ class AcademicController extends Controller
                 'program_type' => 'required|string|in:UG,PG,PHD',
                 'department_id' => 'required|exists:departments,id',
                 'scholarship_eligible' => 'required|boolean',
+                'academic_stream' => 'nullable|string|in:UG,PG',
+                'calendar_type' => 'nullable|string|in:semester,trimester',
+                'matric_format' => 'nullable|string|max:255',
             ]);
+
+            $stream = $data['academic_stream'] ?? (in_array($data['program_type'], ['PG', 'PHD']) ? 'PG' : 'UG');
+            $calendar = $data['calendar_type'] ?? 'semester';
 
             Programme::create([
                 'name' => $data['name'],
                 'type' => $data['program_type'],
+                'academic_stream' => $stream,
+                'calendar_type' => $calendar,
+                'matric_format' => $data['matric_format'] ?? null,
                 'department_id' => $data['department_id'],
                 'scholarship_eligible' => $data['scholarship_eligible'],
             ]);
@@ -372,11 +381,20 @@ class AcademicController extends Controller
                 'program_type' => 'required|string|in:UG,PG,PHD',
                 'department_id' => 'required|exists:departments,id',
                 'scholarship_eligible' => 'required|boolean',
+                'academic_stream' => 'nullable|string|in:UG,PG',
+                'calendar_type' => 'nullable|string|in:semester,trimester',
+                'matric_format' => 'nullable|string|max:255',
             ]);
+
+            $stream = $data['academic_stream'] ?? (in_array($data['program_type'], ['PG', 'PHD']) ? 'PG' : 'UG');
+            $calendar = $data['calendar_type'] ?? ($programme->calendar_type ?: 'semester');
 
             $programme->update([
                 'name' => $data['name'],
                 'type' => $data['program_type'],
+                'academic_stream' => $stream,
+                'calendar_type' => $calendar,
+                'matric_format' => array_key_exists('matric_format', $data) ? $data['matric_format'] : $programme->matric_format,
                 'department_id' => $data['department_id'],
                 'scholarship_eligible' => $data['scholarship_eligible'],
             ]);

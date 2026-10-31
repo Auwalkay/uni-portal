@@ -21,6 +21,8 @@ class Session extends Model
         'applications_enabled' => 'boolean',
         'admissions_enabled' => 'boolean',
         'type' => 'string',
+        'academic_stream' => 'string',
+        'calendar_type' => 'string',
         'late_payment_deadline' => 'datetime',
         'school_fee_payment_enabled' => 'boolean',
         'late_fee_amount' => 'double',
@@ -46,9 +48,49 @@ class Session extends Model
         return \App\Services\AcademicCacheService::getCurrentSession();
     }
 
+    /**
+     * Resolve the active session matching the student's programme stream and calendar mode
+     */
+    public static function currentForProgram(Programme $program): ?Session
+    {
+        $stream = $program->academic_stream ?: ($program->isPostgraduate() ? 'PG' : 'UG');
+        $calendar = $program->calendar_type ?: 'semester';
+
+        return static::currentForStream($stream, $calendar) ?: static::current();
+    }
+
+    /**
+     * Resolve active session for a specific academic stream and calendar type
+     */
+    public static function currentForStream(string $stream = 'UG', string $calendarType = 'semester'): ?Session
+    {
+        return \App\Services\AcademicCacheService::getCurrentSessionForStream($stream, $calendarType);
+    }
+
+    public function scopeStream($query, string $stream)
+    {
+        return $query->where('academic_stream', strtoupper($stream));
+    }
+
+    public function isPostgraduate(): bool
+    {
+        return strtoupper($this->academic_stream ?? 'UG') === 'PG';
+    }
+
+    public function isUndergraduate(): bool
+    {
+        return ! $this->isPostgraduate();
+    }
+
     protected static function booted()
     {
         static::creating(function ($model) {
+            if (empty($model->academic_stream)) {
+                $model->academic_stream = 'UG';
+            }
+            if (empty($model->calendar_type)) {
+                $model->calendar_type = 'semester';
+            }
             if (auth()->check()) {
                 $model->created_by = auth()->id();
                 $model->updated_by = auth()->id();
