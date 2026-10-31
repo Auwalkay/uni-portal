@@ -9,12 +9,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Search, Plus, Pencil, School, Download } from 'lucide-vue-next'
 import Swal from 'sweetalert2'
 import { computed } from 'vue'
+import AcademicBulkActionBar from '@/components/Academic/AcademicBulkActionBar.vue'
+import { useBulkSelection } from '@/composables/useBulkSelection'
 
 const props = defineProps<{
     departments: {
@@ -40,6 +43,58 @@ const exportUrl = computed(() => {
     return `/admin/academics/departments/export${queryString ? '?' + queryString : ''}`
 })
 
+const deptList = computed(() => props.departments.data || [])
+const {
+    selectedIds,
+    isAllSelected,
+    isSomeSelected,
+    toggleSelectAll,
+    toggleSelectOne,
+    clearSelection,
+} = useBulkSelection(deptList)
+
+const isBulkProcessing = ref(false)
+
+const handleBulkToggle = (isActive: boolean) => {
+    if (selectedIds.value.length === 0) return
+    const actionVerb = isActive ? 'activate' : 'deactivate'
+    const count = selectedIds.value.length
+    Swal.fire({
+        title: `Confirm Bulk ${isActive ? 'Activation' : 'Deactivation'}`,
+        text: `Are you sure you want to ${actionVerb} ${count} selected ${count === 1 ? 'department' : 'departments'}?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: `Yes, ${actionVerb}`,
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: isActive ? '#059669' : '#e11d48',
+    }).then((result) => {
+        if (result.isConfirmed) {
+            isBulkProcessing.value = true
+            router.post(route('admin.academics.bulk_toggle'), {
+                type: 'department',
+                ids: selectedIds.value,
+                is_active: isActive,
+            }, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    clearSelection()
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'success',
+                        title: `Departments ${actionVerb}d successfully`,
+                        showConfirmButton: false,
+                        timer: 2500,
+                    })
+                },
+                onFinish: () => {
+                    isBulkProcessing.value = false
+                },
+            })
+        }
+    })
+}
+
 const applyFilters = debounce(() => {
     router.get(route('admin.academics.departments'), {
         search: search.value,
@@ -47,8 +102,10 @@ const applyFilters = debounce(() => {
     }, { preserveState: true, replace: true })
 }, 300)
 
-watch(search, applyFilters)
-watch(facultyId, applyFilters)
+watch([search, facultyId], () => {
+    clearSelection()
+    applyFilters()
+})
 
 // Modal State
 const isModalOpen = ref(false)
@@ -170,6 +227,13 @@ const toggleStatus = (id: string, currentStatus: boolean) => {
                         <Table>
                             <TableHeader>
                                 <TableRow class="hover:bg-transparent">
+                                    <TableHead class="w-12 text-center">
+                                        <Checkbox
+                                            :checked="isAllSelected ? true : isSomeSelected ? 'indeterminate' : false"
+                                            @update:checked="toggleSelectAll"
+                                            aria-label="Select all departments on this page"
+                                        />
+                                    </TableHead>
                                     <TableHead class="font-bold">Code</TableHead>
                                     <TableHead class="font-bold">Department Name</TableHead>
                                     <TableHead class="font-bold">Faculty</TableHead>
@@ -184,7 +248,15 @@ const toggleStatus = (id: string, currentStatus: boolean) => {
                                     v-for="dept in departments.data"
                                     :key="dept.id"
                                     class="hover:bg-neutral-50/60 dark:hover:bg-neutral-800/50 transition-colors"
+                                    :class="{ 'bg-primary/5 dark:bg-primary/10': selectedIds.includes(dept.id) }"
                                 >
+                                    <TableCell class="w-12 text-center">
+                                        <Checkbox
+                                            :checked="selectedIds.includes(dept.id)"
+                                            @update:checked="(val) => toggleSelectOne(dept.id, val)"
+                                            :aria-label="`Select ${dept.name}`"
+                                        />
+                                    </TableCell>
                                     <TableCell class="font-mono font-semibold text-rose-600 dark:text-rose-400">
                                         {{ dept.code }}
                                     </TableCell>
@@ -229,7 +301,7 @@ const toggleStatus = (id: string, currentStatus: boolean) => {
                                     </TableCell>
                                 </TableRow>
                                 <TableRow v-if="!departments.data || departments.data.length === 0">
-                                    <TableCell colspan="7" class="text-center py-12 text-neutral-500">
+                                    <TableCell colspan="8" class="text-center py-12 text-neutral-500">
                                         No departments found.
                                     </TableCell>
                                 </TableRow>
@@ -316,6 +388,15 @@ const toggleStatus = (id: string, currentStatus: boolean) => {
                     </form>
                 </DialogContent>
             </Dialog>
+            <!-- Floating Bulk Actions Bar -->
+            <AcademicBulkActionBar
+                :selected-count="selectedIds.length"
+                item-name="department"
+                :is-processing="isBulkProcessing"
+                @activate="handleBulkToggle(true)"
+                @deactivate="handleBulkToggle(false)"
+                @clear="clearSelection"
+            />
         </div>
     </AdminLayout>
 </template>
