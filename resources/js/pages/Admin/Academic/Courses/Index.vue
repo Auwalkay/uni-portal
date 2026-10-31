@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -16,6 +17,8 @@ import { Search, Plus, Pencil, FileSpreadsheet, Upload, BookOpen, Download } fro
 import Swal from 'sweetalert2'
 import axios from 'axios'
 import { computed } from 'vue'
+import AcademicBulkActionBar from '@/components/Academic/AcademicBulkActionBar.vue'
+import { useBulkSelection } from '@/composables/useBulkSelection'
 
 const props = defineProps<{
     courses: {
@@ -52,6 +55,58 @@ const exportUrl = computed(() => {
     return `/admin/academics/courses/export${queryString ? '?' + queryString : ''}`
 })
 
+const coursesList = computed(() => props.courses.data || [])
+const {
+    selectedIds,
+    isAllSelected,
+    isSomeSelected,
+    toggleSelectAll,
+    toggleSelectOne,
+    clearSelection,
+} = useBulkSelection(coursesList)
+
+const isBulkProcessing = ref(false)
+
+const handleBulkToggle = (isActive: boolean) => {
+    if (selectedIds.value.length === 0) return
+    const actionVerb = isActive ? 'activate' : 'deactivate'
+    const count = selectedIds.value.length
+    Swal.fire({
+        title: `Confirm Bulk ${isActive ? 'Activation' : 'Deactivation'}`,
+        text: `Are you sure you want to ${actionVerb} ${count} selected ${count === 1 ? 'course' : 'courses'}?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: `Yes, ${actionVerb}`,
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: isActive ? '#059669' : '#e11d48',
+    }).then((result) => {
+        if (result.isConfirmed) {
+            isBulkProcessing.value = true
+            router.post(route('admin.academics.bulk_toggle'), {
+                type: 'course',
+                ids: selectedIds.value,
+                is_active: isActive,
+            }, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    clearSelection()
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'success',
+                        title: `Courses ${actionVerb}d successfully`,
+                        showConfirmButton: false,
+                        timer: 2500,
+                    })
+                },
+                onFinish: () => {
+                    isBulkProcessing.value = false
+                },
+            })
+        }
+    })
+}
+
 const applyFilters = debounce(() => {
     router.get(route('admin.academics.courses'), {
         search: search.value,
@@ -62,7 +117,10 @@ const applyFilters = debounce(() => {
     }, { preserveState: true, replace: true })
 }, 300)
 
-watch([search, facultyId, departmentId, level, semester], applyFilters)
+watch([search, facultyId, departmentId, level, semester], () => {
+    clearSelection()
+    applyFilters()
+})
 
 // Modal State
 const isModalOpen = ref(false)
@@ -252,6 +310,13 @@ const handleExcelUpload = async () => {
                         <Table>
                             <TableHeader>
                                 <TableRow class="hover:bg-transparent">
+                                    <TableHead class="w-12 text-center">
+                                        <Checkbox
+                                            :checked="isAllSelected ? true : isSomeSelected ? 'indeterminate' : false"
+                                            @update:checked="toggleSelectAll"
+                                            aria-label="Select all courses on this page"
+                                        />
+                                    </TableHead>
                                     <TableHead class="font-bold">Course Code</TableHead>
                                     <TableHead class="font-bold">Course Title</TableHead>
                                     <TableHead class="font-bold">Credit Units</TableHead>
@@ -266,7 +331,15 @@ const handleExcelUpload = async () => {
                                     v-for="c in courses.data"
                                     :key="c.id"
                                     class="hover:bg-neutral-50/60 dark:hover:bg-neutral-800/50 transition-colors"
+                                    :class="{ 'bg-primary/5 dark:bg-primary/10': selectedIds.includes(c.id) }"
                                 >
+                                    <TableCell class="w-12 text-center">
+                                        <Checkbox
+                                            :checked="selectedIds.includes(c.id)"
+                                            @update:checked="(val) => toggleSelectOne(c.id, val)"
+                                            :aria-label="`Select ${c.code}`"
+                                        />
+                                    </TableCell>
                                     <TableCell class="font-mono font-semibold text-rose-600 dark:text-rose-400">
                                         {{ c.code }}
                                     </TableCell>
@@ -303,7 +376,7 @@ const handleExcelUpload = async () => {
                                     </TableCell>
                                 </TableRow>
                                 <TableRow v-if="!courses.data || courses.data.length === 0">
-                                    <TableCell colspan="7" class="text-center py-12 text-neutral-500">
+                                    <TableCell colspan="8" class="text-center py-12 text-neutral-500">
                                         No courses found matching criteria.
                                     </TableCell>
                                 </TableRow>
@@ -462,6 +535,15 @@ const handleExcelUpload = async () => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            <!-- Floating Bulk Actions Bar -->
+            <AcademicBulkActionBar
+                :selected-count="selectedIds.length"
+                item-name="course"
+                :is-processing="isBulkProcessing"
+                @activate="handleBulkToggle(true)"
+                @deactivate="handleBulkToggle(false)"
+                @clear="clearSelection"
+            />
         </div>
     </AdminLayout>
 </template>

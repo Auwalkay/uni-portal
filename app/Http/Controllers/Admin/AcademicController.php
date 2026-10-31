@@ -10,6 +10,7 @@ use App\Models\Programme;
 use App\Models\Unit;
 use App\Services\AcademicCacheService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class AcademicController extends Controller
@@ -194,6 +195,48 @@ class AcademicController extends Controller
         $item->update(['is_active' => $request->is_active]);
 
         return back()->with('success', ucfirst($request->type).' status updated.');
+    }
+
+    public function bulkToggle(Request $request)
+    {
+        $request->validate([
+            'type' => 'required|in:faculty,department,programme,course,unit',
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'required|uuid',
+            'is_active' => 'required|boolean',
+        ]);
+
+        $user = $request->user();
+        if ($request->type === 'faculty' && ! $user->can('manage_faculties') && ! $user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'department' && ! $user->can('manage_departments') && ! $user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'unit' && ! $user->can('manage_departments') && ! $user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'programme' && ! $user->can('manage_programmes') && ! $user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        } elseif ($request->type === 'course' && ! $user->can('manage_courses') && ! $user->can('manage_academic_sessions')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $modelClass = match ($request->type) {
+            'faculty' => Faculty::class,
+            'department' => Department::class,
+            'programme' => Programme::class,
+            'course' => Course::class,
+            'unit' => Unit::class,
+        };
+
+        $updatedCount = $modelClass::whereIn('id', $request->ids)->update([
+            'is_active' => $request->is_active,
+        ]);
+
+        AcademicCacheService::clearAll();
+
+        $action = $request->is_active ? 'activated' : 'deactivated';
+        $label = Str::plural(ucfirst($request->type), $updatedCount);
+
+        return back()->with('success', "{$updatedCount} {$label} {$action} successfully.");
     }
 
     public function store(Request $request)
