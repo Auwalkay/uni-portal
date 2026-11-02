@@ -519,12 +519,26 @@ class CourseRegistrationController extends Controller
             abort(404, 'No active session.');
         }
 
-        $registrations = CourseRegistration::where('student_id', $student->id)
+        $student->loadMissing(['academicDepartment.faculty', 'program']);
+
+        $programme = $student->program;
+        $overrides = $programme
+            ? DB::table('course_programme')->where('programme_id', $programme->id)->pluck('is_compulsory', 'course_id')
+            : collect();
+
+        $allRegistrations = CourseRegistration::where('student_id', $student->id)
             ->where('session_id', $currentSession->id)
             ->whereHas('course', fn ($q) => $q->where('is_active', true))
-            ->with(['course' => fn ($q) => $q->where('is_active', true), 'semester'])
-            ->get()
-            ->groupBy(fn ($reg) => $reg->semester?->name ?? 'Unknown');
+            ->with(['course.department' => fn ($q) => $q->where('is_active', true), 'semester'])
+            ->get();
+
+        foreach ($allRegistrations as $reg) {
+            if ($reg->course) {
+                $reg->course->is_compulsory = $reg->course->resolveIsCompulsoryFor($student, $overrides);
+            }
+        }
+
+        $registrations = $allRegistrations->groupBy(fn ($reg) => $reg->semester?->name ?? 'Unknown');
 
         if ($registrations->isEmpty()) {
             return back()->with('error', 'No course registration records found for this session.');

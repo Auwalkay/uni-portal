@@ -111,7 +111,7 @@ class ResultController extends Controller
 
                     foreach ($regs as $reg) {
                         if ($reg->course) {
-                            $reg->course->is_compulsory = $overrides->has($reg->course->id) ? (bool)$overrides->get($reg->course->id) : false;
+                            $reg->course->is_compulsory = $reg->course->resolveIsCompulsoryFor($student, $overrides);
                         }
                         if ($isBlocked) {
                             $reg->score = null;
