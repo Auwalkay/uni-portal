@@ -10,7 +10,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Swal from 'sweetalert2';
 import { Plus, Pencil, BookOpen, Trash2, Loader2 } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
@@ -141,6 +140,94 @@ const filteredProgrammes = computed(() => {
     if (!form.department_id) return props.allProgrammes;
     return props.allProgrammes.filter((prog: any) => prog.department_id === form.department_id);
 });
+
+const filterFacultyOptions = computed(() => [
+    { value: 'ALL', label: 'All Faculties' },
+    { value: 'NON_ACADEMIC', label: 'Non-Academic Departments' },
+    ...(props.allFaculties || []).map((fac: any) => ({
+        value: fac.id,
+        label: fac.name,
+    })),
+]);
+
+const filterDepartmentSelectOptions = computed(() => [
+    { value: 'ALL', label: 'All Departments' },
+    ...(filterDepartments.value || []).map((dept: any) => ({
+        value: dept.id,
+        label: dept.name,
+    })),
+]);
+
+const allFacultiesOptions = computed(() => (props.allFaculties || []).map((fac: any) => ({
+    value: fac.id,
+    label: fac.name,
+})));
+
+const allDepartmentsOptions = computed(() => (props.allDepartments || []).map((dept: any) => ({
+    value: dept.id,
+    label: dept.name,
+})));
+
+const filteredDepartmentsOptions = computed(() => (filteredDepartments.value || []).map((dept: any) => ({
+    value: dept.id,
+    label: dept.name,
+})));
+
+const courseFilteredDepartmentsOptions = computed(() => (filteredDepartments.value || []).map((dept: any) => ({
+    value: dept.id,
+    label: `${dept.code} - ${dept.name}`,
+})));
+
+const departmentModalFacultyOptions = computed(() => [
+    { value: 'none', label: 'None (Non-Academic)' },
+    ...(props.allFaculties || []).map((fac: any) => ({
+        value: fac.id,
+        label: fac.name,
+    })),
+]);
+
+const departmentFacultyId = computed({
+    get: () => form.faculty_id || 'none',
+    set: (val: string) => handleFacultyChange(val),
+});
+
+const courseProgrammeId = computed({
+    get: () => form.programme_id || 'none',
+    set: (val: string) => {
+        form.programme_id = val === 'none' ? '' : val;
+    },
+});
+
+const courseFilteredProgrammesOptions = computed(() => [
+    { value: 'none', label: 'None (General Course)' },
+    ...(filteredProgrammes.value || []).map((prog: any) => ({
+        value: prog.id,
+        label: prog.name,
+    })),
+]);
+
+const programTypeOptions = [
+    { value: 'UG', label: 'Undergraduate (UG)' },
+    { value: 'PG', label: 'Postgraduate (PG)' },
+    { value: 'PHD', label: 'PhD' },
+];
+
+const courseLevelOptions = [
+    { value: '100', label: '100 Level' },
+    { value: '200', label: '200 Level' },
+    { value: '300', label: '300 Level' },
+    { value: '400', label: '400 Level' },
+    { value: '500', label: '500 Level' },
+    { value: '600', label: '600 Level' },
+    { value: '700', label: '700 Level' },
+    { value: '800', label: '800 Level' },
+    { value: '900', label: '900 Level' },
+];
+
+const courseSemesterOptions = [
+    { value: '1', label: 'First' },
+    { value: '2', label: 'Second' },
+];
 
 const handleFacultyChange = (val: string) => {
     if (activeType.value === 'department') {
@@ -621,39 +708,29 @@ const removeProgrammeCourse = async (courseId: string) => {
             <!-- FILTER BAR -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="relative">
-                     <Input v-model="filterForm.search" placeholder="Search by name or code..." class="pl-8" />
-                     <span class="absolute left-2.5 top-2.5 text-muted-foreground">
+                     <Input v-model="filterForm.search" placeholder="Search by name or code..." class="pl-8 h-10" />
+                     <span class="absolute left-2.5 top-3 text-muted-foreground">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-search"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                      </span>
                 </div>
                 <!-- Faculty Filter - Hidden on Faculties tab, visible on others -->
                 <div v-if="filterForm.tab !== 'faculties'">
-                     <Select v-model="filterForm.faculty_id" @update:model-value="filterForm.department_id = ''">
-                        <SelectTrigger>
-                            <SelectValue placeholder="All Faculties" />
-                        </SelectTrigger>
-                        <SelectContent>
-                             <SelectItem value="ALL">All Faculties</SelectItem>
-                             <SelectItem value="NON_ACADEMIC">Non-Academic Departments</SelectItem>
-                             <SelectItem v-for="fac in allFaculties" :key="fac.id" :value="fac.id">
-                                {{ fac.name }}
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
+                     <SearchableSelect
+                        v-model="filterForm.faculty_id"
+                        :options="filterFacultyOptions"
+                        placeholder="All Faculties"
+                        search-placeholder="Search faculty..."
+                        @update:model-value="filterForm.department_id = ''"
+                    />
                 </div>
                  <!-- Department Filter - Visible on Programmes and Courses tabs -->
                  <div v-if="['programmes', 'courses'].includes(filterForm.tab)">
-                     <Select v-model="filterForm.department_id">
-                        <SelectTrigger>
-                            <SelectValue placeholder="All Departments" />
-                        </SelectTrigger>
-                        <SelectContent>
-                             <SelectItem value="ALL">All Departments</SelectItem>
-                             <SelectItem v-for="dept in filterDepartments" :key="dept.id" :value="dept.id">
-                                {{ dept.name }}
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
+                     <SearchableSelect
+                        v-model="filterForm.department_id"
+                        :options="filterDepartmentSelectOptions"
+                        placeholder="All Departments"
+                        search-placeholder="Search department..."
+                    />
                 </div>
             </div>
 
@@ -759,17 +836,13 @@ const removeProgrammeCourse = async (courseId: string) => {
                             </div>
                             <div class="space-y-1">
                                 <Label>Faculty</Label>
-                                <Select :model-value="form.faculty_id || 'none'" @update:model-value="handleFacultyChange">
-                                    <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.faculty_id}">
-                                        <SelectValue placeholder="Select Faculty (Optional for non-academic)" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">None (Non-Academic)</SelectItem>
-                                        <SelectItem v-for="fac in allFaculties" :key="fac.id" :value="fac.id">
-                                            {{ fac.name }}
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <SearchableSelect
+                                    v-model="departmentFacultyId"
+                                    :options="departmentModalFacultyOptions"
+                                    placeholder="Select Faculty (Optional for non-academic)"
+                                    search-placeholder="Search faculty..."
+                                    :error-class="!!form.errors.faculty_id"
+                                />
                                 <span v-if="form.errors.faculty_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.faculty_id }}</span>
                             </div>
                             <div class="flex items-center space-x-2 pt-2">
@@ -794,16 +867,13 @@ const removeProgrammeCourse = async (courseId: string) => {
                             </div>
                             <div class="space-y-1">
                                 <Label>Department</Label>
-                                <Select v-model="form.department_id">
-                                    <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.department_id}">
-                                        <SelectValue placeholder="Select Department" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem v-for="dept in allDepartments" :key="dept.id" :value="dept.id">
-                                            {{ dept.name }}
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <SearchableSelect
+                                    v-model="form.department_id"
+                                    :options="allDepartmentsOptions"
+                                    placeholder="Select Department"
+                                    search-placeholder="Search department..."
+                                    :error-class="!!form.errors.department_id"
+                                />
                                 <span v-if="form.errors.department_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.department_id }}</span>
                             </div>
                         </div>
@@ -817,44 +887,35 @@ const removeProgrammeCourse = async (courseId: string) => {
                             </div>
                             <div class="space-y-1">
                                 <Label>Type</Label>
-                                <Select v-model="form.program_type"> <!-- Corrected v-model -->
-                                    <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.program_type}">
-                                        <SelectValue placeholder="Select Type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="UG">Undergraduate (UG)</SelectItem>
-                                        <SelectItem value="PG">Postgraduate (PG)</SelectItem>
-                                        <SelectItem value="PHD">PhD</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <SearchableSelect
+                                    v-model="form.program_type"
+                                    :options="programTypeOptions"
+                                    placeholder="Select Type"
+                                    search-placeholder="Search degree type..."
+                                    :error-class="!!form.errors.program_type"
+                                />
                                 <span v-if="form.errors.program_type" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.program_type }}</span>
                             </div>
                             <div class="space-y-1">
                                 <Label>Faculty</Label>
-                                <Select v-model="form.faculty_id">
-                                    <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.faculty_id}">
-                                        <SelectValue placeholder="Select Faculty" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem v-for="fac in allFaculties" :key="fac.id" :value="fac.id">
-                                            {{ fac.name }}
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <SearchableSelect
+                                    v-model="form.faculty_id"
+                                    :options="allFacultiesOptions"
+                                    placeholder="Select Faculty"
+                                    search-placeholder="Search faculty..."
+                                    :error-class="!!form.errors.faculty_id"
+                                />
                                 <span v-if="form.errors.faculty_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.faculty_id }}</span>
                             </div>
                             <div class="space-y-1">
                                 <Label>Department</Label>
-                                 <Select v-model="form.department_id">
-                                    <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.department_id}">
-                                        <SelectValue placeholder="Select Department" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem v-for="dept in filteredDepartments" :key="dept.id" :value="dept.id">
-                                            {{ dept.name }}
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                 <SearchableSelect
+                                    v-model="form.department_id"
+                                    :options="filteredDepartmentsOptions"
+                                    placeholder="Select Department"
+                                    search-placeholder="Search department..."
+                                    :error-class="!!form.errors.department_id"
+                                />
                                 <span v-if="form.errors.department_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.department_id }}</span>
                             </div>
                             <div class="flex items-center space-x-2 pt-2">
@@ -885,43 +946,37 @@ const removeProgrammeCourse = async (courseId: string) => {
                                 </div>
                                 <div class="space-y-1">
                                     <Label>Level</Label>
-                                    <Select v-model="form.level">
-                                        <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.level}"><SelectValue placeholder="Select" /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="100">100</SelectItem>
-                                            <SelectItem value="200">200</SelectItem>
-                                            <SelectItem value="300">300</SelectItem>
-                                            <SelectItem value="400">400</SelectItem>
-                                            <SelectItem value="500">500</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <SearchableSelect
+                                        v-model="form.level"
+                                        :options="courseLevelOptions"
+                                        placeholder="Select Level"
+                                        search-placeholder="Search level..."
+                                        :error-class="!!form.errors.level"
+                                    />
                                     <span v-if="form.errors.level" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.level }}</span>
                                 </div>
                              </div>
                              <div class="grid grid-cols-2 gap-4">
                                   <div class="space-y-1">
                                     <Label>Semester</Label>
-                                     <Select v-model="form.semester">
-                                        <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.semester}"><SelectValue placeholder="Select" /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="1">First</SelectItem>
-                                            <SelectItem value="2">Second</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                     <SearchableSelect
+                                        v-model="form.semester"
+                                        :options="courseSemesterOptions"
+                                        placeholder="Select Semester"
+                                        search-placeholder="Search semester..."
+                                        :error-class="!!form.errors.semester"
+                                    />
                                     <span v-if="form.errors.semester" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.semester }}</span>
                                 </div>
                                  <div class="space-y-1">
                                     <Label>Faculty</Label>
-                                    <Select v-model="form.faculty_id">
-                                        <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.faculty_id}">
-                                            <SelectValue placeholder="Faculty" class="truncate" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                             <SelectItem v-for="fac in allFaculties" :key="fac.id" :value="fac.id">
-                                                {{ fac.name }}
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <SearchableSelect
+                                        v-model="form.faculty_id"
+                                        :options="allFacultiesOptions"
+                                        placeholder="Select Faculty"
+                                        search-placeholder="Search faculty..."
+                                        :error-class="!!form.errors.faculty_id"
+                                    />
                                     <span v-if="form.errors.faculty_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.faculty_id }}</span>
                                 </div>
                              </div>
@@ -929,32 +984,25 @@ const removeProgrammeCourse = async (courseId: string) => {
                              <div class="grid grid-cols-2 gap-4">
                                 <div class="space-y-1">
                                     <Label>Department</Label>
-                                     <Select v-model="form.department_id">
-                                        <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.department_id}">
-                                            <SelectValue placeholder="Dept" class="truncate" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                             <SelectItem v-for="dept in filteredDepartments" :key="dept.id" :value="dept.id">
-                                                {{ dept.code }} - {{ dept.name }}
-                                            </SelectItem>
-                                        </SelectContent>
-                                     </Select>
-                                     <span v-if="form.errors.department_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.department_id }}</span>
+                                    <SearchableSelect
+                                        v-model="form.department_id"
+                                        :options="courseFilteredDepartmentsOptions"
+                                        placeholder="Select Dept"
+                                        search-placeholder="Search department..."
+                                        :error-class="!!form.errors.department_id"
+                                    />
+                                    <span v-if="form.errors.department_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.department_id }}</span>
                                 </div>
                                 <div class="space-y-1">
                                     <Label>Programme</Label>
-                                     <Select :model-value="form.programme_id || 'none'" @update:model-value="val => form.programme_id = val === 'none' ? '' : val">
-                                        <SelectTrigger :class="{'border-rose-500 focus:ring-rose-500': form.errors.programme_id}">
-                                            <SelectValue placeholder="Programme" class="truncate" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">None (General Course)</SelectItem>
-                                             <SelectItem v-for="prog in filteredProgrammes" :key="prog.id" :value="prog.id">
-                                                {{ prog.name }}
-                                            </SelectItem>
-                                        </SelectContent>
-                                     </Select>
-                                     <span v-if="form.errors.programme_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.programme_id }}</span>
+                                    <SearchableSelect
+                                        v-model="courseProgrammeId"
+                                        :options="courseFilteredProgrammesOptions"
+                                        placeholder="Select Programme"
+                                        search-placeholder="Search programme..."
+                                        :error-class="!!form.errors.programme_id"
+                                    />
+                                    <span v-if="form.errors.programme_id" class="text-xs text-rose-500 font-medium mt-0.5 inline-block">{{ form.errors.programme_id }}</span>
                                 </div>
                              </div>
                         </div>

@@ -9,7 +9,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import SearchableSelect from '@/components/SearchableSelect.vue'
 import {
     ArrowLeft,
@@ -46,6 +45,11 @@ const isSubmitting = ref(false)
 
 const isCopyModalOpen = ref(false)
 const sourceProgrammeId = ref('')
+
+const programmeOptions = computed(() => (props.allProgrammes || []).map((p: any) => ({
+    value: p.id,
+    label: p.name,
+})))
 
 const isExcelModalOpen = ref(false)
 const excelFile = ref<File | null>(null)
@@ -514,16 +518,12 @@ const handleExcelUpload = async () => {
                     <div class="space-y-4 py-3">
                         <div class="space-y-1.5">
                             <Label>Source Programme</Label>
-                            <Select v-model="sourceProgrammeId">
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Source Programme" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem v-for="p in allProgrammes" :key="p.id" :value="p.id">
-                                        {{ p.name }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <SearchableSelect
+                                v-model="sourceProgrammeId"
+                                :options="programmeOptions"
+                                placeholder="Select Source Programme"
+                                search-placeholder="Search programme..."
+                            />
                         </div>
                     </div>
 

@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import SearchableSelect from '@/components/SearchableSelect.vue'
 import { Search, Plus, Pencil, School, Download } from 'lucide-vue-next'
 import Swal from 'sweetalert2'
 import { computed } from 'vue'
@@ -34,6 +34,22 @@ const props = defineProps<{
 
 const search = ref(props.filters?.search || '')
 const facultyId = ref(props.filters?.faculty_id || 'ALL')
+
+const facultyListOptions = computed(() => (props.faculties || []).map((f: any) => ({
+    value: f.id,
+    label: f.name,
+})))
+
+const filterFacultyOptions = computed(() => [
+    { value: 'ALL', label: 'All Faculties' },
+    { value: 'NON_ACADEMIC', label: 'Non-Academic Only' },
+    ...facultyListOptions.value,
+])
+
+const modalFacultyOptions = computed(() => [
+    { value: 'none', label: 'None (Non-Academic Unit)' },
+    ...facultyListOptions.value,
+])
 
 const exportUrl = computed(() => {
     const params = new URLSearchParams()
@@ -124,6 +140,7 @@ const openCreateModal = () => {
     modalMode.value = 'create'
     form.reset()
     form.type = 'department'
+    form.faculty_id = 'none'
     form.is_academic = true
     form.clearErrors()
     isModalOpen.value = true
@@ -135,7 +152,7 @@ const openEditModal = (department: any) => {
     form.id = department.id
     form.name = department.name
     form.code = department.code
-    form.faculty_id = department.faculty_id || ''
+    form.faculty_id = department.faculty_id || 'none'
     form.is_academic = Boolean(department.is_academic)
     form.clearErrors()
     isModalOpen.value = true
@@ -143,6 +160,9 @@ const openEditModal = (department: any) => {
 
 const submitForm = () => {
     const routeName = modalMode.value === 'create' ? 'admin.academics.store' : 'admin.academics.update'
+    if (form.faculty_id === 'none') {
+        form.faculty_id = ''
+    }
     form.post(route(routeName), {
         onSuccess: () => {
             isModalOpen.value = false
@@ -191,32 +211,28 @@ const toggleStatus = (id: string, currentStatus: boolean) => {
                         <CardDescription>Manage academic departments and non-academic administrative units.</CardDescription>
                     </div>
                     <div class="flex flex-col sm:flex-row items-center gap-3">
-                        <Button variant="outline" size="sm" as-child class="gap-1.5 text-xs font-semibold">
+                        <Button variant="outline" size="sm" as-child class="h-10 gap-1.5 text-xs font-semibold">
                             <a :href="exportUrl" download>
                                 <Download class="w-3.5 h-3.5 text-emerald-600" />
                                 Export Departments
                             </a>
                         </Button>
 
-                        <Select v-model="facultyId">
-                            <SelectTrigger class="w-full sm:w-48 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800">
-                                <SelectValue placeholder="All Faculties" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="ALL">All Faculties</SelectItem>
-                                <SelectItem value="NON_ACADEMIC">Non-Academic Only</SelectItem>
-                                <SelectItem v-for="f in faculties" :key="f.id" :value="f.id">
-                                    {{ f.name }}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                            v-model="facultyId"
+                            :options="filterFacultyOptions"
+                            placeholder="All Faculties"
+                            search-placeholder="Search faculty..."
+                            class="w-full sm:w-56"
+                            trigger-class="bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800"
+                        />
 
                         <div class="relative w-full sm:w-64">
                             <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
                             <Input
                                 v-model="search"
                                 placeholder="Search department..."
-                                class="pl-9 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800"
+                                class="pl-9 h-10 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800"
                             />
                         </div>
                     </div>
@@ -358,17 +374,13 @@ const toggleStatus = (id: string, currentStatus: boolean) => {
 
                         <div class="space-y-1.5">
                             <Label for="dept_faculty">Parent Faculty (Optional for non-academic)</Label>
-                            <Select v-model="form.faculty_id">
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Parent Faculty" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">None (Non-Academic Unit)</SelectItem>
-                                    <SelectItem v-for="f in faculties" :key="f.id" :value="f.id">
-                                        {{ f.name }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <SearchableSelect
+                                v-model="form.faculty_id"
+                                :options="modalFacultyOptions"
+                                placeholder="Select Parent Faculty"
+                                search-placeholder="Search faculty..."
+                                :error-class="!!form.errors.faculty_id"
+                            />
                         </div>
 
                         <div class="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800">
