@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import SearchableSelect from '@/components/SearchableSelect.vue'
 import { Search, Plus, Pencil, GraduationCap, BookOpen, Download } from 'lucide-vue-next'
 import Swal from 'sweetalert2'
 import { computed } from 'vue'
@@ -38,6 +38,44 @@ const props = defineProps<{
 const search = ref(props.filters?.search || '')
 const departmentId = ref(props.filters?.department_id || 'ALL')
 const programType = ref(props.filters?.program_type || 'ALL')
+
+const departmentOptions = computed(() => (props.departments || []).map((d: any) => ({
+    value: d.id,
+    label: d.name,
+})))
+
+const filterDepartmentOptions = computed(() => [
+    { value: 'ALL', label: 'All Departments' },
+    ...departmentOptions.value,
+])
+
+const programTypeOptions = [
+    { value: 'UG', label: 'Undergraduate (UG)' },
+    { value: 'PG', label: 'Postgraduate (General PG)' },
+    { value: 'PGD', label: 'Postgraduate Diploma (PGD - 700L)' },
+    { value: 'MBA', label: 'Master of Business Administration (MBA - 800L)' },
+    { value: 'MIM', label: 'Master of International Management (MIM - 800L)' },
+    { value: 'MSC', label: "Academic Master's (M.Sc / M.A - 800L)" },
+    { value: 'MPHIL', label: "Master of Philosophy (M.Phil - 800L)" },
+    { value: 'PHD', label: 'Doctorate (Ph.D - 900L)' },
+]
+
+const filterProgramTypeOptions = [
+    { value: 'ALL', label: 'All Degree Levels' },
+    { value: 'UG', label: 'Undergraduate (UG)' },
+    { value: 'PG', label: 'Postgraduate (PG)' },
+    { value: 'PHD', label: 'Doctorate (PhD)' },
+]
+
+const calendarOptions = [
+    { value: 'semester', label: 'Standard Semester (2 Terms)' },
+    { value: 'trimester', label: 'Executive Trimester (3 Terms)' },
+]
+
+const billingModelOptions = [
+    { value: 'composite_term', label: 'Flat Composite Fee' },
+    { value: 'unbundled_milestone', label: 'Unbundled Milestones (PG)' },
+]
 
 const exportUrl = computed(() => {
     const params = new URLSearchParams()
@@ -233,43 +271,37 @@ const toggleStatus = (id: string, currentStatus: boolean) => {
                         <CardDescription>Manage undergraduate (UG), postgraduate (PG), and doctoral (PhD) academic programmes.</CardDescription>
                     </div>
                     <div class="flex flex-wrap items-center gap-3">
-                        <Button variant="outline" size="sm" as-child class="gap-1.5 text-xs font-semibold">
+                        <Button variant="outline" size="sm" as-child class="h-10 gap-1.5 text-xs font-semibold">
                             <a :href="exportUrl" download>
                                 <Download class="w-3.5 h-3.5 text-emerald-600" />
                                 Export Programmes
                             </a>
                         </Button>
 
-                        <Select v-model="programType">
-                            <SelectTrigger class="w-36 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800">
-                                <SelectValue placeholder="Degree Level" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="ALL">All Degree Levels</SelectItem>
-                                <SelectItem value="UG">Undergraduate (UG)</SelectItem>
-                                <SelectItem value="PG">Postgraduate (PG)</SelectItem>
-                                <SelectItem value="PHD">Doctorate (PhD)</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                            v-model="programType"
+                            :options="filterProgramTypeOptions"
+                            placeholder="Degree Level"
+                            search-placeholder="Search degree..."
+                            class="w-full sm:w-44"
+                            trigger-class="bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800"
+                        />
 
-                        <Select v-model="departmentId">
-                            <SelectTrigger class="w-48 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800">
-                                <SelectValue placeholder="All Departments" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="ALL">All Departments</SelectItem>
-                                <SelectItem v-for="d in departments" :key="d.id" :value="d.id">
-                                    {{ d.name }}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                            v-model="departmentId"
+                            :options="filterDepartmentOptions"
+                            placeholder="All Departments"
+                            search-placeholder="Search department..."
+                            class="w-full sm:w-56"
+                            trigger-class="bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800"
+                        />
 
                         <div class="relative w-full sm:w-60">
                             <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
                             <Input
                                 v-model="search"
                                 placeholder="Search programme..."
-                                class="pl-9 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800"
+                                class="pl-9 h-10 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800"
                             />
                         </div>
                     </div>
@@ -414,63 +446,46 @@ const toggleStatus = (id: string, currentStatus: boolean) => {
 
                         <div class="space-y-1.5">
                             <Label for="prog_type">Degree Type</Label>
-                            <Select v-model="form.program_type">
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="UG">Undergraduate (UG)</SelectItem>
-                                    <SelectItem value="PG">Postgraduate (General PG)</SelectItem>
-                                    <SelectItem value="PGD">Postgraduate Diploma (PGD - 700L)</SelectItem>
-                                    <SelectItem value="MBA">Master of Business Administration (MBA - 800L)</SelectItem>
-                                    <SelectItem value="MIM">Master of International Management (MIM - 800L)</SelectItem>
-                                    <SelectItem value="MSC">Academic Master's (M.Sc / M.A - 800L)</SelectItem>
-                                    <SelectItem value="MPHIL">Master of Philosophy (M.Phil - 800L)</SelectItem>
-                                    <SelectItem value="PHD">Doctorate (Ph.D - 900L)</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <SearchableSelect
+                                v-model="form.program_type"
+                                :options="programTypeOptions"
+                                placeholder="Select Type"
+                                search-placeholder="Search degree type..."
+                                :error-class="!!form.errors.program_type"
+                            />
                         </div>
 
                         <div class="space-y-1.5">
                             <Label for="prog_dept">Department</Label>
-                            <Select v-model="form.department_id">
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Department" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem v-for="d in departments" :key="d.id" :value="d.id">
-                                        {{ d.name }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <SearchableSelect
+                                v-model="form.department_id"
+                                :options="departmentOptions"
+                                placeholder="Select Department"
+                                search-placeholder="Search department..."
+                                :error-class="!!form.errors.department_id"
+                            />
                             <p v-if="form.errors.department_id" class="text-xs text-rose-500">{{ form.errors.department_id }}</p>
                         </div>
 
                         <div class="grid grid-cols-2 gap-3">
                             <div class="space-y-1.5">
                                 <Label for="calendar_type">Calendar System</Label>
-                                <Select v-model="form.calendar_type">
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select Calendar" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="semester">Standard Semester (2 Terms)</SelectItem>
-                                        <SelectItem value="trimester">Executive Trimester (3 Terms)</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <SearchableSelect
+                                    v-model="form.calendar_type"
+                                    :options="calendarOptions"
+                                    placeholder="Select Calendar"
+                                    search-placeholder="Search calendar..."
+                                />
                             </div>
 
                             <div class="space-y-1.5">
                                 <Label for="billing_model">Fee Billing Model</Label>
-                                <Select v-model="form.billing_model">
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select Billing Model" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="composite_term">Flat Composite Fee</SelectItem>
-                                        <SelectItem value="unbundled_milestone">Unbundled Milestones (PG)</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <SearchableSelect
+                                    v-model="form.billing_model"
+                                    :options="billingModelOptions"
+                                    placeholder="Select Billing Model"
+                                    search-placeholder="Search billing..."
+                                />
                             </div>
                         </div>
 

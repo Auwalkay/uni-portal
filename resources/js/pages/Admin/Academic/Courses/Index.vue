@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import SearchableSelect from '@/components/SearchableSelect.vue'
 import { Search, Plus, Pencil, FileSpreadsheet, Upload, BookOpen, Download } from 'lucide-vue-next'
 import Swal from 'sweetalert2'
 import axios from 'axios'
@@ -43,6 +43,52 @@ const facultyId = ref(props.filters?.faculty_id || 'ALL')
 const departmentId = ref(props.filters?.department_id || 'ALL')
 const level = ref(props.filters?.level || 'ALL')
 const semester = ref(props.filters?.semester || 'ALL')
+
+const departmentOptions = computed(() => (props.departments || []).map((d: any) => ({
+    value: d.id,
+    label: d.name,
+})))
+
+const filterDepartmentOptions = computed(() => [
+    { value: 'ALL', label: 'All Departments' },
+    ...departmentOptions.value,
+])
+
+const levelOptions = [
+    { value: 100, label: '100 Level' },
+    { value: 200, label: '200 Level' },
+    { value: 300, label: '300 Level' },
+    { value: 400, label: '400 Level' },
+    { value: 500, label: '500 Level' },
+    { value: 600, label: '600 Level' },
+    { value: 700, label: '700 Level (PGD)' },
+    { value: 800, label: "800 Level (Master's)" },
+    { value: 900, label: '900 Level (Ph.D)' },
+]
+
+const filterLevelOptions = [
+    { value: 'ALL', label: 'All Levels' },
+    ...levelOptions,
+]
+
+const semesterOptions = [
+    { value: '1', label: '1st Semester / Trimester 1' },
+    { value: '2', label: '2nd Semester / Trimester 2' },
+    { value: '3', label: 'Trimester 3 / Research Term' },
+]
+
+const filterSemesterOptions = [
+    { value: 'ALL', label: 'All Semesters / Terms' },
+    ...semesterOptions,
+]
+
+const courseTypeOptions = [
+    { value: 'lecture_exam', label: 'Standard Lecture & Examination' },
+    { value: 'case_study_seminar', label: 'Executive Case Study & Seminar (MBA/MIM)' },
+    { value: 'practicum_internship', label: 'Industry Practicum / Attachment' },
+    { value: 'capstone_project', label: 'Capstone / Applied Project' },
+    { value: 'academic_dissertation', label: 'Academic Thesis / Dissertation (M.Sc/Ph.D)' },
+]
 
 const exportUrl = computed(() => {
     const params = new URLSearchParams()
@@ -269,54 +315,39 @@ const handleExcelUpload = async () => {
 
                 <!-- Filter Controls -->
                 <div class="px-6 pb-4 flex flex-wrap items-center gap-3">
-                    <Select v-model="level">
-                        <SelectTrigger class="w-40 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800">
-                            <SelectValue placeholder="All Levels" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="ALL">All Levels</SelectItem>
-                            <SelectItem value="100">100 Level</SelectItem>
-                            <SelectItem value="200">200 Level</SelectItem>
-                            <SelectItem value="300">300 Level</SelectItem>
-                            <SelectItem value="400">400 Level</SelectItem>
-                            <SelectItem value="500">500 Level</SelectItem>
-                            <SelectItem value="600">600 Level</SelectItem>
-                            <SelectItem value="700">700 Level (PGD)</SelectItem>
-                            <SelectItem value="800">800 Level (Master's)</SelectItem>
-                            <SelectItem value="900">900 Level (Ph.D)</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                        v-model="level"
+                        :options="filterLevelOptions"
+                        placeholder="All Levels"
+                        search-placeholder="Search level..."
+                        class="w-full sm:w-40"
+                        trigger-class="bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800"
+                    />
 
-                    <Select v-model="semester">
-                        <SelectTrigger class="w-40 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800">
-                            <SelectValue placeholder="Semester / Term" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="ALL">All Semesters / Terms</SelectItem>
-                            <SelectItem value="1">1st Semester / Trimester 1</SelectItem>
-                            <SelectItem value="2">2nd Semester / Trimester 2</SelectItem>
-                            <SelectItem value="3">Trimester 3 / Research Term</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                        v-model="semester"
+                        :options="filterSemesterOptions"
+                        placeholder="Semester / Term"
+                        search-placeholder="Search semester..."
+                        class="w-full sm:w-48"
+                        trigger-class="bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800"
+                    />
 
-                    <Select v-model="departmentId">
-                        <SelectTrigger class="w-48 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800">
-                            <SelectValue placeholder="Department" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="ALL">All Departments</SelectItem>
-                            <SelectItem v-for="d in departments" :key="d.id" :value="d.id">
-                                {{ d.name }}
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                        v-model="departmentId"
+                        :options="filterDepartmentOptions"
+                        placeholder="All Departments"
+                        search-placeholder="Search department..."
+                        class="w-full sm:w-56"
+                        trigger-class="bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800"
+                    />
 
                     <div class="relative flex-1 min-w-[200px]">
                         <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
                         <Input
                             v-model="search"
                             placeholder="Search course by code or title..."
-                            class="pl-9 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800"
+                            class="pl-9 h-10 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800"
                         />
                     </div>
                 </div>
@@ -470,67 +501,47 @@ const handleExcelUpload = async () => {
                         <div class="grid grid-cols-2 gap-3">
                             <div class="space-y-1.5">
                                 <Label>Level</Label>
-                                <Select v-model.number="form.level">
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Level" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem :value="100">100 Level</SelectItem>
-                                        <SelectItem :value="200">200 Level</SelectItem>
-                                        <SelectItem :value="300">300 Level</SelectItem>
-                                        <SelectItem :value="400">400 Level</SelectItem>
-                                        <SelectItem :value="500">500 Level</SelectItem>
-                                        <SelectItem :value="600">600 Level</SelectItem>
-                                        <SelectItem :value="700">700 Level (PGD)</SelectItem>
-                                        <SelectItem :value="800">800 Level (Master's)</SelectItem>
-                                        <SelectItem :value="900">900 Level (Ph.D)</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <SearchableSelect
+                                    v-model="form.level"
+                                    :options="levelOptions"
+                                    placeholder="Select Level"
+                                    search-placeholder="Search level..."
+                                    :error-class="!!form.errors.level"
+                                />
                             </div>
 
                             <div class="space-y-1.5">
                                 <Label>Semester / Term</Label>
-                                <Select v-model="form.semester">
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Semester" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="1">1st Semester / Trimester 1</SelectItem>
-                                        <SelectItem value="2">2nd Semester / Trimester 2</SelectItem>
-                                        <SelectItem value="3">Trimester 3 / Research Term</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <SearchableSelect
+                                    v-model="form.semester"
+                                    :options="semesterOptions"
+                                    placeholder="Select Semester"
+                                    search-placeholder="Search semester..."
+                                    :error-class="!!form.errors.semester"
+                                />
                             </div>
                         </div>
 
                         <div class="space-y-1.5">
                             <Label>Delivery & Assessment Type</Label>
-                            <Select v-model="form.course_type">
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Course Type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="lecture_exam">Standard Lecture & Examination</SelectItem>
-                                    <SelectItem value="case_study_seminar">Executive Case Study & Seminar (MBA/MIM)</SelectItem>
-                                    <SelectItem value="practicum_internship">Industry Practicum / Attachment</SelectItem>
-                                    <SelectItem value="capstone_project">Capstone / Applied Project</SelectItem>
-                                    <SelectItem value="academic_dissertation">Academic Thesis / Dissertation (M.Sc/Ph.D)</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <SearchableSelect
+                                v-model="form.course_type"
+                                :options="courseTypeOptions"
+                                placeholder="Select Course Type"
+                                search-placeholder="Search delivery type..."
+                                :error-class="!!form.errors.course_type"
+                            />
                         </div>
 
                         <div class="space-y-1.5">
                             <Label>Department</Label>
-                            <Select v-model="form.department_id">
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Department" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem v-for="d in departments" :key="d.id" :value="d.id">
-                                        {{ d.name }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <SearchableSelect
+                                v-model="form.department_id"
+                                :options="departmentOptions"
+                                placeholder="Select Department"
+                                search-placeholder="Search department..."
+                                :error-class="!!form.errors.department_id"
+                            />
                             <p v-if="form.errors.department_id" class="text-xs text-rose-500">{{ form.errors.department_id }}</p>
                         </div>
 
