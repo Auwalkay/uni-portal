@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\CourseAllocation;
 use App\Models\CourseAllocationRequest;
+use App\Models\Semester;
 use App\Models\Session;
 use App\Models\SystemSetting;
 use App\Services\CourseAllocationNotificationService;
@@ -27,13 +28,21 @@ class SelfCourseAllocationController extends Controller
         $session = Session::current() ?? Session::latest()->first();
         $sessionId = $session?->id;
 
+        // Resolve current active semester
+        $currentSemester = $session?->semesters()->where('is_current', true)->first()
+            ?? Semester::current();
+
+        $activeSemesterCodes = $currentSemester
+            ? $currentSemester->getMatchingCourseSemesters()
+            : ['1', 'First', 'First Semester'];
+
         $isOpen = filter_var(SystemSetting::get('enable_lecturer_self_course_allocation', true), FILTER_VALIDATE_BOOLEAN);
         $minUnits = intval(SystemSetting::get('lecturer_self_allocation_min_units', 6));
         $maxUnits = intval(SystemSetting::get('lecturer_self_allocation_max_units', 24));
         $maxCourses = intval(SystemSetting::get('lecturer_self_allocation_max_courses', 5));
 
-        // Filters: search, level, semester, department_id
-        $filters = $request->only(['search', 'level', 'semester', 'department_id']);
+        // Filters: search, level, department_id (semester is locked to current active semester)
+        $filters = $request->only(['search', 'level', 'department_id']);
         $selectedDepartmentId = $request->has('department_id')
             ? $request->input('department_id')
             : ($staff->department_id ?? 'all');
@@ -52,10 +61,11 @@ class SelfCourseAllocationController extends Controller
         $pendingUnits = Course::whereIn('id', $myPendingCourseIds)->sum('units');
         $totalUnits = $allocatedUnits + $pendingUnits;
 
-        // Query Courses with department eager loaded
+        // Query Courses with department eager loaded, strictly filtered to current active semester only
         $coursesQuery = Course::query()
             ->with(['department:id,name,code', 'department.faculty:id,name'])
             ->where('is_active', true)
+            ->whereIn('semester', $activeSemesterCodes)
             ->when($selectedDepartmentId && $selectedDepartmentId !== 'all', function ($q) use ($selectedDepartmentId) {
                 $q->where('department_id', $selectedDepartmentId);
             })
@@ -66,7 +76,6 @@ class SelfCourseAllocationController extends Controller
                 });
             })
             ->when($filters['level'] ?? null, fn($q, $lvl) => $q->where('level', $lvl))
-            ->when($filters['semester'] ?? null, fn($q, $sem) => $q->where('semester', (string) $sem))
             ->orderBy('code');
 
         $paginatedCourses = $coursesQuery->paginate(12)->withQueryString();
@@ -157,7 +166,15 @@ class SelfCourseAllocationController extends Controller
                 'pending_courses_count' => $myPendingCourseIds->count(),
             ],
             'currentSession' => $session ? $session->only(['id', 'name']) : null,
-            'filters' => array_merge($filters, ['department_id' => $selectedDepartmentId]),
+            'currentSemester' => $currentSemester ? [
+                'id' => $currentSemester->id,
+                'name' => $currentSemester->name,
+                'code' => $currentSemester->getSemesterCode(),
+            ] : null,
+            'filters' => array_merge($filters, [
+                'department_id' => $selectedDepartmentId,
+                'semester' => $currentSemester?->getSemesterCode() ?? '1',
+            ]),
         ]);
     }
 
@@ -186,6 +203,14 @@ class SelfCourseAllocationController extends Controller
 
         try {
             $allocationRequest = DB::transaction(function () use ($staff, $session, $request) {
+                // Resolve active semester for the current session
+                $currentSemester = $session->semesters()->where('is_current', true)->first()
+                    ?? Semester::current();
+
+                $activeSemesterCodes = $currentSemester
+                    ? $currentSemester->getMatchingCourseSemesters()
+                    : ['1', 'First', 'First Semester'];
+
                 // Pessimistic Lock on the course to serialize concurrent picks for the same course
                 // Allow any active course across departments
                 $course = Course::where('id', $request->course_id)
@@ -195,6 +220,12 @@ class SelfCourseAllocationController extends Controller
 
                 if (! $course) {
                     throw new \DomainException('This course does not exist or is inactive.');
+                }
+
+                // Strictly verify the course belongs to the active semester
+                if (! in_array((string) $course->semester, $activeSemesterCodes, true)) {
+                    $semName = $currentSemester?->name ?? 'active';
+                    throw new \DomainException("You can only request courses for the current active semester ({$semName}).");
                 }
 
                 // Check Exclusivity: Active allocation in this session

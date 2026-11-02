@@ -13,9 +13,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import SearchableSelect from '@/components/SearchableSelect.vue';
 import {
     BookOpen, Search, ArrowLeft, CheckCircle2, Clock, XCircle, AlertCircle,
-    Lock, Sparkles, Building2, Send, X, Layers, AlertTriangle
+    Lock, Sparkles, Building2, Send, X, Layers, AlertTriangle, Calendar
 } from 'lucide-vue-next';
 import { debounce } from 'lodash';
 import { route } from 'ziggy-js';
@@ -76,6 +77,7 @@ const props = defineProps<{
         pending_courses_count: number;
     };
     currentSession?: { id: string; name: string } | null;
+    currentSemester?: { id: string; name: string; code: string } | null;
     filters: { search?: string; level?: string; semester?: string; department_id?: string };
 }>();
 
@@ -87,19 +89,25 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const search = ref(props.filters.search || '');
 const selectedLevel = ref(props.filters.level || 'all');
-const selectedSemester = ref(props.filters.semester || 'all');
 const selectedDepartment = ref(props.filters.department_id || props.department?.id || 'all');
+
+const departmentOptions = computed(() => [
+    { value: 'all', label: 'All Departments' },
+    ...(props.departments || []).map(d => ({
+        value: d.id,
+        label: `${d.name} (${d.code})`,
+    })),
+]);
 
 const updateFilters = debounce(() => {
     router.get(route('admin.teaching.courses.self_allocation'), {
         search: search.value || undefined,
         level: selectedLevel.value === 'all' ? undefined : selectedLevel.value,
-        semester: selectedSemester.value === 'all' ? undefined : selectedSemester.value,
         department_id: selectedDepartment.value === 'all' ? undefined : selectedDepartment.value,
     }, { preserveState: true, replace: true });
 }, 300);
 
-watch([search, selectedLevel, selectedSemester, selectedDepartment], () => {
+watch([search, selectedLevel, selectedDepartment], () => {
     updateFilters();
 });
 
@@ -195,7 +203,7 @@ const isMaxReached = computed(() => {
                             </Link>
                         </Button>
                     </div>
-                    <h1 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100 mt-1 flex items-center gap-2">
+                    <h1 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100 mt-1 flex flex-wrap items-center gap-2">
                         Self Course Allocation
                         <Badge v-if="isOpen" variant="outline" class="border-emerald-500 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30">
                             Window Open
@@ -203,9 +211,13 @@ const isMaxReached = computed(() => {
                         <Badge v-else variant="outline" class="border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950/30">
                             Window Closed
                         </Badge>
+                        <Badge v-if="currentSemester" variant="secondary" class="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                            <Calendar class="w-3.5 h-3.5 mr-1 text-indigo-600 dark:text-indigo-400" />
+                            {{ currentSemester.name }}
+                        </Badge>
                     </h1>
                     <p class="text-muted-foreground mt-1">
-                        Select and request courses for the current academic session ({{ currentSession?.name || 'Active Session' }}).
+                        Select and request courses for the active semester ({{ currentSession?.name || 'Active Session' }} &bull; {{ currentSemester?.name || 'Active Semester' }}).
                     </p>
                 </div>
 
@@ -327,31 +339,27 @@ const isMaxReached = computed(() => {
                 <!-- Available Courses Tab -->
                 <TabsContent value="available" class="space-y-4 pt-4">
                     <!-- Filters -->
-                    <div class="flex flex-col md:flex-row gap-3 flex-wrap">
+                    <div class="flex flex-col md:flex-row gap-3 flex-wrap items-center">
                         <div class="relative flex-1 min-w-[200px]">
-                            <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Search class="absolute left-2.5 top-3 h-4 w-4 text-muted-foreground" />
                             <Input
                                 v-model="search"
                                 type="search"
                                 placeholder="Search by course code or title..."
-                                class="pl-9 w-full"
+                                class="pl-9 h-10 w-full"
                             />
                         </div>
 
-                        <Select v-model="selectedDepartment">
-                            <SelectTrigger class="w-full md:w-[220px]">
-                                <SelectValue placeholder="All Departments" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Departments</SelectItem>
-                                <SelectItem v-for="dept in departments" :key="dept.id" :value="dept.id">
-                                    {{ dept.name }} ({{ dept.code }})
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                            v-model="selectedDepartment"
+                            :options="departmentOptions"
+                            placeholder="All Departments"
+                            search-placeholder="Search department..."
+                            class="w-full md:w-[260px]"
+                        />
 
                         <Select v-model="selectedLevel">
-                            <SelectTrigger class="w-[140px]">
+                            <SelectTrigger class="w-full md:w-[140px] h-10">
                                 <SelectValue placeholder="All Levels" />
                             </SelectTrigger>
                             <SelectContent>
@@ -364,16 +372,10 @@ const isMaxReached = computed(() => {
                             </SelectContent>
                         </Select>
 
-                        <Select v-model="selectedSemester">
-                            <SelectTrigger class="w-[150px]">
-                                <SelectValue placeholder="All Semesters" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Semesters</SelectItem>
-                                <SelectItem value="1">1st Semester</SelectItem>
-                                <SelectItem value="2">2nd Semester</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <div class="flex items-center gap-1.5 px-3 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-md text-xs font-semibold text-neutral-700 dark:text-neutral-300 h-10 shrink-0">
+                            <Calendar class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                            <span>Active: {{ currentSemester?.name || 'Active Semester' }}</span>
+                        </div>
                     </div>
 
                     <!-- Courses Grid -->
