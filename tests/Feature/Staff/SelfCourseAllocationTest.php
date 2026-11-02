@@ -219,17 +219,60 @@ test('lecturer cannot submit course request if self allocation window is closed'
     expect(CourseAllocationRequest::count())->toBe(0);
 });
 
-test('lecturer cannot request a course outside their department', function () {
+test('lecturer can request a course from another department (cross-department allocation)', function () {
+    Mail::fake();
+    $data = setupSelfAllocationTestData();
+    SystemSetting::set('enable_lecturer_self_course_allocation', '1');
+
+    // Lecturer A is from Dept A, courseB1 belongs to Dept B
+    $response = $this->actingAs($data['lecturerAUser'])
+        ->post(route('admin.teaching.courses.self_allocation.store'), [
+            'course_id' => $data['courseB1']->id,
+            'notes' => 'Cross-department request',
+        ]);
+
+    $response->assertSessionHas('success', 'Course request submitted successfully and sent for review.');
+
+    $req = CourseAllocationRequest::where('course_id', $data['courseB1']->id)
+        ->where('staff_id', $data['lecturerAStaff']->id)
+        ->first();
+
+    expect($req)->not->toBeNull();
+    expect($req->status)->toBe('pending');
+    expect($req->department_id)->toBe($data['departmentB']->id);
+    Mail::assertQueued(CourseAllocationRequestedMail::class);
+});
+
+test('lecturer self allocation page includes pagination links and departments list', function () {
     $data = setupSelfAllocationTestData();
     SystemSetting::set('enable_lecturer_self_course_allocation', '1');
 
     $response = $this->actingAs($data['lecturerAUser'])
-        ->post(route('admin.teaching.courses.self_allocation.store'), [
-            'course_id' => $data['courseB1']->id, // Belongs to Dept B, lecturer is Dept A
-        ]);
+        ->get(route('admin.teaching.courses.self_allocation'));
 
-    $response->assertSessionHas('error', 'This course does not belong to your department or is inactive.');
-    expect(CourseAllocationRequest::count())->toBe(0);
+    $response->assertOk();
+    $response->assertInertia(fn ($page) => $page
+        ->component('Staff/Course/Allocation')
+        ->has('courses.data')
+        ->has('courses.links')
+        ->has('departments')
+        ->where('isOpen', true)
+        ->has('stats')
+    );
+});
+
+test('lecturer can filter courses by department', function () {
+    $data = setupSelfAllocationTestData();
+    SystemSetting::set('enable_lecturer_self_course_allocation', '1');
+
+    $response = $this->actingAs($data['lecturerAUser'])
+        ->get(route('admin.teaching.courses.self_allocation', ['department_id' => $data['departmentB']->id]));
+
+    $response->assertOk();
+    $response->assertInertia(fn ($page) => $page
+        ->component('Staff/Course/Allocation')
+        ->where('courses.data.0.code', 'SEN 101')
+    );
 });
 
 test('lecturer can request available department course and notification emails are queued', function () {
