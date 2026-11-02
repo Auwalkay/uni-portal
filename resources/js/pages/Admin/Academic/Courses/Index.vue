@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Switch } from '@/components/ui/switch'
+import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -191,6 +192,7 @@ const form = useForm({
     course_type: 'lecture_exam',
     department_id: '',
     programme_id: '',
+    is_compulsory: false,
 })
 
 const openCreateModal = () => {
@@ -201,6 +203,7 @@ const openCreateModal = () => {
     form.level = 100
     form.semester = '1'
     form.course_type = 'lecture_exam'
+    form.is_compulsory = false
     form.clearErrors()
     isModalOpen.value = true
 }
@@ -217,6 +220,7 @@ const openEditModal = (c: any) => {
     form.course_type = c.course_type || 'lecture_exam'
     form.department_id = c.department_id || ''
     form.programme_id = c.programme_id || ''
+    form.is_compulsory = Boolean(c.is_compulsory)
     form.clearErrors()
     isModalOpen.value = true
 }
@@ -388,7 +392,14 @@ const handleExcelUpload = async () => {
                                         />
                                     </TableCell>
                                     <TableCell class="font-mono font-semibold text-rose-600 dark:text-rose-400">
-                                        {{ c.code }}
+                                        <div>{{ c.code }}</div>
+                                        <Badge
+                                            :variant="c.is_compulsory ? 'default' : 'outline'"
+                                            class="text-[9px] px-1.5 py-0 mt-0.5 uppercase tracking-wide font-semibold"
+                                            :class="c.is_compulsory ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'text-neutral-500 border-neutral-300 dark:border-neutral-700'"
+                                        >
+                                            {{ c.is_compulsory ? 'Core' : 'Elective' }}
+                                        </Badge>
                                     </TableCell>
                                     <TableCell class="font-medium text-neutral-900 dark:text-white">
                                         <div>{{ c.title }}</div>
@@ -543,6 +554,17 @@ const handleExcelUpload = async () => {
                                 :error-class="!!form.errors.department_id"
                             />
                             <p v-if="form.errors.department_id" class="text-xs text-rose-500">{{ form.errors.department_id }}</p>
+                        </div>
+
+                        <div class="flex items-center justify-between rounded-lg border p-3 bg-muted/20">
+                            <div class="space-y-0.5">
+                                <Label class="text-xs font-semibold cursor-pointer">Core / Compulsory Course</Label>
+                                <p class="text-[11px] text-muted-foreground">Mark this course as a mandatory core requirement for enrolled students (otherwise elective)</p>
+                            </div>
+                            <Switch
+                                :checked="Boolean(form.is_compulsory)"
+                                @update:checked="(val) => form.is_compulsory = val"
+                            />
                         </div>
 
                         <DialogFooter class="mt-6">

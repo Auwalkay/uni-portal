@@ -42,6 +42,7 @@ class Course extends Model
 
     protected $casts = [
         'is_active' => 'boolean',
+        'is_compulsory' => 'boolean',
         'level' => 'integer',
         'units' => 'integer',
     ];
@@ -112,5 +113,55 @@ class Course extends Model
     public function getCourseTypeLabelAttribute(): string
     {
         return self::COURSE_TYPES[$this->course_type ?? 'lecture_exam'] ?? 'Standard Lecture & Examination';
+    }
+
+    /**
+     * Resolves whether this course is CORE (compulsory) or ELECTIVE for a student.
+     */
+    public function resolveIsCompulsoryFor(?Student $student, $overrides = null): bool
+    {
+        if (! $student) {
+            return (bool) $this->is_compulsory;
+        }
+
+        // 1. Check explicit Programme curriculum override (from course_programme pivot)
+        if ($overrides !== null && $overrides->has($this->id)) {
+            return (bool) $overrides->get($this->id);
+        }
+
+        if ($student->program_id) {
+            $pivot = \Illuminate\Support\Facades\DB::table('course_programme')
+                ->where('programme_id', $student->program_id)
+                ->where('course_id', $this->id)
+                ->first();
+            if ($pivot !== null) {
+                return (bool) $pivot->is_compulsory;
+            }
+        }
+
+        // 2. Explicitly flagged as compulsory on the course itself
+        if ($this->is_compulsory) {
+            return true;
+        }
+
+        // 3. Institutional General Studies (GNS / GST) are core university requirements
+        $code = strtoupper(str_replace(' ', '', $this->code ?? ''));
+        if (preg_match('/^(GNS|GST)\b/i', $this->code ?? '') || str_starts_with($code, 'GNS') || str_starts_with($code, 'GST')) {
+            return true;
+        }
+        if ($this->relationLoaded('department') && $this->department && stripos($this->department->name, 'General Studies') !== false) {
+            return true;
+        }
+
+        // 4. Programme or Department course for this student
+        $studentDeptId = $student->department_id ?? $student->academicDepartment?->id ?? $student->program?->department_id;
+        if ($this->programme_id && $student->program_id && $this->programme_id === $student->program_id) {
+            return true;
+        }
+        if ($this->department_id && $studentDeptId && $this->department_id === $studentDeptId) {
+            return true;
+        }
+
+        return false;
     }
 }
