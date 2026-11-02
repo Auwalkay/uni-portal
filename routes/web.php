@@ -46,6 +46,10 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
             Route::post('fee-configurations', [FinanceController::class, 'storeFeeConfiguration'])->name('fee_configurations.store');
             Route::put('fee-configurations/{config}', [FinanceController::class, 'updateFeeConfiguration'])->name('fee_configurations.update');
             Route::delete('fee-configurations/{config}', [FinanceController::class, 'destroyFeeConfiguration'])->name('fee_configurations.destroy');
+            // Compatibility aliases for Ziggy and SessionFees callers
+            Route::post('configurations', [FinanceController::class, 'storeFeeConfiguration'])->name('configurations.store');
+            Route::put('configurations/{config}', [FinanceController::class, 'updateFeeConfiguration'])->name('configurations.update');
+            Route::delete('configurations/{config}', [FinanceController::class, 'destroyFeeConfiguration'])->name('configurations.destroy');
             Route::get('session/{session}/fees', [FinanceController::class, 'manageSessionFees'])->name('session.fees');
             Route::post('clone-fees', [FinanceController::class, 'cloneSessionFees'])->name('clone_fees');
         });
@@ -321,7 +325,13 @@ Route::middleware('throttle:webhooks')->group(function () {
     Route::post('webhooks/seerbit', [SeerbitWebhookController::class, 'handle'])->name('webhooks.seerbit');
 });
 
-// Public Verification
+// Public Verification & Postgraduate Referee Recommendations
 Route::get('verify-admission/{identifier}', [AdmissionVerificationController::class, 'verify'])
     ->middleware('throttle:public-verification')
     ->name('verify.admission');
+
+Route::get('referee/recommendation/{token}', [\App\Http\Controllers\Public\RefereeRecommendationController::class, 'show'])
+    ->name('referee.recommendation.show');
+
+Route::post('referee/recommendation/{token}', [\App\Http\Controllers\Public\RefereeRecommendationController::class, 'store'])
+    ->name('referee.recommendation.store');

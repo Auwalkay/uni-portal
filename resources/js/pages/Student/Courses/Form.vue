@@ -112,14 +112,84 @@ const programmeItems = computed(() => [
     ...filteredProgrammes.value.map(p => ({ value: String(p.id), label: p.name }))
 ]);
 
-const levelItems = [
-    { value: '', label: 'All Levels' },
-    { value: '100', label: '100 Level' },
-    { value: '200', label: '200 Level' },
-    { value: '300', label: '300 Level' },
-    { value: '400', label: '400 Level' },
-    { value: '500', label: '500 Level' },
-];
+const isPostgraduateStudent = computed(() => {
+    return Boolean(
+        props.student?.is_postgraduate ||
+        props.student?.academic_stream === 'PG' ||
+        ['700', '800', '900'].includes(String(props.student?.current_level))
+    );
+});
+
+const levelItems = computed(() => {
+    if (isPostgraduateStudent.value) {
+        return [
+            { value: '', label: 'All PG Levels' },
+            { value: '700', label: '700 Level (PGD)' },
+            { value: '800', label: '800 Level (Masters / M.Sc / MBA)' },
+            { value: '900', label: '900 Level (Ph.D / Doctorate)' },
+        ];
+    }
+    return [
+        { value: '', label: 'All Levels' },
+        { value: '100', label: '100 Level' },
+        { value: '200', label: '200 Level' },
+        { value: '300', label: '300 Level' },
+        { value: '400', label: '400 Level' },
+        { value: '500', label: '500 Level' },
+        { value: '700', label: '700 Level (PGD)' },
+        { value: '800', label: '800 Level (Masters)' },
+        { value: '900', label: '900 Level (Ph.D)' },
+    ];
+});
+
+const semesterCodes = computed(() => {
+    const codes = new Set<string>();
+    if (props.semesters && props.semesters.length > 0) {
+        props.semesters.forEach(s => {
+            if (s.name?.toLowerCase().includes('third') || s.name?.toLowerCase().includes('trimester 3')) {
+                codes.add('3');
+            } else if (s.name?.toLowerCase().includes('second') || s.name?.toLowerCase().includes('trimester 2')) {
+                codes.add('2');
+            } else if (s.name?.toLowerCase().includes('first') || s.name?.toLowerCase().includes('trimester 1')) {
+                codes.add('1');
+            } else if (s.code) {
+                codes.add(String(s.code));
+            }
+        });
+    }
+    (props.courses || []).forEach(c => {
+        if (c.semester) codes.add(String(c.semester));
+    });
+    if (codes.size === 0) {
+        codes.add('1');
+        codes.add('2');
+    }
+    return Array.from(codes).sort();
+});
+
+const getSemesterTitle = (semCode: string) => {
+    const sem = props.semesters?.find(s => {
+        const code = s.code || (s.name?.toLowerCase().includes('third') ? '3' : (s.name?.toLowerCase().includes('second') ? '2' : '1'));
+        return String(code) === String(semCode);
+    });
+    if (sem?.name) return sem.name;
+    if (semCode === '1') return isPostgraduateStudent.value ? 'First Semester / Trimester 1' : 'First Semester';
+    if (semCode === '2') return isPostgraduateStudent.value ? 'Second Semester / Trimester 2' : 'Second Semester';
+    if (semCode === '3') return isPostgraduateStudent.value ? 'Third Trimester / Research Phase' : 'Third Semester';
+    return `Semester ${semCode}`;
+};
+
+const formatCourseType = (type?: string) => {
+    if (!type || type === 'taught_course') return null;
+    switch (type) {
+        case 'seminar': return { label: 'Seminar', color: 'bg-amber-100 text-amber-800 border-amber-300' };
+        case 'proposal_defense': return { label: 'Proposal Defense', color: 'bg-blue-100 text-blue-800 border-blue-300' };
+        case 'internal_defense': return { label: 'Internal Defense', color: 'bg-indigo-100 text-indigo-800 border-indigo-300' };
+        case 'external_defense_viva': return { label: 'Viva Voce', color: 'bg-purple-100 text-purple-800 border-purple-300' };
+        case 'dissertation_thesis': return { label: 'Dissertation / Thesis', color: 'bg-rose-100 text-rose-800 border-rose-300' };
+        default: return { label: type, color: 'bg-gray-100 text-gray-800 border-gray-300' };
+    }
+};
 
 watch(() => filterForm.value.faculty_id, () => {
     filterForm.value.department_id = '';
@@ -144,17 +214,16 @@ const selectedCourses = computed(() => {
 });
 
 // Computed Units
-const unitsFirst = computed(() => {
+const getSemesterUnits = (semCode: string) => {
     return selectedCourses.value
-        .filter(c => c.semester === '1')
-        .reduce((sum, c) => sum + c.units, 0);
-});
+        .filter(c => String(c.semester) === String(semCode))
+        .reduce((sum, c) => sum + (Number(c.units) || 0), 0);
+};
 
-const unitsSecond = computed(() => {
-    return selectedCourses.value
-        .filter(c => c.semester === '2')
-        .reduce((sum, c) => sum + c.units, 0);
-});
+const unitsFirst = computed(() => getSemesterUnits('1'));
+const unitsSecond = computed(() => getSemesterUnits('2'));
+const unitsThird = computed(() => getSemesterUnits('3'));
+const totalUnits = computed(() => selectedCourses.value.reduce((sum, c) => sum + (Number(c.units) || 0), 0));
 
 const toggleCourse = (courseId: number, semesterCode: string) => {
     if (props.locks[semesterCode]) return;
@@ -167,13 +236,13 @@ const toggleCourse = (courseId: number, semesterCode: string) => {
         if (!course) return; 
 
         // Check Max Units Per Semester
-        const currentUnits = semesterCode === '1' ? unitsFirst.value : unitsSecond.value;
+        const currentUnits = getSemesterUnits(semesterCode);
         
         if ((currentUnits + course.units) > props.maxUnits) {
              Swal.fire({
                 icon: 'error',
                 title: 'Limit Exceeded',
-                text: `Maximum of ${props.maxUnits} units allowed for this semester.`,
+                text: `Maximum of ${props.maxUnits} units allowed for this semester/trimester.`,
                 toast: true,
                 position: 'top-end',
                 showConfirmButton: false,
@@ -306,29 +375,20 @@ const getSemesterCourses = (semesterCode: string) => {
                         <div class="flex items-center gap-4">
                              <div class="flex flex-col items-end">
                                 <div class="flex items-baseline gap-1">
-                                    <span class="text-2xl font-bold font-mono text-gray-900">{{ unitsFirst + unitsSecond }}</span>
+                                    <span class="text-2xl font-bold font-mono text-gray-900">{{ totalUnits }}</span>
                                     <span class="text-xs font-semibold text-gray-400 uppercase">Total Units</span>
                                 </div>
                              </div>
                              <Separator orientation="vertical" class="h-8" />
                              <!-- Mini Progress Group -->
                             <div class="flex gap-3">
-                                <div class="space-y-1">
+                                <div v-for="semCode in semesterCodes" :key="semCode" class="space-y-1">
                                     <div class="flex justify-between text-[10px] uppercase font-bold text-gray-500">
-                                        <span>1st Sem</span>
-                                        <span :class="unitsFirst > maxUnits ? 'text-red-600' : 'text-emerald-600'">{{ unitsFirst }}u</span>
+                                        <span>{{ semCode === '1' ? '1st' : (semCode === '2' ? '2nd' : '3rd') }}</span>
+                                        <span :class="getSemesterUnits(semCode) > maxUnits ? 'text-red-600' : 'text-emerald-600'">{{ getSemesterUnits(semCode) }}u</span>
                                     </div>
-                                    <div class="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                        <div class="h-full bg-emerald-500 transition-all duration-300" :style="{ width: Math.min((unitsFirst / maxUnits) * 100, 100) + '%' }"></div>
-                                    </div>
-                                </div>
-                                <div class="space-y-1">
-                                    <div class="flex justify-between text-[10px] uppercase font-bold text-gray-500">
-                                        <span>2nd Sem</span>
-                                        <span :class="unitsSecond > maxUnits ? 'text-red-600' : 'text-blue-600'">{{ unitsSecond }}u</span>
-                                    </div>
-                                    <div class="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                        <div class="h-full bg-blue-500 transition-all duration-300" :style="{ width: Math.min((unitsSecond / maxUnits) * 100, 100) + '%' }"></div>
+                                    <div class="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                        <div class="h-full bg-emerald-500 transition-all duration-300" :style="{ width: Math.min((getSemesterUnits(semCode) / maxUnits) * 100, 100) + '%' }"></div>
                                     </div>
                                 </div>
                             </div>
@@ -336,16 +396,23 @@ const getSemesterCourses = (semesterCode: string) => {
                     </div>
 
                     <!-- Selected Items Grid -->
-                    <div class="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100 bg-white">
-                        <!-- First Sem Column -->
-                        <div class="p-6 bg-emerald-50/10">
-                            <h4 class="text-xs font-bold text-emerald-800 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-emerald-500 ring-4 ring-emerald-50"></span>
-                                First Semester
+                    <div class="grid grid-cols-1 divide-y divide-gray-100 bg-white" :class="semesterCodes.length === 3 ? 'md:grid-cols-3 md:divide-y-0 md:divide-x' : 'md:grid-cols-2 md:divide-y-0 md:divide-x'">
+                        <div v-for="semCode in semesterCodes" :key="semCode" class="p-6" :class="semCode === '1' ? 'bg-emerald-50/10' : (semCode === '2' ? 'bg-blue-50/10' : 'bg-purple-50/10')">
+                            <h4 class="text-xs font-bold uppercase tracking-widest mb-4 flex items-center gap-2"
+                                :class="semCode === '1' ? 'text-emerald-800' : (semCode === '2' ? 'text-blue-800' : 'text-purple-800')">
+                                <span class="w-2 h-2 rounded-full"
+                                    :class="semCode === '1' ? 'bg-emerald-500 ring-4 ring-emerald-50' : (semCode === '2' ? 'bg-blue-500 ring-4 ring-blue-50' : 'bg-purple-500 ring-4 ring-purple-50')"></span>
+                                {{ getSemesterTitle(semCode) }}
                             </h4>
-                            <div v-if="selectedCourses.filter(c => c.semester === '1').length === 0" class="flex flex-col items-center justify-center py-6 text-center border-2 border-dashed border-emerald-100 rounded-xl bg-emerald-50/50">
-                                <span class="text-emerald-300 mb-1"><Loader2 class="w-5 h-5 animate-spin-slow" /></span>
-                                <span class="text-sm font-medium text-emerald-800/60">No courses selected</span>
+                            <div v-if="selectedCourses.filter(c => String(c.semester) === String(semCode)).length === 0" 
+                                class="flex flex-col items-center justify-center py-6 text-center border-2 border-dashed rounded-xl"
+                                :class="semCode === '1' ? 'border-emerald-100 bg-emerald-50/50' : (semCode === '2' ? 'border-blue-100 bg-blue-50/50' : 'border-purple-100 bg-purple-50/50')">
+                                <span :class="semCode === '1' ? 'text-emerald-300' : (semCode === '2' ? 'text-blue-300' : 'text-purple-300')" class="mb-1">
+                                    <Loader2 class="w-5 h-5 animate-spin-slow" />
+                                </span>
+                                <span class="text-sm font-medium" :class="semCode === '1' ? 'text-emerald-800/60' : (semCode === '2' ? 'text-blue-800/60' : 'text-purple-800/60')">
+                                    No courses selected
+                                </span>
                             </div>
                             <div v-else class="flex flex-wrap gap-2">
                                 <TransitionGroup 
@@ -356,48 +423,15 @@ const getSemesterCourses = (semesterCode: string) => {
                                     leave-from-class="opacity-100 scale-100"
                                     leave-to-class="opacity-0 scale-95"
                                 >
-                                    <div v-for="course in selectedCourses.filter(c => c.semester === '1')" :key="course.id" 
-                                        class="group relative flex items-center gap-2 bg-white ring-1 ring-gray-200/70 pl-3 pr-1 py-1.5 rounded-lg shadow-sm hover:shadow-md hover:ring-emerald-400 transition-all cursor-default"
+                                    <div v-for="course in selectedCourses.filter(c => String(c.semester) === String(semCode))" :key="course.id" 
+                                        class="group relative flex items-center gap-2 bg-white ring-1 ring-gray-200/70 pl-3 pr-1 py-1.5 rounded-lg shadow-sm hover:shadow-md transition-all cursor-default"
+                                        :class="semCode === '1' ? 'hover:ring-emerald-400' : (semCode === '2' ? 'hover:ring-blue-400' : 'hover:ring-purple-400')"
                                     >
                                         <div class="flex flex-col">
-                                            <span class="font-mono text-xs font-bold text-emerald-800 tracking-tight">{{ course.code }}</span>
-                                            <span class="text-[10px] text-gray-500 truncate max-w-[120px]">{{ course.title }}</span>
-                                        </div>
-                                        <div class="flex flex-col items-end gap-1 border-l pl-2 ml-1 border-gray-100">
-                                            <Badge variant="secondary" class="h-4 px-1 text-[9px] bg-gray-100 text-gray-500 hover:bg-gray-100">{{ course.units }}u</Badge>
-                                            <button @click.stop="removeCourse(course.id)" class="text-gray-300 hover:text-red-500 transition-colors">
-                                                <X class="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </TransitionGroup>
-                            </div>
-                        </div>
-
-                        <!-- Second Sem Column -->
-                        <div class="p-6 bg-blue-50/10">
-                            <h4 class="text-xs font-bold text-blue-800 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-blue-500 ring-4 ring-blue-50"></span>
-                                Second Semester
-                            </h4>
-                            <div v-if="selectedCourses.filter(c => c.semester === '2').length === 0" class="flex flex-col items-center justify-center py-6 text-center border-2 border-dashed border-blue-100 rounded-xl bg-blue-50/50">
-                                <span class="text-blue-300 mb-1"><Loader2 class="w-5 h-5 animate-spin-slow" /></span>
-                                <span class="text-sm font-medium text-blue-800/60">No courses selected</span>
-                            </div>
-                            <div v-else class="flex flex-wrap gap-2">
-                                <TransitionGroup 
-                                    enter-active-class="transition-all duration-300 ease-out"
-                                    enter-from-class="opacity-0 scale-95"
-                                    enter-to-class="opacity-100 scale-100"
-                                    leave-active-class="transition-all duration-200 ease-in absolute"
-                                    leave-from-class="opacity-100 scale-100"
-                                    leave-to-class="opacity-0 scale-95"
-                                >
-                                    <div v-for="course in selectedCourses.filter(c => c.semester === '2')" :key="course.id" 
-                                        class="group relative flex items-center gap-2 bg-white ring-1 ring-gray-200/70 pl-3 pr-1 py-1.5 rounded-lg shadow-sm hover:shadow-md hover:ring-blue-400 transition-all cursor-default"
-                                    >
-                                        <div class="flex flex-col">
-                                            <span class="font-mono text-xs font-bold text-blue-800 tracking-tight">{{ course.code }}</span>
+                                            <span class="font-mono text-xs font-bold tracking-tight"
+                                                :class="semCode === '1' ? 'text-emerald-800' : (semCode === '2' ? 'text-blue-800' : 'text-purple-800')">
+                                                {{ course.code }}
+                                            </span>
                                             <span class="text-[10px] text-gray-500 truncate max-w-[120px]">{{ course.title }}</span>
                                         </div>
                                         <div class="flex flex-col items-end gap-1 border-l pl-2 ml-1 border-gray-100">
@@ -485,16 +519,17 @@ const getSemesterCourses = (semesterCode: string) => {
                     <!-- Main Course Lists -->
                     <div class="lg:col-span-3 space-y-8">
                         <!-- Semester Blocks Loop -->
-                         <div v-for="semCode in ['1', '2']" :key="semCode" class="animate-in fade-in slide-in-from-bottom-4 duration-500" :style="{ animationDelay: semCode === '1' ? '0ms' : '150ms' }">
+                         <div v-for="semCode in semesterCodes" :key="semCode" class="animate-in fade-in slide-in-from-bottom-4 duration-500">
                             
                             <!-- Section Header -->
                             <div class="flex items-end justify-between mb-5 px-1">
                                 <div class="flex items-center gap-3">
-                                    <div class="flex items-center justify-center w-10 h-10 rounded-xl shadow-sm text-lg font-bold" :class="semCode === '1' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'">
+                                    <div class="flex items-center justify-center w-10 h-10 rounded-xl shadow-sm text-lg font-bold" 
+                                        :class="semCode === '1' ? 'bg-emerald-100 text-emerald-700' : (semCode === '2' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700')">
                                         {{ semCode }}
                                     </div>
                                     <div>
-                                        <h3 class="text-xl font-bold text-gray-900 tracking-tight">{{ semCode === '1' ? 'First' : 'Second' }} Semester</h3>
+                                        <h3 class="text-xl font-bold text-gray-900 tracking-tight">{{ getSemesterTitle(semCode) }}</h3>
                                         <div class="flex items-center gap-2 text-sm mt-0.5">
                                             <span v-if="locks[semCode]" class="text-red-600 font-bold flex items-center gap-1"><Lock class="w-3 h-3" /> Locked</span>
                                             <span v-else class="text-green-600 font-bold flex items-center gap-1">Registration Open</span>
@@ -504,8 +539,9 @@ const getSemesterCourses = (semesterCode: string) => {
                                     </div>
                                 </div>
                                 <div class="text-right hidden sm:block">
-                                    <span class="block text-2xl font-bold font-mono leading-none" :class="semCode === '1' ? 'text-emerald-600' : 'text-blue-600'">
-                                        {{ semCode === '1' ? unitsFirst : unitsSecond }}
+                                    <span class="block text-2xl font-bold font-mono leading-none" 
+                                        :class="semCode === '1' ? 'text-emerald-600' : (semCode === '2' ? 'text-blue-600' : 'text-purple-600')">
+                                        {{ getSemesterUnits(semCode) }}
                                     </span>
                                     <span class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Units Selected</span>
                                 </div>
@@ -526,13 +562,13 @@ const getSemesterCourses = (semesterCode: string) => {
                                             <TableHead class="py-4">Course Title</TableHead>
                                             <TableHead class="py-4 w-[180px]">Lecturer</TableHead>
                                             <TableHead class="w-[80px] text-center py-4">Units</TableHead>
-                                            <TableHead class="w-[100px] text-center py-4">Type</TableHead>
+                                            <TableHead class="w-[120px] text-center py-4">Type</TableHead>
                                             <TableHead class="w-[120px] text-center py-4">Status</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         <tr v-if="getSemesterCourses(semCode).length === 0">
-                                            <td colspan="6" class="h-32 text-center">
+                                            <td colspan="7" class="h-32 text-center">
                                                 <div class="flex flex-col items-center justify-center text-gray-400">
                                                     <Search class="w-8 h-8 mb-2 opacity-50" />
                                                     <p>No courses found for this semester.</p>
@@ -562,7 +598,7 @@ const getSemesterCourses = (semesterCode: string) => {
                                                     <CheckCircle2 v-if="form.courses.includes(course.id)" class="w-3.5 h-3.5 text-white" />
                                                  </div>
                                             </TableCell>
-                                            <TableCell class="font-mono font-bold text-sm" :class="semCode === '1' ? 'text-emerald-700' : 'text-blue-700'">
+                                            <TableCell class="font-mono font-bold text-sm" :class="semCode === '1' ? 'text-emerald-700' : (semCode === '2' ? 'text-blue-700' : 'text-purple-700')">
                                                 {{ course.code }}
                                             </TableCell>
                                             <TableCell class="py-4">
@@ -581,12 +617,21 @@ const getSemesterCourses = (semesterCode: string) => {
                                                 {{ course.units }}
                                             </TableCell>
                                             <TableCell class="text-center">
-                                                <Badge :variant="course.is_compulsory ? 'default' : 'outline'" 
-                                                    class="rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wide font-bold shadow-none"
-                                                    :class="course.is_compulsory ? 'bg-gray-900 text-white hover:bg-gray-800' : 'text-gray-500 border-gray-200'"
-                                                >
-                                                    {{ course.is_compulsory ? 'Core' : 'Elective' }}
-                                                </Badge>
+                                                <div class="flex flex-col items-center gap-1">
+                                                    <Badge :variant="course.is_compulsory ? 'default' : 'outline'" 
+                                                        class="rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wide font-bold shadow-none"
+                                                        :class="course.is_compulsory ? 'bg-gray-900 text-white hover:bg-gray-800' : 'text-gray-500 border-gray-200'"
+                                                    >
+                                                        {{ course.is_compulsory ? 'Core' : 'Elective' }}
+                                                    </Badge>
+                                                    <Badge v-if="formatCourseType(course.course_type)"
+                                                        variant="outline"
+                                                        class="text-[9px] px-1.5 py-0 rounded border font-semibold"
+                                                        :class="formatCourseType(course.course_type)?.color"
+                                                    >
+                                                        {{ formatCourseType(course.course_type)?.label }}
+                                                    </Badge>
+                                                </div>
                                             </TableCell>
                                              <TableCell class="text-center">
                                                 <Transition
@@ -614,7 +659,7 @@ const getSemesterCourses = (semesterCode: string) => {
                 <div class="fixed bottom-0 left-0 md:left-[var(--sidebar-width)] right-0 bg-white/90 backdrop-blur-md border-t border-gray-200 shadow-lg z-50 p-4 md:px-8 transition-[left] duration-200 ease-linear">
                      <div class="max-w-7xl mx-auto flex items-center justify-between">
                         <div class="text-sm text-gray-500 hidden sm:block">
-                            Current selection: <span class="font-bold text-gray-900">{{ selectedCourses.length }} courses</span> with <span class="font-bold text-gray-900">{{ unitsFirst + unitsSecond }} units</span>.
+                            Current selection: <span class="font-bold text-gray-900">{{ selectedCourses.length }} courses</span> with <span class="font-bold text-gray-900">{{ totalUnits }} units</span>.
                         </div>
                         <div class="flex items-center gap-4 w-full sm:w-auto justify-end">
                             <Link :href="route('student.courses.index')" class="text-sm font-medium text-gray-500 hover:text-gray-900 hidden sm:block">Cancel</Link>

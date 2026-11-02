@@ -9,6 +9,14 @@ class Course extends Model
 {
     use HasUuids;
 
+    public const COURSE_TYPES = [
+        'lecture_exam' => 'Standard Lecture & Examination',
+        'case_study_seminar' => 'Executive Case Study & Seminar',
+        'practicum_internship' => 'Industry Practicum / Attachment',
+        'capstone_project' => 'Capstone / Applied Project',
+        'academic_dissertation' => 'Academic Thesis / Dissertation',
+    ];
+
     protected static function booted()
     {
         static::saving(function ($course) {
@@ -21,6 +29,9 @@ class Course extends Model
                     $course->code = $cleaned;
                 }
             }
+            if (empty($course->course_type)) {
+                $course->course_type = 'lecture_exam';
+            }
         });
 
         static::saved(fn() => \App\Services\AcademicCacheService::clearAll());
@@ -31,6 +42,8 @@ class Course extends Model
 
     protected $casts = [
         'is_active' => 'boolean',
+        'level' => 'integer',
+        'units' => 'integer',
     ];
 
     public function department()
@@ -67,5 +80,37 @@ class Course extends Model
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    public function isPostgraduate(): bool
+    {
+        if ((int) ($this->level ?? 0) >= 700) {
+            return true;
+        }
+
+        if ($this->relationLoaded('programme') && $this->programme) {
+            return $this->programme->isPostgraduate();
+        }
+
+        if ($this->programme_id) {
+            return (bool) $this->programme?->isPostgraduate();
+        }
+
+        return false;
+    }
+
+    public function isResearchOrProject(): bool
+    {
+        return in_array($this->course_type ?? 'lecture_exam', [
+            'case_study_seminar',
+            'practicum_internship',
+            'capstone_project',
+            'academic_dissertation',
+        ], true);
+    }
+
+    public function getCourseTypeLabelAttribute(): string
+    {
+        return self::COURSE_TYPES[$this->course_type ?? 'lecture_exam'] ?? 'Standard Lecture & Examination';
     }
 }

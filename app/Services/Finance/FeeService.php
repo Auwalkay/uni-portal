@@ -46,6 +46,7 @@ class FeeService
                     ->orWhereNull('entry_mode');
             })
             ->where('is_compulsory', true)
+            ->where('is_milestone_fee', false)
             ->with('feeType')
             ->get();
 
@@ -220,6 +221,7 @@ class FeeService
 
         $allConfigs = FeeConfiguration::where('session_id', $targetSessionId)
             ->where('is_compulsory', true)
+            ->where('is_milestone_fee', false)
             ->with('feeType')
             ->get();
 
@@ -245,6 +247,9 @@ class FeeService
         $sessionConfigs = $allConfigsBySession->get($targetSessionId, collect());
 
         $matchingConfigs = $sessionConfigs->filter(function ($config) use ($student) {
+            if ($config->is_milestone_fee) {
+                return false;
+            }
             $levelMatch = is_null($config->level) || (string)$config->level === (string)$student->current_level;
             $entryMatch = is_null($config->entry_mode) || $config->entry_mode === $student->entry_mode;
             return $levelMatch && $entryMatch;
@@ -302,6 +307,7 @@ class FeeService
                 $q->where('entry_mode', $student->entry_mode)->orWhereNull('entry_mode');
             })
             ->where('is_compulsory', true)
+            ->where('is_milestone_fee', false)
             ->with('feeType')
             ->get();
 
@@ -460,6 +466,7 @@ class FeeService
                     ->orWhereNull('entry_mode');
             })
             ->where('is_compulsory', false)
+            ->where('is_milestone_fee', false)
             ->with('feeType')
             ->get();
 
@@ -509,6 +516,172 @@ class FeeService
                     ->where('session_id', $config->session_id);
             })->where('fee_type_id', $config->fee_type_id)->exists();
         })->values();
+    }
+
+    /**
+     * Get available unbundled milestone fees (bench_fee, practicum_fee, defense_fee, extension_fee) for a student.
+     */
+    public function getAvailableMilestoneFees(Student $student, Session $session)
+    {
+        $targetSessionId = ($student->fee_policy === 'admission_session' && $student->admitted_session_id)
+            ? $student->admitted_session_id
+            : $session->id;
+
+        $allConfigs = FeeConfiguration::where('session_id', $targetSessionId)
+            ->where(function ($q) use ($student) {
+                $q->where('level', $student->current_level)
+                    ->orWhereNull('level');
+            })
+            ->where(function ($q) use ($student) {
+                $q->where('entry_mode', $student->entry_mode)
+                    ->orWhereNull('entry_mode');
+            })
+            ->where('is_milestone_fee', true)
+            ->with('feeType')
+            ->get();
+
+        $resolvedConfigs = collect();
+        $groupedConfigs = $allConfigs->groupBy(fn ($cfg) => $cfg->milestone_type ?: $cfg->fee_type_id);
+
+        foreach ($groupedConfigs as $groupKey => $configs) {
+            $resolved = null;
+            if ($student->program_id) {
+                $resolved = $configs->where('program_id', $student->program_id)->first();
+            }
+            if (! $resolved && $student->department_id) {
+                $resolved = $configs->where('department_id', $student->department_id)
+                    ->whereNull('program_id')
+                    ->first();
+            }
+            if (! $resolved && $student->faculty_id) {
+                $resolved = $configs->where('faculty_id', $student->faculty_id)
+                    ->whereNull('department_id')
+                    ->whereNull('program_id')
+                    ->first();
+            }
+            if (! $resolved) {
+                $resolved = $configs->whereNull('faculty_id')
+                    ->whereNull('department_id')
+                    ->whereNull('program_id')
+                    ->first();
+            }
+            if ($resolved) {
+                $resolvedConfigs->push($resolved);
+            }
+        }
+
+        return $resolvedConfigs->filter(function ($config) use ($student, $session) {
+            $isOneTime = ($config->feeType && $config->feeType->is_one_time)
+                || in_array($config->milestone_type, ['bench_fee', 'defense_fee', 'practicum_fee'], true);
+
+            return ! InvoiceItem::whereHas('invoice', function ($q) use ($student, $session, $isOneTime) {
+                $q->where('user_id', $student->user_id);
+                if (! $isOneTime) {
+                    $q->where('session_id', $session->id);
+                }
+            })->where('fee_type_id', $config->fee_type_id)->exists();
+        })->values();
+    }
+
+    /**
+     * Generate an unbundled milestone fee invoice (e.g. bench_fee, defense_fee, practicum_fee, extension_fee).
+     */
+    public function generateMilestoneFeeInvoice(Student $student, Session $session, string $milestoneType): ?Invoice
+    {
+        $targetSessionId = ($student->fee_policy === 'admission_session' && $student->admitted_session_id)
+            ? $student->admitted_session_id
+            : $session->id;
+
+        $configs = FeeConfiguration::where('session_id', $targetSessionId)
+            ->where('is_milestone_fee', true)
+            ->where('milestone_type', $milestoneType)
+            ->where(function ($q) use ($student) {
+                $q->where('level', $student->current_level)
+                    ->orWhereNull('level');
+            })
+            ->where(function ($q) use ($student) {
+                $q->where('entry_mode', $student->entry_mode)
+                    ->orWhereNull('entry_mode');
+            })
+            ->with('feeType')
+            ->get();
+
+        if ($configs->isEmpty()) {
+            return null;
+        }
+
+        $config = null;
+        if ($student->program_id) {
+            $config = $configs->where('program_id', $student->program_id)->first();
+        }
+        if (! $config && $student->department_id) {
+            $config = $configs->where('department_id', $student->department_id)
+                ->whereNull('program_id')
+                ->first();
+        }
+        if (! $config && $student->faculty_id) {
+            $config = $configs->where('faculty_id', $student->faculty_id)
+                ->whereNull('department_id')
+                ->whereNull('program_id')
+                ->first();
+        }
+        if (! $config) {
+            $config = $configs->whereNull('faculty_id')
+                ->whereNull('department_id')
+                ->whereNull('program_id')
+                ->first();
+        }
+
+        if (! $config) {
+            return null;
+        }
+
+        $isOneTime = ($config->feeType && $config->feeType->is_one_time)
+            || in_array($milestoneType, ['bench_fee', 'defense_fee', 'practicum_fee'], true);
+
+        $existingItem = InvoiceItem::whereHas('invoice', function ($q) use ($student, $session, $isOneTime) {
+            $q->where('user_id', $student->user_id)
+                ->where('status', '!=', 'cancelled');
+            if (! $isOneTime) {
+                $q->where('session_id', $session->id);
+            }
+        })->where('fee_type_id', $config->fee_type_id)->with('invoice')->first();
+
+        if ($existingItem && $existingItem->invoice) {
+            return $existingItem->invoice;
+        }
+
+        return DB::transaction(function () use ($student, $session, $config, $milestoneType) {
+            $studentSession = StudentSession::firstOrCreate(
+                ['student_id' => $student->id, 'session_id' => $session->id],
+                ['level' => $student->current_level, 'status' => 'active']
+            );
+
+            $description = $config->feeType?->name
+                ?? (FeeConfiguration::MILESTONE_TYPES[$milestoneType] ?? 'Postgraduate Milestone Fee');
+
+            $invoice = Invoice::create([
+                'user_id' => $student->user_id,
+                'session_id' => $session->id,
+                'student_session_id' => $studentSession->id,
+                'type' => 'milestone_fee',
+                'reference' => 'MLS-' . strtoupper(uniqid()),
+                'invoice_number' => 'INV-MLS-' . strtoupper(Str::random(8)),
+                'amount' => $config->amount,
+                'paid_amount' => 0.00,
+                'status' => 'pending',
+                'due_date' => now()->addWeeks(4),
+            ]);
+
+            InvoiceItem::create([
+                'invoice_id' => $invoice->id,
+                'fee_type_id' => $config->fee_type_id,
+                'description' => $description,
+                'amount' => $config->amount,
+            ]);
+
+            return $invoice;
+        });
     }
 
     /**

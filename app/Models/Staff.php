@@ -122,4 +122,19 @@ class Staff extends Model
             $q->where('is_active', true)->whereNull('deleted_at');
         });
     }
+
+    public function postgraduateAccreditation(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(PostgraduateStaffAccreditation::class, 'staff_id');
+    }
+
+    public function supervisedResearchProjects(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PostgraduateResearchProject::class, 'major_supervisor_id');
+    }
+
+    public function coSupervisedResearchProjects(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PostgraduateResearchProject::class, 'co_supervisor_id');
+    }
 }

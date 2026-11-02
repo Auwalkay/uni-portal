@@ -67,6 +67,9 @@ class AdmissionController extends Controller
         $applicant->load([
             'user',
             'documents',
+            'referees',
+            'qualifications',
+            'employments',
             'state',
             'lga',
             'programme.department.faculty',
@@ -77,9 +80,28 @@ class AdmissionController extends Controller
             ->with('payments')
             ->first();
 
+        $pgEligibility = null;
+        if ($applicant->isPostgraduate() && $applicant->programme) {
+            $pgService = app(\App\Services\Admissions\PostgraduateAdmissionService::class);
+            if ($applicant->qualifications->isNotEmpty()) {
+                $pgEligibility = $pgService->validateQualificationsList(
+                    $applicant->programme,
+                    $applicant->qualifications->toArray()
+                );
+            } elseif ($applicant->previous_qualification && $applicant->previous_class_of_degree) {
+                $pgEligibility = $pgService->validateEntryQualification(
+                    $applicant->programme,
+                    $applicant->previous_qualification,
+                    $applicant->previous_class_of_degree,
+                    $applicant->previous_cgpa
+                );
+            }
+        }
+
         return Inertia::render('Admin/Admissions/Show', [
             'applicant' => $applicant,
             'payment_info' => $paymentInfo,
+            'pg_eligibility' => $pgEligibility,
             'programmes' => fn () => \App\Services\AcademicCacheService::getProgrammes(),
             'scholarships' => fn () => \App\Services\AcademicCacheService::getScholarships(),
         ]);
@@ -93,7 +115,7 @@ class AdmissionController extends Controller
 
         // Extra fields required when admitting
         if ($request->status === 'admitted') {
-            $rules['admitted_level'] = 'required|in:100,200,300,400,500';
+            $rules['admitted_level'] = 'required|in:100,200,300,400,500,600,700,800,900';
             $rules['admitted_programme_id'] = 'required|exists:programmes,id';
             $rules['scholarship_id'] = 'nullable|exists:scholarships,id';
         }

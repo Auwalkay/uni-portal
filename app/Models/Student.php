@@ -180,6 +180,21 @@ class Student extends Model
         return $this->hasMany(CourseRegistration::class);
     }
 
+    public function researchProjects()
+    {
+        return $this->hasMany(PostgraduateResearchProject::class);
+    }
+
+    public function latestResearchProject()
+    {
+        return $this->hasOne(PostgraduateResearchProject::class)->latestOfMany();
+    }
+
+    public function pgProfile()
+    {
+        return $this->hasOne(PostgraduateStudentProfile::class);
+    }
+
     public function state()
     {
         return $this->belongsTo(State::class);
@@ -249,6 +264,8 @@ class Student extends Model
             $targetSession = \App\Models\Session::find($this->pending_promotion_session_id);
             if ($targetSession) {
                 $previousSession = \App\Models\Session::where('start_date', '<', $targetSession->start_date)
+                    ->where('academic_stream', $targetSession->academic_stream ?? 'UG')
+                    ->where('calendar_type', $targetSession->calendar_type ?? 'semester')
                     ->orderBy('start_date', 'desc')
                     ->first();
                 
@@ -294,12 +311,74 @@ class Student extends Model
         }
 
         if ($this->admitted_session_id) {
-            $currentSessionId = Session::current()?->id;
+            $currentSessionId = $this->resolveCurrentSession()?->id ?? Session::current()?->id;
             if ($currentSessionId) {
                 return (string) $this->admitted_session_id !== (string) $currentSessionId;
             }
         }
 
-        return (int) $this->current_level > 100;
+        return $this->isPostgraduate()
+            ? (int) $this->current_level > 700
+            : (int) $this->current_level > 100;
+    }
+
+    public function isPostgraduate(): bool
+    {
+        if ((int) ($this->current_level ?? 0) >= 700) {
+            return true;
+        }
+
+        if (strtolower((string) ($this->entry_mode ?? '')) === 'postgraduate') {
+            return true;
+        }
+
+        if ($this->relationLoaded('program') && $this->program) {
+            return $this->program->isPostgraduate();
+        }
+
+        if ($this->program_id) {
+            return (bool) $this->program?->isPostgraduate();
+        }
+
+        return false;
+    }
+
+    public function resolveCurrentSession(): ?Session
+    {
+        if ($this->program) {
+            return Session::currentForProgram($this->program);
+        }
+
+        return Session::current();
+    }
+
+    public function postgraduateProfile(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(PostgraduateStudentProfile::class, 'student_id');
+    }
+
+    public function postgraduateResearchProject(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(PostgraduateResearchProject::class, 'student_id');
+    }
+
+    public function postgraduateResearchLogs(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PostgraduateResearchLog::class, 'student_id');
+    }
+
+    public function postgraduateProgressReports(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PostgraduateProgressReport::class, 'student_id');
+    }
+
+    public function postgraduateCandidacyRequests(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PostgraduateCandidacyRequest::class, 'student_id');
+    }
+
+    public function postgraduatePublications(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PostgraduatePublication::class, 'student_id');
     }
 }

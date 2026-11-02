@@ -21,12 +21,15 @@ createInertiaApp({
             import.meta.glob<DefineComponent>('./pages/**/*.vue'),
         ),
     setup({ el, App, props, plugin }) {
-        const ziggyConfig = (props.initialPage.props as any)?.ziggy || Ziggy;
-        if (typeof window !== 'undefined') {
-            (ziggyConfig as any).location = window.location;
-            (ziggyConfig as any).url = window.location.origin;
-            (ziggyConfig as any).port = window.location.port ? parseInt(window.location.port) : null;
-        }
+        const rawZiggy = (props.initialPage.props as any)?.ziggy || Ziggy;
+        const ziggyConfig = typeof window !== 'undefined'
+            ? {
+                ...rawZiggy,
+                location: window.location.href,
+                url: window.location.origin,
+                port: window.location.port ? parseInt(window.location.port) : null,
+            }
+            : rawZiggy;
 
         createApp({ render: () => h(App, props) })
             .use(plugin)

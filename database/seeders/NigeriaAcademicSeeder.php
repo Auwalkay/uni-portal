@@ -158,8 +158,80 @@ class NigeriaAcademicSeeder extends Seeder
                 foreach ($deptData['programmes'] as $progName) {
                     $department->programmes()->firstOrCreate(
                         ['name' => $progName],
-                        ['type' => 'UG', 'is_active' => true]
+                        ['type' => 'UG', 'academic_stream' => 'UG', 'is_active' => true]
                     );
+                }
+
+                // Seed Postgraduate Programmes for applicable departments
+                $pgProgrammesByDept = [
+                    'Computer Science' => [
+                        ['name' => 'PGD Computer Science', 'type' => 'PGD', 'duration' => 1, 'calendar_type' => 'semester', 'matric_format' => 'PGD/{YEAR}/{SEQUENCE}'],
+                        ['name' => 'M.Sc Computer Science', 'type' => 'MSC', 'duration' => 2, 'calendar_type' => 'semester', 'matric_format' => 'MSC/{YEAR}/{SEQUENCE}'],
+                        ['name' => 'Ph.D Computer Science', 'type' => 'PHD', 'duration' => 3, 'calendar_type' => 'semester', 'matric_format' => 'PHD/{YEAR}/{SEQUENCE}'],
+                    ],
+                    'Mathematics' => [
+                        ['name' => 'M.Sc Mathematics', 'type' => 'MSC', 'duration' => 2, 'calendar_type' => 'semester', 'matric_format' => 'MSC/{YEAR}/{SEQUENCE}'],
+                        ['name' => 'Ph.D Mathematics', 'type' => 'PHD', 'duration' => 3, 'calendar_type' => 'semester', 'matric_format' => 'PHD/{YEAR}/{SEQUENCE}'],
+                    ],
+                    'Physics' => [
+                        ['name' => 'M.Sc Physics', 'type' => 'MSC', 'duration' => 2, 'calendar_type' => 'semester', 'matric_format' => 'MSC/{YEAR}/{SEQUENCE}'],
+                        ['name' => 'Ph.D Physics', 'type' => 'PHD', 'duration' => 3, 'calendar_type' => 'semester', 'matric_format' => 'PHD/{YEAR}/{SEQUENCE}'],
+                    ],
+                    'Chemistry' => [
+                        ['name' => 'M.Sc Chemistry', 'type' => 'MSC', 'duration' => 2, 'calendar_type' => 'semester', 'matric_format' => 'MSC/{YEAR}/{SEQUENCE}'],
+                        ['name' => 'Ph.D Chemistry', 'type' => 'PHD', 'duration' => 3, 'calendar_type' => 'semester', 'matric_format' => 'PHD/{YEAR}/{SEQUENCE}'],
+                    ],
+                    'Microbiology' => [
+                        ['name' => 'M.Sc Microbiology', 'type' => 'MSC', 'duration' => 2, 'calendar_type' => 'semester', 'matric_format' => 'MSC/{YEAR}/{SEQUENCE}'],
+                        ['name' => 'Ph.D Microbiology', 'type' => 'PHD', 'duration' => 3, 'calendar_type' => 'semester', 'matric_format' => 'PHD/{YEAR}/{SEQUENCE}'],
+                    ],
+                    'Electrical & Electronics Engineering' => [
+                        ['name' => 'M.Eng Electrical & Electronics Engineering', 'type' => 'MSC', 'duration' => 2, 'calendar_type' => 'semester', 'matric_format' => 'MENG/{YEAR}/{SEQUENCE}'],
+                        ['name' => 'Ph.D Electrical & Electronics Engineering', 'type' => 'PHD', 'duration' => 3, 'calendar_type' => 'semester', 'matric_format' => 'PHD/{YEAR}/{SEQUENCE}'],
+                    ],
+                    'Mechanical Engineering' => [
+                        ['name' => 'M.Eng Mechanical Engineering', 'type' => 'MSC', 'duration' => 2, 'calendar_type' => 'semester', 'matric_format' => 'MENG/{YEAR}/{SEQUENCE}'],
+                        ['name' => 'Ph.D Mechanical Engineering', 'type' => 'PHD', 'duration' => 3, 'calendar_type' => 'semester', 'matric_format' => 'PHD/{YEAR}/{SEQUENCE}'],
+                    ],
+                    'Business Administration' => [
+                        ['name' => 'PGD Business Administration', 'type' => 'PGD', 'duration' => 1, 'calendar_type' => 'semester', 'matric_format' => 'PGD/{YEAR}/{SEQUENCE}'],
+                        ['name' => 'Master of Business Administration (MBA)', 'type' => 'MBA', 'duration' => 2, 'calendar_type' => 'trimester', 'matric_format' => 'MBA/{YEAR}/{SEQUENCE}'],
+                        ['name' => 'Ph.D Business Administration', 'type' => 'PHD', 'duration' => 3, 'calendar_type' => 'semester', 'matric_format' => 'PHD/{YEAR}/{SEQUENCE}'],
+                    ],
+                    'Economics' => [
+                        ['name' => 'M.Sc Economics', 'type' => 'MSC', 'duration' => 2, 'calendar_type' => 'semester', 'matric_format' => 'MSC/{YEAR}/{SEQUENCE}'],
+                        ['name' => 'Ph.D Economics', 'type' => 'PHD', 'duration' => 3, 'calendar_type' => 'semester', 'matric_format' => 'PHD/{YEAR}/{SEQUENCE}'],
+                    ],
+                    'Accounting' => [
+                        ['name' => 'PGD Accounting', 'type' => 'PGD', 'duration' => 1, 'calendar_type' => 'semester', 'matric_format' => 'PGD/{YEAR}/{SEQUENCE}'],
+                        ['name' => 'M.Sc Accounting', 'type' => 'MSC', 'duration' => 2, 'calendar_type' => 'semester', 'matric_format' => 'MSC/{YEAR}/{SEQUENCE}'],
+                    ],
+                    'Private & Property Law' => [
+                        ['name' => 'Master of Laws (LL.M)', 'type' => 'MSC', 'duration' => 2, 'calendar_type' => 'semester', 'matric_format' => 'LLM/{YEAR}/{SEQUENCE}'],
+                    ],
+                    'Mass Communication' => [
+                        ['name' => 'PGD Mass Communication', 'type' => 'PGD', 'duration' => 1, 'calendar_type' => 'semester', 'matric_format' => 'PGD/{YEAR}/{SEQUENCE}'],
+                        ['name' => 'M.Sc Mass Communication', 'type' => 'MSC', 'duration' => 2, 'calendar_type' => 'semester', 'matric_format' => 'MSC/{YEAR}/{SEQUENCE}'],
+                        ['name' => 'Ph.D Mass Communication', 'type' => 'PHD', 'duration' => 3, 'calendar_type' => 'semester', 'matric_format' => 'PHD/{YEAR}/{SEQUENCE}'],
+                    ],
+                ];
+
+                if (isset($pgProgrammesByDept[$deptName])) {
+                    foreach ($pgProgrammesByDept[$deptName] as $pgProg) {
+                        $department->programmes()->firstOrCreate(
+                            ['name' => $pgProg['name']],
+                            [
+                                'type' => $pgProg['type'],
+                                'academic_stream' => 'PG',
+                                'calendar_type' => $pgProg['calendar_type'] ?? 'semester',
+                                'duration' => $pgProg['duration'] ?? 2,
+                                'matric_format' => $pgProg['matric_format'],
+                                'min_graduation_cgpa' => 3.00,
+                                'billing_model' => 'composite_term',
+                                'is_active' => true,
+                            ]
+                        );
+                    }
                 }
 
                 // Seed some basic courses for each department (100 Level)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { Head, useForm, router } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import ApplicantLayout from '@/layouts/ApplicantLayout.vue';
@@ -10,9 +10,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { CheckCircle2 } from 'lucide-vue-next';
 
-interface Programme { id: string; name: string; is_active?: boolean; }
-interface Department { id: string; name: string; programmes: Programme[]; }
-interface Faculty { id: string; name: string; departments: Department[]; }
+interface Programme {
+    id: string;
+    name: string;
+    is_active?: boolean;
+    academic_stream?: 'UG' | 'PG';
+    type?: string;
+}
+interface Department {
+    id: string;
+    name: string;
+    programmes: Programme[];
+}
+interface Faculty {
+    id: string;
+    name: string;
+    departments: Department[];
+}
 
 const props = defineProps<{
     faculties: Faculty[];
@@ -26,12 +40,57 @@ const form = useForm({
     programme_id: '',
 });
 
-// Cascading Logic
-const selectedFaculty = computed(() => props.faculties.find(f => f.id === form.faculty_id));
-const departments = computed(() => selectedFaculty.value?.departments || []);
+const isPgProgramme = (p: Programme): boolean => {
+    if (String(p.academic_stream || '').toUpperCase() === 'PG') return true;
+    const type = String(p.type || '').toUpperCase();
+    if (['PG', 'PGD', 'MBA', 'MIM', 'MSC', 'MPHIL', 'PHD', 'MASTERS', 'DOCTORATE'].includes(type)) return true;
+    const name = String(p.name || '').trim();
+    if (/^(M\.?Sc|Ph\.?D|PGD|MBA|MIM|M\.?Eng|M\.?Phil|Master|Doctor)\b/i.test(name)) return true;
+    return false;
+};
 
+const isProgramMatchingMode = (p: Programme): boolean => {
+    return form.mode === 'PG' ? isPgProgramme(p) : !isPgProgramme(p);
+};
+
+// Only show faculties that offer programmes for the selected application mode
+const availableFaculties = computed(() => {
+    return props.faculties.filter(faculty =>
+        (faculty.departments || []).some(dept =>
+            (dept.programmes || []).some(p => p.is_active !== false && isProgramMatchingMode(p))
+        )
+    );
+});
+
+// Cascading Logic: Selected Faculty
+const selectedFaculty = computed(() => availableFaculties.value.find(f => f.id === form.faculty_id));
+
+// Only show departments within the selected faculty that offer programmes for the selected mode
+const departments = computed(() => {
+    return (selectedFaculty.value?.departments || []).filter(dept =>
+        (dept.programmes || []).some(p => p.is_active !== false && isProgramMatchingMode(p))
+    );
+});
+
+// Cascading Logic: Selected Department
 const selectedDepartment = computed(() => departments.value.find(d => d.id === form.department_id));
-const programmes = computed(() => (selectedDepartment.value?.programmes || []).filter(p => p.is_active !== false));
+
+// STRICTLY return programmes matching the chosen stream - NO fallback to other streams
+const programmes = computed(() => {
+    const active = (selectedDepartment.value?.programmes || []).filter(p => p.is_active !== false);
+    return active.filter(isProgramMatchingMode);
+});
+
+// Reset cascading selections when mode changes
+watch(() => form.mode, () => {
+    form.programme_id = '';
+    if (!availableFaculties.value.some(f => f.id === form.faculty_id)) {
+        form.faculty_id = '';
+        form.department_id = '';
+    } else if (!departments.value.some(d => d.id === form.department_id)) {
+        form.department_id = '';
+    }
+});
 
 const proceedToForm = () => {
     router.visit(route('applicant.apply.form'), {
@@ -111,7 +170,7 @@ const proceedToForm = () => {
                                 <SelectValue placeholder="Select your target Faculty" />
                             </SelectTrigger>
                             <SelectContent class="border-border shadow-lg">
-                                <SelectItem v-for="faculty in faculties" :key="faculty.id" :value="faculty.id" class="cursor-pointer focus:bg-primary/5 focus:text-primary transition-colors">
+                                <SelectItem v-for="faculty in availableFaculties" :key="faculty.id" :value="faculty.id" class="cursor-pointer focus:bg-primary/5 focus:text-primary transition-colors">
                                     {{ faculty.name }}
                                 </SelectItem>
                             </SelectContent>
@@ -149,6 +208,9 @@ const proceedToForm = () => {
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
+                            <p v-if="programmes.length === 0" class="text-xs text-amber-600 dark:text-amber-400 font-medium mt-1.5 flex items-center gap-1.5">
+                                <span>⚠️</span> No {{ form.mode === 'PG' ? 'Postgraduate' : 'Undergraduate' }} programmes are currently available for this department.
+                            </p>
                         </div>
                     </Transition>
 

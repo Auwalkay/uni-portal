@@ -101,9 +101,13 @@ const selectSession = (sessionId: number) => {
                         <ShieldAlert class="h-6 w-6 text-amber-600" />
                     </div>
                     <div class="flex-1">
-                        <h3 class="font-semibold text-amber-800 text-base">Second Semester Exam Clearance Required</h3>
+                        <h3 class="font-semibold text-amber-800 text-base">
+                            {{ student?.is_postgraduate || student?.academic_stream === 'PG' ? 'Academic & Research Clearance Required' : 'Second Semester Exam Clearance Required' }}
+                        </h3>
                         <p class="mt-1 text-sm text-amber-700">
-                            To be eligible for Second Semester exams and download your Exam Card, all pending fees including school fees and hostel fees must be fully cleared. Please complete your fee payments to unlock these services.
+                            {{ student?.is_postgraduate || student?.academic_stream === 'PG'
+                                ? 'To be eligible for semester examinations, seminar presentations, and thesis defense clearance, all pending tuition and milestone fees must be fully settled.'
+                                : 'To be eligible for Second Semester exams and download your Exam Card, all pending fees including school fees must be fully cleared. Please complete your fee payments to unlock these services.' }}
                         </p>
                         <Link :href="route('student.payments.index')" class="mt-3 inline-flex items-center text-sm font-medium text-amber-800 hover:text-amber-900 underline underline-offset-4">
                             Clear Pending Fees &rarr;

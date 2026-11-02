@@ -29,6 +29,9 @@ class ResultImport implements ToCollection, WithChunkReading, WithHeadingRow
      */
     public function collection(Collection $rows)
     {
+        $maxCa = $this->course->isResearchOrProject() ? 100 : 40;
+        $maxExam = $this->course->isResearchOrProject() ? 100 : 80;
+
         foreach ($rows as $index => $row) {
             if (!isset($row['matric_number']))
                 continue;
@@ -38,12 +41,12 @@ class ResultImport implements ToCollection, WithChunkReading, WithHeadingRow
             $ca = isset($row['ca']) && $row['ca'] !== '' ? floatval($row['ca']) : 0;
             $exam = isset($row['exam']) && $row['exam'] !== '' ? floatval($row['exam']) : 0;
 
-            if ($ca < 0 || $ca > 40) {
-                throw new \Exception("Row {$rowNum}: The CA score for student with matric number '{$matric}' must be between 0 and 40 (currently {$row['ca']}).");
+            if ($ca < 0 || $ca > $maxCa) {
+                throw new \Exception("Row {$rowNum}: The CA score for student with matric number '{$matric}' must be between 0 and {$maxCa} (currently {$row['ca']}).");
             }
 
-            if ($exam < 0 || $exam > 80) {
-                throw new \Exception("Row {$rowNum}: The Exam score for student with matric number '{$matric}' must be between 0 and 80 (currently {$row['exam']}).");
+            if ($exam < 0 || $exam > $maxExam) {
+                throw new \Exception("Row {$rowNum}: The Exam score for student with matric number '{$matric}' must be between 0 and {$maxExam} (currently {$row['exam']}).");
             }
 
             if ($ca + $exam > 100) {
@@ -51,17 +54,18 @@ class ResultImport implements ToCollection, WithChunkReading, WithHeadingRow
             }
 
             // Find Student Registration
-            // We join students to check matric number
+            // We join students to check matriculation_number
             $registration = CourseRegistration::where('course_id', $this->course->id)
                 ->where('session_id', $this->session->id)
                 ->whereHas('student', function ($q) use ($matric) {
-                    $q->where('matric_number', $matric);
+                    $q->where('matriculation_number', $matric);
                 })
+                ->with(['course.programme', 'student.program'])
                 ->first();
 
             if ($registration) {
                 $total = $ca + $exam;
-                $grading = $this->gradingService->calculate($total);
+                $grading = $this->gradingService->calculate($total, $registration);
 
                 $registration->update([
                     'ca_score' => $ca,

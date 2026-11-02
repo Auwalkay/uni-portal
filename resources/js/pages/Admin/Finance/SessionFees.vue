@@ -34,7 +34,16 @@ interface FeeConfiguration {
     level?: string | null;
     entry_mode?: string | null;
     is_compulsory: boolean;
+    is_milestone_fee?: boolean;
+    milestone_type?: string | null;
 }
+
+const milestoneTypeLabels: Record<string, string> = {
+    bench_fee: 'Research Bench / Lab Fee',
+    practicum_fee: 'Practicum / Attachment Fee',
+    defense_fee: 'External Viva Voce Defense Fee',
+    extension_fee: 'Programme Extension Fee',
+};
 
 const props = defineProps<{
     session: any;
@@ -58,11 +67,16 @@ const configForm = useForm({
     level: '',
     entry_mode: '' as string | null,
     is_compulsory: true,
+    is_milestone_fee: false,
+    milestone_type: '' as string | null,
 });
 
 const openCreateConfig = () => {
     configForm.reset();
     configForm.session_id = props.session.id;
+    configForm.is_compulsory = true;
+    configForm.is_milestone_fee = false;
+    configForm.milestone_type = '';
     editingConfig.value = false;
     isConfigModalOpen.value = true;
 };
@@ -79,6 +93,8 @@ const openEditConfig = (config: FeeConfiguration) => {
     configForm.level = config.level || '';
     configForm.entry_mode = config.entry_mode || '';
     configForm.is_compulsory = !!config.is_compulsory;
+    configForm.is_milestone_fee = !!config.is_milestone_fee;
+    configForm.milestone_type = config.milestone_type || '';
     editingConfig.value = true;
     isConfigModalOpen.value = true;
 };
@@ -89,9 +105,10 @@ const submitConfig = () => {
     if (form.department_id === 'all') form.department_id = null;
     if (form.program_id === 'all') form.program_id = null;
     if (form.entry_mode === 'all' || !form.entry_mode) form.entry_mode = null;
+    if (!form.is_milestone_fee || !form.milestone_type) form.milestone_type = null;
 
     if (editingConfig.value && configForm.id) {
-        configForm.put(route('admin.finance.configurations.update', configForm.id), {
+        configForm.put(route('admin.finance.fee_configurations.update', configForm.id), {
             onSuccess: () => {
                 isConfigModalOpen.value = false;
                 Swal.fire({ icon: 'success', title: 'Success', text: 'Fee Rule updated', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
@@ -99,7 +116,7 @@ const submitConfig = () => {
             onError: () => Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to save rule', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 })
         });
     } else {
-        configForm.post(route('admin.finance.configurations.store'), {
+        configForm.post(route('admin.finance.fee_configurations.store'), {
             onSuccess: () => {
                 isConfigModalOpen.value = false;
                 Swal.fire({ icon: 'success', title: 'Success', text: 'Fee Rule created', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
@@ -111,7 +128,7 @@ const submitConfig = () => {
 
 const deleteConfig = (config: FeeConfiguration) => {
     if (confirm('Delete this rule?')) {
-        router.delete(route('admin.finance.configurations.destroy', config.id), {
+        router.delete(route('admin.finance.fee_configurations.destroy', config.id), {
             onSuccess: () => Swal.fire({ icon: 'success', title: 'Deleted', text: 'Rule deleted', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 }),
             onError: () => Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to delete', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 })
         });
@@ -166,6 +183,9 @@ const formatCurrency = (val: number) => {
                                 <TableCell class="font-medium">
                                     {{ config.fee_type?.name }}
                                     <Badge v-if="config.is_compulsory" class="ml-2 text-[10px]" variant="outline">Compulsory</Badge>
+                                    <Badge v-if="config.is_milestone_fee" class="ml-2 text-[10px] bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300" variant="secondary">
+                                        Milestone: {{ config.milestone_type ? (milestoneTypeLabels[config.milestone_type] || config.milestone_type) : 'PG' }}
+                                    </Badge>
                                 </TableCell>
                                 <TableCell class="text-xs text-muted-foreground">
                                     <div v-if="config.program">Prog: <span class="text-foreground">{{ config.program.name }}</span></div>
@@ -283,9 +303,27 @@ const formatCurrency = (val: number) => {
                                 </div>
                              </div>
                         </div>
-                          <div class="flex items-center space-x-2">
-                             <Checkbox id="comp-new" v-model:checked="configForm.is_compulsory" />
-                            <Label for="comp-new">Is Compulsory?</Label>
+                        <div class="space-y-3">
+                            <div class="flex items-center space-x-2">
+                                <Checkbox id="comp-new" v-model:checked="configForm.is_compulsory" />
+                                <Label for="comp-new">Is Compulsory?</Label>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <Checkbox id="milestone-fee" v-model:checked="configForm.is_milestone_fee" />
+                                <Label for="milestone-fee">Unbundled Postgraduate Milestone Fee (Bench, Practicum, Viva Voce Defense, Extension)</Label>
+                            </div>
+                            <div v-if="configForm.is_milestone_fee" class="grid gap-2 pl-6">
+                                <Label>Milestone Trigger Stage</Label>
+                                <Select :model-value="configForm.milestone_type || undefined" @update:model-value="(v) => configForm.milestone_type = v as string">
+                                    <SelectTrigger><SelectValue placeholder="Select Milestone Stage" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="bench_fee">Research Bench / Laboratory Fee</SelectItem>
+                                        <SelectItem value="practicum_fee">Executive Practicum / Field Attachment Fee</SelectItem>
+                                        <SelectItem value="defense_fee">External Viva Voce / Dissertation Defense Fee</SelectItem>
+                                        <SelectItem value="extension_fee">Programme Extension / Renewal Fee</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
                     </div>
                     <DialogFooter>

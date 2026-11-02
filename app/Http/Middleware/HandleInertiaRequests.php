@@ -59,6 +59,15 @@ class HandleInertiaRequests extends Middleware
                     'id' => $user->student->id,
                     'department_id' => $user->student->effective_department_id,
                     'program_id' => $user->student->program_id,
+                    'is_postgraduate' => $user->student->isPostgraduate(),
+                    'academic_stream' => $user->student->academic_stream ?? $user->student->programme?->academic_stream ?? 'UG',
+                    'current_level' => $user->student->current_level,
+                    'matriculation_number' => $user->student->matriculation_number,
+                    'spgs_file_number' => $user->student->pgProfile?->spgs_file_number,
+                    'candidacy_status' => $user->student->pgProfile?->candidacy_status,
+                    'study_mode' => $user->student->pgProfile?->study_mode,
+                    'degree_type' => $user->student->programme?->type ?? $user->student->program?->type,
+                    'programme_name' => $user->student->programme?->name ?? $user->student->program?->name,
                 ] : null,
             ];
         }

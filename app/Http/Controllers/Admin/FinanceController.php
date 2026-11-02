@@ -225,14 +225,23 @@ class FinanceController extends Controller
         $validated = $request->validate([
             'fee_type_id' => 'required|exists:fee_types,id',
             'session_id' => 'required|exists:academic_sessions,id',
+            'semester_id' => 'nullable|exists:semesters,id',
             'amount' => 'required|numeric|min:0',
             'faculty_id' => 'nullable|exists:faculties,id',
             'department_id' => 'nullable|exists:departments,id',
             'program_id' => 'nullable|exists:programmes,id',
-            'level' => 'nullable|string', // 100, 200, etc.
-            'entry_mode' => 'nullable|string|in:UTME,Direct Entry,Transfer,Postgraduate',
+            'level' => 'nullable|string', // 100, 200, 700, 800, 900, etc.
+            'entry_mode' => 'nullable|string|in:UTME,Direct Entry,Transfer,Postgraduate,PGD,MBA,MIM,MSc,PhD',
             'is_compulsory' => 'boolean',
+            'is_per_course' => 'nullable|boolean',
+            'is_milestone_fee' => 'nullable|boolean',
+            'milestone_type' => 'nullable|string|in:bench_fee,practicum_fee,defense_fee,extension_fee',
         ]);
+
+        $validated['is_milestone_fee'] = (bool) ($validated['is_milestone_fee'] ?? false);
+        if (! $validated['is_milestone_fee']) {
+            $validated['milestone_type'] = null;
+        }
 
         FeeConfiguration::create($validated);
 
@@ -246,9 +255,19 @@ class FinanceController extends Controller
         $validated = $request->validate([
             'amount' => 'required|numeric|min:0',
             'level' => 'nullable|string',
-            'entry_mode' => 'nullable|string|in:UTME,Direct Entry,Transfer,Postgraduate',
+            'entry_mode' => 'nullable|string|in:UTME,Direct Entry,Transfer,Postgraduate,PGD,MBA,MIM,MSc,PhD',
             'is_compulsory' => 'boolean',
+            'is_per_course' => 'nullable|boolean',
+            'is_milestone_fee' => 'nullable|boolean',
+            'milestone_type' => 'nullable|string|in:bench_fee,practicum_fee,defense_fee,extension_fee',
         ]);
+
+        if (array_key_exists('is_milestone_fee', $validated)) {
+            $validated['is_milestone_fee'] = (bool) $validated['is_milestone_fee'];
+            if (! $validated['is_milestone_fee']) {
+                $validated['milestone_type'] = null;
+            }
+        }
 
         $config->update($validated);
 

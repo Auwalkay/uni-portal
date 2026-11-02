@@ -34,6 +34,13 @@ const props = defineProps<{
         gender?: string;
         jamb_score?: string;
         previous_institution?: string;
+        previous_qualification?: string;
+        previous_course_of_study?: string;
+        previous_class_of_degree?: string;
+        previous_cgpa?: number | string | null;
+        graduation_year?: number | string | null;
+        nysc_status?: string | null;
+        research_proposal_title?: string | null;
         
         // Relationships
         user: { name: string; email: string; avatar_url?: string };
@@ -41,6 +48,7 @@ const props = defineProps<{
         lga?: { id: number; name: string };
         programme?: { 
             name: string; 
+            academic_stream?: string;
             department?: { 
                 faculty?: { name: string } 
             } 
@@ -57,7 +65,31 @@ const props = defineProps<{
             original_name: string;
             path: string;
         }>;
+        referees?: Array<{
+            id: string;
+            name: string;
+            email: string;
+            phone?: string | null;
+            institution_or_organization: string;
+            position_or_rank?: string | null;
+            relationship?: string | null;
+            status: string;
+            token: string;
+            academic_capacity_rating?: number | null;
+            research_potential_rating?: number | null;
+            character_integrity_rating?: number | null;
+            communication_rating?: number | null;
+            recommendation_strength?: string | null;
+            comments?: string | null;
+            submitted_at?: string | null;
+        }>;
     };
+    pg_eligibility?: {
+        eligible: boolean;
+        tier: string;
+        default_level: number;
+        message: string;
+    } | null;
     payment_info?: {
         amount: number;
         status: string;
@@ -165,6 +197,9 @@ const passportUrl = computed(() => {
                                         <SelectItem value="300">300 Level</SelectItem>
                                         <SelectItem value="400">400 Level</SelectItem>
                                         <SelectItem value="500">500 Level</SelectItem>
+                                        <SelectItem value="700">700 Level (PGD)</SelectItem>
+                                        <SelectItem value="800">800 Level (Master's - MBA/MIM/M.Sc)</SelectItem>
+                                        <SelectItem value="900">900 Level (Ph.D Doctorate)</SelectItem>
                                     </SelectContent>
                                 </Select>
                                 <p v-if="form.errors.admitted_level" class="text-xs text-destructive">{{ form.errors.admitted_level }}</p>
@@ -342,6 +377,109 @@ const passportUrl = computed(() => {
                          <div>
                             <Label class="text-muted-foreground">Previous Institution</Label>
                             <p class="font-medium">{{ applicant.previous_institution || 'N/A' }}</p>
+                        </div>
+                        <div v-if="applicant.previous_qualification">
+                            <Label class="text-muted-foreground">Previous Qualification</Label>
+                            <p class="font-medium">{{ applicant.previous_qualification }} ({{ applicant.previous_class_of_degree || (applicant as any).class_of_degree || 'N/A' }})</p>
+                        </div>
+                        <div v-if="applicant.previous_cgpa">
+                            <Label class="text-muted-foreground">Previous CGPA</Label>
+                            <p class="font-medium">{{ applicant.previous_cgpa }} / 5.00</p>
+                        </div>
+                        <div v-if="(applicant as any).study_mode">
+                            <Label class="text-muted-foreground">Mode of Study</Label>
+                            <p class="font-medium uppercase">{{ String((applicant as any).study_mode).replace('_', ' ') }}</p>
+                        </div>
+                        <div v-if="(applicant as any).sponsorship_type">
+                            <Label class="text-muted-foreground">Sponsorship</Label>
+                            <p class="font-medium uppercase">{{ (applicant as any).sponsorship_type }}</p>
+                        </div>
+                        <div v-if="(applicant as any).official_transcript_status">
+                            <Label class="text-muted-foreground">Official Transcript Status</Label>
+                            <p class="font-medium capitalize">{{ String((applicant as any).official_transcript_status).replaceAll('_', ' ') }}</p>
+                        </div>
+                        <div v-if="applicant.research_proposal_title" class="col-span-2 lg:col-span-3">
+                            <Label class="text-muted-foreground">Proposed Research / Capstone Topic</Label>
+                            <p class="font-medium italic">{{ applicant.research_proposal_title }}</p>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <!-- Multi-Degree Qualifications Card (PG) -->
+                <Card v-if="(applicant as any).qualifications && (applicant as any).qualifications.length > 0">
+                    <CardHeader>
+                        <CardTitle>Academic Qualifications History ({{ (applicant as any).qualifications.length }})</CardTitle>
+                        <CardDescription>All degrees and diplomas submitted for Postgraduate admission</CardDescription>
+                    </CardHeader>
+                    <CardContent class="space-y-3">
+                        <div
+                            v-for="qual in (applicant as any).qualifications"
+                            :key="qual.id"
+                            class="p-3.5 rounded-xl border bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm"
+                        >
+                            <div>
+                                <p class="font-bold">{{ qual.qualification_type }} — {{ qual.course_of_study }}</p>
+                                <p class="text-xs text-muted-foreground">{{ qual.institution_name }} ({{ qual.graduation_year }})</p>
+                            </div>
+                            <div class="text-right">
+                                <Badge variant="outline">{{ qual.class_of_degree }}</Badge>
+                                <p v-if="qual.cgpa" class="text-xs font-mono mt-1">CGPA: {{ qual.cgpa }} / {{ qual.scale_max || '5.00' }}</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <!-- Postgraduate Referees Card -->
+                <Card v-if="applicant.referees && applicant.referees.length > 0">
+                    <CardHeader>
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <CardTitle>Referee Recommendations ({{ applicant.referees.filter(r => r.status === 'submitted').length }} / {{ applicant.referees.length }})</CardTitle>
+                                <CardDescription>Confidential evaluations for School of Postgraduate Studies screening</CardDescription>
+                            </div>
+                            <Badge v-if="pg_eligibility" :variant="pg_eligibility.eligible ? 'default' : 'destructive'">
+                                {{ pg_eligibility.eligible ? `Eligible (${pg_eligibility.default_level}L)` : 'Not Eligible' }}
+                            </Badge>
+                        </div>
+                    </CardHeader>
+                    <CardContent class="space-y-4">
+                        <div
+                            v-for="referee in applicant.referees"
+                            :key="referee.id"
+                            class="p-4 rounded-xl border bg-muted/20 space-y-2 text-sm"
+                        >
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div>
+                                    <p class="font-bold">{{ referee.name }} <span class="text-xs font-normal text-muted-foreground">— {{ referee.position_or_rank || referee.relationship }} ({{ referee.institution_or_organization }})</span></p>
+                                    <p class="text-xs text-muted-foreground">{{ referee.email }} <span v-if="referee.phone">• {{ referee.phone }}</span></p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <Badge :variant="referee.status === 'submitted' ? 'default' : 'secondary'" class="uppercase">
+                                        {{ referee.status }}
+                                    </Badge>
+                                    <a
+                                        v-if="referee.status !== 'submitted'"
+                                        :href="route('referee.recommendation.show', referee.token)"
+                                        target="_blank"
+                                        class="text-xs text-primary underline"
+                                    >
+                                        Evaluation Link
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div v-if="referee.status === 'submitted'" class="border-t pt-2 mt-2 space-y-1.5 text-xs">
+                                <div class="flex flex-wrap gap-3">
+                                    <span><strong>Verdict:</strong> {{ referee.recommendation_strength?.replaceAll('_', ' ').toUpperCase() }}</span>
+                                    <span><strong>Academic:</strong> {{ referee.academic_capacity_rating }}/5</span>
+                                    <span><strong>Research:</strong> {{ referee.research_potential_rating }}/5</span>
+                                    <span><strong>Integrity:</strong> {{ referee.character_integrity_rating }}/5</span>
+                                    <span><strong>Communication:</strong> {{ referee.communication_rating }}/5</span>
+                                </div>
+                                <p v-if="referee.comments" class="text-muted-foreground italic bg-background p-2.5 rounded border">
+                                    "{{ referee.comments }}"
+                                </p>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
