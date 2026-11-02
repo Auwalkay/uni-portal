@@ -8,6 +8,7 @@ use App\Models\Session;
 use App\Models\Student;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Artisan;
 use App\Services\AcademicCacheService;
@@ -25,60 +26,56 @@ class SessionController extends Controller
 
     public function store(Request $request)
     {
+        $stream = $request->input('academic_stream', 'UG') ?: 'UG';
+        $calendar = $request->input('calendar_type', 'semester') ?: 'semester';
+
         $validated = $request->validate([
-            'name' => 'required|string|unique:academic_sessions,name',
+            'name' => [
+                'required',
+                'string',
+                Rule::unique('academic_sessions', 'name')
+                    ->where(function ($query) use ($stream, $calendar) {
+                        return $query->where('academic_stream', $stream)
+                                     ->where('calendar_type', $calendar);
+                    }),
+            ],
             'start_date' => 'required|date',
             'end_date' => 'required|date|after:start_date',
             'type' => 'required|string|in:regular,summer,regular_with_summer',
+            'academic_stream' => 'nullable|string|in:UG,PG',
+            'calendar_type' => 'nullable|string|in:semester,trimester',
             'include_summer' => 'nullable|boolean',
+        ], [
+            'name.unique' => 'A session with this name already exists for the selected academic stream and calendar system.',
         ]);
 
         $sessionType = ($validated['type'] === 'regular_with_summer') ? 'regular' : $validated['type'];
+        $academicStream = $validated['academic_stream'] ?? 'UG';
+        $calendarType = $validated['calendar_type'] ?? 'semester';
 
         $session = Session::create([
             'name' => $validated['name'],
             'start_date' => $validated['start_date'],
             'end_date' => $validated['end_date'],
             'type' => $sessionType,
+            'academic_stream' => $academicStream,
+            'calendar_type' => $calendarType,
         ]);
 
-        // Auto-create Semesters based on Selection
-        if ($validated['type'] === 'summer') {
-            Semester::create([
-                'session_id' => $session->id,
-                'name' => 'Summer Semester',
-                'is_current' => false,
-            ]);
+        // Auto-create Semesters / Trimesters based on Calendar Type
+        if ($calendarType === 'trimester') {
+            Semester::create(['session_id' => $session->id, 'name' => 'Trimester 1', 'is_current' => false]);
+            Semester::create(['session_id' => $session->id, 'name' => 'Trimester 2', 'is_current' => false]);
+            Semester::create(['session_id' => $session->id, 'name' => 'Trimester 3', 'is_current' => false]);
+        } elseif ($validated['type'] === 'summer') {
+            Semester::create(['session_id' => $session->id, 'name' => 'Summer Semester', 'is_current' => false]);
         } elseif ($validated['type'] === 'regular_with_summer' || !empty($validated['include_summer'])) {
-            Semester::create([
-                'session_id' => $session->id,
-                'name' => 'First Semester',
-                'is_current' => false,
-            ]);
-
-            Semester::create([
-                'session_id' => $session->id,
-                'name' => 'Second Semester',
-                'is_current' => false,
-            ]);
-
-            Semester::create([
-                'session_id' => $session->id,
-                'name' => 'Summer Semester',
-                'is_current' => false,
-            ]);
+            Semester::create(['session_id' => $session->id, 'name' => 'First Semester', 'is_current' => false]);
+            Semester::create(['session_id' => $session->id, 'name' => 'Second Semester', 'is_current' => false]);
+            Semester::create(['session_id' => $session->id, 'name' => 'Summer Semester', 'is_current' => false]);
         } else {
-            Semester::create([
-                'session_id' => $session->id,
-                'name' => 'First Semester',
-                'is_current' => false,
-            ]);
-
-            Semester::create([
-                'session_id' => $session->id,
-                'name' => 'Second Semester',
-                'is_current' => false,
-            ]);
+            Semester::create(['session_id' => $session->id, 'name' => 'First Semester', 'is_current' => false]);
+            Semester::create(['session_id' => $session->id, 'name' => 'Second Semester', 'is_current' => false]);
         }
 
         return to_route('admin.sessions.show', $session)->with('success', 'Session created successfully. Please configure fees and activation.');
@@ -86,10 +83,26 @@ class SessionController extends Controller
 
     public function update(Request $request, Session $session)
     {
+        $stream = $request->input('academic_stream', $session->academic_stream ?? 'UG') ?: 'UG';
+        $calendar = $request->input('calendar_type', $session->calendar_type ?? 'semester') ?: 'semester';
+
         $validated = $request->validate([
-            'name' => 'required|string|unique:academic_sessions,name,' . $session->id,
+            'name' => [
+                'required',
+                'string',
+                Rule::unique('academic_sessions', 'name')
+                    ->ignore($session->id)
+                    ->where(function ($query) use ($stream, $calendar) {
+                        return $query->where('academic_stream', $stream)
+                                     ->where('calendar_type', $calendar);
+                    }),
+            ],
             'start_date' => 'required|date',
             'end_date' => 'required|date|after:start_date',
+            'academic_stream' => 'nullable|string|in:UG,PG',
+            'calendar_type' => 'nullable|string|in:semester,trimester',
+        ], [
+            'name.unique' => 'A session with this name already exists for the selected academic stream and calendar system.',
         ]);
 
         $session->update($validated);
@@ -113,18 +126,30 @@ class SessionController extends Controller
     private function performActivation(Session $session): void
     {
         DB::transaction(function () use ($session) {
-            // 1. Deactivate all other sessions
-            Session::where('is_current', true)->where('id', '!=', $session->id)->update(['is_current' => false]);
+            // 1. Deactivate other sessions within the SAME academic stream and calendar type
+            Session::where('is_current', true)
+                ->where('academic_stream', $session->academic_stream)
+                ->where('calendar_type', $session->calendar_type)
+                ->where('id', '!=', $session->id)
+                ->update(['is_current' => false]);
 
             // 2. Activate target session
             $session->is_current = true;
             $session->save();
 
-            // 3. Deactivate all semesters
-            Semester::where('is_current', true)->update(['is_current' => false]);
+            // 3. Deactivate old semesters for this stream and calendar type
+            $oldSessionIds = Session::where('academic_stream', $session->academic_stream)
+                ->where('calendar_type', $session->calendar_type)
+                ->where('id', '!=', $session->id)
+                ->pluck('id');
 
-            // 4. Activate the first available semester for this session
+            Semester::whereIn('session_id', $oldSessionIds)->where('is_current', true)->update(['is_current' => false]);
+            $session->semesters()->update(['is_current' => false]);
+
+            // 4. Activate the first available semester/trimester for this session
             $semesterToActivate = $session->semesters()->where('name', 'First Semester')->first()
+                ?? $session->semesters()->where('name', 'Trimester 1')->first()
+                ?? $session->semesters()->where('name', 'First Trimester')->first()
                 ?? $session->semesters()->where('name', 'Summer Semester')->first()
                 ?? $session->semesters()->first();
 

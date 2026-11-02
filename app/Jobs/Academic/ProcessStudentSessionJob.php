@@ -42,6 +42,11 @@ class ProcessStudentSessionJob implements ShouldQueue
                 ->first();
 
             if ($existingSession) {
+                StudentSession::where('student_id', $this->student->id)
+                    ->where('id', '!=', $existingSession->id)
+                    ->where('status', 'active')
+                    ->update(['status' => 'completed']);
+
                 $existingSession->update(['status' => 'active']);
                 $this->student->update([
                     'current_level' => $existingSession->level,
@@ -57,6 +62,8 @@ class ProcessStudentSessionJob implements ShouldQueue
                 
                 if (!$promotePending) {
                     $previousSession = Session::where('start_date', '<', $this->session->start_date)
+                        ->where('academic_stream', $this->session->academic_stream ?? 'UG')
+                        ->where('calendar_type', $this->session->calendar_type ?? 'semester')
                         ->orderBy('start_date', 'desc')
                         ->first();
                         
@@ -76,28 +83,73 @@ class ProcessStudentSessionJob implements ShouldQueue
                     }
                 }
 
-                $newLevel = $this->student->current_level;
+                $newLevel = (int) $this->student->current_level;
                 $isGraduating = false;
+                $isExtension = false;
 
                 if ($this->session->type === 'regular') {
-                    $maxLevel = $this->student->program_duration * 100;
+                    if ($this->student->isPostgraduate()) {
+                        // Postgraduate students stay at their fixed tier level (700 PGD, 800 Master's, 900 Ph.D)
+                        $newLevel = (int) $this->student->current_level ?: 800;
 
-                    if ($this->student->current_level >= $maxLevel) {
-                        $isGraduating = true;
-                        $this->student->update([
-                            'status' => 'graduated',
-                            'graduated_at' => now(),
-                        ]);
+                        $hasCompletedDefense = $this->student->latestResearchProject()
+                            ->where('status', 'completed')
+                            ->exists();
+
+                        $minGraduationCgpa = (float) ($this->student->program?->min_graduation_cgpa ?? 3.00);
+                        $currentCgpa = app(\App\Services\Postgraduate\PostgraduateResearchService::class)
+                            ->calculateStudentCgpa($this->student);
+
+                        if ($hasCompletedDefense && $currentCgpa >= $minGraduationCgpa) {
+                            $isGraduating = true;
+                            $this->student->update([
+                                'status' => 'graduated',
+                            ]);
+                            $this->student->pgProfile?->update([
+                                'candidacy_status' => 'graduated',
+                            ]);
+                        } else {
+                            $pgProfile = $this->student->pgProfile;
+                            if ($pgProfile) {
+                                $nextEnrolledCount = ((int) $pgProfile->sessions_enrolled_count) + 1;
+                                $normalDurationSessions = max((int) ($this->student->program_duration ?: 2), 1);
+                                $isExtension = $nextEnrolledCount > $normalDurationSessions;
+
+                                $pgProfile->update([
+                                    'sessions_enrolled_count' => $nextEnrolledCount,
+                                    'candidacy_status' => $isExtension ? 'extension' : $pgProfile->candidacy_status,
+                                ]);
+                            }
+
+                            $this->student->update([
+                                'current_level' => $newLevel,
+                                'status' => 'active',
+                            ]);
+                        }
                     } else {
-                        $newLevel += 100;
-                        $this->student->update([
-                            'current_level' => $newLevel,
-                            'status' => 'active'
-                        ]);
+                        $programDuration = (int) ($this->student->program?->duration ?: ($this->student->program_duration ?: 4));
+                        $maxLevel = max(400, $programDuration * 100);
+
+                        if ($this->student->current_level >= $maxLevel) {
+                            $isGraduating = true;
+                            $this->student->update([
+                                'status' => 'graduated',
+                            ]);
+                        } else {
+                            $newLevel += 100;
+                            $this->student->update([
+                                'current_level' => $newLevel,
+                                'status' => 'active',
+                            ]);
+                        }
                     }
                 }
 
                 if (!$isGraduating) {
+                    StudentSession::where('student_id', $this->student->id)
+                        ->where('status', 'active')
+                        ->update(['status' => 'completed']);
+
                     StudentSession::create([
                         'student_id' => $this->student->id,
                         'session_id' => $this->session->id,
@@ -105,6 +157,10 @@ class ProcessStudentSessionJob implements ShouldQueue
                         'status' => 'active',
                         'semester' => $this->semesterName,
                     ]);
+
+                    if ($isExtension) {
+                        $feeService->generateMilestoneFeeInvoice($this->student, $this->session, 'extension_fee');
+                    }
                 }
             }
 

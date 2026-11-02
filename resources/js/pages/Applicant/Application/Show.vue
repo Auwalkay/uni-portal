@@ -62,10 +62,19 @@
                             <p class="font-medium text-lg">{{ applicant.phone }}</p>
                         </div>
                          <div>
-                            <h3 class="text-sm font-medium text-muted-foreground mb-1">JAMB Registration</h3>
+                            <h3 class="text-sm font-medium text-muted-foreground mb-1">
+                                {{ applicant.application_mode === 'PG' ? 'PG Application Reference' : 'JAMB Registration' }}
+                            </h3>
                             <p class="font-medium text-lg font-mono">{{ applicant.jamb_registration_number }}</p>
                         </div>
-                        <div>
+                        <div v-if="applicant.application_mode === 'PG'">
+                            <h3 class="text-sm font-medium text-muted-foreground mb-1">Previous Qualification</h3>
+                            <p class="font-medium text-lg">
+                                {{ applicant.previous_qualification || 'N/A' }}
+                                <span v-if="applicant.previous_class_of_degree" class="text-sm text-muted-foreground">({{ applicant.previous_class_of_degree }})</span>
+                            </p>
+                        </div>
+                        <div v-else>
                             <h3 class="text-sm font-medium text-muted-foreground mb-1">JAMB Score</h3>
                             <p class="font-medium text-lg">{{ applicant.jamb_score }}</p>
                         </div>
@@ -76,6 +85,79 @@
                         <div>
                             <h3 class="text-sm font-medium text-muted-foreground mb-1">Application Session</h3>
                             <p class="font-medium text-lg">{{ invoice?.session?.name || currentSession?.name || 'N/A' }}</p>
+                        </div>
+                    </div>
+
+                    <!-- Postgraduate Qualifications & Transcript Request Label Section -->
+                    <div v-if="applicant.application_mode === 'PG'" class="border-t pt-6 space-y-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-indigo-50 border border-indigo-200">
+                            <div>
+                                <h3 class="text-sm font-bold text-indigo-950">Official Academic Transcript Request Label</h3>
+                                <p class="text-xs text-indigo-800">
+                                    Download this official SPGS cover sheet and forward it to your former institution(s) to send your official transcript directly to SPGS.
+                                </p>
+                            </div>
+                            <a :href="route('applicant.apply.transcript_label')" target="_blank" class="shrink-0">
+                                <Button size="sm" class="bg-indigo-700 hover:bg-indigo-800 text-white font-semibold">
+                                    Download Transcript Label (PDF)
+                                </Button>
+                            </a>
+                        </div>
+
+                        <div v-if="applicant.qualifications && applicant.qualifications.length > 0" class="space-y-2">
+                            <h3 class="text-base font-bold text-foreground">Submitted Academic Qualifications</h3>
+                            <div class="grid grid-cols-1 gap-2">
+                                <div
+                                    v-for="qual in applicant.qualifications"
+                                    :key="qual.id"
+                                    class="p-3 rounded-lg border bg-slate-50/70 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                                >
+                                    <div>
+                                        <p class="font-semibold">{{ qual.qualification_type }} in {{ qual.course_of_study }} — {{ qual.institution_name }}</p>
+                                        <p class="text-xs text-muted-foreground">
+                                            {{ qual.class_of_degree }}
+                                            <span v-if="qual.cgpa"> • CGPA: {{ qual.cgpa }} / {{ qual.scale_max || '5.00' }}</span>
+                                            • Graduated: {{ qual.graduation_year }}
+                                        </p>
+                                    </div>
+                                    <span v-if="qual.is_highest_qualification" class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple-100 text-purple-800">
+                                        Highest Qualification
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Postgraduate Referees Section -->
+                    <div v-if="applicant.referees && applicant.referees.length > 0" class="border-t pt-6 space-y-4">
+                        <h3 class="text-base font-bold text-foreground">Referee Recommendations ({{ applicant.referees.filter((r: any) => r.status === 'submitted').length }} / {{ applicant.referees.length }} Submitted)</h3>
+                        <div class="grid grid-cols-1 gap-3">
+                            <div
+                                v-for="referee in applicant.referees"
+                                :key="referee.id"
+                                class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3.5 rounded-lg border bg-slate-50/70 text-sm"
+                            >
+                                <div>
+                                    <p class="font-semibold">{{ referee.name }} <span class="text-xs font-normal text-muted-foreground">({{ referee.institution_or_organization }})</span></p>
+                                    <p class="text-xs text-muted-foreground">{{ referee.email }}</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span
+                                        class="px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase"
+                                        :class="referee.status === 'submitted' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'"
+                                    >
+                                        {{ referee.status }}
+                                    </span>
+                                    <a
+                                        v-if="referee.status !== 'submitted' && referee.token"
+                                        :href="route('referee.recommendation.show', referee.token)"
+                                        target="_blank"
+                                        class="text-xs font-medium text-blue-600 hover:underline"
+                                    >
+                                        Open Referee Link
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

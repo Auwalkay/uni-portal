@@ -172,7 +172,10 @@ class ResultController extends Controller
 
             return [
                 'history' => $history,
-                'cgpa' => $cgpa
+                'cgpa' => $cgpa,
+                'academic_standing' => $this->gradingService->getAcademicStanding($cgpa, $student),
+                'min_graduation_cgpa' => $this->gradingService->getMinimumGraduationCgpa($student),
+                'meets_graduation_requirement' => $this->gradingService->meetsGraduationRequirement($cgpa, $student),
             ];
         });
 

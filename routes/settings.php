@@ -69,6 +69,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/apply/form', [ApplicationController::class, 'form'])->name('apply.form');
         Route::post('/apply', [ApplicationController::class, 'store'])->name('apply.store');
         Route::get('/application/preview', [ApplicationController::class, 'show'])->name('apply.show');
+        Route::get('/application/transcript-label', [ApplicationController::class, 'downloadTranscriptLabel'])->name('apply.transcript_label');
 
         Route::get('/payment', [\App\Http\Controllers\Applicant\PaymentController::class, 'index'])->name('payment.index');
         Route::post('/payment/pay', [\App\Http\Controllers\Applicant\PaymentController::class, 'pay'])->name('payment.pay');
@@ -142,8 +143,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
             // Announcements routes
             Route::get('/announcements', [StudentAnnouncementController::class, 'index'])->name('announcements.index');
 
+            // Postgraduate Capstone & Dissertation routes
+            Route::get('/research', [\App\Http\Controllers\Student\PostgraduateResearchController::class, 'index'])->name('research.index');
+            Route::post('/research/topic', [\App\Http\Controllers\Student\PostgraduateResearchController::class, 'storeTopic'])->name('research.topic.store');
+            Route::post('/research/milestones/{milestone}', [\App\Http\Controllers\Student\PostgraduateResearchController::class, 'submitMilestone'])->name('research.milestones.submit');
+            Route::post('/research/logs', [\App\Http\Controllers\Student\PostgraduateResearchController::class, 'storeLog'])->name('research.logs.store');
+            Route::post('/research/progress-reports', [\App\Http\Controllers\Student\PostgraduateResearchController::class, 'storeProgressReport'])->name('research.progress-reports.store');
+            Route::post('/research/candidacy-requests', [\App\Http\Controllers\Student\PostgraduateResearchController::class, 'storeCandidacyRequest'])->name('research.candidacy-requests.store');
+            Route::post('/research/publications', [\App\Http\Controllers\Student\PostgraduateResearchController::class, 'storePublication'])->name('research.publications.store');
+
             // User Manual route
         });
+    });
+
+    // Academic Staff Postgraduate Supervisory Workbench
+    Route::middleware(['auth', 'verified', 'permission:supervise_pg_students|manage_postgraduate_school'])->prefix('staff/postgraduate')->name('staff.postgraduate.')->group(function () {
+        Route::get('/supervision', [\App\Http\Controllers\Staff\PostgraduateSupervisionController::class, 'index'])->name('supervision.index');
+        Route::post('/supervision/logs/{log}/review', [\App\Http\Controllers\Staff\PostgraduateSupervisionController::class, 'reviewLog'])->name('supervision.logs.review');
+        Route::post('/supervision/milestones/{milestone}/review', [\App\Http\Controllers\Staff\PostgraduateSupervisionController::class, 'reviewMilestone'])->name('supervision.milestones.review');
+        Route::post('/supervision/progress-reports/{progressReport}/endorse', [\App\Http\Controllers\Staff\PostgraduateSupervisionController::class, 'endorseProgressReport'])->name('supervision.progress-reports.endorse');
     });
 
     // Admin/Staff Personal History Routes (accessible by all staff and admin users with view_library / view_sickbay_portal)
@@ -194,6 +212,27 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/results/{course}/upload', [ResultController::class, 'upload'])->name('results.upload');
             Route::post('/results/{course}/publish', [ResultController::class, 'publish'])->name('results.publish');
             Route::post('/results/sessions/{session}/publish', [ResultController::class, 'publishSession'])->name('results.publish-session');
+
+            // Postgraduate Capstone & Dissertation Management (SPGS)
+            Route::get('/postgraduate/research/search-candidates', [\App\Http\Controllers\Admin\PostgraduateResearchController::class, 'searchCandidates'])->name('postgraduate.research.search-candidates');
+            Route::get('/postgraduate/research/search-supervisors', [\App\Http\Controllers\Admin\PostgraduateResearchController::class, 'searchSupervisors'])->name('postgraduate.research.search-supervisors');
+            Route::get('/postgraduate/research', [\App\Http\Controllers\Admin\PostgraduateResearchController::class, 'index'])->name('postgraduate.research.index');
+            Route::post('/postgraduate/research', [\App\Http\Controllers\Admin\PostgraduateResearchController::class, 'store'])->name('postgraduate.research.store');
+            Route::put('/postgraduate/research/{project}/supervisors', [\App\Http\Controllers\Admin\PostgraduateResearchController::class, 'allocateSupervisors'])->name('postgraduate.research.supervisors');
+            Route::put('/postgraduate/research/milestones/{milestone}/review', [\App\Http\Controllers\Admin\PostgraduateResearchController::class, 'reviewMilestone'])->name('postgraduate.research.milestones.review');
+            Route::put('/postgraduate/research/{project}/defense', [\App\Http\Controllers\Admin\PostgraduateResearchController::class, 'scheduleDefense'])->name('postgraduate.research.defense.schedule');
+            Route::post('/postgraduate/research/{project}/verdict', [\App\Http\Controllers\Admin\PostgraduateResearchController::class, 'recordVerdict'])->name('postgraduate.research.defense.verdict');
+            Route::post('/postgraduate/research/{project}/examiners', [\App\Http\Controllers\Admin\PostgraduateResearchController::class, 'addExaminer'])->name('postgraduate.research.examiners.store');
+            Route::post('/postgraduate/research/examiners/{examiner}/report', [\App\Http\Controllers\Admin\PostgraduateResearchController::class, 'recordExaminerReport'])->name('postgraduate.research.examiners.report');
+            Route::post('/postgraduate/research/candidacy-requests/{candidacyRequest}', [\App\Http\Controllers\Admin\PostgraduateResearchController::class, 'processCandidacyRequest'])->name('postgraduate.research.candidacy-requests.process');
+            Route::post('/postgraduate/research/progress-reports/{progressReport}', [\App\Http\Controllers\Admin\PostgraduateResearchController::class, 'reviewProgressReport'])->name('postgraduate.research.progress-reports.review');
+
+            // Postgraduate Faculty & Supervisory Governance (SPGS)
+            Route::get('/postgraduate/staff', [\App\Http\Controllers\Admin\PostgraduateStaffController::class, 'index'])->name('postgraduate.staff.index');
+            Route::put('/postgraduate/staff/{staff}/accreditation', [\App\Http\Controllers\Admin\PostgraduateStaffController::class, 'updateAccreditation'])->name('postgraduate.staff.accreditation.update');
+            Route::get('/postgraduate/staff/search-supervisors', [\App\Http\Controllers\Admin\PostgraduateStaffController::class, 'searchSupervisors'])->name('postgraduate.staff.search');
+            Route::post('/postgraduate/external-examiners', [\App\Http\Controllers\Admin\PostgraduateStaffController::class, 'storeExternalExaminer'])->name('postgraduate.external-examiners.store');
+            Route::put('/postgraduate/external-examiners/{examiner}/toggle', [\App\Http\Controllers\Admin\PostgraduateStaffController::class, 'toggleExternalExaminer'])->name('postgraduate.external-examiners.toggle');
         });
 
         // Student Management (Creation & Migration)

@@ -55,7 +55,7 @@ watch(() => page.props.errors, (errors) => {
         <Tabs defaultValue="register" @update:modelValue="(v) => v === 'login' && router.visit(login().url)" class="w-full">
             <TabsList class="grid w-full grid-cols-2 mb-6">
                 <TabsTrigger value="login">Sign In</TabsTrigger>
-                <TabsTrigger value="register">Register</TabsTrigger>
+                <TabsTrigger value="register">Fresh Applicant</TabsTrigger>
             </TabsList>
             <TabsContent value="register">
                 <form @submit.prevent="submit" class="flex flex-col gap-6">

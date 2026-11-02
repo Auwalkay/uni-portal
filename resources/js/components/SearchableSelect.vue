@@ -6,6 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Search, ChevronDown, Check, X } from 'lucide-vue-next';
 import { cn } from '@/lib/utils';
 
+defineOptions({
+    inheritAttrs: false,
+});
+
 const props = withDefaults(defineProps<{
     modelValue: any;
     items?: Array<{ value: string | number; label: string }>;
@@ -16,6 +20,7 @@ const props = withDefaults(defineProps<{
     disabled?: boolean;
     errorClass?: boolean;
     triggerClass?: string;
+    containerClass?: string;
     multiple?: boolean;
 }>(), {
     items: () => [],
@@ -26,6 +31,7 @@ const props = withDefaults(defineProps<{
     disabled: false,
     errorClass: false,
     triggerClass: '',
+    containerClass: '',
     multiple: false,
 });
 
@@ -127,10 +133,26 @@ const removeItem = (val: string | number) => {
         }
     }
 };
+
+const triggerWidthClass = computed(() => {
+    if (!props.triggerClass) return null;
+    const tokens = props.triggerClass.split(/\s+/);
+    const widthTokens = tokens.filter(t => /^(sm:|md:|lg:|xl:)?w-/.test(t));
+    return widthTokens.length > 0 ? widthTokens.join(' ') : null;
+});
 </script>
 
 <template>
-  <div class="w-full space-y-2">
+  <div
+    v-bind="$attrs"
+    :class="cn(
+      'w-full',
+      triggerWidthClass,
+      multiple && selectedItems.length > 0 && 'space-y-2',
+      containerClass,
+      $attrs.class as string,
+    )"
+  >
     <Popover v-model:open="open">
       <PopoverTrigger as-child>
         <Button
@@ -153,7 +175,7 @@ const removeItem = (val: string | number) => {
         </Button>
       </PopoverTrigger>
       <PopoverContent 
-        class="w-[var(--radix-popover-trigger-width)] p-0 bg-popover text-popover-foreground border shadow-md rounded-md" 
+        class="w-[var(--radix-popover-trigger-width)] min-w-[200px] p-0 bg-popover text-popover-foreground border shadow-md rounded-md" 
         align="start"
         disable-portal
         @pointerdown.stop

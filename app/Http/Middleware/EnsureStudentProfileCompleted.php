@@ -19,6 +19,13 @@ class EnsureStudentProfileCompleted
         if ($user && $user->hasRole('student')) {
             $student = $user->student;
             if ($student) {
+                if ($student->isPostgraduate()) {
+                    // Postgraduate students use postgraduate_student_profiles and do not require UG indigene letters or O-Level sitting forms
+                    if ($student->pgProfile()->exists() || !empty($student->gender)) {
+                        return $next($request);
+                    }
+                }
+
                 // Determine if any required field is null or O-Level result does not exist
                 $hasState = !empty($student->state_id);
                 $hasLga = !empty($student->lga_id);

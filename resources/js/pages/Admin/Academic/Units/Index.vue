@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import SearchableSelect from '@/components/SearchableSelect.vue'
 import { Search, Plus, Pencil, Layers, Download } from 'lucide-vue-next'
 import Swal from 'sweetalert2'
 import { computed } from 'vue'
@@ -31,6 +31,16 @@ const props = defineProps<{
 
 const search = ref(props.filters?.search || '')
 const departmentId = ref(props.filters?.department_id || 'ALL')
+
+const departmentOptions = computed(() => (props.departments || []).map((d: any) => ({
+    value: d.id,
+    label: d.name,
+})))
+
+const filterDepartmentOptions = computed(() => [
+    { value: 'ALL', label: 'All Departments' },
+    ...departmentOptions.value,
+])
 
 const exportUrl = computed(() => {
     const params = new URLSearchParams()
@@ -130,31 +140,28 @@ const toggleStatus = (id: string, currentStatus: boolean) => {
                         <CardDescription>Manage sub-units under university academic and non-academic departments.</CardDescription>
                     </div>
                     <div class="flex items-center gap-3">
-                        <Button variant="outline" size="sm" as-child class="gap-1.5 text-xs font-semibold">
+                        <Button variant="outline" size="sm" as-child class="h-10 gap-1.5 text-xs font-semibold">
                             <a :href="exportUrl" download>
                                 <Download class="w-3.5 h-3.5 text-emerald-600" />
                                 Export Units
                             </a>
                         </Button>
 
-                        <Select v-model="departmentId">
-                            <SelectTrigger class="w-48 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800">
-                                <SelectValue placeholder="All Departments" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="ALL">All Departments</SelectItem>
-                                <SelectItem v-for="d in departments" :key="d.id" :value="d.id">
-                                    {{ d.name }}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                            v-model="departmentId"
+                            :options="filterDepartmentOptions"
+                            placeholder="All Departments"
+                            search-placeholder="Search department..."
+                            class="w-full sm:w-56"
+                            trigger-class="bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800"
+                        />
 
                         <div class="relative w-full sm:w-60">
                             <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
                             <Input
                                 v-model="search"
                                 placeholder="Search unit..."
-                                class="pl-9 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800"
+                                class="pl-9 h-10 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800"
                             />
                         </div>
                     </div>
@@ -263,16 +270,13 @@ const toggleStatus = (id: string, currentStatus: boolean) => {
 
                         <div class="space-y-1.5">
                             <Label>Parent Department</Label>
-                            <Select v-model="form.department_id">
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Department" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem v-for="d in departments" :key="d.id" :value="d.id">
-                                        {{ d.name }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <SearchableSelect
+                                v-model="form.department_id"
+                                :options="departmentOptions"
+                                placeholder="Select Department"
+                                search-placeholder="Search department..."
+                                :error-class="!!form.errors.department_id"
+                            />
                             <p v-if="form.errors.department_id" class="text-xs text-rose-500">{{ form.errors.department_id }}</p>
                         </div>
 

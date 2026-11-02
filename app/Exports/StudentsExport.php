@@ -23,7 +23,7 @@ class StudentsExport implements FromQuery, WithHeadings, WithMapping
     {
         $user = auth()->user();
         $query = Student::query()
-            ->with(['user', 'academicDepartment.faculty', 'admittedSession', 'program', 'scholarship']);
+            ->with(['user', 'academicDepartment.faculty', 'admittedSession', 'program', 'scholarship', 'state', 'lga']);
 
         if ($user) {
             if (!$user->can('manage_users') && !$user->hasAnyRole(['admin', 'super_admin', 'vc', 'ict_admin', 'registrar', 'bursar', 'admission_director'])) {
@@ -157,6 +157,8 @@ class StudentsExport implements FromQuery, WithHeadings, WithMapping
             'Gender',
             'Date of Birth',
             'Age',
+            'State of Origin',
+            'LGA',
             'Level',
             'Faculty',
             'Department',
@@ -178,6 +180,8 @@ class StudentsExport implements FromQuery, WithHeadings, WithMapping
             ucfirst($student->gender ?? ''),
             $student->dob ?? 'N/A',
             $student->age ?? 'N/A',
+            $student->state?->name ?? 'N/A',
+            $student->lga?->name ?? 'N/A',
             $student->current_level,
             $student->academicDepartment?->faculty?->name ?? 'N/A',
             $student->academicDepartment?->name ?? 'N/A',
