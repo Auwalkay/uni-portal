@@ -36,7 +36,7 @@ class StudentController extends Controller
             'faculties' => AcademicCacheService::getFaculties(),
             'programmes' => AcademicCacheService::getProgrammes(),
             'states' => AcademicCacheService::getStates(),
-            'levels' => ['100', '200', '300', '400', '500'],
+            'levels' => ['100', '200', '300', '400', '500', '700', '800', '900'],
             'entry_modes' => ['UTME', 'Direct Entry', 'Transfer', 'Postgraduate'],
             'scholarships' => AcademicCacheService::getScholarships(),
         ]);
@@ -63,7 +63,7 @@ class StudentController extends Controller
             'faculty_id' => 'required|exists:faculties,id',
             'department_id' => 'required|exists:departments,id',
             'program_id' => 'required|exists:programmes,id',
-            'current_level' => 'required|in:100,200,300,400,500',
+            'current_level' => 'required|in:100,200,300,400,500,600,700,800,900',
             'admitted_session_id' => 'required|exists:academic_sessions,id',
             'entry_mode' => 'required|string',
             'matriculation_number' => 'nullable|string|unique:students,matriculation_number',
@@ -91,12 +91,19 @@ class StudentController extends Controller
 
             // Generate Matric Number
             $dept = \App\Models\Department::find($validated['department_id']);
+            $prog = !empty($validated['program_id']) ? \App\Models\Programme::find($validated['program_id']) : null;
+
             $matricNumber = !empty($validated['matriculation_number'])
                 ? strtoupper(trim($validated['matriculation_number']))
-                : MatriculationNumberHelper::generate([
-                    'dept_code' => $dept?->code,
-                    'level' => $validated['current_level'],
-                ]);
+                : ($prog
+                    ? MatriculationNumberHelper::generateForProgram($prog, [
+                        'dept_code' => $dept?->code,
+                        'level' => $validated['current_level'],
+                    ])
+                    : MatriculationNumberHelper::generate([
+                        'dept_code' => $dept?->code,
+                        'level' => $validated['current_level'],
+                    ]));
 
             // Handle Passport
             $passportPath = null;
@@ -104,7 +111,6 @@ class StudentController extends Controller
                 $passportPath = $request->file('passport_photo')->store('passports', 'public');
             }
 
-            $prog = \App\Models\Programme::find($validated['program_id']);
             $entryLevel = (int) $validated['current_level'];
             $duration = max(($prog?->duration ?? 4) - ($entryLevel === 200 ? 1 : ($entryLevel === 300 ? 2 : 0)), 1);
 
@@ -521,7 +527,7 @@ class StudentController extends Controller
             'faculty_id'    => 'nullable|exists:faculties,id',
             'department_id' => 'nullable|exists:departments,id',
             'program_id'    => 'nullable|exists:programmes,id',
-            'level'         => 'nullable|in:100,200,300,400,500',
+            'level'         => 'nullable|in:100,200,300,400,500,600,700,800,900',
             'scholarship_id'=> 'nullable|exists:scholarships,id',
         ]);
 
@@ -618,7 +624,7 @@ class StudentController extends Controller
             'faculties' => AcademicCacheService::getFaculties(),
             'programmes' => AcademicCacheService::getProgrammes(),
             'states' => AcademicCacheService::getStates(),
-            'levels' => ['100', '200', '300', '400', '500'],
+            'levels' => ['100', '200', '300', '400', '500', '700', '800', '900'],
             'entry_modes' => ['UTME', 'Direct Entry', 'Transfer', 'Postgraduate'],
             'scholarships' => AcademicCacheService::getScholarships(),
         ]);
@@ -644,7 +650,7 @@ class StudentController extends Controller
             'faculty_id' => 'required|exists:faculties,id',
             'department_id' => 'required|exists:departments,id',
             'program_id' => 'required|exists:programmes,id',
-            'current_level' => 'required|in:100,200,300,400,500',
+            'current_level' => 'required|in:100,200,300,400,500,600,700,800,900',
             'admitted_session_id' => 'required|exists:academic_sessions,id',
             'entry_mode' => 'required|string',
             'matriculation_number' => 'required|string|unique:students,matriculation_number,' . $student->id,
@@ -719,7 +725,7 @@ class StudentController extends Controller
      */
     public function promote(Request $request, Student $student)
     {
-        $currentSession = Session::current();
+        $currentSession = $student->resolveCurrentSession() ?? Session::current();
         
         if (!$currentSession) {
             return back()->with('error', 'No active academic session found for promotion.');
@@ -736,7 +742,7 @@ class StudentController extends Controller
                 'semesterName' => $semesterName
             ])->handle(app(\App\Services\Finance\FeeService::class));
 
-            return back()->with('success', "Student promoted to level {$student->fresh()->current_level} for session {$currentSession->name}.");
+            return back()->with('success', "Student processed at level {$student->fresh()->current_level} for session {$currentSession->name}.");
         } catch (\Exception $e) {
             return back()->with('error', 'Promotion failed: ' . $e->getMessage());
         }

@@ -107,7 +107,25 @@ class ProfileController extends Controller
         $totalUnits = 0;
         // Ensure level doesn't 'go down' when viewing historical sessions
         $level = max((int) ($student->current_level ?? 0), (int) ($currentStudentSession->level ?? 0));
-        $academicStatus = 'Good Standing';
+        $isPg = $student ? $student->isPostgraduate() : false;
+
+        if ($isPg) {
+            $cgpaVal = (float) $cgpa;
+            if ($cgpaVal >= 4.00) {
+                $academicStatus = 'Distinction / Ph.D Track';
+            } elseif ($cgpaVal >= 3.50) {
+                $academicStatus = 'Good Academic Standing';
+            } elseif ($cgpaVal >= 3.00) {
+                $academicStatus = 'Satisfactory Standing';
+            } elseif ($cgpaVal > 0) {
+                $academicStatus = 'Below SPGS Benchmark (< 3.00)';
+            } else {
+                $academicStatus = 'Candidacy In Progress';
+            }
+        } else {
+            $academicStatus = 'Good Standing';
+        }
+
         $showRegistrationNotification = false;
         $registrationMessage = '';
         $isRegistrationActive = false;
@@ -169,7 +187,7 @@ class ProfileController extends Controller
         $hostelNotificationMessage = '';
         $bookingEnabled = filter_var(SystemSetting::get('enable_hostel_booking', true), FILTER_VALIDATE_BOOLEAN);
 
-        if ($bookingEnabled && $student && $resolvedSession) {
+        if (!$isPg && $bookingEnabled && $student && $resolvedSession) {
             $hasBooked = \App\Models\HostelBooking::where('student_id', $student->id)
                 ->where('session_id', $resolvedSession->id)
                 ->exists();
@@ -180,9 +198,56 @@ class ProfileController extends Controller
             }
         }
 
+        // Postgraduate Specific Candidacy & Research Project Dossier
+        $pgDossier = null;
+        if ($isPg && $student) {
+            $student->loadMissing([
+                'postgraduateProfile',
+                'postgraduateResearchProject.majorSupervisor.user',
+                'postgraduateResearchProject.coSupervisor.user',
+                'postgraduateResearchProject.milestones',
+            ]);
+
+            $project = $student->postgraduateResearchProject;
+            $milestones = $project?->milestones ?: collect();
+            $completedCount = $milestones->whereIn('status', ['supervisor_approved', 'spgs_cleared'])->count();
+            $totalCount = $milestones->count();
+            $progressPercent = $totalCount > 0 ? (int) round(($completedCount / $totalCount) * 100) : 0;
+            $currentMilestone = $milestones->where('status', '!=', 'spgs_cleared')->sortBy('order')->first();
+
+            $pgDossier = [
+                'spgs_file_number' => $student->postgraduateProfile?->spgs_file_number ?? $student->spgs_file_number ?? 'SPGS/'.strtoupper(substr($student->matriculation_number ?? 'PG', 0, 8)),
+                'candidacy_status' => $student->postgraduateProfile?->candidacy_status ?? 'confirmed',
+                'candidacy_expires_at' => $student->postgraduateProfile?->candidacy_expires_at ? $student->postgraduateProfile->candidacy_expires_at->format('M Y') : null,
+                'degree_type' => $student->program?->type ?? 'Postgraduate',
+                'research_project' => $project ? [
+                    'id' => $project->id,
+                    'title' => $project->title,
+                    'pathway_type' => $project->pathway_type,
+                    'status' => $project->status,
+                    'defense_status' => $project->defense_status,
+                    'final_score' => $project->final_score,
+                    'final_grade' => $project->final_grade,
+                    'major_supervisor' => $project->majorSupervisor?->user?->name,
+                    'major_supervisor_designation' => $project->majorSupervisor?->designation,
+                    'co_supervisor' => $project->coSupervisor?->user?->name,
+                    'milestones_count' => $totalCount,
+                    'milestones_completed' => $completedCount,
+                    'progress_percent' => $progressPercent,
+                    'current_milestone_title' => $currentMilestone?->title,
+                    'current_milestone_stage' => $currentMilestone?->stage,
+                ] : null,
+                'logs_count' => $student->postgraduateResearchLogs()->count(),
+                'last_log_date' => $student->postgraduateResearchLogs()->latest('entry_date')->first()?->entry_date?->format('M d, Y'),
+                'publications_count' => $student->postgraduatePublications()->count(),
+                'progress_reports_count' => $student->postgraduateProgressReports()->count(),
+                'pending_requests_count' => $student->postgraduateCandidacyRequests()->where('status', 'pending')->count(),
+            ];
+        }
+
         // Fetch Timetable for Registered Courses
         $timetable = [];
-        if ($student && $resolvedSession && $currentStudentSession) {
+        if (!$isPg && $student && $resolvedSession && $currentStudentSession) {
             $timetable = AcademicCacheService::getStudentTimetable($student->id, $currentStudentSession->session_id);
         }
 
@@ -212,6 +277,8 @@ class ProfileController extends Controller
         return Inertia::render('Student/Dashboard', [
             'student' => $student->load(['program']),
             'user' => $student ? $student->user : auth()->user(),
+            'isPostgraduate' => $isPg,
+            'pgDossier' => $pgDossier,
             'isProfileComplete' => $isProfileComplete,
             'isReturningStudent' => $student ? $student->isReturningStudent($resolvedSession) : false,
             'schoolFeeStatus' => $schoolFeeStatus,

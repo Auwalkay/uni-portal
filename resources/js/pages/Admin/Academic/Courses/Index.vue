@@ -126,6 +126,14 @@ watch([search, facultyId, departmentId, level, semester], () => {
 const isModalOpen = ref(false)
 const modalMode = ref<'create' | 'edit'>('create')
 
+const courseTypeLabels: Record<string, string> = {
+    lecture_exam: 'Lecture & Exam',
+    case_study_seminar: 'Case Study / Seminar',
+    practicum_internship: 'Practicum / Attachment',
+    capstone_project: 'Capstone Project',
+    academic_dissertation: 'Thesis / Dissertation',
+}
+
 const form = useForm({
     type: 'course',
     id: '',
@@ -134,6 +142,7 @@ const form = useForm({
     units: 3,
     level: 100,
     semester: '1',
+    course_type: 'lecture_exam',
     department_id: '',
     programme_id: '',
 })
@@ -145,6 +154,7 @@ const openCreateModal = () => {
     form.units = 3
     form.level = 100
     form.semester = '1'
+    form.course_type = 'lecture_exam'
     form.clearErrors()
     isModalOpen.value = true
 }
@@ -158,6 +168,7 @@ const openEditModal = (c: any) => {
     form.units = c.units
     form.level = c.level
     form.semester = String(c.semester)
+    form.course_type = c.course_type || 'lecture_exam'
     form.department_id = c.department_id || ''
     form.programme_id = c.programme_id || ''
     form.clearErrors()
@@ -259,7 +270,7 @@ const handleExcelUpload = async () => {
                 <!-- Filter Controls -->
                 <div class="px-6 pb-4 flex flex-wrap items-center gap-3">
                     <Select v-model="level">
-                        <SelectTrigger class="w-36 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800">
+                        <SelectTrigger class="w-40 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800">
                             <SelectValue placeholder="All Levels" />
                         </SelectTrigger>
                         <SelectContent>
@@ -269,17 +280,22 @@ const handleExcelUpload = async () => {
                             <SelectItem value="300">300 Level</SelectItem>
                             <SelectItem value="400">400 Level</SelectItem>
                             <SelectItem value="500">500 Level</SelectItem>
+                            <SelectItem value="600">600 Level</SelectItem>
+                            <SelectItem value="700">700 Level (PGD)</SelectItem>
+                            <SelectItem value="800">800 Level (Master's)</SelectItem>
+                            <SelectItem value="900">900 Level (Ph.D)</SelectItem>
                         </SelectContent>
                     </Select>
 
                     <Select v-model="semester">
-                        <SelectTrigger class="w-36 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800">
-                            <SelectValue placeholder="Semester" />
+                        <SelectTrigger class="w-40 bg-neutral-50/50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800">
+                            <SelectValue placeholder="Semester / Term" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="ALL">All Semesters</SelectItem>
-                            <SelectItem value="1">1st Semester</SelectItem>
-                            <SelectItem value="2">2nd Semester</SelectItem>
+                            <SelectItem value="ALL">All Semesters / Terms</SelectItem>
+                            <SelectItem value="1">1st Semester / Trimester 1</SelectItem>
+                            <SelectItem value="2">2nd Semester / Trimester 2</SelectItem>
+                            <SelectItem value="3">Trimester 3 / Research Term</SelectItem>
                         </SelectContent>
                     </Select>
 
@@ -344,14 +360,20 @@ const handleExcelUpload = async () => {
                                         {{ c.code }}
                                     </TableCell>
                                     <TableCell class="font-medium text-neutral-900 dark:text-white">
-                                        {{ c.title }}
+                                        <div>{{ c.title }}</div>
+                                        <span
+                                            v-if="c.course_type && c.course_type !== 'lecture_exam'"
+                                            class="inline-flex items-center mt-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300"
+                                        >
+                                            {{ courseTypeLabels[c.course_type] || c.course_type }}
+                                        </span>
                                     </TableCell>
                                     <TableCell class="font-semibold">
                                         {{ c.units }} Units
                                     </TableCell>
                                     <TableCell>
                                         <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
-                                            {{ c.level }}L (Sem {{ c.semester }})
+                                            {{ c.level }}L (Term {{ c.semester }})
                                         </span>
                                     </TableCell>
                                     <TableCell class="text-neutral-700 dark:text-neutral-300">
@@ -427,7 +449,7 @@ const handleExcelUpload = async () => {
                                     id="c_units"
                                     type="number"
                                     min="1"
-                                    max="10"
+                                    max="24"
                                     v-model="form.units"
                                     :class="{ 'border-rose-500': form.errors.units }"
                                 />
@@ -458,22 +480,43 @@ const handleExcelUpload = async () => {
                                         <SelectItem :value="300">300 Level</SelectItem>
                                         <SelectItem :value="400">400 Level</SelectItem>
                                         <SelectItem :value="500">500 Level</SelectItem>
+                                        <SelectItem :value="600">600 Level</SelectItem>
+                                        <SelectItem :value="700">700 Level (PGD)</SelectItem>
+                                        <SelectItem :value="800">800 Level (Master's)</SelectItem>
+                                        <SelectItem :value="900">900 Level (Ph.D)</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
 
                             <div class="space-y-1.5">
-                                <Label>Semester</Label>
+                                <Label>Semester / Term</Label>
                                 <Select v-model="form.semester">
                                     <SelectTrigger>
                                         <SelectValue placeholder="Semester" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="1">1st Semester</SelectItem>
-                                        <SelectItem value="2">2nd Semester</SelectItem>
+                                        <SelectItem value="1">1st Semester / Trimester 1</SelectItem>
+                                        <SelectItem value="2">2nd Semester / Trimester 2</SelectItem>
+                                        <SelectItem value="3">Trimester 3 / Research Term</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <Label>Delivery & Assessment Type</Label>
+                            <Select v-model="form.course_type">
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select Course Type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="lecture_exam">Standard Lecture & Examination</SelectItem>
+                                    <SelectItem value="case_study_seminar">Executive Case Study & Seminar (MBA/MIM)</SelectItem>
+                                    <SelectItem value="practicum_internship">Industry Practicum / Attachment</SelectItem>
+                                    <SelectItem value="capstone_project">Capstone / Applied Project</SelectItem>
+                                    <SelectItem value="academic_dissertation">Academic Thesis / Dissertation (M.Sc/Ph.D)</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         <div class="space-y-1.5">

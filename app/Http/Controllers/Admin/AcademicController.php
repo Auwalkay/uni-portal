@@ -282,14 +282,35 @@ class AcademicController extends Controller
         } elseif ($request->type === 'programme') {
             $data = $request->validate([
                 'name' => 'required|string|max:255',
-                'program_type' => 'required|string|in:UG,PG,PHD',
+                'program_type' => ['required', 'string', \Illuminate\Validation\Rule::enum(\App\Enums\ProgramType::class)],
                 'department_id' => 'required|exists:departments,id',
                 'scholarship_eligible' => 'required|boolean',
+                'academic_stream' => 'nullable|string|in:UG,PG',
+                'calendar_type' => 'nullable|string|in:semester,trimester',
+                'matric_format' => 'nullable|string|max:255',
+                'billing_model' => 'nullable|string|in:composite_term,unbundled_milestone',
+                'min_graduation_cgpa' => 'nullable|numeric|min:1|max:5',
             ]);
+
+            $isPgType = \App\Enums\ProgramType::isPostgraduateValue($data['program_type']);
+            $stream = $isPgType ? 'PG' : ($data['academic_stream'] ?? 'UG');
+            $calendar = $data['calendar_type'] ?? 'semester';
+            $billingModel = $data['billing_model'] ?? 'composite_term';
+            $minCgpa = isset($data['min_graduation_cgpa']) && ! is_null($data['min_graduation_cgpa'])
+                ? (float) $data['min_graduation_cgpa']
+                : ($stream === 'PG' ? 3.00 : 1.00);
+            if ($stream === 'PG' && $minCgpa < 3.00) {
+                $minCgpa = 3.00;
+            }
 
             Programme::create([
                 'name' => $data['name'],
                 'type' => $data['program_type'],
+                'academic_stream' => $stream,
+                'calendar_type' => $calendar,
+                'matric_format' => $data['matric_format'] ?? null,
+                'billing_model' => $billingModel,
+                'min_graduation_cgpa' => $minCgpa,
                 'department_id' => $data['department_id'],
                 'scholarship_eligible' => $data['scholarship_eligible'],
             ]);
@@ -309,12 +330,14 @@ class AcademicController extends Controller
             $data = $request->validate([
                 'title' => 'required|string|max:255',
                 'code' => 'required|string|max:20|unique:courses,code',
-                'units' => 'required|integer|min:1|max:10',
+                'units' => 'required|integer|min:1|max:24',
                 'level' => 'required|integer',
-                'semester' => 'required|string', // '1' or '2'
+                'semester' => 'required|string', // '1', '2', or '3'
+                'course_type' => 'nullable|string|in:lecture_exam,case_study_seminar,practicum_internship,capstone_project,academic_dissertation',
                 'department_id' => 'required|exists:departments,id',
                 'programme_id' => 'nullable|exists:programmes,id',
             ]);
+            $data['course_type'] = $data['course_type'] ?? 'lecture_exam';
             Course::create($data);
         }
 
@@ -369,14 +392,35 @@ class AcademicController extends Controller
             $programme = Programme::findOrFail($request->id);
             $data = $request->validate([
                 'name' => 'required|string|max:255',
-                'program_type' => 'required|string|in:UG,PG,PHD',
+                'program_type' => ['required', 'string', \Illuminate\Validation\Rule::enum(\App\Enums\ProgramType::class)],
                 'department_id' => 'required|exists:departments,id',
                 'scholarship_eligible' => 'required|boolean',
+                'academic_stream' => 'nullable|string|in:UG,PG',
+                'calendar_type' => 'nullable|string|in:semester,trimester',
+                'matric_format' => 'nullable|string|max:255',
+                'billing_model' => 'nullable|string|in:composite_term,unbundled_milestone',
+                'min_graduation_cgpa' => 'nullable|numeric|min:1|max:5',
             ]);
+
+            $isPgType = \App\Enums\ProgramType::isPostgraduateValue($data['program_type']);
+            $stream = $isPgType ? 'PG' : ($data['academic_stream'] ?? 'UG');
+            $calendar = $data['calendar_type'] ?? ($programme->calendar_type ?: 'semester');
+            $billingModel = $data['billing_model'] ?? ($programme->billing_model ?: 'composite_term');
+            $minCgpa = array_key_exists('min_graduation_cgpa', $data) && ! is_null($data['min_graduation_cgpa'])
+                ? (float) $data['min_graduation_cgpa']
+                : ($programme->min_graduation_cgpa ?? ($stream === 'PG' ? 3.00 : 1.00));
+            if ($stream === 'PG' && $minCgpa < 3.00) {
+                $minCgpa = 3.00;
+            }
 
             $programme->update([
                 'name' => $data['name'],
                 'type' => $data['program_type'],
+                'academic_stream' => $stream,
+                'calendar_type' => $calendar,
+                'matric_format' => array_key_exists('matric_format', $data) ? $data['matric_format'] : $programme->matric_format,
+                'billing_model' => $billingModel,
+                'min_graduation_cgpa' => $minCgpa,
                 'department_id' => $data['department_id'],
                 'scholarship_eligible' => $data['scholarship_eligible'],
             ]);
@@ -397,12 +441,16 @@ class AcademicController extends Controller
             $data = $request->validate([
                 'title' => 'required|string|max:255',
                 'code' => 'required|string|max:20|unique:courses,code,'.$course->id,
-                'units' => 'required|integer|min:1|max:10',
+                'units' => 'required|integer|min:1|max:24',
                 'level' => 'required|integer',
                 'semester' => 'required|string',
+                'course_type' => 'nullable|string|in:lecture_exam,case_study_seminar,practicum_internship,capstone_project,academic_dissertation',
                 'department_id' => 'required|exists:departments,id',
                 'programme_id' => 'nullable|exists:programmes,id',
             ]);
+            if (empty($data['course_type'])) {
+                $data['course_type'] = $course->course_type ?: 'lecture_exam';
+            }
             $course->update($data);
         }
 

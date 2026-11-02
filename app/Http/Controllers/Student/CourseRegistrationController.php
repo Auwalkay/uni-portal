@@ -70,9 +70,16 @@ class CourseRegistrationController extends Controller
             ];
         }
 
-        $currentSession = Session::current();
-        $currentSemester = Semester::current();
-        $isSecondSemActive = $currentSemester && (stripos($currentSemester->name, 'Second') !== false || $currentSemester->name == '2');
+        $currentSession = $student->resolveCurrentSession() ?? Session::current();
+        $currentSemester = $currentSession
+            ? Semester::where('session_id', $currentSession->id)->where('is_current', true)->first()
+            : Semester::current();
+        $isSecondSemActive = $currentSemester && (
+            stripos($currentSemester->name, 'Second') !== false ||
+            stripos($currentSemester->name, 'Trimester 2') !== false ||
+            stripos($currentSemester->name, 'Trimester 3') !== false ||
+            $currentSemester->name == '2'
+        );
 
         $pendingInvoicesCount = $isSecondSemActive
             ? Invoice::where('user_id', Auth::id())->where('status', '!=', 'paid')->count()
@@ -97,13 +104,13 @@ class CourseRegistrationController extends Controller
      */
     public function create(Request $request)
     {
-        $student = Student::where('user_id', Auth::id())->with('academicDepartment')->first();
+        $student = Student::where('user_id', Auth::id())->with(['academicDepartment', 'program'])->first();
 
         if (!$student) {
             return redirect()->route('dashboard')->with('error', 'You are not yet a matriculated student.');
         }
 
-        $currentSession = Session::current();
+        $currentSession = $student->resolveCurrentSession() ?? Session::current();
         if (!$currentSession) {
             return back()->with('error', 'No active academic session found.');
         }
@@ -119,7 +126,8 @@ class CourseRegistrationController extends Controller
                 ->with('error', 'You must pay your School Fees for the current session before registering courses.');
         }
 
-        $currentSemester = Semester::current();
+        $currentSemester = Semester::where('session_id', $currentSession->id)->where('is_current', true)->first()
+            ?? Semester::current();
         $semesters = Semester::where('session_id', $currentSession->id)->orderBy('name')->get();
         $locks = $this->getSemesterRegistrationLocks($semesters, $paymentInfo['isPartial']);
 
@@ -198,8 +206,8 @@ class CourseRegistrationController extends Controller
             'courses.*' => 'exists:courses,id',
         ]);
 
-        $student = Student::where('user_id', Auth::id())->firstOrFail();
-        $currentSession = Session::current();
+        $student = Student::where('user_id', Auth::id())->with('program')->firstOrFail();
+        $currentSession = $student->resolveCurrentSession() ?? Session::current();
         if (!$currentSession) {
             abort(404, 'No active session.');
         }
@@ -211,10 +219,12 @@ class CourseRegistrationController extends Controller
                 ->with('error', 'You must pay your School Fees for the current session before registering courses.');
         }
 
-        $currentSemester = Semester::current();
+        $currentSemester = Semester::where('session_id', $currentSession->id)->where('is_current', true)->first()
+            ?? Semester::current();
         $semesters = Semester::where('session_id', $currentSession->id)->get();
-        $firstSemester = $semesters->filter(fn ($s) => stripos($s->name, 'First') !== false || $s->name == '1')->first();
-        $secondSemester = $semesters->filter(fn ($s) => stripos($s->name, 'Second') !== false || $s->name == '2')->first();
+        $firstSemester = $semesters->filter(fn ($s) => stripos($s->name, 'First') !== false || stripos($s->name, 'Trimester 1') !== false || $s->name == '1')->first();
+        $secondSemester = $semesters->filter(fn ($s) => stripos($s->name, 'Second') !== false || stripos($s->name, 'Trimester 2') !== false || $s->name == '2')->first();
+        $thirdSemester = $semesters->filter(fn ($s) => stripos($s->name, 'Third') !== false || stripos($s->name, 'Trimester 3') !== false || $s->name == '3')->first();
 
         $now = now();
         $isFirstSemLocked = false;
@@ -248,8 +258,9 @@ class CourseRegistrationController extends Controller
         }
         $firstSemCourses = $selectedCourses->where('semester', '1');
         $secondSemCourses = $selectedCourses->where('semester', '2');
+        $thirdSemCourses = $selectedCourses->where('semester', '3');
 
-        if ($paymentInfo['isPartial'] && $secondSemCourses->isNotEmpty()) {
+        if ($paymentInfo['isPartial'] && ($secondSemCourses->isNotEmpty() || $thirdSemCourses->isNotEmpty())) {
             return back()->with('error', 'Because you made a partial school fee payment, you are only allowed to register for First Semester courses. Full payment of school fees is required to register for Second Semester courses.');
         }
 
@@ -258,6 +269,9 @@ class CourseRegistrationController extends Controller
         }
         if ($secondSemCourses->sum('units') > $maxUnits) {
             return back()->with('error', "Maximum of {$maxUnits} units allowed for Second Semester.");
+        }
+        if ($thirdSemCourses->sum('units') > $maxUnits) {
+            return back()->with('error', "Maximum of {$maxUnits} units allowed for Third Trimester.");
         }
 
         // Enforce Locks on Semester-specific changes
@@ -280,7 +294,7 @@ class CourseRegistrationController extends Controller
             return back()->with('error', 'Second Semester registration is locked and cannot be modified.');
         }
 
-        $this->syncCourseRegistrations($student, $currentSession, $firstSemester, $secondSemester, $firstSemCourses, $secondSemCourses);
+        $this->syncCourseRegistrations($student, $currentSession, $firstSemester, $secondSemester, $firstSemCourses, $secondSemCourses, $thirdSemester, $thirdSemCourses);
 
         if ($currentSemester) {
             $perCourseFeeConfig = FeeConfiguration::where('session_id', $currentSession->id)
@@ -314,7 +328,9 @@ class CourseRegistrationController extends Controller
             ->firstOrFail();
 
         $sessionId = $request->query('session_id');
-        $session = $sessionId ? Session::findOrFail($sessionId) : Session::where('is_current', true)->firstOrFail();
+        $session = $sessionId
+            ? Session::findOrFail($sessionId)
+            : ($student->resolveCurrentSession() ?? Session::where('is_current', true)->firstOrFail());
 
         $programme = $student->program;
         $overrides = $programme
@@ -370,7 +386,9 @@ class CourseRegistrationController extends Controller
             $semester = Semester::findOrFail($semesterId);
             $session = $semester->session;
         } else {
-            $session = $sessionId ? Session::findOrFail($sessionId) : Session::where('is_current', true)->firstOrFail();
+            $session = $sessionId
+                ? Session::findOrFail($sessionId)
+                : ($student->resolveCurrentSession() ?? Session::where('is_current', true)->firstOrFail());
             $semester = Semester::where('session_id', $session->id)->where('is_current', true)->first()
                 ?? Semester::where('session_id', $session->id)->firstOrFail();
         }
@@ -483,11 +501,12 @@ class CourseRegistrationController extends Controller
 
     private function getSemesterRegistrationLocks($semesters, bool $isPartialPayment): array
     {
-        $firstSemester = $semesters->filter(fn ($s) => stripos($s->name, 'First') !== false || $s->name == '1')->first();
-        $secondSemester = $semesters->filter(fn ($s) => stripos($s->name, 'Second') !== false || $s->name == '2')->first();
+        $firstSemester = $semesters->filter(fn ($s) => stripos($s->name, 'First') !== false || stripos($s->name, 'Trimester 1') !== false || $s->name == '1')->first();
+        $secondSemester = $semesters->filter(fn ($s) => stripos($s->name, 'Second') !== false || stripos($s->name, 'Trimester 2') !== false || $s->name == '2')->first();
+        $thirdSemester = $semesters->filter(fn ($s) => stripos($s->name, 'Third') !== false || stripos($s->name, 'Trimester 3') !== false || $s->name == '3')->first();
 
         $now = now();
-        $locks = ['1' => false, '2' => false];
+        $locks = ['1' => false, '2' => false, '3' => false];
 
         if ($firstSemester) {
             if (($firstSemester->registration_starts_at && $now->lt($firstSemester->registration_starts_at)) ||
@@ -506,8 +525,16 @@ class CourseRegistrationController extends Controller
             }
         }
 
+        if ($thirdSemester) {
+            if (($thirdSemester->registration_starts_at && $now->lt($thirdSemester->registration_starts_at)) ||
+                ($thirdSemester->registration_ends_at && $now->gt($thirdSemester->registration_ends_at))) {
+                $locks['3'] = true;
+            }
+        }
+
         if ($isPartialPayment) {
             $locks['2'] = true;
+            $locks['3'] = true;
         }
 
         return $locks;
@@ -576,9 +603,9 @@ class CourseRegistrationController extends Controller
         return $courses;
     }
 
-    private function syncCourseRegistrations(Student $student, Session $session, ?Semester $firstSemester, ?Semester $secondSemester, $firstSemCourses, $secondSemCourses): void
+    private function syncCourseRegistrations(Student $student, Session $session, ?Semester $firstSemester, ?Semester $secondSemester, $firstSemCourses, $secondSemCourses, ?Semester $thirdSemester = null, $thirdSemCourses = null): void
     {
-        DB::transaction(function () use ($student, $session, $firstSemester, $secondSemester, $firstSemCourses, $secondSemCourses) {
+        DB::transaction(function () use ($student, $session, $firstSemester, $secondSemester, $firstSemCourses, $secondSemCourses, $thirdSemester, $thirdSemCourses) {
             $studentSession = StudentSession::firstOrCreate(
                 [
                     'student_id' => $student->id,
@@ -613,6 +640,18 @@ class CourseRegistrationController extends Controller
                         'course_id' => $course->id,
                         'session_id' => $session->id,
                         'semester_id' => $secondSemester->id,
+                        'student_session_id' => $studentSession->id,
+                    ]);
+                }
+            }
+
+            if ($thirdSemester && $thirdSemCourses) {
+                foreach ($thirdSemCourses as $course) {
+                    CourseRegistration::create([
+                        'student_id' => $student->id,
+                        'course_id' => $course->id,
+                        'session_id' => $session->id,
+                        'semester_id' => $thirdSemester->id,
                         'student_session_id' => $studentSession->id,
                     ]);
                 }

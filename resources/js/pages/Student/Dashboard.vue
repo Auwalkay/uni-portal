@@ -4,7 +4,37 @@ import { Head, Link } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import StudentLayout from '@/layouts/StudentLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { GraduationCap, BookOpen, CreditCard, Activity, CalendarDays, Clock, AlertCircle, IdCard, Calendar, CalendarClock, MapPin, FileText, Home, Megaphone, Download, Pin, Lock, ShieldAlert } from 'lucide-vue-next';
+import { 
+    GraduationCap, 
+    BookOpen, 
+    CreditCard, 
+    Activity, 
+    CalendarDays, 
+    Clock, 
+    AlertCircle, 
+    IdCard, 
+    Calendar, 
+    CalendarClock, 
+    MapPin, 
+    FileText, 
+    Home, 
+    Megaphone, 
+    Download, 
+    Pin, 
+    Lock, 
+    ShieldAlert,
+    FlaskConical,
+    Award,
+    UserCheck,
+    ChevronRight,
+    CheckCircle2,
+    ArrowRight,
+    ShieldCheck,
+    Sparkles,
+    Building2,
+    Layers,
+    FileCheck
+} from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -20,6 +50,8 @@ import {
 const props = defineProps<{
     student?: any;
     user?: any;
+    isPostgraduate?: boolean;
+    pgDossier?: any;
     isProfileComplete?: boolean;
     isReturningStudent?: boolean;
     schoolFeeStatus?: string; // 'paid', 'partial', 'pending', 'cancelled', etc.
@@ -134,6 +166,388 @@ const greeting = () => {
 
     <StudentLayout :breadcrumbs="breadcrumbs">
         <div class="flex-1 space-y-6 p-6">
+            <!-- ========================================== -->
+            <!-- POSTGRADUATE SCHOLAR DASHBOARD EXPERIENCE -->
+            <!-- ========================================== -->
+            <template v-if="isPostgraduate">
+                <!-- PG Executive Welcome Banner -->
+                <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 shadow-xl border border-slate-800">
+                    <div class="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-6 text-white text-center sm:text-left">
+                        <img 
+                            :src="student?.passport_photo_path ? `/storage/${student.passport_photo_path}` : `https://ui-avatars.com/api/?name=${user?.name}&background=1e1b4b&color=ffffff`" 
+                            alt="Scholar Photo" 
+                            class="h-24 w-24 sm:h-20 sm:w-20 rounded-full border-4 border-indigo-500/30 object-cover shadow-lg flex-shrink-0"
+                        />
+                        <div class="flex-1 min-w-0 w-full">
+                            <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-2">
+                                <Badge variant="outline" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-200 border-indigo-400/30">
+                                    School of Postgraduate Studies (SPGS)
+                                </Badge>
+                                
+                            </div>
+                            <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white leading-tight break-words font-serif">
+                                {{ greeting() }}, {{ user?.name }}
+                            </h1>
+                            <p class="mt-1.5 text-sm sm:text-base text-indigo-200 break-words font-medium">
+                                {{ student?.matriculation_number || 'Matric Pending' }} &bull; 
+                         
+                                {{ student?.program?.name || 'Postgraduate Program' }}
+                            </p>
+                            <div class="mt-4 flex flex-wrap justify-center sm:justify-start gap-2">
+                                <div class="inline-flex items-center rounded-full bg-white/10 border border-white/15 px-3 py-1 text-xs backdrop-blur-sm text-indigo-100 font-medium">
+                                    <GraduationCap class="mr-1.5 h-3.5 w-3.5 text-indigo-300" />
+                                    Level {{ stats?.level }} &bull; {{ pgDossier?.degree_type || 'PG' }}
+                                </div>
+                                <div class="inline-flex items-center rounded-full bg-white/10 border border-white/15 px-3 py-1 text-xs backdrop-blur-sm text-indigo-100 font-medium">
+                                    <CalendarDays class="mr-1.5 h-3.5 w-3.5 text-indigo-300" />
+                                    {{ stats?.session }} Session &bull; {{ stats?.semester }}
+                                </div>
+                                <div v-if="pgDossier?.candidacy_expires_at" class="inline-flex items-center rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-200 px-3 py-1 text-xs backdrop-blur-sm font-medium">
+                                    <Clock class="mr-1.5 h-3.5 w-3.5 text-amber-300" />
+                                    Residency through {{ pgDossier.candidacy_expires_at }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Decorative Glow -->
+                    <div class="absolute -right-16 -top-16 h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none"></div>
+                </div>
+
+                <!-- PG Research & Dissertation Trajectory Showcase Card -->
+                <Card class="border border-border/70 shadow-sm rounded-2xl bg-card overflow-hidden">
+                    <div class="p-6 bg-gradient-to-r from-muted/40 via-background to-muted/20 border-b border-border/60">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                        <FlaskConical class="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <span class="text-xs uppercase tracking-wider font-bold text-muted-foreground">Postgraduate Dissertation & Candidacy</span>
+                                        <h2 class="text-lg sm:text-xl font-bold text-foreground">
+                                            {{ pgDossier?.research_project?.title || 'Research Topic Not Registered' }}
+                                        </h2>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <Button size="sm" class="shrink-0 font-semibold shadow-sm" as-child>
+                                <Link :href="route('student.research.index')">
+                                    Open Research Hub
+                                    <ChevronRight class="w-4 h-4 ml-1" />
+                                </Link>
+                            </Button>
+                        </div>
+
+                        <!-- Trajectory Progress Bar (if project registered) -->
+                        <div v-if="pgDossier?.research_project" class="mt-5 space-y-2">
+                            <div class="flex items-center justify-between text-xs font-medium text-muted-foreground">
+                                <span class="flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-primary"></span>
+                                    Milestone Progress: <strong>{{ pgDossier.research_project.milestones_completed }} of {{ pgDossier.research_project.milestones_count }} Cleared</strong>
+                                </span>
+                                <span class="font-bold text-foreground">{{ pgDossier.research_project.progress_percent }}%</span>
+                            </div>
+                            <div class="w-full bg-muted/60 h-2.5 rounded-full overflow-hidden border border-border/50">
+                                <div 
+                                    class="bg-primary h-full rounded-full transition-all duration-500 ease-out" 
+                                    :style="{ width: `${pgDossier.research_project.progress_percent}%` }"
+                                ></div>
+                            </div>
+                            <div v-if="pgDossier.research_project.current_milestone_title" class="pt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                                <span class="font-semibold text-foreground">Next Active Milestone:</span>
+                                <Badge variant="outline" class="text-[11px] font-mono border-primary/30 text-primary bg-primary/5">
+                                    {{ pgDossier.research_project.current_milestone_title }}
+                                </Badge>
+                            </div>
+                        </div>
+
+                        <div v-else class="mt-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-3">
+                            <AlertCircle class="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                            <div class="flex-1">
+                                <p class="font-bold">No Capstone / Research Topic Registered Yet</p>
+                                <p class="mt-0.5">Register your dissertation title, abstract, and research concentration in the Research Hub to initialize your supervisory committee and milestones.</p>
+                            </div>
+                            <Button size="sm" variant="outline" class="shrink-0 text-xs border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40" as-child>
+                                <Link :href="route('student.research.index')">Register Topic</Link>
+                            </Button>
+                        </div>
+                    </div>
+                </Card>
+
+                <!-- PG Stats Grid -->
+                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <!-- CGPA & NUC Standing -->
+                    <div class="rounded-2xl border border-border/70 bg-card p-5 shadow-sm space-y-2">
+                        <div class="flex items-center justify-between text-muted-foreground">
+                            <span class="text-xs font-bold uppercase tracking-wider">SPGS CGPA</span>
+                            <GraduationCap class="h-4 w-4 text-primary" />
+                        </div>
+                        <div class="text-3xl font-extrabold font-mono text-foreground tracking-tight">{{ stats?.cgpa }}</div>
+                        <div class="flex items-center gap-1.5 text-xs font-semibold" :class="Number(stats?.cgpa) >= 3.0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'">
+                            <CheckCircle2 class="w-3.5 h-3.5" />
+                            <span>{{ stats?.status }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Research Logbook -->
+                    <div class="rounded-2xl border border-border/70 bg-card p-5 shadow-sm space-y-2">
+                        <div class="flex items-center justify-between text-muted-foreground">
+                            <span class="text-xs font-bold uppercase tracking-wider">Digital Logbook</span>
+                            <FlaskConical class="h-4 w-4 text-blue-500" />
+                        </div>
+                        <div class="text-3xl font-extrabold font-mono text-foreground tracking-tight">{{ pgDossier?.logs_count || 0 }} <span class="text-sm font-sans font-medium text-muted-foreground">Entries</span></div>
+                        <p class="text-xs text-muted-foreground truncate">
+                            {{ pgDossier?.last_log_date ? `Last entry: ${pgDossier.last_log_date}` : 'No research logs recorded' }}
+                        </p>
+                    </div>
+
+                    <!-- Publications -->
+                    <div class="rounded-2xl border border-border/70 bg-card p-5 shadow-sm space-y-2">
+                        <div class="flex items-center justify-between text-muted-foreground">
+                            <span class="text-xs font-bold uppercase tracking-wider">Peer-Reviewed Papers</span>
+                            <Award class="h-4 w-4 text-purple-500" />
+                        </div>
+                        <div class="text-3xl font-extrabold font-mono text-foreground tracking-tight">{{ pgDossier?.publications_count || 0 }} <span class="text-sm font-sans font-medium text-muted-foreground">Published</span></div>
+                        <p class="text-xs text-muted-foreground">Indexed for SPGS Defense clearance</p>
+                    </div>
+
+                    <!-- Fees / Financial Clearance -->
+                    <div class="rounded-2xl border border-border/70 bg-card p-5 shadow-sm space-y-2">
+                        <div class="flex items-center justify-between text-muted-foreground">
+                            <span class="text-xs font-bold uppercase tracking-wider">Financial Clearance</span>
+                            <CreditCard class="h-4 w-4 text-emerald-500" />
+                        </div>
+                        <div class="text-2xl font-bold font-mono text-foreground tracking-tight">{{ paymentStatusText }}</div>
+                        <p v-if="!hasPaidEnough" class="text-xs text-red-500 font-semibold">Action Required for Session</p>
+                        <p v-else class="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">Session Standing Cleared</p>
+                    </div>
+                </div>
+
+                <!-- PG 2-Column Core Grid -->
+                <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-7 items-start">
+                    <!-- Left: PG Action Center (Col 4) -->
+                    <div class="lg:col-span-4 rounded-2xl border border-border/70 bg-card shadow-sm overflow-hidden">
+                        <div class="p-6 border-b border-border/60">
+                            <h3 class="font-bold text-lg text-foreground">Postgraduate Academic & Research Actions</h3>
+                            <p class="text-xs text-muted-foreground mt-0.5">Direct portals for thesis governance, coursework, and SPGS clearances.</p>
+                        </div>
+
+                        <div class="grid gap-4 p-6 sm:grid-cols-2">
+                            <!-- Research Hub Action -->
+                            <div class="group flex flex-col justify-between rounded-xl border border-border/60 p-4 hover:border-primary/40 hover:bg-muted/30 transition-all">
+                                <div class="space-y-1.5">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                                            <FlaskConical class="w-3.5 h-3.5" />
+                                        </div>
+                                        <h4 class="font-bold text-sm text-foreground">Research & Thesis Hub</h4>
+                                    </div>
+                                    <p class="text-xs text-muted-foreground">
+                                        Manage dissertation drafts, plagiarism screening, bi-weekly logbooks, and APRs.
+                                    </p>
+                                </div>
+                                <Link :href="route('student.research.index')" class="mt-4 inline-flex items-center text-xs font-bold text-primary hover:underline">
+                                    Enter Research Hub &rarr;
+                                </Link>
+                            </div>
+
+                            <!-- Course Registration Action -->
+                            <div class="group flex flex-col justify-between rounded-xl border border-border/60 p-4 hover:border-primary/40 hover:bg-muted/30 transition-all">
+                                <div class="space-y-1.5">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center">
+                                            <BookOpen class="w-3.5 h-3.5" />
+                                        </div>
+                                        <h4 class="font-bold text-sm text-foreground">Course Registration</h4>
+                                    </div>
+                                    <p class="text-xs text-muted-foreground">
+                                        Register advanced doctoral/masters coursework, departmental seminars, and research credits.
+                                    </p>
+                                </div>
+                                <Link :href="route('student.courses.index')" class="mt-4 inline-flex items-center text-xs font-bold text-blue-600 hover:underline">
+                                    Register Courses &rarr;
+                                </Link>
+                            </div>
+
+                            <!-- Payments Action -->
+                            <div class="group flex flex-col justify-between rounded-xl border border-border/60 p-4 hover:border-primary/40 hover:bg-muted/30 transition-all">
+                                <div class="space-y-1.5">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                                            <CreditCard class="w-3.5 h-3.5" />
+                                        </div>
+                                        <h4 class="font-bold text-sm text-foreground">Bursary & Payments</h4>
+                                    </div>
+                                    <p class="text-xs text-muted-foreground">
+                                        Settle composite session tuition, bench fees, and external examiner evaluation fees.
+                                    </p>
+                                </div>
+                                <Link :href="route('student.payments.index')" class="mt-4 inline-flex items-center text-xs font-bold text-emerald-600 hover:underline">
+                                    Bursary Center &rarr;
+                                </Link>
+                            </div>
+
+                            <!-- Results & Transcripts Action -->
+                            <div class="group flex flex-col justify-between rounded-xl border border-border/60 p-4 hover:border-primary/40 hover:bg-muted/30 transition-all">
+                                <div class="space-y-1.5">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-600 flex items-center justify-center">
+                                            <GraduationCap class="w-3.5 h-3.5" />
+                                        </div>
+                                        <h4 class="font-bold text-sm text-foreground">Results & Broadsheet</h4>
+                                    </div>
+                                    <p class="text-xs text-muted-foreground">
+                                        Inspect graded semester results, weighted GPAs, and Viva defense verdicts.
+                                    </p>
+                                </div>
+                                <Link :href="route('student.results.index')" class="mt-4 inline-flex items-center text-xs font-bold text-purple-600 hover:underline">
+                                    View Results &rarr;
+                                </Link>
+                            </div>
+
+                            <!-- Official Transcript Forwarding Label -->
+                            <div class="group flex flex-col justify-between rounded-xl border border-border/60 p-4 hover:border-primary/40 hover:bg-muted/30 transition-all">
+                                <div class="space-y-1.5">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                                            <FileCheck class="w-3.5 h-3.5" />
+                                        </div>
+                                        <h4 class="font-bold text-sm text-foreground">Transcript Request Label</h4>
+                                    </div>
+                                    <p class="text-xs text-muted-foreground">
+                                        Download the official SPGS transcript routing slip for your former institution.
+                                    </p>
+                                </div>
+                                <a :href="route('applicant.apply.transcript_label')" target="_blank" class="mt-4 inline-flex items-center text-xs font-bold text-amber-600 hover:underline">
+                                    Download Cover Sheet &rarr;
+                                </a>
+                            </div>
+
+                            <!-- Postgraduate ID Card -->
+                            <div class="group flex flex-col justify-between rounded-xl border border-border/60 p-4 hover:border-primary/40 hover:bg-muted/30 transition-all">
+                                <div class="space-y-1.5">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-7 h-7 rounded-lg bg-slate-500/10 text-slate-700 dark:text-slate-300 flex items-center justify-center">
+                                            <IdCard class="w-3.5 h-3.5" />
+                                        </div>
+                                        <h4 class="font-bold text-sm text-foreground">Scholar ID Card</h4>
+                                    </div>
+                                    <p class="text-xs text-muted-foreground">
+                                        Access and print your verified institutional postgraduate student identity card.
+                                    </p>
+                                </div>
+                                <a :href="route('student.id_card.show')" target="_blank" class="mt-4 inline-flex items-center text-xs font-bold text-foreground hover:underline">
+                                    View ID Card &rarr;
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Supervisory Committee & Candidacy Dossier (Col 3) -->
+                    <div class="lg:col-span-3 space-y-6">
+                        <!-- Supervisory Panel Card -->
+                        <Card class="border border-border/70 rounded-2xl bg-card shadow-sm overflow-hidden">
+                            <CardHeader class="pb-3 border-b border-border/60">
+                                <CardTitle class="text-sm font-bold flex items-center gap-2">
+                                    <UserCheck class="w-4 h-4 text-primary" />
+                                    Supervisory Committee
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent class="p-5 space-y-4 text-xs">
+                                <div v-if="pgDossier?.research_project?.major_supervisor" class="space-y-3">
+                                    <div class="p-3 rounded-xl bg-muted/20 border border-border/50 space-y-1">
+                                        <span class="text-[10px] uppercase font-bold text-primary tracking-wider block">Major Supervisor</span>
+                                        <p class="font-bold text-sm text-foreground">{{ pgDossier.research_project.major_supervisor }}</p>
+                                        <p v-if="pgDossier.research_project.major_supervisor_designation" class="text-muted-foreground">
+                                            {{ pgDossier.research_project.major_supervisor_designation }}
+                                        </p>
+                                    </div>
+
+                                    <div v-if="pgDossier.research_project.co_supervisor" class="p-3 rounded-xl bg-muted/20 border border-border/50 space-y-1">
+                                        <span class="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">Co-Supervisor</span>
+                                        <p class="font-bold text-sm text-foreground">{{ pgDossier.research_project.co_supervisor }}</p>
+                                    </div>
+                                </div>
+                                <div v-else class="text-center py-4 text-muted-foreground">
+                                    <p class="font-medium">No supervisors appointed yet.</p>
+                                    <p class="text-[11px] mt-1">Supervisors are confirmed by the Departmental PG Committee upon topic proposal.</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <!-- Candidacy Governance & Petitions Card -->
+                        <Card class="border border-border/70 rounded-2xl bg-card shadow-sm overflow-hidden">
+                            <CardHeader class="pb-3 border-b border-border/60">
+                                <CardTitle class="text-sm font-bold flex items-center gap-2">
+                                    <ShieldCheck class="w-4 h-4 text-emerald-600" />
+                                    Candidacy Governance
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent class="p-5 space-y-3 text-xs">
+                                <div class="flex justify-between items-center py-1.5 border-b border-border/50">
+                                    <span class="text-muted-foreground">SPGS File Ref</span>
+                                    <span class="font-mono font-bold text-foreground">{{ pgDossier?.spgs_file_number || 'N/A' }}</span>
+                                </div>
+                                <div class="flex justify-between items-center py-1.5 border-b border-border/50">
+                                    <span class="text-muted-foreground">Degree Level</span>
+                                    <span class="font-semibold text-foreground">Level {{ stats?.level }} ({{ pgDossier?.degree_type || 'PG' }})</span>
+                                </div>
+                                <div class="flex justify-between items-center py-1.5 border-b border-border/50">
+                                    <span class="text-muted-foreground">Candidacy Status</span>
+                                    <Badge variant="outline" class="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300">
+                                        {{ pgDossier?.candidacy_status || 'Active' }}
+                                    </Badge>
+                                </div>
+                                <div class="flex justify-between items-center py-1.5 border-b border-border/50">
+                                    <span class="text-muted-foreground">Residency Limit</span>
+                                    <span class="font-semibold text-foreground">{{ pgDossier?.candidacy_expires_at || 'In Normal Residency' }}</span>
+                                </div>
+                                <div class="flex justify-between items-center py-1.5">
+                                    <span class="text-muted-foreground">Active SPGS Petitions</span>
+                                    <span class="font-bold text-foreground">{{ pgDossier?.pending_requests_count || 0 }} Pending</span>
+                                </div>
+
+                                <div class="pt-2">
+                                    <Button variant="outline" size="sm" class="w-full text-xs font-semibold" as-child>
+                                        <Link :href="route('student.research.index')">
+                                            Submit Sundry Petition (Extension/Title)
+                                        </Link>
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <!-- Announcements & Bulletins -->
+                        <Card class="border border-border/70 rounded-2xl bg-card shadow-sm overflow-hidden">
+                            <CardHeader class="flex flex-row items-center justify-between pb-3 border-b border-border/60">
+                                <CardTitle class="text-sm font-bold flex items-center gap-2">
+                                    <Megaphone class="w-4 h-4 text-primary" /> SPGS Bulletins
+                                </CardTitle>
+                                <Link href="/student/announcements" class="text-xs text-primary hover:underline font-medium">
+                                    View All
+                                </Link>
+                            </CardHeader>
+                            <CardContent class="p-5 space-y-3.5">
+                                <div v-if="!announcements || announcements.length === 0" class="text-center py-4 text-muted-foreground text-xs">
+                                    No bulletins published.
+                                </div>
+                                <div v-else class="space-y-3">
+                                    <div v-for="bulletin in announcements" :key="bulletin.id" class="text-xs space-y-1 pb-2 border-b last:border-0 last:pb-0">
+                                        <h4 class="font-bold text-foreground line-clamp-1">{{ bulletin.title }}</h4>
+                                        <p class="text-muted-foreground line-clamp-2">{{ bulletin.content || 'Scanned memo attached.' }}</p>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+            </template>
+
+            <!-- ============================================== -->
+            <!-- UNDERGRADUATE SCHOLAR DASHBOARD EXPERIENCE      -->
+            <!-- ============================================== -->
+            <template v-else>
             <!-- Welcome Banner -->
             <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 p-6 sm:p-8 shadow-lg">
                 <div class="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-6 text-white text-center sm:text-left">
@@ -609,6 +1023,7 @@ const greeting = () => {
                 </div>
                 </div>
             </div>
+            </template>
         </div>
     </StudentLayout>
 </template>

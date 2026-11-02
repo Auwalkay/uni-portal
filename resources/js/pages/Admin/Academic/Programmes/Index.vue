@@ -122,8 +122,33 @@ const form = useForm({
     id: '',
     name: '',
     program_type: 'UG',
+    academic_stream: 'UG',
+    calendar_type: 'semester',
+    billing_model: 'composite_term',
+    min_graduation_cgpa: 1.0,
+    matric_format: '',
     department_id: '',
     scholarship_eligible: true,
+})
+
+watch(() => form.program_type, (newType) => {
+    if (['PG', 'PHD', 'PGD', 'MBA', 'MIM', 'MSC', 'MPHIL'].includes(newType)) {
+        form.academic_stream = 'PG'
+        if (Number(form.min_graduation_cgpa) < 3.0) {
+            form.min_graduation_cgpa = 3.0
+        }
+    } else if (newType === 'UG') {
+        form.academic_stream = 'UG'
+        if (Number(form.min_graduation_cgpa) === 3.0) {
+            form.min_graduation_cgpa = 1.0
+        }
+    }
+})
+
+watch(() => form.academic_stream, (newStream) => {
+    if (newStream === 'PG' && Number(form.min_graduation_cgpa) < 3.0) {
+        form.min_graduation_cgpa = 3.0
+    }
 })
 
 const openCreateModal = () => {
@@ -131,6 +156,11 @@ const openCreateModal = () => {
     form.reset()
     form.type = 'programme'
     form.program_type = 'UG'
+    form.academic_stream = 'UG'
+    form.calendar_type = 'semester'
+    form.billing_model = 'composite_term'
+    form.min_graduation_cgpa = 1.0
+    form.matric_format = ''
     form.scholarship_eligible = true
     form.clearErrors()
     isModalOpen.value = true
@@ -142,6 +172,11 @@ const openEditModal = (prog: any) => {
     form.id = prog.id
     form.name = prog.name
     form.program_type = prog.type || 'UG'
+    form.academic_stream = prog.academic_stream || (prog.type === 'PG' || prog.type === 'PHD' ? 'PG' : 'UG')
+    form.calendar_type = prog.calendar_type || 'semester'
+    form.billing_model = prog.billing_model || 'composite_term'
+    form.min_graduation_cgpa = prog.min_graduation_cgpa ?? (form.academic_stream === 'PG' ? 3.0 : 1.0)
+    form.matric_format = prog.matric_format || ''
     form.department_id = prog.department_id || ''
     form.scholarship_eligible = Boolean(prog.scholarship_eligible)
     form.clearErrors()
@@ -385,8 +420,13 @@ const toggleStatus = (id: string, currentStatus: boolean) => {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="UG">Undergraduate (UG)</SelectItem>
-                                    <SelectItem value="PG">Postgraduate (PG)</SelectItem>
-                                    <SelectItem value="PHD">Doctorate (PhD)</SelectItem>
+                                    <SelectItem value="PG">Postgraduate (General PG)</SelectItem>
+                                    <SelectItem value="PGD">Postgraduate Diploma (PGD - 700L)</SelectItem>
+                                    <SelectItem value="MBA">Master of Business Administration (MBA - 800L)</SelectItem>
+                                    <SelectItem value="MIM">Master of International Management (MIM - 800L)</SelectItem>
+                                    <SelectItem value="MSC">Academic Master's (M.Sc / M.A - 800L)</SelectItem>
+                                    <SelectItem value="MPHIL">Master of Philosophy (M.Phil - 800L)</SelectItem>
+                                    <SelectItem value="PHD">Doctorate (Ph.D - 900L)</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -404,6 +444,44 @@ const toggleStatus = (id: string, currentStatus: boolean) => {
                                 </SelectContent>
                             </Select>
                             <p v-if="form.errors.department_id" class="text-xs text-rose-500">{{ form.errors.department_id }}</p>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="space-y-1.5">
+                                <Label for="calendar_type">Calendar System</Label>
+                                <Select v-model="form.calendar_type">
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Calendar" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="semester">Standard Semester (2 Terms)</SelectItem>
+                                        <SelectItem value="trimester">Executive Trimester (3 Terms)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div class="space-y-1.5">
+                                <Label for="billing_model">Fee Billing Model</Label>
+                                <Select v-model="form.billing_model">
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Billing Model" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="composite_term">Flat Composite Fee</SelectItem>
+                                        <SelectItem value="unbundled_milestone">Unbundled Milestones (PG)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <Label for="matric_format">Matriculation Format (Optional)</Label>
+                            <Input
+                                id="matric_format"
+                                v-model="form.matric_format"
+                                placeholder="e.g. MIU/{PROG_CODE}/{YEAR}/{SEQUENCE}"
+                            />
+                            <p class="text-[11px] text-muted-foreground">Placeholders: {YEAR}, {PROG_CODE}, {DEPT_CODE}, {STREAM}, {SEQUENCE}</p>
                         </div>
 
                         <div class="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800">

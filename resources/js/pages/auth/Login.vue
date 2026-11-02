@@ -69,7 +69,7 @@ const submit = () => {
         <Tabs defaultValue="login" @update:modelValue="(v) => v === 'register' && router.visit(register().url)" class="w-full">
             <TabsList class="grid w-full grid-cols-2 mb-6" v-if="canRegister">
                 <TabsTrigger value="login">Sign In</TabsTrigger>
-                <TabsTrigger value="register">Register</TabsTrigger>
+                <TabsTrigger value="register">Fresh Applicant</TabsTrigger>
             </TabsList>
             <TabsContent value="login">
                 <form @submit.prevent="submit" class="space-y-6">

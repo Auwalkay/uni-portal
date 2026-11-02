@@ -82,9 +82,13 @@ class PaymentController extends Controller
             $invoice->setRelation('session', $currentSession);
         }
 
+        $applicant = Applicant::with(['programme', 'programme.department', 'user'])->where('user_id', $user->id)->first();
+
         return Inertia::render('Applicant/Payment/Index', [
-            'invoice' => $invoice,
+            'invoice' => $invoice->load(['session', 'items']),
             'currentSession' => $currentSession,
+            'applicant' => $applicant,
+            'programme' => $applicant?->programme,
         ]);
     }
 

@@ -287,11 +287,14 @@ class ResultController extends Controller
             }
         }
 
+        $maxCa = $course->isResearchOrProject() ? 100 : 40;
+        $maxExam = $course->isResearchOrProject() ? 100 : 80;
+
         $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'scores' => 'required|array',
             'scores.*.id' => 'required|exists:course_registrations,id',
-            'scores.*.ca_score' => 'nullable|numeric|min:0|max:40',
-            'scores.*.exam_score' => 'nullable|numeric|min:0|max:80',
+            'scores.*.ca_score' => "nullable|numeric|min:0|max:{$maxCa}",
+            'scores.*.exam_score' => "nullable|numeric|min:0|max:{$maxExam}",
             'scores.*.is_absent' => 'nullable|boolean',
         ], [], $attributes);
 
@@ -320,8 +323,10 @@ class ResultController extends Controller
 
         $validator->validate();
 
+        $course->loadMissing('programme');
+
         foreach ($request->scores as $data) {
-            $reg = CourseRegistration::find($data['id']);
+            $reg = CourseRegistration::with(['course.programme', 'student.program'])->find($data['id']);
 
             if (! empty($data['is_absent'])) {
                 $reg->update([
@@ -342,7 +347,7 @@ class ResultController extends Controller
                     $total = 100;
                 }
 
-                $grading = $this->gradingService->calculate($total);
+                $grading = $this->gradingService->calculate($total, $reg ?? $course);
 
                 $reg->update([
                     'ca_score' => $ca,
@@ -479,12 +484,14 @@ class ResultController extends Controller
                 return $reg->is_absent || ! is_null($reg->score);
             })->count();
 
-            $passCount = $registrations->filter(function ($reg) {
-                return ! $reg->is_absent && ! is_null($reg->score) && $reg->score >= 40;
+            $passMark = $this->gradingService->getPassMark($course);
+
+            $passCount = $registrations->filter(function ($reg) use ($passMark) {
+                return ! $reg->is_absent && ! is_null($reg->score) && $reg->score >= $passMark;
             })->count();
 
-            $failCount = $registrations->filter(function ($reg) {
-                return ! $reg->is_absent && ! is_null($reg->score) && $reg->score < 40;
+            $failCount = $registrations->filter(function ($reg) use ($passMark) {
+                return ! $reg->is_absent && ! is_null($reg->score) && $reg->score < $passMark;
             })->count();
 
             $absentCount = $registrations->where('is_absent', true)->count();

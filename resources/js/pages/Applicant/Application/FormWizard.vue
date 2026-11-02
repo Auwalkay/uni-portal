@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, useForm, router } from '@inertiajs/vue3';
 import ApplicantLayout from '@/layouts/ApplicantLayout.vue';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import FileUploader from '@/components/FileUploader.vue';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -18,17 +19,61 @@ import {
 import axios from 'axios';
 import { route } from 'ziggy-js';
 import Swal from 'sweetalert2';
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Send,
+  ArrowLeft,
+  AlertCircle,
+  Plus,
+  Trash2,
+} from 'lucide-vue-next';
+
+interface StepItem {
+    id: string;
+    label: string;
+}
 
 const props = defineProps<{
     mode?: string;
+    isPostgraduate?: boolean;
+    pgTier?: string | null;
     programme_id?: string;
-    programme?: { id: string; name: string } | null;
+    programme?: { id: string; name: string; academic_stream?: string; calendar_type?: string } | null;
     states?: Array<{ id: number; name: string; lgas: Array<{ id: number; name: string }> }>;
     scholarships?: Array<{ id: string; name: string; percentage: string }>;
     currentSession?: { id: string; name: string } | null;
+    qualifications?: string[];
+    degreeClasses?: string[];
 }>();
 
-const steps = ['JAMB Details', 'Personal Info', 'Academic History', 'Document Uploads', 'Review'];
+const isPg = computed(() => {
+    return !!(
+        props.isPostgraduate ||
+        props.mode === 'PG' ||
+        props.programme?.academic_stream === 'PG'
+    );
+});
+
+const steps = computed<StepItem[]>(() =>
+    isPg.value
+        ? [
+            { id: 'pathway', label: 'Pathway' },
+            { id: 'biodata', label: 'Biodata' },
+            { id: 'academics', label: 'Qualifications & Referees' },
+            { id: 'documents', label: 'Documents' },
+            { id: 'review', label: 'Review' },
+        ]
+        : [
+            { id: 'jamb', label: 'JAMB' },
+            { id: 'biodata', label: 'Biodata' },
+            { id: 'academics', label: 'Academic History' },
+            { id: 'documents', label: 'Documents' },
+            { id: 'review', label: 'Review' },
+        ]
+);
+
 const currentStep = ref(0);
 
 // JAMB Fetch State
@@ -37,11 +82,38 @@ const isFetching = ref(false);
 const jambError = ref('');
 const fetchedJambData = ref<any>(null);
 
+const defaultQualifications = [
+    'HND', 'B.Sc', 'B.A', 'B.Eng', 'B.Tech', 'B.Ed', 'LL.B',
+    'PGD', 'MBA', 'MIM', 'M.Sc', 'M.A', 'M.Eng', 'M.Ed', 'M.Phil',
+];
+
+const defaultDegreeClasses = [
+    'First Class',
+    'Second Class Upper (2:1)',
+    'Second Class Lower (2:2)',
+    'Third Class',
+    'Distinction',
+    'Upper Credit',
+    'Lower Credit',
+    'Merit',
+    'Credit',
+    'Pass',
+];
+
+const qualificationOptions = computed(() => props.qualifications || defaultQualifications);
+const degreeClassOptions = computed(() => props.degreeClasses || defaultDegreeClasses);
+
 const form = useForm({
+    title: 'Mr.',
     first_name: '',
     last_name: '',
     dob: '',
     phone: '',
+    gender: 'male',
+    marital_status: 'Single',
+    nationality: 'Nigerian',
+    has_name_change: false,
+    previous_full_name: '',
     address: '',
     state_id: '',
     lga_id: '',
@@ -49,13 +121,79 @@ const form = useForm({
     next_of_kin_phone: '',
     next_of_kin_relationship: '',
     jamb_score: '',
+    study_mode: 'full_time',
+    area_of_specialization: '',
+    sponsorship_type: 'self',
+    sponsor_name: '',
     previous_institution: '',
-    mode: props.mode || 'UTME',
+    previous_qualification: '',
+    previous_course_of_study: '',
+    previous_class_of_degree: '',
+    previous_cgpa: '',
+    graduation_year: '',
+    nysc_status: 'Completed',
+    nysc_certificate_number: '',
+    official_transcript_status: 'not_requested',
+    work_experience_years: '0',
+    statement_of_purpose: '',
+    research_proposal_title: '',
+    mode: props.mode || (isPg.value ? 'PG' : 'UTME'),
     programme_id: props.programme_id || '',
     jamb_number: '',
     passport_photo: null as File | null,
     waec_result: null as File | null,
+    academic_transcript: null as File | null,
+    degree_certificate: null as File | null,
+    nysc_certificate: null as File | null,
+    cv_resume: null as File | null,
+    concept_note: null as File | null,
+    name_change_evidence: null as File | null,
+    qualifications: [
+        {
+            qualification_type: '',
+            institution_name: '',
+            course_of_study: '',
+            class_of_degree: '',
+            cgpa: '',
+            scale_max: '5.00',
+            graduation_year: String(new Date().getFullYear() - 1),
+            certificate_number: '',
+        },
+    ],
+    employments: [] as Array<{
+        employer_name: string;
+        job_title: string;
+        department_or_unit: string;
+        start_date: string;
+        end_date: string;
+        is_current: boolean;
+        responsibilities: string;
+    }>,
+    referees: [
+        { name: '', email: '', phone: '', institution_or_organization: '', position_or_rank: '', relationship: 'Academic Supervisor' },
+        { name: '', email: '', phone: '', institution_or_organization: '', position_or_rank: '', relationship: 'Head of Department / Lecturer' },
+        { name: '', email: '', phone: '', institution_or_organization: '', position_or_rank: '', relationship: 'Academic / Professional Referee' },
+    ],
 });
+
+const addQualification = () => {
+    form.qualifications.push({
+        qualification_type: '',
+        institution_name: '',
+        course_of_study: '',
+        class_of_degree: '',
+        cgpa: '',
+        scale_max: '5.00',
+        graduation_year: String(new Date().getFullYear()),
+        certificate_number: '',
+    });
+};
+
+const removeQualification = (index: number) => {
+    if (form.qualifications.length > 1) {
+        form.qualifications.splice(index, 1);
+    }
+};
 
 const filteredLgas = computed(() => {
     if (!form.state_id) return [];
@@ -85,31 +223,15 @@ const confirmJambData = () => {
         form.dob = fetchedJambData.value.dob;
         form.jamb_score = fetchedJambData.value.jamb_score;
         form.jamb_number = fetchedJambData.value.jamb_number;
-        // Move to next step
-        currentStep.value = 1;
-    }
-};
-
-const nextStep = () => {
-    if (currentStep.value < steps.length - 1) {
-        currentStep.value++;
-    }
-};
-
-const prevStep = () => {
-    if (currentStep.value > 0) {
-        currentStep.value--;
+        goToStep(1);
     }
 };
 
 const stepIsValid = computed(() => {
     switch (currentStep.value) {
         case 0:
-            // Step 0: JAMB check. Can be skipped or completed. We allow next if they skip or if logic permits.
-            // Since we allow skipping, we'll return true.
             return true;
         case 1:
-            // Step 1: Personal Details. Require core fields.
             return !!(
                 form.first_name &&
                 form.last_name &&
@@ -120,22 +242,70 @@ const stepIsValid = computed(() => {
                 form.lga_id
             );
         case 2:
-            // Step 2: Academic History.
+            if (isPg.value) {
+                const hasMultiQuals = form.qualifications.length > 0 && form.qualifications.every(
+                    q => q.institution_name.trim() && q.qualification_type.trim() && q.class_of_degree.trim() && q.course_of_study.trim()
+                );
+                const has3Referees = form.referees.length === 3 && form.referees.every(
+                    r => r.name.trim() && r.email.trim() && r.institution_or_organization.trim()
+                );
+                return hasMultiQuals && has3Referees;
+            }
             return !!form.jamb_score;
         case 3:
-            // Step 3: Document Uploads. Usually passport and WAEC are required.
-            return !!(form.passport_photo && form.waec_result);
+            return true;
+        case 4:
+            return true;
         default:
             return true;
     }
 });
 
+const canNavigateToStep = (targetIndex: number) => {
+    if (targetIndex <= currentStep.value) return true;
+    if (targetIndex === currentStep.value + 1) return stepIsValid.value;
+    return false;
+};
+
+const goToStep = (targetIndex: number) => {
+    if (targetIndex === currentStep.value) return;
+    if (canNavigateToStep(targetIndex)) {
+        currentStep.value = targetIndex;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+};
+
+const nextStep = () => {
+    if (currentStep.value < steps.value.length - 1 && stepIsValid.value) {
+        currentStep.value++;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+};
+
+const prevStep = () => {
+    if (currentStep.value > 0) {
+        currentStep.value--;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+};
+
 const submitApplication = () => {
+    if (isPg.value && form.qualifications.length > 0) {
+        const primary = form.qualifications[form.qualifications.length - 1];
+        form.previous_institution = primary.institution_name;
+        form.previous_qualification = primary.qualification_type;
+        form.previous_course_of_study = primary.course_of_study;
+        form.previous_class_of_degree = primary.class_of_degree;
+        form.previous_cgpa = primary.cgpa;
+        form.graduation_year = primary.graduation_year;
+    }
+
     form.post(route('applicant.apply.store'), {
         forceFormData: true,
         onStart: () => {
             Swal.fire({
                 title: 'Submitting application...',
+                text: 'Please wait while we file your application.',
                 allowOutsideClick: false,
                 didOpen: () => Swal.showLoading(),
             });
@@ -143,228 +313,392 @@ const submitApplication = () => {
         onSuccess: () => {
             Swal.fire({
                 icon: 'success',
-                title: 'Submitted',
+                title: 'Application Submitted',
+                text: 'Your application has been received successfully.',
                 toast: true,
                 position: 'top-end',
                 showConfirmButton: false,
-                timer: 2500,
+                timer: 3000,
             });
         },
         onError: (errors) => {
-            // errors is an object: { field: "message", field2: "message" }
             const firstKey = Object.keys(errors)[0];
-            const firstMsg = firstKey ? errors[firstKey] : 'Something went wrong.';
+            const firstMsg = firstKey ? errors[firstKey] : 'Please verify all required fields.';
 
             Swal.fire({
                 icon: 'error',
-                title: 'Registration Failed',
+                title: 'Submission Incomplete',
                 text: firstMsg,
-                toast: true,
-                position: 'top-end',
-                showConfirmButton: false,
+                confirmButtonColor: '#0f172a',
             });
         },
-        // onFinish: () => Swal.close(),
     });
 };
-
 </script>
 
 <template>
     <Head title="Application Form" />
 
-    <ApplicantLayout>
-        <div class="flex flex-col lg:flex-row gap-8 max-w-6xl mx-auto p-4 lg:p-8">
-            <!-- Sidebar Stepper -->
-            <div class="w-full lg:w-64 flex-shrink-0">
-                <div class="sticky top-8 bg-card border rounded-xl p-6 shadow-sm">
-                    <h2 class="font-serif text-xl font-bold text-primary mb-6">Application Progress</h2>
-                    <div class="relative flex flex-col gap-6">
-                         <!-- Vertical Line -->
-                        <div class="absolute left-[15px] top-4 bottom-4 w-0.5 bg-muted"></div>
+    <ApplicantLayout :breadcrumbs="[
+        { title: 'Admissions', href: route('applicant.apply.start') },
+        { title: programme?.name || 'Application Form', href: '#' }
+    ]">
+        <!-- Full-Page Executive Application Canvas -->
+        <div class="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-                        <div
-                            v-for="(step, index) in steps"
-                            :key="index"
-                            class="relative flex items-center gap-4 group cursor-pointer"
-                            @click="index < currentStep ? currentStep = index : null"
-                        >
-                             <div
-                                class="z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all duration-300"
-                                :class="[
-                                    index <= currentStep
-                                        ? 'border-primary bg-primary text-primary-foreground'
-                                        : 'border-muted-foreground/30 bg-background text-muted-foreground'
-                                ]"
-                            >
-                                <span v-if="index < currentStep" class="i-lucide-check w-4 h-4">✓</span>
-                                <span v-else class="text-xs font-medium">{{ index + 1 }}</span>
-                            </div>
-                            <div class="flex flex-col">
-                                <span
-                                    class="text-sm font-medium transition-colors"
-                                    :class="index === currentStep ? 'text-foreground' : 'text-muted-foreground'"
-                                >
-                                    {{ step }}
-                                </span>
-                                <span v-if="index === currentStep" class="text-xs text-primary animate-pulse">In Progress</span>
-                            </div>
-                        </div>
+            <!-- Simple Top Header -->
+            <div class="space-y-6">
+                <div class="flex items-center justify-between gap-4">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        class="text-xs text-muted-foreground hover:text-foreground -ml-2 h-8"
+                        @click="router.visit(route('applicant.apply.start'))"
+                    >
+                        <ArrowLeft class="w-3.5 h-3.5 mr-1.5" />
+                        Change Programme
+                    </Button>
+
+                    <div class="flex items-center gap-2">
+                        <Badge variant="outline" class="text-xs font-medium text-muted-foreground">
+                            {{ isPg ? 'Postgraduate' : 'Undergraduate' }}
+                        </Badge>
+                        <span v-if="currentSession" class="text-xs text-muted-foreground">
+                            {{ currentSession.name }} Session
+                        </span>
                     </div>
+                </div>
+
+                <div>
+                    <h1 class="font-serif text-3xl sm:text-4xl font-bold text-foreground tracking-tight">
+                        {{ programme?.name || 'Application Form' }}
+                    </h1>
+                    <p class="text-sm text-muted-foreground mt-1">
+                        Step {{ currentStep + 1 }} of {{ steps.length }}: {{ steps[currentStep]?.label }}
+                    </p>
+                </div>
+
+                <!-- Sleek Minimal Horizontal Stepper -->
+                <div class="pt-2">
+                    <nav aria-label="Progress">
+                        <ol class="flex items-center w-full">
+                            <li
+                                v-for="(step, index) in steps"
+                                :key="step.id"
+                                class="relative flex-1 flex items-center"
+                                :class="{ 'pr-4 sm:pr-8': index < steps.length - 1 }"
+                            >
+                                <button
+                                    type="button"
+                                    class="group flex items-center gap-2 text-left focus:outline-none"
+                                    :disabled="!canNavigateToStep(index)"
+                                    @click="goToStep(index)"
+                                >
+                                    <span
+                                        class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 transition-colors"
+                                        :class="[
+                                            index < currentStep
+                                                ? 'bg-primary text-primary-foreground'
+                                                : index === currentStep
+                                                ? 'border-2 border-primary text-primary bg-background'
+                                                : 'border border-border text-muted-foreground bg-muted/30'
+                                        ]"
+                                    >
+                                        <Check v-if="index < currentStep" class="w-3.5 h-3.5 stroke-[2.5]" />
+                                        <span v-else>{{ index + 1 }}</span>
+                                    </span>
+                                    <span
+                                        class="hidden md:inline text-xs font-medium transition-colors"
+                                        :class="index === currentStep ? 'text-foreground font-semibold' : 'text-muted-foreground'"
+                                    >
+                                        {{ step.label }}
+                                    </span>
+                                </button>
+
+                                <!-- Connecting Line -->
+                                <div
+                                    v-if="index < steps.length - 1"
+                                    class="flex-1 ml-3 sm:ml-4 h-0.5 transition-colors"
+                                    :class="index < currentStep ? 'bg-primary' : 'bg-border'"
+                                ></div>
+                            </li>
+                        </ol>
+                    </nav>
                 </div>
             </div>
 
-            <!-- Main Content Form -->
-            <Card class="flex-1 shadow-xl border-0 ring-1 ring-border/50 bg-card/95 backdrop-blur-sm relative overflow-hidden">
-                <!-- Decorative background elements -->
-                <div class="absolute top-0 right-0 -m-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
-                <div class="absolute bottom-0 left-0 -m-20 w-64 h-64 bg-secondary/5 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
+            <!-- Main Form Card (Uncluttered, Focused Workspace) -->
+            <Card class="border border-border/70 shadow-sm rounded-2xl bg-card">
+                <CardContent class="p-6 sm:p-10 space-y-8">
 
-                <CardHeader class="border-b bg-muted/20 px-8 py-8">
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div>
-                            <CardTitle class="font-serif text-3xl font-bold text-primary">{{ steps[currentStep] }}</CardTitle>
-                            <p class="text-base text-muted-foreground mt-2">Please provide accurate information for your application.</p>
-                        </div>
-                        <div v-if="currentSession" class="self-start sm:self-auto shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">
-                            <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-                            <span>{{ currentSession.name }} Academic Session</span>
-                        </div>
-                    </div>
-                </CardHeader>
-
-                <CardContent class="p-8 space-y-8 min-h-[500px] relative">
-
-                     <!-- Step 0: JAMB Check (New Step) -->
-                    <Transition enter-active-class="transition-all duration-500 ease-out" enter-from-class="opacity-0 translate-x-8" enter-to-class="opacity-100 translate-x-0" leave-active-class="absolute inset-x-8 transition-all duration-300 ease-in" leave-from-class="opacity-100 -translate-x-0" leave-to-class="opacity-0 -translate-x-8">
-                    <div v-if="currentStep === 0" class="space-y-8 max-w-md mx-auto py-10">
-                        <div class="text-center space-y-2">
-                            <div class="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <span class="text-2xl">🎓</span>
+                    <!-- ========================================== -->
+                    <!-- STEP 0: Pathway & Mode (PG) OR JAMB (UG)   -->
+                    <!-- ========================================== -->
+                    <div v-if="currentStep === 0" class="space-y-6">
+                        <!-- Postgraduate Stream Overview -->
+                        <div v-if="isPg" class="space-y-6">
+                            <div>
+                                <h3 class="text-lg font-semibold text-foreground">Study Mode & Specialization</h3>
+                                <p class="text-xs text-muted-foreground mt-0.5">Please indicate your preferred enrollment schedule and research focus.</p>
                             </div>
-                            <h3 class="text-lg font-semibold">Import JAMB Details</h3>
-                            <p class="text-sm text-muted-foreground">Enter your JAMB Registration Number to fetch your records.</p>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                <div class="space-y-2">
+                                    <Label class="text-sm">Mode of Study <span class="text-destructive">*</span></Label>
+                                    <Select v-model="form.study_mode">
+                                        <SelectTrigger class="h-11"><SelectValue placeholder="Select mode of study" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="full_time">Full-Time</SelectItem>
+                                            <SelectItem value="part_time">Part-Time</SelectItem>
+                                            <SelectItem value="executive">Executive / Weekend</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div class="space-y-2">
+                                    <Label class="text-sm">Sponsorship Type <span class="text-destructive">*</span></Label>
+                                    <Select v-model="form.sponsorship_type">
+                                        <SelectTrigger class="h-11"><SelectValue placeholder="Select sponsorship type" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="self">Self-Sponsored</SelectItem>
+                                            <SelectItem value="tetfund">TETFund</SelectItem>
+                                            <SelectItem value="ptdf">PTDF</SelectItem>
+                                            <SelectItem value="employer">Employer / Corporate</SelectItem>
+                                            <SelectItem value="scholarship">University Scholarship</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div v-if="form.sponsorship_type !== 'self'" class="space-y-2">
+                                    <Label class="text-sm">Sponsoring Organization</Label>
+                                    <Input
+                                        v-model="form.sponsor_name"
+                                        placeholder="e.g. Central Bank of Nigeria / TETFund"
+                                        class="h-11"
+                                    />
+                                </div>
+
+                                <div class="space-y-2 md:col-span-2 lg:col-span-3">
+                                    <Label class="text-sm">Area of Specialization / Concentration</Label>
+                                    <Input
+                                        v-model="form.area_of_specialization"
+                                        placeholder="e.g. Artificial Intelligence, Commercial Law, Corporate Finance"
+                                        class="h-11"
+                                    />
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="space-y-4">
-                            <div class="space-y-2">
-                                <Label>JAMB Registration Number</Label>
-                                <div class="flex gap-2">
-                                    <Input v-model="jambNumber" placeholder="e.g 2024123456AB" class="uppercase" />
-                                    <Button @click="fetchJambDetails" :disabled="isFetching || !jambNumber">
-                                        {{ isFetching ? 'Fetching...' : 'Fetch' }}
+                        <!-- Undergraduate JAMB Verification -->
+                        <div v-else class="space-y-6 max-w-md mx-auto py-6">
+                            <div class="text-center space-y-1">
+                                <h3 class="text-lg font-semibold text-foreground">Import JAMB Details</h3>
+                                <p class="text-xs text-muted-foreground">Enter your JAMB registration number to verify your score.</p>
+                            </div>
+
+                            <div class="space-y-4">
+                                <div class="space-y-2">
+                                    <Label class="text-sm">JAMB Registration Number</Label>
+                                    <div class="flex gap-2">
+                                        <Input v-model="jambNumber" placeholder="e.g. 202612345678AB" class="h-11 uppercase font-mono" />
+                                        <Button class="h-11 px-5" @click="fetchJambDetails" :disabled="isFetching || !jambNumber">
+                                            {{ isFetching ? 'Fetching...' : 'Verify' }}
+                                        </Button>
+                                    </div>
+                                    <p v-if="jambError" class="text-xs text-destructive flex items-center gap-1 mt-1">
+                                        <AlertCircle class="w-3.5 h-3.5" />
+                                        {{ jambError }}
+                                    </p>
+                                </div>
+
+                                <div v-if="fetchedJambData" class="p-4 rounded-xl border bg-muted/30 space-y-3">
+                                    <div class="flex items-center gap-3">
+                                        <img :src="fetchedJambData.passport_url" class="w-12 h-12 rounded-full border" />
+                                        <div>
+                                            <p class="font-semibold text-sm">{{ fetchedJambData.first_name }} {{ fetchedJambData.last_name }}</p>
+                                            <p class="text-xs text-muted-foreground">Score: <strong class="text-foreground">{{ fetchedJambData.jamb_score }}</strong></p>
+                                        </div>
+                                    </div>
+                                    <Button class="w-full" size="sm" variant="secondary" @click="confirmJambData">
+                                        Continue with these details
                                     </Button>
                                 </div>
-                                <p v-if="jambError" class="text-xs text-destructive">{{ jambError }}</p>
-                            </div>
 
-                            <div v-if="fetchedJambData" class="bg-primary/5 rounded-lg p-4 border border-primary/10 space-y-3">
-                                <div class="flex items-center gap-3">
-                                    <img :src="fetchedJambData.passport_url" class="w-12 h-12 rounded-full border" />
-                                    <div>
-                                        <p class="font-bold">{{ fetchedJambData.first_name }} {{ fetchedJambData.last_name }}</p>
-                                        <p class="text-xs text-muted-foreground">Score: {{ fetchedJambData.jamb_score }}</p>
-                                    </div>
-                                </div>
-                                <Button class="w-full" variant="secondary" @click="confirmJambData">Continue with these details</Button>
+                                <Button variant="outline" class="w-full h-11 text-xs" @click="goToStep(1)">
+                                    Skip & Enter Manually
+                                </Button>
                             </div>
                         </div>
-
-                         <div class="relative">
-                            <div class="absolute inset-0 flex items-center"><span class="w-full border-t"></span></div>
-                            <div class="relative flex justify-center text-xs uppercase"><span class="bg-background px-2 text-muted-foreground">Or fill manually</span></div>
-                        </div>
-
-                        <Button variant="outline" class="w-full h-12 border-primary/20 hover:bg-primary/5 hover:text-primary transition-colors font-medium mt-6" @click="currentStep++">Skip & Fill Manually</Button>
                     </div>
-                    </Transition>
 
-                    <!-- Step 1: Personal Details -->
-                    <Transition enter-active-class="transition-all duration-500 ease-out" enter-from-class="opacity-0 translate-x-8" enter-to-class="opacity-100 translate-x-0" leave-active-class="absolute inset-x-8 transition-all duration-300 ease-in" leave-from-class="opacity-100 -translate-x-0" leave-to-class="opacity-0 -translate-x-8">
+                    <!-- ========================================== -->
+                    <!-- STEP 1: Personal Biodata                   -->
+                    <!-- ========================================== -->
                     <div v-if="currentStep === 1" class="space-y-8">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div class="space-y-3">
-                                <Label class="font-semibold text-foreground">First Name <span class="text-destructive">*</span></Label>
-                                <Input v-model="form.first_name" placeholder="Enter first name" class="h-12 focus-visible:ring-primary/30" />
-                            </div>
-                            <div class="space-y-3">
-                                <Label class="font-semibold text-foreground">Last Name <span class="text-destructive">*</span></Label>
-                                <Input v-model="form.last_name" placeholder="Enter last name" class="h-12 focus-visible:ring-primary/30" />
-                            </div>
-                            <div class="space-y-3">
-                                <Label class="font-semibold text-foreground">Date of Birth <span class="text-destructive">*</span></Label>
-                                <Input type="date" v-model="form.dob" class="h-12 focus-visible:ring-primary/30" />
-                            </div>
-                            <div class="space-y-3">
-                                <Label class="font-semibold text-foreground">Phone Number <span class="text-destructive">*</span></Label>
-                                <Input type="tel" v-model="form.phone" placeholder="+234..." class="h-12 focus-visible:ring-primary/30" />
+                        <!-- Identity & Legal Name -->
+                        <div class="space-y-4">
+                            <div>
+                                <h3 class="text-base font-semibold text-foreground">Personal Details</h3>
+                                <p class="text-xs text-muted-foreground mt-0.5">Please provide your official names as they appear on your credentials.</p>
                             </div>
 
-                            <div class="space-y-3 md:col-span-2">
-                                <Label class="font-semibold text-foreground">Residential Address <span class="text-destructive">*</span></Label>
-                                 <textarea
-                                    v-model="form.address"
-                                    class="flex min-h-[100px] w-full rounded-md border border-input bg-background px-4 py-3 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                    placeholder="Enter your full residential address"
-                                ></textarea>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                                <div v-if="isPg" class="space-y-1.5">
+                                    <Label class="text-xs">Title <span class="text-destructive">*</span></Label>
+                                    <Select v-model="form.title">
+                                        <SelectTrigger class="h-10"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Mr.">Mr.</SelectItem>
+                                            <SelectItem value="Mrs.">Mrs.</SelectItem>
+                                            <SelectItem value="Miss">Miss</SelectItem>
+                                            <SelectItem value="Ms.">Ms.</SelectItem>
+                                            <SelectItem value="Dr.">Dr.</SelectItem>
+                                            <SelectItem value="Engr.">Engr.</SelectItem>
+                                            <SelectItem value="Barr.">Barr.</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs">First Name <span class="text-destructive">*</span></Label>
+                                    <Input v-model="form.first_name" placeholder="First Name" class="h-10" />
+                                </div>
+
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs">Last Name <span class="text-destructive">*</span></Label>
+                                    <Input v-model="form.last_name" placeholder="Last Name" class="h-10" />
+                                </div>
+
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs">Date of Birth <span class="text-destructive">*</span></Label>
+                                    <Input type="date" v-model="form.dob" class="h-10" />
+                                </div>
+
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs">Gender <span class="text-destructive">*</span></Label>
+                                    <Select v-model="form.gender">
+                                        <SelectTrigger class="h-10"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="male">Male</SelectItem>
+                                            <SelectItem value="female">Female</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs">Marital Status</Label>
+                                    <Select v-model="form.marital_status">
+                                        <SelectTrigger class="h-10"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Single">Single</SelectItem>
+                                            <SelectItem value="Married">Married</SelectItem>
+                                            <SelectItem value="Divorced">Divorced</SelectItem>
+                                            <SelectItem value="Widowed">Widowed</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs">Phone Number <span class="text-destructive">*</span></Label>
+                                    <Input type="tel" v-model="form.phone" placeholder="+234..." class="h-10" />
+                                </div>
+
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs">Nationality</Label>
+                                    <Input v-model="form.nationality" class="h-10" />
+                                </div>
                             </div>
 
-                            <div class="space-y-3">
-                                <Label class="font-semibold text-foreground">State of Origin <span class="text-destructive">*</span></Label>
-                                <Select v-model="form.state_id">
-                                    <SelectTrigger class="h-12">
-                                        <SelectValue placeholder="Select State" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem v-for="state in states" :key="state.id" :value="String(state.id)">
-                                            {{ state.name }}
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div class="space-y-3">
-                                <Label class="font-semibold text-foreground">LGA of Origin <span class="text-destructive">*</span></Label>
-                                <Select v-model="form.lga_id" :disabled="!form.state_id">
-                                    <SelectTrigger class="h-12">
-                                        <SelectValue placeholder="Select LGA" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem v-for="lga in filteredLgas" :key="lga.id" :value="String(lga.id)">
-                                            {{ lga.name }}
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
+                            <!-- Name change toggle -->
+                            <div v-if="isPg" class="pt-2">
+                                <div class="flex items-center gap-2">
+                                    <input
+                                        id="has_name_change"
+                                        type="checkbox"
+                                        v-model="form.has_name_change"
+                                        class="h-4 w-4 rounded border-border text-primary"
+                                    />
+                                    <Label for="has_name_change" class="text-xs text-muted-foreground cursor-pointer">
+                                        I have changed my name since my previous degree was issued (e.g. by marriage)
+                                    </Label>
+                                </div>
+                                <div v-if="form.has_name_change" class="pt-3 pl-6 max-w-md space-y-1">
+                                    <Label class="text-xs">Previous Full Name</Label>
+                                    <Input v-model="form.previous_full_name" placeholder="Name as printed on degree" class="h-10" />
+                                </div>
                             </div>
                         </div>
 
-                        <div class="bg-muted/30 p-6 rounded-xl border border-border/50 space-y-6">
-                            <h4 class="font-serif text-lg font-bold text-primary flex items-center gap-2">
-                                <span class="i-lucide-users w-5 h-5"></span> Next of Kin Details
-                            </h4>
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div class="space-y-3">
-                                    <Label class="font-semibold text-foreground">Full Name</Label>
-                                    <Input v-model="form.next_of_kin_name" placeholder="Name of next of kin" class="h-12 bg-background" />
+                        <Separator />
+
+                        <!-- Contact & Domicile -->
+                        <div class="space-y-4">
+                            <div>
+                                <h3 class="text-base font-semibold text-foreground">Contact & Origin</h3>
+                                <p class="text-xs text-muted-foreground mt-0.5">Your residential address and state of origin.</p>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+                                <div class="space-y-1.5 md:col-span-2">
+                                    <Label class="text-xs">Residential Address <span class="text-destructive">*</span></Label>
+                                    <Input v-model="form.address" placeholder="Full residential address" class="h-10" />
                                 </div>
-    
-                                 <div class="space-y-3">
-                                    <Label class="font-semibold text-foreground">Phone Number</Label>
-                                    <Input v-model="form.next_of_kin_phone" placeholder="Phone number" class="h-12 bg-background" />
+
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs">State of Origin <span class="text-destructive">*</span></Label>
+                                    <Select v-model="form.state_id">
+                                        <SelectTrigger class="h-10"><SelectValue placeholder="Select State" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem v-for="state in states" :key="state.id" :value="String(state.id)">
+                                                {{ state.name }}
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-    
-                                 <div class="space-y-3 md:col-span-2">
-                                    <Label class="font-semibold text-foreground">Relationship</Label>
-                                     <Select v-model="form.next_of_kin_relationship">
-                                        <SelectTrigger class="h-12 bg-background">
-                                            <SelectValue placeholder="Select Relationship" />
-                                        </SelectTrigger>
+
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs">LGA of Origin <span class="text-destructive">*</span></Label>
+                                    <Select v-model="form.lga_id" :disabled="!form.state_id">
+                                        <SelectTrigger class="h-10"><SelectValue placeholder="Select LGA" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem v-for="lga in filteredLgas" :key="lga.id" :value="String(lga.id)">
+                                                {{ lga.name }}
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        <!-- Next of Kin -->
+                        <div class="space-y-4">
+                            <div>
+                                <h3 class="text-base font-semibold text-foreground">Next of Kin</h3>
+                                <p class="text-xs text-muted-foreground mt-0.5">Emergency contact person details.</p>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs">Full Name <span class="text-destructive">*</span></Label>
+                                    <Input v-model="form.next_of_kin_name" placeholder="Full Name" class="h-10" />
+                                </div>
+
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs">Phone Number <span class="text-destructive">*</span></Label>
+                                    <Input v-model="form.next_of_kin_phone" placeholder="+234..." class="h-10" />
+                                </div>
+
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs">Relationship <span class="text-destructive">*</span></Label>
+                                    <Select v-model="form.next_of_kin_relationship">
+                                        <SelectTrigger class="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="Father">Father</SelectItem>
                                             <SelectItem value="Mother">Mother</SelectItem>
-                                            <SelectItem value="Sibling">Sibling</SelectItem>
                                             <SelectItem value="Spouse">Spouse</SelectItem>
+                                            <SelectItem value="Sibling">Sibling</SelectItem>
                                             <SelectItem value="Guardian">Guardian</SelectItem>
                                             <SelectItem value="Other">Other</SelectItem>
                                         </SelectContent>
@@ -373,167 +707,400 @@ const submitApplication = () => {
                             </div>
                         </div>
                     </div>
-                    </Transition>
 
-                    <!-- Step 2: Academic History -->
-                    <Transition enter-active-class="transition-all duration-500 ease-out" enter-from-class="opacity-0 translate-x-8" enter-to-class="opacity-100 translate-x-0" leave-active-class="absolute inset-x-8 transition-all duration-300 ease-in" leave-from-class="opacity-100 -translate-x-0" leave-to-class="opacity-0 -translate-x-8">
+                    <!-- ========================================== -->
+                    <!-- STEP 2: Qualifications & 3 Referees        -->
+                    <!-- ========================================== -->
                     <div v-if="currentStep === 2" class="space-y-8">
-                        <div class="bg-primary/5 p-6 rounded-xl border border-primary/10">
-                            <div class="space-y-3 max-w-md">
-                                <Label class="font-semibold text-foreground">JAMB Score <span class="text-destructive">*</span></Label>
-                                <Input type="number" v-model="form.jamb_score" placeholder="e.g 280" class="h-12 text-lg font-medium" />
-                                <p class="text-xs text-muted-foreground mt-1">Please enter your exact JAMB score for verification.</p>
-                            </div>
-                        </div>
-                        
-                        <Separator />
-                    </div>
-                    </Transition>
-
-                    <!-- Step 3: Uploads -->
-                    <Transition enter-active-class="transition-all duration-500 ease-out" enter-from-class="opacity-0 translate-x-8" enter-to-class="opacity-100 translate-x-0" leave-active-class="absolute inset-x-8 transition-all duration-300 ease-in" leave-from-class="opacity-100 -translate-x-0" leave-to-class="opacity-0 -translate-x-8">
-                    <div v-if="currentStep === 3" class="space-y-8">
-                        <div class="bg-muted/20 p-6 rounded-xl border border-border/50">
-                            <FileUploader
-                                label="Passport Photograph *"
-                                accept="image/*"
-                                @update:file="(file) => form.passport_photo = file"
-                            />
-                            <p class="text-xs text-muted-foreground mt-3">Upload a recent, clear passport photograph. Max size: 500KB.</p>
-                        </div>
-                        
-                        <div class="bg-muted/20 p-6 rounded-xl border border-border/50">
-                            <FileUploader
-                                label="O'Level Result (WAEC/NECO) *"
-                                accept=".pdf,image/*"
-                                @update:file="(file) => form.waec_result = file"
-                            />
-                            <p class="text-xs text-muted-foreground mt-3">Upload a scanned copy of your result or statement of result. Max size: 500KB.</p>
-                        </div>
-                    </div>
-                    </Transition>
-
-                    <!-- Step 4: Review -->
-                    <Transition enter-active-class="transition-all duration-500 ease-out" enter-from-class="opacity-0 translate-x-8" enter-to-class="opacity-100 translate-x-0" leave-active-class="absolute inset-x-8 transition-all duration-300 ease-in" leave-from-class="opacity-100 -translate-x-0" leave-to-class="opacity-0 -translate-x-8">
-                    <div v-if="currentStep === 4" class="space-y-8">
-                        <div class="bg-card shadow-sm border border-border/50 rounded-xl overflow-hidden">
-                            <div class="bg-primary/5 px-6 py-4 border-b border-border/50 flex items-center gap-3">
-                                <span class="bg-primary text-primary-foreground w-8 h-8 rounded-full flex items-center justify-center font-bold">1</span>
-                                <h3 class="font-serif text-xl font-bold text-foreground">Personal Information Summary</h3>
-                            </div>
-                            <div class="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-sm">
-                                <div class="space-y-1">
-                                    <span class="block text-muted-foreground text-xs uppercase tracking-wider font-semibold">Full Name</span>
-                                    <span class="font-medium text-base text-foreground bg-muted/30 px-3 py-2 rounded-md block border border-transparent hover:border-border transition-colors">{{ form.first_name }} {{ form.last_name }}</span>
-                                </div>
-                                <div class="space-y-1">
-                                    <span class="block text-muted-foreground text-xs uppercase tracking-wider font-semibold">Date of Birth</span>
-                                    <span class="font-medium text-base text-foreground bg-muted/30 px-3 py-2 rounded-md block border border-transparent hover:border-border transition-colors">{{ form.dob }}</span>
-                                </div>
-                                <div class="space-y-1">
-                                    <span class="block text-muted-foreground text-xs uppercase tracking-wider font-semibold">Phone</span>
-                                    <span class="font-medium text-base text-foreground bg-muted/30 px-3 py-2 rounded-md block border border-transparent hover:border-border transition-colors">{{ form.phone }}</span>
-                                </div>
-                                <div class="space-y-1 sm:col-span-2 lg:col-span-3">
-                                    <span class="block text-muted-foreground text-xs uppercase tracking-wider font-semibold">Address</span>
-                                    <span class="font-medium text-base text-foreground bg-muted/30 px-3 py-2 rounded-md block border border-transparent hover:border-border transition-colors break-words">{{ form.address }}</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="bg-card shadow-sm border border-border/50 rounded-xl overflow-hidden">
-                            <div class="bg-primary/5 px-6 py-4 border-b border-border/50 flex items-center gap-3">
-                                <span class="bg-primary text-primary-foreground w-8 h-8 rounded-full flex items-center justify-center font-bold">2</span>
-                                <h3 class="font-serif text-xl font-bold text-foreground">Academic Information</h3>
-                            </div>
-                            <div class="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-sm">
-                                <div class="space-y-1">
-                                    <span class="block text-muted-foreground text-xs uppercase tracking-wider font-semibold">Application Mode</span>
-                                    <span class="font-medium text-base text-foreground bg-muted/30 px-3 py-2 rounded-md block border border-transparent hover:border-border transition-colors">
-                                        {{ form.mode }}
-                                    </span>
-                                </div>
-                                <div class="space-y-1" v-if="programme">
-                                    <span class="block text-muted-foreground text-xs uppercase tracking-wider font-semibold">Programme Choice</span>
-                                    <span class="font-medium text-base text-foreground bg-muted/30 px-3 py-2 rounded-md block border border-transparent hover:border-border transition-colors">
-                                        {{ programme.name }}
-                                    </span>
-                                </div>
-                                <div class="space-y-1" v-if="currentSession">
-                                    <span class="block text-muted-foreground text-xs uppercase tracking-wider font-semibold">Academic Session</span>
-                                    <span class="font-medium text-base text-foreground bg-muted/30 px-3 py-2 rounded-md block border border-transparent hover:border-border transition-colors">
-                                        {{ currentSession.name }} Session
-                                    </span>
-                                </div>
-                                <div class="space-y-1">
-                                    <span class="block text-muted-foreground text-xs uppercase tracking-wider font-semibold">JAMB Score</span>
-                                    <span class="font-medium text-base text-foreground bg-muted/30 px-3 py-2 rounded-md block border border-transparent hover:border-border transition-colors flex items-center gap-2">
-                                        {{ form.jamb_score || 'N/A' }}
-                                        <span v-if="form.jamb_score" class="i-lucide-badge-check text-green-500 w-4 h-4"></span>
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="bg-card shadow-sm border border-border/50 rounded-xl overflow-hidden">
-                            <div class="bg-primary/5 px-6 py-4 border-b border-border/50 flex items-center gap-3">
-                                <span class="bg-primary text-primary-foreground w-8 h-8 rounded-full flex items-center justify-center font-bold">3</span>
-                                <h3 class="font-serif text-xl font-bold text-foreground">Documents Attached</h3>
-                            </div>
-                            <div class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                                <div class="flex items-center gap-3 p-3 rounded-lg border" :class="form.passport_photo ? 'bg-green-50/50 border-green-200' : 'bg-destructive/5 border-destructive/20'">
-                                    <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center" :class="form.passport_photo ? 'bg-green-100 text-green-600' : 'bg-destructive/10 text-destructive'">
-                                        <span v-if="form.passport_photo" class="text-lg">✓</span>
-                                        <span v-else class="text-lg">✗</span>
-                                    </div>
+                        <template v-if="isPg">
+                            <!-- Tertiary Degrees -->
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
                                     <div>
-                                        <p class="font-semibold text-foreground">Passport Photo</p>
-                                        <p class="text-xs text-muted-foreground">{{ form.passport_photo ? form.passport_photo.name : 'Missing document' }}</p>
+                                        <h3 class="text-base font-semibold text-foreground">Tertiary Academic Qualifications</h3>
+                                        <p class="text-xs text-muted-foreground mt-0.5">Add your bachelor's degree, HND, or postgraduate diploma.</p>
                                     </div>
+                                    <Button type="button" variant="outline" size="sm" class="text-xs h-8" @click="addQualification">
+                                        <Plus class="w-3.5 h-3.5 mr-1" />
+                                        Add Degree
+                                    </Button>
                                 </div>
-                                <div class="flex items-center gap-3 p-3 rounded-lg border" :class="form.waec_result ? 'bg-green-50/50 border-green-200' : 'bg-destructive/5 border-destructive/20'">
-                                    <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center" :class="form.waec_result ? 'bg-green-100 text-green-600' : 'bg-destructive/10 text-destructive'">
-                                        <span v-if="form.waec_result" class="text-lg">✓</span>
-                                        <span v-else class="text-lg">✗</span>
-                                    </div>
-                                    <div>
-                                        <p class="font-semibold text-foreground">O'Level Result</p>
-                                        <p class="text-xs text-muted-foreground">{{ form.waec_result ? form.waec_result.name : 'Missing document' }}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
 
-                        <div class="flex items-start gap-4 p-5 bg-yellow-50 text-yellow-900 rounded-xl border border-yellow-200 shadow-sm mt-8">
-                            <div class="flex-shrink-0 mt-0.5">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 text-yellow-600"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-                            </div>
-                             <div class="space-y-1">
-                                <h4 class="font-bold">Declaration of Authenticity</h4>
-                                <p class="text-sm leading-relaxed text-yellow-800/90">
-                                    By submitting this application, I solemnly declare that all information provided is true to the best of my knowledge.
-                                    I understand that any false declaration or forgery will result in immediate disqualification, expulsion, and possible prosecution under the law.
+                                <p v-if="form.errors.previous_qualification" class="text-xs text-destructive bg-destructive/10 p-3 rounded-lg">
+                                    {{ form.errors.previous_qualification }}
                                 </p>
+
+                                <div class="space-y-4">
+                                    <div
+                                        v-for="(qual, qIdx) in form.qualifications"
+                                        :key="qIdx"
+                                        class="p-5 rounded-xl border border-border/80 bg-muted/10 space-y-4"
+                                    >
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-xs font-semibold text-foreground">
+                                                {{ qIdx === 0 ? 'Primary Qualifying Degree' : `Additional Degree #${qIdx + 1}` }}
+                                            </span>
+                                            <Button
+                                                v-if="form.qualifications.length > 1"
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                class="text-destructive h-7 text-xs px-2"
+                                                @click="removeQualification(qIdx)"
+                                            >
+                                                <Trash2 class="w-3.5 h-3.5 mr-1" />
+                                                Remove
+                                            </Button>
+                                        </div>
+
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
+                                                <Label class="text-xs">Awarding Institution <span class="text-destructive">*</span></Label>
+                                                <Input v-model="qual.institution_name" placeholder="e.g. University of Lagos" class="h-10 bg-background" />
+                                            </div>
+
+                                            <div class="space-y-1.5">
+                                                <Label class="text-xs">Qualification Type <span class="text-destructive">*</span></Label>
+                                                <Select v-model="qual.qualification_type">
+                                                    <SelectTrigger class="h-10 bg-background"><SelectValue placeholder="Select type" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem v-for="q in qualificationOptions" :key="q" :value="q">{{ q }}</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            <div class="space-y-1.5">
+                                                <Label class="text-xs">Class of Degree <span class="text-destructive">*</span></Label>
+                                                <Select v-model="qual.class_of_degree">
+                                                    <SelectTrigger class="h-10 bg-background"><SelectValue placeholder="Select grade" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem v-for="c in degreeClassOptions" :key="c" :value="c">{{ c }}</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            <div class="space-y-1.5">
+                                                <Label class="text-xs">Discipline / Course <span class="text-destructive">*</span></Label>
+                                                <Input v-model="qual.course_of_study" placeholder="e.g. Law" class="h-10 bg-background" />
+                                            </div>
+
+                                            <div class="space-y-1.5">
+                                                <Label class="text-xs">CGPA (out of 5.00)</Label>
+                                                <Input type="number" step="0.01" min="0" max="5" v-model="qual.cgpa" placeholder="e.g. 4.15" class="h-10 bg-background" />
+                                            </div>
+
+                                            <div class="space-y-1.5">
+                                                <Label class="text-xs">Year of Graduation <span class="text-destructive">*</span></Label>
+                                                <Input type="number" min="1970" max="2030" v-model="qual.graduation_year" placeholder="2022" class="h-10 bg-background" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <Separator />
+
+                            <!-- NYSC & Research Intent -->
+                            <div class="space-y-4">
+                                <div>
+                                    <h3 class="text-base font-semibold text-foreground">National Service & Research Focus</h3>
+                                    <p class="text-xs text-muted-foreground mt-0.5">NYSC discharge details and proposed thesis area.</p>
+                                </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                                    <div class="space-y-1.5">
+                                        <Label class="text-xs">NYSC Status <span class="text-destructive">*</span></Label>
+                                        <Select v-model="form.nysc_status">
+                                            <SelectTrigger class="h-10"><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="Completed">Completed (Discharged)</SelectItem>
+                                                <SelectItem value="Exempted">Exempted</SelectItem>
+                                                <SelectItem value="Excluded">Excluded</SelectItem>
+                                                <SelectItem value="Non-Nigerian">International Non-Nigerian</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div class="space-y-1.5">
+                                        <Label class="text-xs">NYSC Certificate / Exemption Number</Label>
+                                        <Input v-model="form.nysc_certificate_number" placeholder="Certificate Number" class="h-10" />
+                                    </div>
+
+                                    <div class="space-y-1.5 sm:col-span-2">
+                                        <Label class="text-xs">Proposed Dissertation / Research Title</Label>
+                                        <Input v-model="form.research_proposal_title" placeholder="Brief research or capstone project title" class="h-10" />
+                                    </div>
+
+                                    <div class="space-y-1.5 sm:col-span-2">
+                                        <Label class="text-xs">Statement of Purpose</Label>
+                                        <textarea
+                                            v-model="form.statement_of_purpose"
+                                            class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                                            placeholder="State your academic motivation and background..."
+                                        ></textarea>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <Separator />
+
+                            <!-- 3 Referees -->
+                            <div class="space-y-4">
+                                <div>
+                                    <h3 class="text-base font-semibold text-foreground">Three (3) Referees <span class="text-destructive">*</span></h3>
+                                    <p class="text-xs text-muted-foreground mt-0.5">Provide 3 referees who will submit online confidential recommendations.</p>
+                                </div>
+
+                                <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                                    <div
+                                        v-for="(referee, idx) in form.referees"
+                                        :key="idx"
+                                        class="p-4 rounded-xl border border-border/80 bg-muted/10 space-y-3"
+                                    >
+                                        <span class="text-xs font-semibold text-foreground block">
+                                            Referee {{ idx + 1 }} {{ idx === 0 ? '(Academic Supervisor)' : (idx === 1 ? '(Lecturer / HOD)' : '(Academic / Professional)') }}
+                                        </span>
+
+                                        <div class="space-y-2.5">
+                                            <div class="space-y-1">
+                                                <Label class="text-xs">Full Name <span class="text-destructive">*</span></Label>
+                                                <Input v-model="referee.name" placeholder="e.g. Prof. J. A. Bello" class="h-9 bg-background text-xs" />
+                                            </div>
+
+                                            <div class="space-y-1">
+                                                <Label class="text-xs">Email Address <span class="text-destructive">*</span></Label>
+                                                <Input type="email" v-model="referee.email" placeholder="bello@university.edu.ng" class="h-9 bg-background text-xs font-mono" />
+                                            </div>
+
+                                            <div class="space-y-1">
+                                                <Label class="text-xs">Phone Number</Label>
+                                                <Input v-model="referee.phone" placeholder="+234..." class="h-9 bg-background text-xs" />
+                                            </div>
+
+                                            <div class="space-y-1">
+                                                <Label class="text-xs">Institution / Organization <span class="text-destructive">*</span></Label>
+                                                <Input v-model="referee.institution_or_organization" placeholder="e.g. University of Lagos" class="h-9 bg-background text-xs" />
+                                            </div>
+
+                                            <div class="space-y-1">
+                                                <Label class="text-xs">Relationship</Label>
+                                                <Input v-model="referee.relationship" placeholder="e.g. Supervisor" class="h-9 bg-background text-xs" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Undergraduate Academic Details -->
+                        <template v-else>
+                            <div class="space-y-4 max-w-md">
+                                <div class="space-y-2">
+                                    <Label class="text-sm">Official JAMB Score <span class="text-destructive">*</span></Label>
+                                    <Input type="number" v-model="form.jamb_score" placeholder="e.g. 275" class="h-11 font-semibold" />
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- ========================================== -->
+                    <!-- STEP 3: Document Uploads                   -->
+                    <!-- ========================================== -->
+                    <div v-if="currentStep === 3" class="space-y-6">
+                        <div>
+                            <h3 class="text-base font-semibold text-foreground">Supporting Documents</h3>
+                            <p class="text-xs text-muted-foreground mt-0.5">Upload clear PDF or image scans (max 2MB each).</p>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                            <div class="p-4 rounded-xl border border-border/80 bg-background space-y-2">
+                                <FileUploader
+                                    label="Passport Photograph *"
+                                    accept="image/*"
+                                    @update:file="(file) => form.passport_photo = file"
+                                />
+                            </div>
+
+                            <div v-if="isPg" class="p-4 rounded-xl border border-border/80 bg-background space-y-2">
+                                <FileUploader
+                                    label="Academic Transcript *"
+                                    accept=".pdf,image/*"
+                                    @update:file="(file) => form.academic_transcript = file"
+                                />
+                            </div>
+
+                            <div v-if="isPg" class="p-4 rounded-xl border border-border/80 bg-background space-y-2">
+                                <FileUploader
+                                    label="Degree Certificate (Optional)"
+                                    accept=".pdf,image/*"
+                                    @update:file="(file) => form.degree_certificate = file"
+                                />
+                            </div>
+
+                            <div v-if="isPg" class="p-4 rounded-xl border border-border/80 bg-background space-y-2">
+                                <FileUploader
+                                    label="NYSC Certificate (Optional)"
+                                    accept=".pdf,image/*"
+                                    @update:file="(file) => form.nysc_certificate = file"
+                                />
+                            </div>
+
+                            <div v-if="isPg" class="p-4 rounded-xl border border-border/80 bg-background space-y-2">
+                                <FileUploader
+                                    label="Curriculum Vitae (CV) (Optional)"
+                                    accept=".pdf,.doc,.docx"
+                                    @update:file="(file) => form.cv_resume = file"
+                                />
+                            </div>
+
+                            <div v-if="isPg" class="p-4 rounded-xl border border-border/80 bg-background space-y-2">
+                                <FileUploader
+                                    label="Research Concept Note (Optional)"
+                                    accept=".pdf,.doc,.docx"
+                                    @update:file="(file) => form.concept_note = file"
+                                />
+                            </div>
+
+                            <div v-if="isPg && form.has_name_change" class="p-4 rounded-xl border border-border/80 bg-background space-y-2 sm:col-span-2">
+                                <FileUploader
+                                    label="Marriage Certificate / Change of Name Document *"
+                                    accept=".pdf,image/*"
+                                    @update:file="(file) => form.name_change_evidence = file"
+                                />
+                            </div>
+
+                            <div class="p-4 rounded-xl border border-border/80 bg-background space-y-2">
+                                <FileUploader
+                                    :label="isPg ? 'O\'Level Result (Optional)' : 'O\'Level Result *'"
+                                    accept=".pdf,image/*"
+                                    @update:file="(file) => form.waec_result = file"
+                                />
                             </div>
                         </div>
                     </div>
-                    </Transition>
+
+                    <!-- ========================================== -->
+                    <!-- STEP 4: Review & Submit                    -->
+                    <!-- ========================================== -->
+                    <div v-if="currentStep === 4" class="space-y-6">
+                        <div>
+                            <h3 class="text-base font-semibold text-foreground">Review Application</h3>
+                            <p class="text-xs text-muted-foreground mt-0.5">Please confirm your details before final submission.</p>
+                        </div>
+
+                        <div class="space-y-4">
+                            <!-- Personal Details Summary -->
+                            <div class="p-4 rounded-xl border border-border/80 bg-muted/10 space-y-3">
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Personal Information</h4>
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                    <div>
+                                        <span class="text-muted-foreground block text-[10px]">Name</span>
+                                        <span class="font-medium text-foreground">{{ form.title }} {{ form.first_name }} {{ form.last_name }}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-muted-foreground block text-[10px]">Date of Birth</span>
+                                        <span class="font-medium text-foreground">{{ form.dob }}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-muted-foreground block text-[10px]">Phone</span>
+                                        <span class="font-medium text-foreground">{{ form.phone }}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-muted-foreground block text-[10px]">Next of Kin</span>
+                                        <span class="font-medium text-foreground">{{ form.next_of_kin_name }}</span>
+                                    </div>
+                                    <div class="col-span-2 sm:col-span-4">
+                                        <span class="text-muted-foreground block text-[10px]">Address</span>
+                                        <span class="font-medium text-foreground">{{ form.address }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Programme & Pathway Summary -->
+                            <div class="p-4 rounded-xl border border-border/80 bg-muted/10 space-y-3">
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Programme Choice</h4>
+                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                                    <div>
+                                        <span class="text-muted-foreground block text-[10px]">Programme</span>
+                                        <span class="font-medium text-foreground">{{ programme?.name }}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-muted-foreground block text-[10px]">Mode</span>
+                                        <span class="font-medium text-foreground uppercase">{{ form.study_mode }}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-muted-foreground block text-[10px]">Sponsorship</span>
+                                        <span class="font-medium text-foreground uppercase">{{ form.sponsorship_type }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Qualifications & Referees Summary (PG) -->
+                            <div v-if="isPg" class="p-4 rounded-xl border border-border/80 bg-muted/10 space-y-3">
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Qualifications & Referees</h4>
+                                <div class="space-y-2 text-xs">
+                                    <div v-for="(q, idx) in form.qualifications" :key="idx" class="border-b pb-2 last:border-b-0">
+                                        <span class="font-medium text-foreground">{{ q.qualification_type }} in {{ q.course_of_study }}</span>
+                                        <span class="text-muted-foreground"> — {{ q.institution_name }} ({{ q.class_of_degree }})</span>
+                                    </div>
+                                </div>
+                                <div class="pt-1">
+                                    <span class="text-muted-foreground block text-[10px] mb-1">Referees:</span>
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                                        <div v-for="(r, i) in form.referees" :key="i" class="p-2 rounded bg-background border text-[11px]">
+                                            <span class="font-medium block">{{ r.name }}</span>
+                                            <span class="text-muted-foreground font-mono truncate block">{{ r.email }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Declaration -->
+                            <div class="p-4 rounded-xl bg-muted/30 border border-border/80 text-xs text-muted-foreground leading-relaxed">
+                                By clicking <strong>Submit Application</strong>, I confirm that all information provided is accurate and authentic to the best of my knowledge.
+                            </div>
+                        </div>
+                    </div>
 
                 </CardContent>
-                <CardFooter class="flex justify-between border-t border-border/50 bg-muted/10 p-6 sm:p-8 mt-auto rounded-b-xl relative z-10">
-                    <Button variant="outline" @click="prevStep" :disabled="currentStep === 0" class="w-32 h-12 font-medium">
+
+                <!-- Clean Card Footer -->
+                <CardFooter class="flex items-center justify-between border-t border-border/70 p-6 bg-muted/5">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        @click="prevStep"
+                        :disabled="currentStep === 0"
+                        class="text-xs h-10 px-4"
+                    >
+                        <ChevronLeft class="w-4 h-4 mr-1" />
                         Previous
                     </Button>
 
-                    <Button v-if="currentStep < steps.length - 1" @click="nextStep" :disabled="!stepIsValid" class="w-32 h-12 shadow-lg hover:shadow-primary/30 font-semibold transition-all">
-                        Next Step
+                    <Button
+                        v-if="currentStep < steps.length - 1"
+                        size="sm"
+                        @click="nextStep"
+                        :disabled="!stepIsValid"
+                        class="text-xs h-10 px-5"
+                    >
+                        Continue
+                        <ChevronRight class="w-4 h-4 ml-1" />
                     </Button>
 
-                    <Button v-else @click="submitApplication" :disabled="form.processing" class="w-48 bg-primary text-primary-foreground shadow-lg hover:shadow-xl transition-all">
+                    <Button
+                        v-else
+                        size="sm"
+                        @click="submitApplication"
+                        :disabled="form.processing"
+                        class="text-xs h-10 px-6 font-semibold"
+                    >
+                        <Send class="w-4 h-4 mr-2" />
                         Submit Application
                     </Button>
                 </CardFooter>
             </Card>
+
         </div>
     </ApplicantLayout>
 </template>

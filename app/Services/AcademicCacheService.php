@@ -41,7 +41,7 @@ class AcademicCacheService
             if ($onlyActive) {
                 $query->where('is_active', true);
             }
-            return $query->get(['id', 'name', 'department_id', 'is_active']);
+            return $query->get(['id', 'name', 'department_id', 'is_active', 'type', 'academic_stream', 'calendar_type', 'matric_format']);
         });
     }
 
@@ -62,7 +62,7 @@ class AcademicCacheService
     public static function getSessions()
     {
         return Cache::remember('academic_sessions_list', self::TTL, function () {
-            return Session::latest()->get(['id', 'name']);
+            return Session::latest()->get(['id', 'name', 'academic_stream', 'calendar_type', 'is_current']);
         });
     }
 
@@ -77,6 +77,26 @@ class AcademicCacheService
                     $session->is_current = true;
                 }
             }
+            return $session;
+        });
+    }
+
+    public static function getCurrentSessionForStream(string $stream = 'UG', string $calendarType = 'semester')
+    {
+        $stream = strtoupper($stream);
+        $calendarType = strtolower($calendarType);
+        $cacheKey = "current_session_{$stream}_{$calendarType}";
+
+        return Cache::remember($cacheKey, self::TTL, function () use ($stream, $calendarType) {
+            $session = Session::where('is_current', true)
+                ->where('academic_stream', $stream)
+                ->where('calendar_type', $calendarType)
+                ->first();
+
+            if (!$session && $stream === 'UG' && $calendarType === 'semester') {
+                $session = Session::where('is_current', true)->first();
+            }
+
             return $session;
         });
     }
@@ -339,6 +359,9 @@ class AcademicCacheService
         Cache::forget('all_scholarships');
         Cache::forget('academic_sessions_list');
         Cache::forget('current_session');
+        Cache::forget('current_session_UG_semester');
+        Cache::forget('current_session_PG_semester');
+        Cache::forget('current_session_PG_trimester');
         Cache::forget('current_semester');
         Cache::forget('all_semesters_list');
         Cache::forget('all_faculties');

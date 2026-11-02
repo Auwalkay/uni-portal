@@ -86,11 +86,11 @@ class PaymentController extends Controller
             }
         }
 
-        $currentSession = Session::current();
+        $student = Auth::user()->student;
+        $currentSession = $student ? $student->resolveCurrentSession() : Session::current();
         $canGenerateInvoice = false;
         $optionalFees = [];
 
-        $student = Auth::user()->student;
         if ($currentSession && $student) {
             $canGenerateInvoice = $currentSession->school_fee_payment_enabled && 
                 ! Invoice::where('user_id', Auth::id())
@@ -137,7 +137,7 @@ class PaymentController extends Controller
     public function getOptionalFees()
     {
         $student = Auth::user()->student;
-        $currentSession = Session::current();
+        $currentSession = $student ? $student->resolveCurrentSession() : Session::current();
         if (! $student || ! $currentSession) {
             return response()->json([]);
         }
@@ -151,7 +151,7 @@ class PaymentController extends Controller
     public function initiateOptionalFee(\App\Models\FeeConfiguration $config)
     {
         $student = Auth::user()->student;
-        $currentSession = Session::current();
+        $currentSession = $student ? $student->resolveCurrentSession() : Session::current();
 
         if (! $student || ! $student->hasDepartment()) {
             return back()->with('error', 'You cannot generate optional fee invoices because your academic department has not been assigned.');
@@ -388,8 +388,8 @@ class PaymentController extends Controller
     public function createSchoolFeeInvoice()
     {
         $user = Auth::user();
-        $student = \App\Models\Student::where('user_id', $user->id)->firstOrFail();
-        $currentSession = Session::current();
+        $student = \App\Models\Student::where('user_id', $user->id)->with('program')->firstOrFail();
+        $currentSession = $student->resolveCurrentSession() ?? Session::current();
 
         if (! $currentSession) {
             return back()->with('error', 'No active academic session found.');

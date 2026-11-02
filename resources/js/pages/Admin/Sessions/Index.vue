@@ -29,6 +29,8 @@ interface Session {
     is_current: boolean;
     registration_enabled: boolean;
     type?: string;
+    academic_stream?: 'UG' | 'PG';
+    calendar_type?: 'semester' | 'trimester';
     semesters?: Semester[]; // Optional if not loaded initially, but we should eager load
 }
 
@@ -45,11 +47,15 @@ const form = useForm({
     start_date: '',
     end_date: '',
     type: 'regular',
+    academic_stream: 'UG' as 'UG' | 'PG',
+    calendar_type: 'semester' as 'semester' | 'trimester',
 });
 
 const openCreate = () => {
     editingSession.value = null;
     form.reset();
+    form.academic_stream = 'UG';
+    form.calendar_type = 'semester';
     isModalOpen.value = true;
 };
 
@@ -59,6 +65,8 @@ const openEdit = (session: Session) => {
     form.start_date = session.start_date.split('T')[0];
     form.end_date = session.end_date.split('T')[0];
     form.type = session.type || 'regular'; // Handle existing sessions
+    form.academic_stream = session.academic_stream || 'UG';
+    form.calendar_type = session.calendar_type || 'semester';
     isModalOpen.value = true;
 };
 
@@ -168,6 +176,8 @@ const activateSemester = (session: Session, semester: Semester) => {
                             <TableRow>
                                 <TableHead class="w-[50px]"></TableHead>
                                 <TableHead>Name</TableHead>
+                                <TableHead>Stream</TableHead>
+                                <TableHead>Calendar</TableHead>
                                 <TableHead>Start Date</TableHead>
                                 <TableHead>End Date</TableHead>
                                 <TableHead>Status</TableHead>
@@ -182,6 +192,14 @@ const activateSemester = (session: Session, semester: Semester) => {
                                         <ChevronUp v-else class="h-4 w-4" />
                                     </TableCell>
                                     <TableCell class="font-medium">{{ session.name }}</TableCell>
+                                    <TableCell>
+                                        <Badge v-if="session.academic_stream === 'PG'" variant="secondary" class="bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 border-purple-200">PG</Badge>
+                                        <Badge v-else variant="outline">UG</Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge v-if="session.calendar_type === 'trimester'" variant="outline" class="border-indigo-300 text-indigo-700 dark:text-indigo-300">Trimester</Badge>
+                                        <Badge v-else variant="outline" class="text-muted-foreground">Semester</Badge>
+                                    </TableCell>
                                     <TableCell>{{ new Date(session.start_date).toLocaleDateString() }}</TableCell>
                                     <TableCell>{{ new Date(session.end_date).toLocaleDateString() }}</TableCell>
                                     <TableCell>
@@ -206,7 +224,7 @@ const activateSemester = (session: Session, semester: Semester) => {
                                 </TableRow>
                                 <!-- Nested Semesters Row -->
                                 <TableRow v-if="expandedSessionId === session.id" class="bg-muted/30">
-                                    <TableCell colspan="6" class="p-4">
+                                    <TableCell colspan="8" class="p-4">
                                         <div class="rounded-md border bg-background p-4">
                                             <h4 class="mb-4 text-sm font-semibold">Semesters</h4>
                                             <div class="grid gap-4 sm:grid-cols-2">
@@ -253,7 +271,34 @@ const activateSemester = (session: Session, semester: Semester) => {
                             <span v-if="form.errors.name" class="text-xs text-destructive">{{ form.errors.name }}</span>
                         </div>
 
-                        <div class="grid gap-2">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="grid gap-2">
+                                <Label for="academic_stream">Academic Stream</Label>
+                                <select
+                                    id="academic_stream"
+                                    v-model="form.academic_stream"
+                                    class="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                >
+                                    <option value="UG">Undergraduate (UG)</option>
+                                    <option value="PG">Postgraduate (PG)</option>
+                                </select>
+                                <span v-if="form.errors.academic_stream" class="text-xs text-destructive">{{ form.errors.academic_stream }}</span>
+                            </div>
+                            <div class="grid gap-2">
+                                <Label for="calendar_type">Calendar System</Label>
+                                <select
+                                    id="calendar_type"
+                                    v-model="form.calendar_type"
+                                    class="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                >
+                                    <option value="semester">Standard Semester (2 Semesters)</option>
+                                    <option value="trimester">Executive Trimester (3 Trimesters)</option>
+                                </select>
+                                <span v-if="form.errors.calendar_type" class="text-xs text-destructive">{{ form.errors.calendar_type }}</span>
+                            </div>
+                        </div>
+
+                        <div v-if="form.calendar_type !== 'trimester'" class="grid gap-2">
                             <Label for="type">Session Type</Label>
                             <select
                                 id="type"

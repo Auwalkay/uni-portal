@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building, Package, LifeBuoy, Library, Activity, Megaphone, UserCheck, FolderTree, QrCode, ShieldAlert, BookPlus, Inbox } from 'lucide-vue-next';
+import { 
+    BookOpen, Folder, LayoutGrid, Users, Shield, GraduationCap, CreditCard, FileText, 
+    Banknote, Calendar, CalendarRange, Wallet, DollarSign, Award, Building, Package, 
+    LifeBuoy, Library, Activity, Megaphone, UserCheck, FolderTree, QrCode, ShieldAlert, 
+    BookPlus, Inbox, FlaskConical, FileCheck, ScrollText, GitPullRequest, FileSpreadsheet 
+} from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -164,6 +169,44 @@ const academicsItems = computed(() => {
             href: route('admin.course_registration.index'),
             icon: BookOpen,
             show: hasPermission('manage_student_registrations'),
+        },
+    ].filter(i => i.show);
+});
+
+const postgraduateItems = computed(() => {
+    const isSuperAdmin = hasRole('admin') || hasRole('super_admin');
+
+    return [
+        {
+            title: 'SPGS Operations Desk',
+            href: route().has('admin.postgraduate.research.index') ? route('admin.postgraduate.research.index') : '/admin/postgraduate/research',
+            icon: FlaskConical,
+            show: isSuperAdmin || hasPermission('view_pg_dashboard') || hasPermission('manage_postgraduate_school') || hasRole(['dean_spgs', 'dpgc_chair', 'hod']),
+            items: [
+                { title: 'Theses & Projects', href: '/admin/postgraduate/research' },
+                { title: 'Milestones & Plagiarism', href: '/admin/postgraduate/research?tab=milestones' },
+                { title: 'Progress Reports (APR)', href: '/admin/postgraduate/research?tab=aprs' },
+                { title: 'Sundry Petitions', href: '/admin/postgraduate/research?tab=petitions' },
+                { title: 'Defense & Broadsheets', href: '/admin/postgraduate/research?tab=defense' },
+            ]
+        },
+        {
+            title: 'Supervisors & Quota Registry',
+            href: route().has('admin.postgraduate.staff.index') ? route('admin.postgraduate.staff.index') : '/admin/postgraduate/staff',
+            icon: Users,
+            show: isSuperAdmin || hasPermission('view_pg_supervisors') || hasPermission('manage_pg_supervisors') || hasRole(['dean_spgs', 'dean', 'hod', 'dpgc_chair']),
+        },
+        {
+            title: 'Supervisory Workbench',
+            href: route().has('staff.postgraduate.supervision.index') ? route('staff.postgraduate.supervision.index') : '/staff/postgraduate/supervision',
+            icon: UserCheck,
+            show: hasPermission('supervise_pg_students') || hasRole(['lecturer', 'staff']),
+        },
+        {
+            title: 'PG Admissions Pool',
+            href: '/admin/admissions?stream=PG',
+            icon: Award,
+            show: isSuperAdmin || hasPermission('view_applications'),
         },
     ].filter(i => i.show);
 });
@@ -461,6 +504,7 @@ const footerNavItems = computed(() => {
             <NavMain v-if="frontDeskItems.length > 0" :items="frontDeskItems" label="Front Desk" />
             <NavMain v-if="personalItems.length > 0" :items="personalItems" label="Personal" />
             <NavMain v-if="academicsItems.length > 0" :items="academicsItems" label="Academics" />
+            <NavMain v-if="postgraduateItems.length > 0" :items="postgraduateItems" label="Postgraduate School (SPGS)" />
             <NavMain v-if="examinationsItems.length > 0" :items="examinationsItems" label="Examinations" />
             <NavMain v-if="financeItems.length > 0" :items="financeItems" label="Finance" />
             <NavMain v-if="administrationItems.length > 0" :items="administrationItems" label="Administration" />

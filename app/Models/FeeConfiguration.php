@@ -14,6 +14,13 @@ class FeeConfiguration extends Model
     {
         return LogOptions::defaults()->logFillable()->logOnlyDirty()->dontLogEmptyChanges();
     }
+    public const MILESTONE_TYPES = [
+        'bench_fee' => 'Research Bench / Laboratory Fee',
+        'practicum_fee' => 'Executive Practicum / Field Attachment Fee',
+        'defense_fee' => 'External Defense / Viva Voce Fee',
+        'extension_fee' => 'Programme Extension / Renewal Fee',
+    ];
+
     protected $fillable = [
         'fee_type_id',
         'session_id',
@@ -26,6 +33,15 @@ class FeeConfiguration extends Model
         'amount',
         'is_compulsory',
         'is_per_course',
+        'is_milestone_fee',
+        'milestone_type',
+    ];
+
+    protected $casts = [
+        'amount' => 'float',
+        'is_compulsory' => 'boolean',
+        'is_per_course' => 'boolean',
+        'is_milestone_fee' => 'boolean',
     ];
 
     public function feeType()

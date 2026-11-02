@@ -33,13 +33,23 @@ class PromoteStudentsJob implements ShouldQueue
     public function handle(): void
     {
         $session = Session::findOrFail($this->sessionId);
+        $stream = $session->academic_stream ?? 'UG';
+        $calendarType = $session->calendar_type ?? 'semester';
 
-        // 1. Prepare Session and Semester Statuses
-        DB::transaction(function () use ($session) {
-            Session::where('is_current', true)->update(['is_current' => false]);
+        // 1. Prepare Session and Semester Statuses scoped to the target stream & calendar type
+        DB::transaction(function () use ($session, $stream, $calendarType) {
+            $sameStreamSessionIds = Session::where('academic_stream', $stream)
+                ->where('calendar_type', $calendarType)
+                ->pluck('id');
+
+            Session::whereIn('id', $sameStreamSessionIds)
+                ->where('is_current', true)
+                ->update(['is_current' => false]);
+
             $session->update(['is_current' => true]);
 
-            Semester::query()->update(['is_current' => false]);
+            Semester::whereIn('session_id', $sameStreamSessionIds)->update(['is_current' => false]);
+
             $firstSemester = $session->semesters()->where('name', 'First Semester')->first()
                 ?? $session->semesters()->where('name', 'Summer Semester')->first()
                 ?? $session->semesters()->first();
@@ -53,9 +63,18 @@ class PromoteStudentsJob implements ShouldQueue
             ?? $session->semesters()->value('name')
             ?? 'First Semester';
 
-        // 2. Dispatch Individual Jobs for each student
-        // Using chunkById to handle large datasets (5K+) without memory issues
+        // 2. Dispatch Individual Jobs only for students belonging to this academic stream & calendar type
         Student::where('status', '!=', 'graduated')
+            ->where(function ($query) use ($stream, $calendarType) {
+                $query->whereHas('program', function ($pq) use ($stream, $calendarType) {
+                    $pq->where('academic_stream', $stream)
+                        ->where('calendar_type', $calendarType);
+                });
+
+                if ($stream === 'UG' && $calendarType === 'semester') {
+                    $query->orWhereNull('program_id');
+                }
+            })
             ->chunkById(500, function ($students) use ($session, $firstSemesterName) {
                 foreach ($students as $student) {
                     ProcessStudentSessionJob::dispatch($student, $session, $firstSemesterName);

@@ -201,7 +201,12 @@
         </div>
 
         <h1 class="uni-name">Mewar International University Nigeria</h1>
-        <div class="form-title">Course Registration Form</div>
+        @if($student->is_postgraduate || $student->academic_stream === 'PG')
+            <div class="form-title" style="color: #6b21a8; font-size: 15px; margin-bottom: 2px;">School of Postgraduate Studies (SPGS)</div>
+            <div style="font-size: 13px; font-weight: bold; text-transform: uppercase; color: #333; margin-bottom: 4px;">Postgraduate Course & Research Milestone Registration Form</div>
+        @else
+            <div class="form-title">Course Registration Form</div>
+        @endif
         <div class="session-info">
             {{ $session->name }} Academic Session
             @if($semester)
@@ -237,9 +242,17 @@
             <tr>
                 <td class="info-label">Programme:</td>
                 <td class="info-value">{{ $student->program->name ?? 'N/A' }}</td>
-                <td class="info-label">Level:</td>
-                <td class="info-value">{{ $student->current_level }}</td>
+                <td class="info-label">Level / Stream:</td>
+                <td class="info-value">{{ $student->current_level }} ({{ $student->is_postgraduate || $student->academic_stream === 'PG' ? 'Postgraduate' : 'Undergraduate' }})</td>
             </tr>
+            @if($student->is_postgraduate || $student->academic_stream === 'PG')
+            <tr>
+                <td class="info-label">SPGS File No:</td>
+                <td class="info-value">{{ $student->spgs_file_number ?? ('SPGS/' . $student->matriculation_number) }}</td>
+                <td class="info-label">Study Mode:</td>
+                <td class="info-value">{{ ucfirst(str_replace('_', ' ', $student->postgraduateProfile->mode_of_study ?? $student->study_mode ?? 'Full-Time')) }}</td>
+            </tr>
+            @endif
         </table>
     </div>
 
@@ -284,23 +297,46 @@
     </div>
 
     <div class="footer">
-        <table class="signature-grid">
-            <tr>
-                <td class="signature-cell">
-                    <div class="signature-line">Student's Signature</div>
-                </td>
-                <td width="10%"></td>
-                <td class="signature-cell">
-                    <div class="signature-line">Course Adviser's Signature</div>
-                </td>
-            </tr>
-            <tr>
-                <td colspan="3" style="padding-top: 30px; text-align: center; font-size: 10px; color: #999;">
-                    Generated on {{ now()->format('d/m/Y H:i:s') }} | Mewar International University Nigeria Course
-                    Management System
-                </td>
-            </tr>
-        </table>
+        @if($student->is_postgraduate || $student->academic_stream === 'PG')
+            <table class="signature-grid">
+                <tr>
+                    <td class="signature-cell" style="width: 30%;">
+                        <div class="signature-line">Candidate's Signature & Date</div>
+                    </td>
+                    <td style="width: 5%;"></td>
+                    <td class="signature-cell" style="width: 30%;">
+                        <div class="signature-line">Major Supervisor / PG Coordinator</div>
+                    </td>
+                    <td style="width: 5%;"></td>
+                    <td class="signature-cell" style="width: 30%;">
+                        <div class="signature-line">Dean, SPGS</div>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="5" style="padding-top: 25px; text-align: center; font-size: 10px; color: #999;">
+                        Generated on {{ now()->format('d/m/Y H:i:s') }} | Mewar International University Nigeria School of Postgraduate Studies (SPGS)
+                    </td>
+                </tr>
+            </table>
+        @else
+            <table class="signature-grid">
+                <tr>
+                    <td class="signature-cell">
+                        <div class="signature-line">Student's Signature</div>
+                    </td>
+                    <td width="10%"></td>
+                    <td class="signature-cell">
+                        <div class="signature-line">Course Adviser's Signature</div>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="3" style="padding-top: 30px; text-align: center; font-size: 10px; color: #999;">
+                        Generated on {{ now()->format('d/m/Y H:i:s') }} | Mewar International University Nigeria Course
+                        Management System
+                    </td>
+                </tr>
+            </table>
+        @endif
     </div>
 </body>
 
