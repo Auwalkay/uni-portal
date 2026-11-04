@@ -35,7 +35,7 @@ class Building extends Model
     {
         static::creating(function ($building) {
             if (empty($building->code)) {
-                $building->code = mb_strtoupper(Str::slug($building->name));
+                $building->code = static::generateUniqueCode($building->name);
             } else {
                 $building->code = mb_strtoupper($building->code);
             }
@@ -47,7 +47,7 @@ class Building extends Model
 
         static::updating(function ($building) {
             if (empty($building->code)) {
-                $building->code = mb_strtoupper(Str::slug($building->name));
+                $building->code = static::generateUniqueCode($building->name, $building->id);
             } else {
                 $building->code = mb_strtoupper($building->code);
             }
@@ -56,6 +56,32 @@ class Building extends Model
                 $building->updated_by = auth()->id();
             }
         });
+    }
+
+    /**
+     * Generate a unique uppercase building code from a name.
+     */
+    public static function generateUniqueCode(string $name, ?string $ignoreId = null): string
+    {
+        $base = mb_strtoupper(Str::slug(trim($name)));
+        if (empty($base)) {
+            $base = 'BLD';
+        }
+
+        $candidate = $base;
+        $counter = 2;
+
+        while (static::where('code', $candidate)->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))->withTrashed()->exists()) {
+            $candidate = "{$base}-{$counter}";
+            $counter++;
+        }
+
+        return $candidate;
+    }
+
+    public function hasSeatingCapacity(): bool
+    {
+        return $this->capacity !== null && $this->capacity > 0;
     }
 
     protected function code(): Attribute
