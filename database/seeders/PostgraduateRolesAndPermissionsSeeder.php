@@ -15,6 +15,9 @@ class PostgraduateRolesAndPermissionsSeeder extends Seeder
         $permissions = [
             'manage_postgraduate_school',
             'view_pg_dashboard',
+            'view_pg_applications',
+            'review_pg_applications',
+            'admit_pg_students',
             'manage_pg_supervisors',
             'view_pg_supervisors',
             'supervise_pg_students',

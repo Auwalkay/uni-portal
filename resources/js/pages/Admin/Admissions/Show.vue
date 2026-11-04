@@ -97,7 +97,19 @@ const props = defineProps<{
     };
     programmes: Array<{ id: string; name: string }>;
     scholarships: Array<{ id: string; name: string }>;
+    user_permissions?: {
+        can_view_ug?: boolean;
+        can_view_pg?: boolean;
+        can_review?: boolean;
+        can_admit?: boolean;
+    };
 }>();
+
+const breadcrumbs = [
+    { title: 'Applicants', href: '/admin/admissions' },
+    { title: 'Undergraduate', href: route().has('admin.admissions.ug.index') ? route('admin.admissions.ug.index') : '/admin/admissions/ug' },
+    { title: props.applicant.user.name, href: '#' },
+];
 
 const form = useForm({
     status: props.applicant.status,
@@ -109,7 +121,11 @@ const form = useForm({
 const isAdmitting = computed(() => form.status === 'admitted');
 
 const updateStatus = () => {
-    form.put(route('admin.admissions.update', props.applicant.id), {
+    const targetRoute = route().has('admin.admissions.ug.update')
+        ? route('admin.admissions.ug.update', props.applicant.id)
+        : route('admin.admissions.update', props.applicant.id);
+
+    form.put(targetRoute, {
         onSuccess: () => {
             // Toast success
         }
@@ -125,7 +141,7 @@ const passportUrl = computed(() => {
 <template>
     <Head :title="`Application: ${applicant.user.name}`" />
 
-    <AdminLayout>
+    <AdminLayout :breadcrumbs="breadcrumbs">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <!-- Left Column: Actions & Key Status -->
             <div class="space-y-6">
@@ -166,15 +182,17 @@ const passportUrl = computed(() => {
                         <CardTitle class="text-lg">Actions</CardTitle>
                     </CardHeader>
                     <CardContent class="grid gap-3">
-                        <Select v-model="form.status">
-                            <SelectTrigger :disabled="applicant.status === 'admitted'">
+                        <Select v-model="form.status" :disabled="applicant.status === 'admitted' || (user_permissions && !user_permissions.can_review)">
+                            <SelectTrigger :disabled="applicant.status === 'admitted' || (user_permissions && !user_permissions.can_review)">
                                 <SelectValue placeholder="Change Status" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="draft">Draft (Incomplete)</SelectItem>
                                 <SelectItem value="submitted">Submitted</SelectItem>
                                 <SelectItem value="screening">Under Screening</SelectItem>
-                                <SelectItem value="admitted">Admit Student</SelectItem>
+                                <SelectItem value="admitted" :disabled="user_permissions && !user_permissions.can_admit">
+                                    Admit Student {{ user_permissions && !user_permissions.can_admit ? '(Requires admit_students)' : '' }}
+                                </SelectItem>
                                 <SelectItem value="rejected">Reject Application</SelectItem>
                             </SelectContent>
                         </Select>
@@ -255,7 +273,7 @@ const passportUrl = computed(() => {
                             </div>
                         </template>
                         
-                        <Button @click="updateStatus" :disabled="form.processing || applicant.status === 'admitted'" class="w-full">
+                        <Button @click="updateStatus" :disabled="form.processing || applicant.status === 'admitted' || (user_permissions && !user_permissions.can_review)" class="w-full">
                             Update Status
                         </Button>
 

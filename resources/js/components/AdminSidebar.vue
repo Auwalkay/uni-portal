@@ -99,10 +99,27 @@ const personalItems = computed(() => {
 const academicsItems = computed(() => {
     return [
         {
-            title: 'Admission / Applicants',
-            href: '/admin/admissions',
+            title: 'Applicants',
             icon: Users,
-            show: hasPermission('view_applications'),
+            show: hasRole('admin') || hasRole('super_admin') || hasPermission('view_applications') || hasPermission('view_pg_applications'),
+            items: [
+                {
+                    title: 'UG Applicants',
+                    href: '/admin/admissions/ug',
+                },
+                {
+                    title: 'PG Applicants',
+                    href: '/admin/admissions/pg',
+                },
+            ].filter(sub => {
+                if (sub.href === '/admin/admissions/ug') {
+                    return hasRole('admin') || hasRole('super_admin') || hasPermission('view_applications');
+                }
+                if (sub.href === '/admin/admissions/pg') {
+                    return hasRole('admin') || hasRole('super_admin') || hasPermission('view_pg_applications');
+                }
+                return true;
+            }),
         },
         {
             title: 'Students',
@@ -204,9 +221,9 @@ const postgraduateItems = computed(() => {
         },
         {
             title: 'PG Admissions Pool',
-            href: '/admin/admissions?stream=PG',
+            href: '/admin/admissions/pg',
             icon: Award,
-            show: isSuperAdmin || hasPermission('view_applications'),
+            show: isSuperAdmin || hasPermission('view_pg_applications'),
         },
     ].filter(i => i.show);
 });
