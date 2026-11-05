@@ -35,20 +35,24 @@ class ApplicationController extends Controller
         // If applicant submitted an application but application invoice is missing, generate it
         if ($applicant && (!$applicationInvoice || $applicationInvoice->status !== 'paid') && $applicant->status === 'pending_payment') {
             if (!$applicationInvoice && $currentSession) {
+                $appFee = $applicant->isPostgraduate()
+                    ? SystemSetting::get('pg_application_fee', 50000)
+                    : SystemSetting::get('application_fee', 100000);
+
                 $applicationInvoice = \App\Models\Invoice::create([
                     'user_id' => $user->id,
                     'type' => 'application_fee',
                     'session_id' => $currentSession->id,
                     'reference' => 'APP-' . strtoupper(uniqid()),
-                    'amount' => SystemSetting::get('application_fee', 100000),
+                    'amount' => $appFee,
                     'paid_amount' => 0,
                     'status' => 'pending',
                     'due_date' => now()->addDays(7),
                 ]);
 
                 $applicationInvoice->items()->create([
-                    'description' => 'Application Fee',
-                    'amount' => SystemSetting::get('application_fee', 100000),
+                    'description' => $applicant->isPostgraduate() ? 'Postgraduate Application & Enrolment Fee' : 'Application Fee',
+                    'amount' => $appFee,
                     'quantity' => 1,
                 ]);
 
@@ -353,6 +357,10 @@ class ApplicationController extends Controller
                 throw new \Exception('No active academic session found.');
             }
 
+            $appFee = $applicant->isPostgraduate()
+                ? SystemSetting::get('pg_application_fee', 50000)
+                : SystemSetting::get('application_fee', 100000);
+
             $invoice = \App\Models\Invoice::firstOrCreate(
                 [
                     'user_id' => $user->id,
@@ -361,7 +369,7 @@ class ApplicationController extends Controller
                 ],
                 [
                     'reference' => 'APP-' . strtoupper(uniqid()),
-                    'amount' => SystemSetting::get('application_fee', 100000),
+                    'amount' => $appFee,
                     'paid_amount' => 0,
                     'status' => 'pending',
                     'due_date' => now()->addDays(7),
@@ -370,8 +378,8 @@ class ApplicationController extends Controller
 
             if ($invoice->items()->count() === 0) {
                 $invoice->items()->create([
-                    'description' => 'Application Fee',
-                    'amount' => SystemSetting::get('application_fee', 100000),
+                    'description' => $applicant->isPostgraduate() ? 'Postgraduate Application & Enrolment Fee' : 'Application Fee',
+                    'amount' => $appFee,
                     'quantity' => 1,
                 ]);
             }

@@ -236,12 +236,14 @@ class PostgraduateAdmissionController extends Controller
         $applicant->load(['user', 'programme.department.faculty', 'state', 'lga', 'scholarship']);
         $currentSession = \App\Models\Session::current();
 
+        $feesData = $this->calculateEstimatedFeesForApplicant($applicant, $currentSession);
+
         $pdf = Pdf::loadView('documents.admission_letter', [
             'applicant' => $applicant,
             'faculty_name' => $applicant->programme?->department->faculty->name ?? 'School of Postgraduate Studies',
             'programme_name' => $applicant->programme?->name ?? 'N/A',
             'session_name' => $currentSession->name ?? '2025/2026',
-            'fees' => null,
+            'fees' => $feesData,
         ])->setOptions([
             'defaultFont' => 'DejaVu Sans',
             'isHtml5ParserEnabled' => true,
@@ -250,6 +252,80 @@ class PostgraduateAdmissionController extends Controller
         ]);
 
         return $pdf->download($fileName);
+    }
+
+    private function calculateEstimatedFeesForApplicant($applicant, $session)
+    {
+        if (! $session) {
+            return null;
+        }
+
+        $program = $applicant->programme;
+        $deptId = $program?->department_id;
+        $facultyId = $program?->department?->faculty_id;
+        $progType = $program?->type;
+
+        $allConfigs = \App\Models\FeeConfiguration::where('session_id', $session->id)
+            ->where('is_compulsory', true)
+            ->with('feeType')
+            ->get();
+
+        $tuition = 0;
+        $oneTimeFeesTotal = 0;
+        $oneTimeFeesList = [];
+
+        $grouped = $allConfigs->groupBy('fee_type_id');
+        foreach ($grouped as $feeTypeId => $configs) {
+            $resolved = \App\Services\Finance\FeeService::resolveConfigFromCollection(
+                $configs,
+                $applicant->program_choice_1,
+                $deptId,
+                $facultyId,
+                $progType,
+                $applicant->admitted_level,
+                $applicant->application_mode,
+                true
+            );
+
+            if ($resolved) {
+                if ($resolved->feeType && $resolved->feeType->is_one_time) {
+                    $oneTimeFeesTotal += $resolved->amount;
+                    $oneTimeFeesList[] = [
+                        'name' => $resolved->feeType->name,
+                        'amount' => $resolved->amount,
+                    ];
+                } else {
+                    $tuition += $resolved->amount;
+                }
+            }
+        }
+
+        // Standard Enrolment/Application fee for PG is 50,000
+        $enrolmentFee = (float) \App\Models\SystemSetting::get('pg_application_fee', 50000);
+        $oneTimeFeesList[] = [
+            'name' => 'Enrolment / Application Fee',
+            'amount' => $enrolmentFee,
+        ];
+        $oneTimeFeesTotal += $enrolmentFee;
+
+        $discount = 0;
+        $scholarship = $applicant->scholarship;
+        if ($scholarship && ($program?->scholarship_eligible ?? true)) {
+            $percentage = $scholarship->percentage ?? 0;
+            $discount = ($tuition * $percentage) / 100;
+        }
+
+        $totalPayable = max(0, ($tuition - $discount) + $oneTimeFeesTotal);
+
+        return [
+            'tuition' => $tuition,
+            'one_time_fees' => $oneTimeFeesTotal,
+            'one_time_fees_list' => $oneTimeFeesList,
+            'admin_charge' => 0,
+            'discount' => $discount,
+            'total' => $totalPayable,
+            'acceptance_fee' => $enrolmentFee,
+        ];
     }
 }
 

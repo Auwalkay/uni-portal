@@ -288,7 +288,12 @@ class FinanceController extends Controller
     public function manageSessionFees(Session $session)
     {
         return Inertia::render('Admin/Finance/SessionFees', [
-            'session' => $session->load(['feeConfigurations.feeType', 'feeConfigurations.faculty', 'feeConfigurations.department', 'feeConfigurations.program']),
+            'session' => $session->load([
+                'feeConfigurations.feeType',
+                'feeConfigurations.faculty',
+                'feeConfigurations.department.faculty',
+                'feeConfigurations.program.department.faculty',
+            ]),
             'feeTypes' => FeeType::all(),
             'faculties' => AcademicCacheService::getAllFaculties(),
             'departments' => AcademicCacheService::getAllDepartments(),
@@ -330,5 +335,16 @@ class FinanceController extends Controller
         \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory('admission_letters');
 
         return back()->with('success', 'Fee configurations cloned successfully.');
+    }
+
+    public function syncPgSchedule(Session $session)
+    {
+        \Illuminate\Support\Facades\Artisan::call('fees:seed-pg-schedule', [
+            'session_id' => $session->id,
+        ]);
+
+        \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory('admission_letters');
+
+        return back()->with('success', "Standard Postgraduate fee schedule successfully synchronized for session {$session->name}.");
     }
 }

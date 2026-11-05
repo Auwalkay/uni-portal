@@ -51,6 +51,7 @@ Route::middleware(['auth', 'verified', 'permission:access_admin_dashboard'])->pr
             Route::put('configurations/{config}', [FinanceController::class, 'updateFeeConfiguration'])->name('configurations.update');
             Route::delete('configurations/{config}', [FinanceController::class, 'destroyFeeConfiguration'])->name('configurations.destroy');
             Route::get('session/{session}/fees', [FinanceController::class, 'manageSessionFees'])->name('session.fees');
+            Route::post('session/{session}/fees/sync-pg-schedule', [FinanceController::class, 'syncPgSchedule'])->name('session.fees.sync_pg');
             Route::post('clone-fees', [FinanceController::class, 'cloneSessionFees'])->name('clone_fees');
         });
 

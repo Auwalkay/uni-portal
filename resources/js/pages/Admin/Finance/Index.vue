@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { format } from 'date-fns';
 import { Head, useForm, router, Link } from '@inertiajs/vue3';
 import Swal from 'sweetalert2';
@@ -204,6 +204,26 @@ const submitClone = () => {
         onError: () => Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to clone fees', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 })
     });
 };
+
+// Stream Filter State for Academic Session Cards
+const sessionStreamFilter = ref<'all' | 'UG' | 'PG'>('all');
+
+const ugSessionsCount = computed(() => {
+    return (props.sessions || []).filter((s: any) => s.academic_stream !== 'PG').length;
+});
+
+const pgSessionsCount = computed(() => {
+    return (props.sessions || []).filter((s: any) => s.academic_stream === 'PG').length;
+});
+
+const filteredSessions = computed(() => {
+    if (!props.sessions) return [];
+    if (sessionStreamFilter.value === 'all') return props.sessions;
+    if (sessionStreamFilter.value === 'PG') {
+        return props.sessions.filter((s: any) => s.academic_stream === 'PG');
+    }
+    return props.sessions.filter((s: any) => s.academic_stream !== 'PG');
+});
 
 // --- Hostel Fee Configuration Logic ---
 const isHostelFeeModalOpen = ref(false);
@@ -459,30 +479,104 @@ const formatCurrency = (amount: any) => {
                 </TabsContent>
 
                 <TabsContent value="configs" class="space-y-4">
-                     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        <Card v-for="session in sessions" :key="session.id" class="relative overflow-hidden">
-                            <CardHeader>
-                                <CardTitle>{{ session.name }}</CardTitle>
-                                <CardDescription>{{ format(new Date(session.start_date), 'MMM d, yyyy') }} - {{ format(new Date(session.end_date), 'MMM d, yyyy') }}</CardDescription>
+                    <!-- Session stream filter bar -->
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-zinc-900 p-3 rounded-lg border border-zinc-200/80 dark:border-zinc-800 shadow-2xs">
+                        <div>
+                            <h3 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Academic Sessions</h3>
+                            <p class="text-xs text-muted-foreground">Select an academic session to manage tuition, acceptance, and departmental fee rules.</p>
+                        </div>
+                        <div class="inline-flex items-center rounded-lg bg-zinc-100 dark:bg-zinc-800 p-1 border border-zinc-200 dark:border-zinc-700/60 self-start sm:self-auto">
+                            <button
+                                type="button"
+                                @click="sessionStreamFilter = 'all'"
+                                :class="[
+                                    'px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer',
+                                    sessionStreamFilter === 'all'
+                                        ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-xs'
+                                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
+                                ]"
+                            >
+                                All Streams ({{ sessions.length }})
+                            </button>
+                            <button
+                                type="button"
+                                @click="sessionStreamFilter = 'UG'"
+                                :class="[
+                                    'px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer',
+                                    sessionStreamFilter === 'UG'
+                                        ? 'bg-white dark:bg-zinc-900 text-sky-700 dark:text-sky-300 shadow-xs'
+                                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
+                                ]"
+                            >
+                                <span class="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
+                                Undergraduate ({{ ugSessionsCount }})
+                            </button>
+                            <button
+                                type="button"
+                                @click="sessionStreamFilter = 'PG'"
+                                :class="[
+                                    'px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer',
+                                    sessionStreamFilter === 'PG'
+                                        ? 'bg-white dark:bg-zinc-900 text-purple-700 dark:text-purple-300 shadow-xs'
+                                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
+                                ]"
+                            >
+                                <span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                                Postgraduate ({{ pgSessionsCount }})
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <Card v-for="session in filteredSessions" :key="session.id" class="relative overflow-hidden border border-zinc-200/80 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all shadow-xs">
+                            <CardHeader class="pb-3">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="space-y-1">
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <CardTitle class="text-base font-bold text-zinc-900 dark:text-zinc-100">{{ session.name }}</CardTitle>
+                                            <Badge
+                                                v-if="session.academic_stream === 'PG'"
+                                                variant="secondary"
+                                                class="bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200 dark:border-purple-800 font-semibold text-[11px] px-2 py-0.5"
+                                            >
+                                                Postgraduate (PG)
+                                            </Badge>
+                                            <Badge
+                                                v-else
+                                                variant="outline"
+                                                class="bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border-sky-200 dark:border-sky-800 font-semibold text-[11px] px-2 py-0.5"
+                                            >
+                                                Undergraduate (UG)
+                                            </Badge>
+                                        </div>
+                                        <CardDescription class="text-xs">
+                                            {{ format(new Date(session.start_date), 'MMM d, yyyy') }} - {{ format(new Date(session.end_date), 'MMM d, yyyy') }}
+                                        </CardDescription>
+                                    </div>
+                                    <Badge v-if="session.is_current" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-[11px] shrink-0 shadow-xs">
+                                        Current
+                                    </Badge>
+                                </div>
                             </CardHeader>
                             <CardContent>
-                                <div class="flex items-center justify-between">
-                                    <div class="space-y-1">
-                                         <p class="text-2xl font-bold">{{ session.fee_configurations_count }}</p>
-                                         <p class="text-xs text-muted-foreground">Fee Rules Configured</p>
+                                <div class="flex items-center justify-between pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+                                    <div class="space-y-0.5">
+                                        <p class="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">{{ session.fee_configurations_count }}</p>
+                                        <p class="text-xs text-muted-foreground">Fee Rules Configured</p>
                                     </div>
                                     <Link :href="route('admin.finance.session.fees', session.id)">
-                                        <Button variant="outline" size="sm">
-                                            <Settings class="mr-2 h-4 w-4" /> Manage Rules
+                                        <Button variant="outline" size="sm" class="font-medium text-xs">
+                                            <Settings class="mr-1.5 h-3.5 w-3.5 text-zinc-500" /> Manage Rules
                                         </Button>
                                     </Link>
                                 </div>
-                                <div v-if="session.is_current" class="absolute top-2 right-2">
-                                    <Badge>Current</Badge>
-                                </div>
                             </CardContent>
                         </Card>
-                     </div>
+                    </div>
+
+                    <div v-if="filteredSessions.length === 0" class="p-8 text-center border rounded-lg bg-zinc-50/50 dark:bg-zinc-900/50">
+                        <p class="text-sm text-zinc-500">No {{ sessionStreamFilter === 'PG' ? 'Postgraduate' : 'Undergraduate' }} academic sessions found.</p>
+                    </div>
                 </TabsContent>
 
                 <TabsContent value="hostel-fees" class="space-y-4">
@@ -590,7 +684,7 @@ const formatCurrency = (amount: any) => {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem v-for="session in sessions" :key="session.id" :value="session.id.toString()">
-                                                {{ session.name }}
+                                                {{ session.name }} ({{ session.academic_stream === 'PG' ? 'Postgraduate / PG' : 'Undergraduate / UG' }})
                                             </SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -667,7 +761,7 @@ const formatCurrency = (amount: any) => {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem v-for="sess in sessions" :key="sess.id" :value="sess.id">
-                                        {{ sess.name }}
+                                        {{ sess.name }} ({{ sess.academic_stream === 'PG' ? 'Postgraduate / PG' : 'Undergraduate / UG' }})
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
@@ -683,7 +777,7 @@ const formatCurrency = (amount: any) => {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem v-for="sess in sessions" :key="sess.id" :value="sess.id">
-                                        {{ sess.name }}
+                                        {{ sess.name }} ({{ sess.academic_stream === 'PG' ? 'Postgraduate / PG' : 'Undergraduate / UG' }})
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
