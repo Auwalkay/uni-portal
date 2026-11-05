@@ -587,13 +587,10 @@ class ProfileController extends Controller
             return null;
         }
 
+        $progType = $student->program?->type;
+        $isPg = $student->isPostgraduate();
+
         $allConfigs = \App\Models\FeeConfiguration::where('session_id', $sessionId)
-            ->where(function ($q) use ($student) {
-                $q->where('level', $student->current_level)->orWhereNull('level');
-            })
-            ->where(function ($q) use ($student) {
-                $q->where('entry_mode', $student->entry_mode)->orWhereNull('entry_mode');
-            })
             ->where('is_compulsory', true)
             ->with('feeType')
             ->get();
@@ -605,10 +602,16 @@ class ProfileController extends Controller
 
         $grouped = $allConfigs->groupBy('fee_type_id');
         foreach ($grouped as $feeTypeId => $configs) {
-            $resolved = $configs->where('program_id', $student->program_id)->first()
-                ?? $configs->where('department_id', $student->department_id)->whereNull('program_id')->first()
-                ?? $configs->where('faculty_id', $student->faculty_id)->whereNull('department_id')->whereNull('program_id')->first()
-                ?? $configs->whereNull('faculty_id')->whereNull('department_id')->whereNull('program_id')->first();
+            $resolved = \App\Services\Finance\FeeService::resolveConfigFromCollection(
+                $configs,
+                $student->program_id,
+                $student->department_id,
+                $student->faculty_id,
+                $progType,
+                $student->current_level,
+                $student->entry_mode,
+                $isPg
+            );
 
             if ($resolved) {
                 if ($resolved->feeType && $resolved->feeType->is_one_time) {

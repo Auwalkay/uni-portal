@@ -14,16 +14,43 @@ use Inertia\Inertia;
 
 class AdmissionController extends Controller
 {
+    /**
+     * Hub router for /admin/admissions
+     */
+    public function hub(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user->can('view_applications') || $user->hasRole(['admin', 'super_admin'])) {
+            return redirect()->route('admin.admissions.ug.index', $request->query());
+        }
+
+        if ($user->can('view_pg_applications')) {
+            return redirect()->route('admin.admissions.pg.index', $request->query());
+        }
+
+        abort(403, 'Unauthorized to view applications.');
+    }
+
     public function index(Request $request)
     {
-        $query = Applicant::with(['user', 'programme']);
+        $user = $request->user();
+
+        if (! $user->can('view_applications') && ! $user->hasRole(['admin', 'super_admin'])) {
+            if ($user->can('view_pg_applications')) {
+                return redirect()->route('admin.admissions.pg.index');
+            }
+            abort(403, 'Unauthorized to view undergraduate applications.');
+        }
+
+        $query = Applicant::undergraduate()->with(['user', 'programme']);
 
         // Stats
         $stats = [
-            'total' => Applicant::count(),
-            'admitted' => Applicant::where('status', 'admitted')->count(),
-            'rejected' => Applicant::where('status', 'rejected')->count(),
-            'pending' => Applicant::where('status', 'pending')->count(),
+            'total' => Applicant::undergraduate()->count(),
+            'admitted' => Applicant::undergraduate()->where('status', 'admitted')->count(),
+            'rejected' => Applicant::undergraduate()->where('status', 'rejected')->count(),
+            'pending' => Applicant::undergraduate()->where('status', 'pending')->count(),
         ];
 
         // Filters
@@ -33,7 +60,8 @@ class AdmissionController extends Controller
                 $q->whereHas('user', function ($uq) use ($search) {
                     $uq->where('name', 'like', '%'.$search.'%')
                         ->orWhere('email', 'like', '%'.$search.'%');
-                })->orWhere('jamb_registration_number', 'like', '%'.$search.'%');
+                })->orWhere('jamb_registration_number', 'like', '%'.$search.'%')
+                  ->orWhere('application_number', 'like', '%'.$search.'%');
             });
         }
 
@@ -49,21 +77,44 @@ class AdmissionController extends Controller
 
         $applicants = $query->latest()->paginate($perPage)->withQueryString();
 
-        $programmes = \App\Services\AcademicCacheService::getProgrammes();
+        $programmes = \App\Services\AcademicCacheService::getProgrammes()
+            ->filter(fn ($p) => ! $p->isPostgraduate())
+            ->values();
 
         $filters = $request->only(['search', 'status', 'programme_id']);
         $filters['per_page'] = $perPage;
+
+        $userPermissions = [
+            'can_view_ug' => true,
+            'can_view_pg' => $user->can('view_pg_applications') || $user->hasRole(['admin', 'super_admin']),
+            'can_review' => $user->can('review_applications') || $user->hasRole(['admin', 'super_admin']),
+            'can_admit' => $user->can('admit_students') || $user->hasRole(['admin', 'super_admin']),
+        ];
 
         return Inertia::render('Admin/Admissions/Index', [
             'applicants' => $applicants,
             'stats' => $stats,
             'filters' => $filters,
             'programmes' => $programmes,
+            'user_permissions' => $userPermissions,
         ]);
     }
 
-    public function show(Applicant $applicant)
+    public function show(Request $request, Applicant $applicant)
     {
+        $user = $request->user();
+
+        if ($applicant->isPostgraduate()) {
+            if ($user->can('view_pg_applications') || $user->hasRole(['admin', 'super_admin'])) {
+                return redirect()->route('admin.admissions.pg.show', $applicant);
+            }
+            abort(404, 'Undergraduate applicant not found.');
+        }
+
+        if (! $user->can('view_applications') && ! $user->hasRole(['admin', 'super_admin'])) {
+            abort(403, 'Unauthorized to view undergraduate applications.');
+        }
+
         $applicant->load([
             'user',
             'documents',
@@ -80,42 +131,48 @@ class AdmissionController extends Controller
             ->with('payments')
             ->first();
 
-        $pgEligibility = null;
-        if ($applicant->isPostgraduate() && $applicant->programme) {
-            $pgService = app(\App\Services\Admissions\PostgraduateAdmissionService::class);
-            if ($applicant->qualifications->isNotEmpty()) {
-                $pgEligibility = $pgService->validateQualificationsList(
-                    $applicant->programme,
-                    $applicant->qualifications->toArray()
-                );
-            } elseif ($applicant->previous_qualification && $applicant->previous_class_of_degree) {
-                $pgEligibility = $pgService->validateEntryQualification(
-                    $applicant->programme,
-                    $applicant->previous_qualification,
-                    $applicant->previous_class_of_degree,
-                    $applicant->previous_cgpa
-                );
-            }
-        }
+        $userPermissions = [
+            'can_view_ug' => true,
+            'can_view_pg' => $user->can('view_pg_applications') || $user->hasRole(['admin', 'super_admin']),
+            'can_review' => $user->can('review_applications') || $user->hasRole(['admin', 'super_admin']),
+            'can_admit' => $user->can('admit_students') || $user->hasRole(['admin', 'super_admin']),
+        ];
 
         return Inertia::render('Admin/Admissions/Show', [
             'applicant' => $applicant,
             'payment_info' => $paymentInfo,
-            'pg_eligibility' => $pgEligibility,
-            'programmes' => fn () => \App\Services\AcademicCacheService::getProgrammes(),
+            'pg_eligibility' => null,
+            'programmes' => fn () => \App\Services\AcademicCacheService::getProgrammes()->filter(fn ($p) => ! $p->isPostgraduate())->values(),
             'scholarships' => fn () => \App\Services\AcademicCacheService::getScholarships(),
+            'user_permissions' => $userPermissions,
         ]);
     }
 
     public function update(Request $request, Applicant $applicant)
     {
+        $user = $request->user();
+
+        if ($applicant->isPostgraduate()) {
+            abort(403, 'Unauthorized. Please use the Postgraduate Admissions module to update this applicant.');
+        }
+
+        if (! $user->can('review_applications') && ! $user->hasRole(['admin', 'super_admin'])) {
+            abort(403, 'Unauthorized to review undergraduate applications.');
+        }
+
+        if ($request->status === 'admitted') {
+            if (! $user->can('admit_students') && ! $user->hasRole(['admin', 'super_admin'])) {
+                abort(403, 'Unauthorized to admit undergraduate students.');
+            }
+        }
+
         $rules = [
             'status' => 'required|string|in:draft,submitted,screening,admitted,rejected',
         ];
 
         // Extra fields required when admitting
         if ($request->status === 'admitted') {
-            $rules['admitted_level'] = 'required|in:100,200,300,400,500,600,700,800,900';
+            $rules['admitted_level'] = 'required|in:100,200,300,400,500,600';
             $rules['admitted_programme_id'] = 'required|exists:programmes,id';
             $rules['scholarship_id'] = 'nullable|exists:scholarships,id';
         }
@@ -156,8 +213,20 @@ class AdmissionController extends Controller
         return back()->with('success', 'Applicant status updated successfully.');
     }
 
-    public function downloadLetter(Applicant $applicant)
+    public function downloadLetter(Request $request, Applicant $applicant)
     {
+        $user = $request->user();
+
+        if ($applicant->isPostgraduate()) {
+            if ($user->can('view_pg_applications') || $user->hasRole(['admin', 'super_admin'])) {
+                return redirect()->route('admin.admissions.pg.letter', $applicant);
+            }
+            abort(404, 'Undergraduate applicant not found.');
+        }
+
+        if (! $user->can('view_applications') && ! $user->hasRole(['admin', 'super_admin'])) {
+            abort(403, 'Unauthorized to view undergraduate admission letters.');
+        }
         if ($applicant->status !== 'admitted') {
             abort(403, 'Admission letter is only available for admitted applicants.');
         }
@@ -212,6 +281,8 @@ class AdmissionController extends Controller
         $program = $applicant->programme;
         $deptId = $program?->department_id;
         $facultyId = $program?->department?->faculty_id;
+        $progType = $program?->type;
+        $isPg = $applicant->isPostgraduate();
 
         $entryMode = $applicant->application_mode;
         if ($entryMode === 'DE') {
@@ -221,15 +292,6 @@ class AdmissionController extends Controller
         }
 
         $allConfigs = \App\Models\FeeConfiguration::where('session_id', $session->id)
-            ->where(function ($q) use ($entryMode) {
-                $q->where(function ($sub) {
-                    $sub->where('level', '100')->orWhereNull('level');
-                })
-                    ->orWhere('entry_mode', $entryMode);
-            })
-            ->where(function ($q) use ($entryMode) {
-                $q->where('entry_mode', $entryMode)->orWhereNull('entry_mode');
-            })
             ->where('is_compulsory', true)
             ->with('feeType')
             ->get();
@@ -241,10 +303,16 @@ class AdmissionController extends Controller
 
         $grouped = $allConfigs->groupBy('fee_type_id');
         foreach ($grouped as $feeTypeId => $configs) {
-            $resolved = $configs->where('program_id', $applicant->program_choice_1)->first()
-                ?? $configs->where('department_id', $deptId)->whereNull('program_id')->first()
-                ?? $configs->where('faculty_id', $facultyId)->whereNull('department_id')->whereNull('program_id')->first()
-                ?? $configs->whereNull('faculty_id')->whereNull('department_id')->whereNull('program_id')->first();
+            $resolved = \App\Services\Finance\FeeService::resolveConfigFromCollection(
+                $configs,
+                $applicant->program_choice_1,
+                $deptId,
+                $facultyId,
+                $progType,
+                '100',
+                $entryMode,
+                $isPg
+            );
 
             if ($resolved) {
                 if ($resolved->feeType && $resolved->feeType->is_one_time) {

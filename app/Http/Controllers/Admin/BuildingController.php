@@ -13,6 +13,23 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class BuildingController extends Controller
 {
+    public const BUILDING_TYPES = [
+        ['value' => 'classroom', 'label' => 'Classroom', 'has_seating' => true],
+        ['value' => 'lecture_theatre', 'label' => 'Lecture Theatre', 'has_seating' => true],
+        ['value' => 'auditorium', 'label' => 'Auditorium', 'has_seating' => true],
+        ['value' => 'multipurpose_hall', 'label' => 'Multipurpose Hall', 'has_seating' => true],
+        ['value' => 'e_library', 'label' => 'E-Library / CBT Center', 'has_seating' => true],
+        ['value' => 'laboratory', 'label' => 'Laboratory / Workshop', 'has_seating' => true],
+        ['value' => 'admin_block', 'label' => 'Administrative Block', 'has_seating' => false],
+        ['value' => 'office', 'label' => 'Faculty / Staff Office', 'has_seating' => false],
+        ['value' => 'library', 'label' => 'Main Library', 'has_seating' => true],
+        ['value' => 'hostel', 'label' => 'Hostel / Residential Hall', 'has_seating' => false],
+        ['value' => 'clinic', 'label' => 'Clinic / Health Center', 'has_seating' => false],
+        ['value' => 'sports_complex', 'label' => 'Sports & Recreation Complex', 'has_seating' => false],
+        ['value' => 'maintenance', 'label' => 'Maintenance & Utility', 'has_seating' => false],
+        ['value' => 'other', 'label' => 'Other Facility', 'has_seating' => false],
+    ];
+
     public function index(Request $request)
     {
         $this->authorizePermission(['view_buildings', 'manage_buildings']);
@@ -45,7 +62,7 @@ class BuildingController extends Controller
 
         $stats = [
             'total_buildings' => Building::count(),
-            'total_capacity' => Building::where('status', 'active')->sum('capacity'),
+            'total_capacity' => Building::where('status', 'active')->whereNotNull('capacity')->sum('capacity'),
             'exam_usable_count' => Building::usableForExams()->where('status', 'active')->count(),
             'active_count' => Building::where('status', 'active')->count(),
         ];
@@ -54,14 +71,7 @@ class BuildingController extends Controller
             'buildings' => $buildings,
             'stats' => $stats,
             'filters' => $request->only(['search', 'status', 'building_type', 'usable_for_exams']),
-            'building_types' => [
-                ['value' => 'multipurpose_hall', 'label' => 'Multipurpose Hall'],
-                ['value' => 'auditorium', 'label' => 'Auditorium'],
-                ['value' => 'lecture_theatre', 'label' => 'Lecture Theatre'],
-                ['value' => 'e_library', 'label' => 'E-Library / CBT Center'],
-                ['value' => 'classroom', 'label' => 'Classroom'],
-                ['value' => 'other', 'label' => 'Other Facility'],
-            ],
+            'building_types' => self::BUILDING_TYPES,
             'userPermissions' => [
                 'canCreate' => $request->user()->can('create_buildings') || $request->user()->can('manage_buildings'),
                 'canEdit' => $request->user()->can('edit_buildings') || $request->user()->can('manage_buildings'),
@@ -75,21 +85,21 @@ class BuildingController extends Controller
     {
         $this->authorizePermission(['create_buildings', 'manage_buildings']);
 
+        if ($request->filled('code')) {
+            $request->merge(['code' => mb_strtoupper(trim($request->code))]);
+        } else {
+            $request->merge(['code' => Building::generateUniqueCode($request->name ?? 'BUILDING')]);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'code' => 'nullable|string|max:50|unique:buildings,code',
-            'building_type' => 'required|string|in:multipurpose_hall,auditorium,lecture_theatre,e_library,classroom,other',
-            'capacity' => 'required|integer|min:1',
+            'code' => 'required|string|max:50|unique:buildings,code',
+            'building_type' => 'required|string|max:50',
+            'capacity' => 'nullable|integer|min:0',
             'usable_for_exams' => 'required|boolean',
             'status' => 'required|string|in:active,under_maintenance,inactive',
             'description' => 'nullable|string|max:1000',
         ]);
-
-        if (empty($validated['code'])) {
-            $validated['code'] = mb_strtoupper(Str::slug($validated['name']));
-        } else {
-            $validated['code'] = mb_strtoupper($validated['code']);
-        }
 
         Building::create($validated);
 
@@ -100,21 +110,21 @@ class BuildingController extends Controller
     {
         $this->authorizePermission(['edit_buildings', 'manage_buildings']);
 
+        if ($request->filled('code')) {
+            $request->merge(['code' => mb_strtoupper(trim($request->code))]);
+        } else {
+            $request->merge(['code' => Building::generateUniqueCode($request->name ?? 'BUILDING', $building->id)]);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'code' => ['nullable', 'string', 'max:50', Rule::unique('buildings', 'code')->ignore($building->id)],
-            'building_type' => 'required|string|in:multipurpose_hall,auditorium,lecture_theatre,e_library,classroom,other',
-            'capacity' => 'required|integer|min:1',
+            'code' => ['required', 'string', 'max:50', Rule::unique('buildings', 'code')->ignore($building->id)],
+            'building_type' => 'required|string|max:50',
+            'capacity' => 'nullable|integer|min:0',
             'usable_for_exams' => 'required|boolean',
             'status' => 'required|string|in:active,under_maintenance,inactive',
             'description' => 'nullable|string|max:1000',
         ]);
-
-        if (empty($validated['code'])) {
-            $validated['code'] = mb_strtoupper(Str::slug($validated['name']));
-        } else {
-            $validated['code'] = mb_strtoupper($validated['code']);
-        }
 
         $building->update($validated);
 
@@ -199,6 +209,15 @@ class BuildingController extends Controller
                 'usable_for_exams' => 'true',
                 'status' => 'active',
                 'description' => 'Large hall with central air conditioning.',
+            ],
+            [
+                'name' => 'Senate Administrative Complex',
+                'code' => '',
+                'building_type' => 'admin_block',
+                'capacity' => '',
+                'usable_for_exams' => 'false',
+                'status' => 'active',
+                'description' => 'University central administration, council chambers, and registry.',
             ],
         ];
 

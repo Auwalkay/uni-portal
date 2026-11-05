@@ -76,9 +76,9 @@ const navItems = computed(() => {
             id: 'admissions',
             label: 'PG Admissions Pool',
             description: 'New Applications & Screening',
-            href: '/admin/admissions?stream=PG',
+            href: '/admin/admissions/pg',
             icon: Award,
-            show: isSuperAdmin || hasPermission('view_applications'),
+            show: isSuperAdmin || hasPermission('view_pg_applications'),
         },
     ].filter(item => item.show);
 });

@@ -51,20 +51,24 @@ class PaymentController extends Controller
                     return redirect()->route('applicant.dashboard')->with('error', 'No active academic session found for payment.');
                 }
 
+                $appFee = $applicant->isPostgraduate()
+                    ? \App\Models\SystemSetting::get('pg_application_fee', 50000)
+                    : \App\Models\SystemSetting::get('application_fee', 100000);
+
                 $invoice = Invoice::create([
                     'user_id' => $user->id,
                     'type' => 'application_fee',
                     'session_id' => $currentSession->id,
                     'reference' => 'APP-' . strtoupper(uniqid()),
-                    'amount' => \App\Models\SystemSetting::get('application_fee', 100000),
+                    'amount' => $appFee,
                     'paid_amount' => 0,
                     'status' => 'pending',
                     'due_date' => now()->addDays(7),
                 ]);
 
                 $invoice->items()->create([
-                    'description' => 'Application Fee',
-                    'amount' => \App\Models\SystemSetting::get('application_fee', 100000),
+                    'description' => $applicant->isPostgraduate() ? 'Postgraduate Application & Enrolment Fee' : 'Application Fee',
+                    'amount' => $appFee,
                     'quantity' => 1,
                 ]);
 

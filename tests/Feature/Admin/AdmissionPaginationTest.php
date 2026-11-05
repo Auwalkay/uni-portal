@@ -84,7 +84,7 @@ class AdmissionPaginationTest extends TestCase
         }
 
         $response = $this->actingAs($this->adminUser)
-            ->get(route('admin.admissions.index'));
+            ->get(route('admin.admissions.ug.index'));
 
         $response->assertOk();
         $response->assertInertia(fn (Assert $page) => $page
@@ -120,7 +120,7 @@ class AdmissionPaginationTest extends TestCase
 
         // Test per_page = 10
         $response10 = $this->actingAs($this->adminUser)
-            ->get(route('admin.admissions.index', ['per_page' => 10]));
+            ->get(route('admin.admissions.ug.index', ['per_page' => 10]));
 
         $response10->assertOk();
         $response10->assertInertia(fn (Assert $page) => $page
@@ -132,7 +132,7 @@ class AdmissionPaginationTest extends TestCase
 
         // Test per_page = 25
         $response25 = $this->actingAs($this->adminUser)
-            ->get(route('admin.admissions.index', ['per_page' => 25]));
+            ->get(route('admin.admissions.ug.index', ['per_page' => 25]));
 
         $response25->assertOk();
         $response25->assertInertia(fn (Assert $page) => $page
@@ -143,7 +143,7 @@ class AdmissionPaginationTest extends TestCase
 
         // Test clamped per_page: below 5 gets clamped to 5
         $responseClampedLow = $this->actingAs($this->adminUser)
-            ->get(route('admin.admissions.index', ['per_page' => 1]));
+            ->get(route('admin.admissions.ug.index', ['per_page' => 1]));
 
         $responseClampedLow->assertOk();
         $responseClampedLow->assertInertia(fn (Assert $page) => $page
@@ -172,7 +172,7 @@ class AdmissionPaginationTest extends TestCase
         }
 
         $response = $this->actingAs($this->adminUser)
-            ->get(route('admin.admissions.index', [
+            ->get(route('admin.admissions.ug.index', [
                 'status' => 'pending',
                 'search' => 'Applicant',
                 'per_page' => 10,
@@ -227,7 +227,7 @@ class AdmissionPaginationTest extends TestCase
         // When filtering for admitted applicants and searching for "Alpha",
         // the query MUST NOT return John Alpha who is rejected.
         $response = $this->actingAs($this->adminUser)
-            ->get(route('admin.admissions.index', [
+            ->get(route('admin.admissions.ug.index', [
                 'status' => 'admitted',
                 'search' => 'JAMBALPHA123',
             ]));
@@ -240,7 +240,7 @@ class AdmissionPaginationTest extends TestCase
 
         // Searching for Beta with status admitted should return Jane Beta
         $response2 = $this->actingAs($this->adminUser)
-            ->get(route('admin.admissions.index', [
+            ->get(route('admin.admissions.ug.index', [
                 'status' => 'admitted',
                 'search' => 'JAMBBETA456',
             ]));
