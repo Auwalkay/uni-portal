@@ -34,6 +34,22 @@ class Applicant extends Model
         return $this->belongsTo(Programme::class, 'program_choice_1');
     }
 
+    public function invoices(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Invoice::class, 'user_id', 'user_id');
+    }
+
+    public function hasPaidApplicationFee(): bool
+    {
+        return $this->invoices()
+            ->where('type', 'application_fee')
+            ->where(function ($q) {
+                $q->where('status', 'paid')
+                    ->orWhereRaw('paid_amount >= amount');
+            })
+            ->exists();
+    }
+
     public function documents(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(ApplicantDocument::class);

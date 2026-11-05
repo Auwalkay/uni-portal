@@ -34,6 +34,7 @@ interface ApplicantItem {
     id: string;
     jamb_registration_number: string;
     status: string;
+    has_paid_application?: boolean;
     created_at: string;
     user: {
         name: string;
@@ -299,9 +300,14 @@ const clearFilters = () => {
                                 {{ format(new Date(applicant.created_at), 'MMM d, yyyy') }}
                             </TableCell>
                             <TableCell>
-                                <Badge :class="getStatusColorClass(applicant.status)" class="capitalize shadow-none">
-                                    {{ applicant.status }}
-                                </Badge>
+                                <div class="flex flex-col gap-1">
+                                    <Badge :class="getStatusColorClass(applicant.status)" class="capitalize shadow-none w-fit">
+                                        {{ applicant.status }}
+                                    </Badge>
+                                    <span class="text-[10px] font-medium" :class="applicant.has_paid_application ? 'text-green-600' : 'text-amber-600'">
+                                        {{ applicant.has_paid_application ? '● Fee Paid' : '○ Fee Unpaid' }}
+                                    </span>
+                                </div>
                             </TableCell>
                             <TableCell class="text-right">
                                 <Link :href="route().has('admin.admissions.ug.show') ? route('admin.admissions.ug.show', applicant.id) : route('admin.admissions.show', applicant.id)">

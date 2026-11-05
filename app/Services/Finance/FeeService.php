@@ -908,6 +908,22 @@ class FeeService
                 }
             }
 
+            // Safeguard for Inter-University Transfer fees:
+            // Transfer fees must strictly and exclusively apply to students entering via Transfer.
+            $isTransferRule = ($c->entry_mode && strcasecmp($c->entry_mode, 'Transfer') === 0);
+            $isTransferFeeType = false;
+            if ($c->relationLoaded('feeType') && $c->feeType) {
+                $typeName = strtolower($c->feeType->name ?? '');
+                $typeSlug = strtolower($c->feeType->slug ?? '');
+                $isTransferFeeType = str_contains($typeName, 'transfer') || str_contains($typeSlug, 'transfer');
+            }
+
+            $isStudentTransfer = ($entryMode && strcasecmp($entryMode, 'Transfer') === 0);
+
+            if ($isTransferRule || $isTransferFeeType) {
+                return $isStudentTransfer;
+            }
+
             // Entry mode / Tier check
             if ($c->entry_mode !== null && $c->entry_mode !== '' && $c->entry_mode !== 'all') {
                 $cNorm = static::normalizeTier($c->entry_mode);

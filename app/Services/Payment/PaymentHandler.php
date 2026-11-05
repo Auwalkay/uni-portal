@@ -316,12 +316,18 @@ class PaymentHandler
         if ($invoice->type === 'application_fee') {
             $applicant = Applicant::where('user_id', $payment->user_id)->first();
             if ($applicant && $applicant->status === 'pending_payment') {
-                $applicant->update([
-                    'status' => 'submitted',
-                    'application_number' => \App\Helpers\ApplicationNumberHelper::generate(),
-                ]);
-                
-                $payment->user->notify(new \App\Notifications\ApplicationSubmitted($applicant));
+                if (! empty($applicant->first_name)) {
+                    $applicant->update([
+                        'status' => 'submitted',
+                        'application_number' => $applicant->application_number ?: \App\Helpers\ApplicationNumberHelper::generate(),
+                    ]);
+
+                    $payment->user?->notify(new \App\Notifications\ApplicationSubmitted($applicant));
+                } else {
+                    $applicant->update([
+                        'status' => 'draft',
+                    ]);
+                }
             }
         }
 

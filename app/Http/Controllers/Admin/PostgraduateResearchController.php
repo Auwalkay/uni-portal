@@ -260,7 +260,7 @@ class PostgraduateResearchController extends Controller
 
         $this->vivaService->addExaminer($project, $validated);
 
-        return back()->with('success', 'Examiner nominated and recorded in project dossier.');
+        return back()->with('success', 'Examiner nominated and recorded successfully.');
     }
 
     public function recordExaminerReport(Request $request, PostgraduateExaminer $examiner)

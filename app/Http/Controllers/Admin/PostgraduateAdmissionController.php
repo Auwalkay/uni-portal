@@ -22,7 +22,9 @@ class PostgraduateAdmissionController extends Controller
             abort(403, 'Unauthorized to view postgraduate applications.');
         }
 
-        $query = Applicant::postgraduate()->with(['user', 'programme.department.faculty', 'referees', 'qualifications']);
+        $query = Applicant::postgraduate()
+            ->with(['user', 'programme.department.faculty', 'referees', 'qualifications'])
+            ->withExists(['invoices as has_paid_application' => fn ($q) => $q->where('type', 'application_fee')->where('status', 'paid')]);
 
         // Stats
         $stats = [
@@ -151,6 +153,7 @@ class PostgraduateAdmissionController extends Controller
         return Inertia::render('Admin/Postgraduate/Admissions/Show', [
             'applicant' => $applicant,
             'payment_info' => $paymentInfo,
+            'is_paid' => $applicant->hasPaidApplicationFee(),
             'pg_eligibility' => $pgEligibility,
             'pg_tier' => $pgTier,
             'default_level' => $defaultLevel,
@@ -172,9 +175,17 @@ class PostgraduateAdmissionController extends Controller
             abort(403, 'Unauthorized to review postgraduate applications.');
         }
 
+        if ($applicant->status === 'enrolled') {
+            return back()->with('error', 'Enrolled applicant records cannot be modified.');
+        }
+
         if ($request->status === 'admitted') {
             if (! $user->can('admit_pg_students') && ! $user->hasRole(['admin', 'super_admin'])) {
                 abort(403, 'Unauthorized to admit postgraduate students.');
+            }
+
+            if (! $applicant->hasPaidApplicationFee()) {
+                return back()->with('error', 'Cannot admit applicant: Postgraduate application & enrolment fee has not been paid.');
             }
         }
 
@@ -225,11 +236,12 @@ class PostgraduateAdmissionController extends Controller
             abort(403, 'Unauthorized to view postgraduate admission letters.');
         }
 
-        if ($applicant->status !== 'admitted') {
-            abort(403, 'Admission letter is only available for admitted applicants.');
+        if (! in_array($applicant->status, ['admitted', 'enrolled'], true)) {
+            abort(403, 'Admission letter is only available for admitted or enrolled applicants.');
         }
 
-        $identifier = $applicant->application_number ?? $applicant->jamb_registration_number ?? 'SPGS_Letter';
+        $rawIdentifier = (string) ($applicant->application_number ?? $applicant->jamb_registration_number ?? 'SPGS_Letter');
+        $identifier = preg_replace('/[^A-Za-z0-9_\-]/', '_', $rawIdentifier);
         $fileName = "SPGS_Admission_Letter_{$identifier}.pdf";
         $filePath = "admission_letters/{$applicant->user_id}.pdf";
 
@@ -252,6 +264,41 @@ class PostgraduateAdmissionController extends Controller
         ]);
 
         return $pdf->download($fileName);
+    }
+
+    public function downloadTranscriptLabel(Request $request, Applicant $applicant)
+    {
+        $user = $request->user();
+
+        if (! $applicant->isPostgraduate()) {
+            abort(404, 'Not a postgraduate applicant.');
+        }
+
+        if (! $user->can('view_pg_applications') && ! $user->hasRole(['admin', 'super_admin'])) {
+            abort(403, 'Unauthorized to view postgraduate transcript labels.');
+        }
+
+        $applicant->load(['programme.department.faculty', 'qualifications']);
+
+        $currentSession = ($applicant->programme ? \App\Models\Session::currentForProgram($applicant->programme) : null)
+            ?? \App\Models\Session::current();
+
+        $pdf = Pdf::loadView('documents.pg_transcript_label', [
+            'applicant' => $applicant,
+            'qualifications' => $applicant->qualifications,
+            'programme_name' => $applicant->programme?->name ?? 'Postgraduate Programme',
+            'department_name' => $applicant->programme?->department?->name ?? 'Department',
+            'faculty_name' => $applicant->programme?->department?->faculty?->name ?? 'School of Postgraduate Studies',
+            'session_name' => $currentSession?->name ?? date('Y') . '/' . (date('Y') + 1),
+        ])->setOptions([
+            'defaultFont' => 'DejaVu Sans',
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled' => true,
+        ]);
+
+        $ref = preg_replace('/[^A-Za-z0-9\-_]/', '_', (string) ($applicant->application_number ?? $applicant->jamb_registration_number ?? 'SPGS'));
+
+        return $pdf->download("SPGS_Transcript_Request_Label_{$ref}.pdf");
     }
 
     private function calculateEstimatedFeesForApplicant($applicant, $session)

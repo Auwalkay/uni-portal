@@ -237,28 +237,20 @@ class InvoiceController extends Controller
             $resolvedConfigs = collect();
             $groupedConfigs = $allConfigs->groupBy('fee_type_id');
 
+            $progType = $student->program?->type;
+            $isPg = $student->isPostgraduate();
+
             foreach ($groupedConfigs as $feeTypeId => $configs) {
-                $resolved = null;
-                if ($student->program_id) {
-                    $resolved = $configs->where('program_id', $student->program_id)->first();
-                }
-                if (!$resolved && $student->department_id) {
-                    $resolved = $configs->where('department_id', $student->department_id)
-                        ->whereNull('program_id')
-                        ->first();
-                }
-                if (!$resolved && $student->faculty_id) {
-                    $resolved = $configs->where('faculty_id', $student->faculty_id)
-                        ->whereNull('department_id')
-                        ->whereNull('program_id')
-                        ->first();
-                }
-                if (!$resolved) {
-                    $resolved = $configs->whereNull('faculty_id')
-                        ->whereNull('department_id')
-                        ->whereNull('program_id')
-                        ->first();
-                }
+                $resolved = \App\Services\Finance\FeeService::resolveConfigFromCollection(
+                    $configs,
+                    $student->program_id,
+                    $student->department_id,
+                    $student->faculty_id,
+                    $progType,
+                    $student->current_level,
+                    $student->entry_mode,
+                    $isPg
+                );
                 if ($resolved) {
                     if ($resolved->feeType && $resolved->feeType->is_one_time) {
                         $alreadyCharged = \App\Models\InvoiceItem::whereHas('invoice', function ($q) use ($student) {
@@ -405,28 +397,20 @@ class InvoiceController extends Controller
                         $resolvedConfigs = collect();
                         $groupedConfigs = $allConfigs->groupBy('fee_type_id');
 
+                        $progType = $student->program?->type;
+                        $isPg = $student->isPostgraduate();
+
                         foreach ($groupedConfigs as $feeTypeId => $configs) {
-                            $resolved = null;
-                            if ($student->program_id) {
-                                $resolved = $configs->where('program_id', $student->program_id)->first();
-                            }
-                            if (!$resolved && $student->department_id) {
-                                $resolved = $configs->where('department_id', $student->department_id)
-                                    ->whereNull('program_id')
-                                    ->first();
-                            }
-                            if (!$resolved && $student->faculty_id) {
-                                $resolved = $configs->where('faculty_id', $student->faculty_id)
-                                    ->whereNull('department_id')
-                                    ->whereNull('program_id')
-                                    ->first();
-                            }
-                            if (!$resolved) {
-                                $resolved = $configs->whereNull('faculty_id')
-                                    ->whereNull('department_id')
-                                    ->whereNull('program_id')
-                                    ->first();
-                            }
+                            $resolved = \App\Services\Finance\FeeService::resolveConfigFromCollection(
+                                $configs,
+                                $student->program_id,
+                                $student->department_id,
+                                $student->faculty_id,
+                                $progType,
+                                $student->current_level,
+                                $student->entry_mode,
+                                $isPg
+                            );
                             if ($resolved) {
                                 if ($resolved->feeType && $resolved->feeType->is_one_time) {
                                     $alreadyCharged = \App\Models\InvoiceItem::whereHas('invoice', function ($q) use ($student) {
@@ -589,12 +573,18 @@ class InvoiceController extends Controller
             if ($invoice->type === 'application_fee') {
                 $applicant = \App\Models\Applicant::where('user_id', $invoice->user_id)->first();
                 if ($applicant && $applicant->status === 'pending_payment') {
-                    $applicant->update([
-                        'status' => 'submitted',
-                        'application_number' => \App\Helpers\ApplicationNumberHelper::generate(),
-                    ]);
-                    
-                    $invoice->user->notify(new \App\Notifications\ApplicationSubmitted($applicant));
+                    if (! empty($applicant->first_name)) {
+                        $applicant->update([
+                            'status' => 'submitted',
+                            'application_number' => $applicant->application_number ?: \App\Helpers\ApplicationNumberHelper::generate(),
+                        ]);
+
+                        $invoice->user->notify(new \App\Notifications\ApplicationSubmitted($applicant));
+                    } else {
+                        $applicant->update([
+                            'status' => 'draft',
+                        ]);
+                    }
                 }
             }
 

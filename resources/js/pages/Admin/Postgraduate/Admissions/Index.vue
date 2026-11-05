@@ -36,6 +36,7 @@ interface ApplicantItem {
     application_number?: string;
     jamb_registration_number?: string;
     status: string;
+    has_paid_application?: boolean;
     created_at: string;
     previous_institution?: string;
     previous_qualification?: string;
@@ -187,7 +188,7 @@ const clearFilters = () => {
                         </Badge>
                     </div>
                     <p class="text-muted-foreground text-sm">
-                        School of Postgraduate Studies dossier review, referee evaluations, and admissions screening.
+                        School of Postgraduate Studies application review, referee evaluations, and admissions screening.
                     </p>
                 </div>
                 <div class="flex items-center gap-2">
@@ -216,7 +217,7 @@ const clearFilters = () => {
                 <StatsCard
                     title="Under Screening"
                     :value="stats.screening.toLocaleString()"
-                    description="Dossier & referee review"
+                    description="Application & referee review"
                     :icon="GraduationCap"
                 />
                 <StatsCard
@@ -378,9 +379,14 @@ const clearFilters = () => {
                                     {{ format(new Date(applicant.created_at), 'MMM d, yyyy') }}
                                 </TableCell>
                                 <TableCell>
-                                    <Badge :class="getStatusColorClass(applicant.status)" class="capitalize shadow-none text-xs">
-                                        {{ applicant.status }}
-                                    </Badge>
+                                    <div class="flex flex-col gap-1">
+                                        <Badge :class="getStatusColorClass(applicant.status)" class="capitalize shadow-none text-xs w-fit">
+                                            {{ applicant.status }}
+                                        </Badge>
+                                        <span class="text-[10px] font-medium" :class="applicant.has_paid_application ? 'text-green-600' : 'text-amber-600'">
+                                            {{ applicant.has_paid_application ? '● Fee Paid' : '○ Fee Unpaid' }}
+                                        </span>
+                                    </div>
                                 </TableCell>
                                 <TableCell class="text-right">
                                     <Link :href="route().has('admin.admissions.pg.show') ? route('admin.admissions.pg.show', applicant.id) : `/admin/admissions/pg/${applicant.id}`">

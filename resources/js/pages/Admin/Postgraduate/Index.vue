@@ -627,7 +627,7 @@ const applyFilters = () => {
                     <DialogHeader>
                         <DialogTitle class="font-serif">Nominate Examiner</DialogTitle>
                         <DialogDescription class="text-xs">
-                            Add an external or internal oral examiner to the project's examination dossier.
+                            Add an external or internal oral examiner to the project's examination panel.
                         </DialogDescription>
                     </DialogHeader>
                     <form @submit.prevent="submitExaminer" class="space-y-3 pt-2">
@@ -740,7 +740,7 @@ const applyFilters = () => {
                 </DialogContent>
             </Dialog>
 
-            <!-- MODAL: VIEW FULL PROJECT DOSSIER -->
+            <!-- MODAL: VIEW FULL PROJECT DETAILS -->
             <Dialog :open="detailsDialogOpen" @update:open="detailsDialogOpen = $event">
                 <DialogContent class="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader v-if="selectedProject">
@@ -936,7 +936,7 @@ const applyFilters = () => {
 
                     <DialogFooter class="pt-4 border-t">
                         <Button type="button" variant="outline" size="sm" @click="detailsDialogOpen = false">
-                            Close Dossier
+                            Close Details
                         </Button>
                     </DialogFooter>
                 </DialogContent>

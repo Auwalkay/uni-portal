@@ -66,7 +66,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('applicant')->name('applicant.')->middleware(['permission:access_applicant_portal'])->group(function () {
         Route::get('/dashboard', [ApplicationController::class, 'index'])->name('dashboard');
         Route::get('/apply/start', [ApplicationController::class, 'create'])->name('apply.start');
+        Route::post('/apply/select-programme', [ApplicationController::class, 'selectProgramme'])->name('apply.select_programme');
         Route::get('/apply/form', [ApplicationController::class, 'form'])->name('apply.form');
+        Route::post('/apply/save-step', [ApplicationController::class, 'saveStep'])->name('apply.save_step');
         Route::post('/apply', [ApplicationController::class, 'store'])->name('apply.store');
         Route::get('/application/preview', [ApplicationController::class, 'show'])->name('apply.show');
         Route::get('/application/transcript-label', [ApplicationController::class, 'downloadTranscriptLabel'])->name('apply.transcript_label');
@@ -210,6 +212,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\PostgraduateAdmissionController::class, 'index'])->name('index');
             Route::get('/{applicant}', [\App\Http\Controllers\Admin\PostgraduateAdmissionController::class, 'show'])->name('show');
             Route::get('/{applicant}/letter', [\App\Http\Controllers\Admin\PostgraduateAdmissionController::class, 'downloadLetter'])->name('letter');
+            Route::get('/{applicant}/transcript-label', [\App\Http\Controllers\Admin\PostgraduateAdmissionController::class, 'downloadTranscriptLabel'])->name('transcript_label');
 
             Route::middleware(['permission:review_pg_applications'])->group(function () {
                 Route::put('/{applicant}', [\App\Http\Controllers\Admin\PostgraduateAdmissionController::class, 'update'])->name('update');
