@@ -553,7 +553,8 @@ class CourseRegistrationController extends Controller
                 'total_units' => $registrations->flatten()->sum('course.units'),
             ]);
 
-            return $pdf->download("Course_Form_{$student->matriculation_number}.pdf");
+            $safeMatric = preg_replace('/[^A-Za-z0-9_\-]/', '_', (string) $student->matriculation_number);
+            return $pdf->download("Course_Form_{$safeMatric}.pdf");
         }
 
         return Inertia::render('Admin/Students/CourseRegistrationFormView', [

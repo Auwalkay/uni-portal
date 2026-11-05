@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 class PostgraduateAdmissionService
 {
     public const QUALIFICATIONS = [
+        'ND',
         'HND',
         'B.Sc',
         'B.A',
@@ -25,6 +26,12 @@ class PostgraduateAdmissionService
         'M.Eng',
         'M.Ed',
         'M.Phil',
+        'ICAN',
+        'ANAN',
+        'ACCA',
+        'CIB',
+        'CIBN',
+        'Other',
     ];
 
     public const DEGREE_CLASSES = [
@@ -38,6 +45,9 @@ class PostgraduateAdmissionService
         'Lower Credit',
         'Merit',
         'Credit',
+        'Associate / Member',
+        'Passed / Qualified',
+        'Fellow',
     ];
 
     /**
@@ -133,9 +143,12 @@ class PostgraduateAdmissionService
 
         $isBachelors = in_array($qual, ['B.SC', 'BSC', 'B.A', 'BA', 'B.ENG', 'B.TECH', 'B.ED', 'LL.B', 'BACHELOR'], true);
         $isHnd = $qual === 'HND';
+        $isNd = in_array($qual, ['ND', 'OND', 'NATIONAL DIPLOMA'], true);
         $isPgd = $qual === 'PGD';
         $isAcademicMasters = in_array($qual, ['M.SC', 'MSC', 'M.A', 'MA', 'M.ENG', 'M.TECH', 'M.ED', 'M.PHIL', 'MPHIL'], true);
         $isProfessionalMasters = in_array($qual, ['MBA', 'MIM', 'MPA'], true);
+        $isProfessionalBody = in_array($qual, ['ICAN', 'ANAN', 'ACCA', 'CIB', 'CIBN', 'CPA', 'CIMA', 'CFA', 'CIPM', 'CIS'], true);
+        $isOther = ($qual === 'OTHER' || (!in_array($qual, array_map('strtoupper', static::QUALIFICATIONS), true) && !$isNd && !$isProfessionalBody && !$isBachelors));
 
         $isMinSecondClassLower = in_array($class, [
             'FIRST CLASS',
@@ -146,11 +159,14 @@ class PostgraduateAdmissionService
             'SECOND CLASS LOWER',
             '2:2',
             'DISTINCTION',
+            'ASSOCIATE / MEMBER',
+            'PASSED / QUALIFIED',
+            'FELLOW',
         ], true);
 
         $isThirdClass = in_array($class, ['THIRD CLASS', '3RD CLASS'], true);
-        $isPassDegree = $class === 'PASS';
-        $isHndCredit = in_array($class, ['DISTINCTION', 'UPPER CREDIT', 'LOWER CREDIT', 'MERIT', 'CREDIT'], true);
+        $isPassDegree = in_array($class, ['PASS', 'PASSED / QUALIFIED'], true);
+        $isHndCredit = in_array($class, ['DISTINCTION', 'UPPER CREDIT', 'LOWER CREDIT', 'MERIT', 'CREDIT', 'ASSOCIATE / MEMBER', 'PASSED / QUALIFIED', 'FELLOW'], true);
 
         // 1. PGD (700 Level)
         if ($tier === 'PGD') {
@@ -184,12 +200,42 @@ class PostgraduateAdmissionService
                 ];
             }
 
+            if ($isProfessionalBody) {
+                return [
+                    'eligible' => true,
+                    'tier' => $tier,
+                    'default_level' => $defaultLevel,
+                    'conversion_required' => false,
+                    'message' => 'Eligible for PGD admission via recognized professional qualification (' . $qualification . ').',
+                ];
+            }
+
+            if ($isOther) {
+                return [
+                    'eligible' => true,
+                    'tier' => $tier,
+                    'default_level' => $defaultLevel,
+                    'conversion_required' => false,
+                    'message' => 'Eligible for PGD admission via qualification (' . $qualification . '), subject to departmental verification.',
+                ];
+            }
+
+            if ($isNd) {
+                return [
+                    'eligible' => false,
+                    'tier' => $tier,
+                    'default_level' => $defaultLevel,
+                    'conversion_required' => false,
+                    'message' => 'National Diploma (ND) alone does not satisfy Postgraduate admission requirements. A minimum of HND (Lower Credit) or Bachelor\'s degree is required.',
+                ];
+            }
+
             return [
                 'eligible' => false,
                 'tier' => $tier,
                 'default_level' => $defaultLevel,
                 'conversion_required' => false,
-                'message' => 'PGD admission requires a minimum of Third Class Bachelor\'s degree or HND (Lower Credit). Pass degrees are not eligible.',
+                'message' => 'PGD admission requires a minimum of Third Class Bachelor\'s degree, HND (Lower Credit), or recognized professional qualification. Pass degrees are not eligible.',
             ];
         }
 
@@ -235,17 +281,66 @@ class PostgraduateAdmissionService
                 ];
             }
 
+            if ($isProfessionalBody) {
+                return [
+                    'eligible' => true,
+                    'tier' => $tier,
+                    'default_level' => $defaultLevel,
+                    'conversion_required' => false,
+                    'message' => 'Eligible for Professional Master\'s (MBA/MIM) via recognized professional qualification (' . $qualification . ').',
+                ];
+            }
+
+            if ($isOther) {
+                return [
+                    'eligible' => true,
+                    'tier' => $tier,
+                    'default_level' => $defaultLevel,
+                    'conversion_required' => false,
+                    'message' => 'Eligible for Professional Master\'s (MBA/MIM) via qualification (' . $qualification . '), subject to departmental verification.',
+                ];
+            }
+
+            if ($isNd) {
+                return [
+                    'eligible' => false,
+                    'tier' => $tier,
+                    'default_level' => $defaultLevel,
+                    'conversion_required' => false,
+                    'message' => 'National Diploma (ND) does not qualify for MBA admission. A Bachelor\'s degree, PGD, or recognized professional qualification is required.',
+                ];
+            }
+
             return [
                 'eligible' => false,
                 'tier' => $tier,
                 'default_level' => $defaultLevel,
                 'conversion_required' => false,
-                'message' => 'MBA/MIM admission requires a Bachelor\'s degree (minimum Second Class Lower 2:2) or a Postgraduate Diploma (PGD). HND and Third Class holders must obtain a PGD first.',
+                'message' => 'MBA/MIM admission requires a Bachelor\'s degree (minimum Second Class Lower 2:2), Postgraduate Diploma (PGD), or recognized professional qualification (e.g. ICAN, ACCA, ANAN, CIB). HND and Third Class holders must obtain a PGD first.',
             ];
         }
 
         // 3. Academic Master's: M.Sc / M.A / M.Ed (800 Level)
         if ($tier === 'ACADEMIC_MASTERS') {
+            if ($isNd) {
+                return [
+                    'eligible' => false,
+                    'tier' => $tier,
+                    'default_level' => $defaultLevel,
+                    'conversion_required' => false,
+                    'message' => 'National Diploma (ND) does not satisfy Academic Master\'s (M.Sc) admission requirements. A Bachelor\'s degree (min 2:2) or PGD is required.',
+                ];
+            }
+
+            if ($isProfessionalBody) {
+                return [
+                    'eligible' => false,
+                    'tier' => $tier,
+                    'default_level' => $defaultLevel,
+                    'conversion_required' => false,
+                    'message' => 'Academic Master\'s (M.Sc) requires a Bachelor\'s degree (minimum 2:2) or an academic PGD with minimum 3.00 CGPA. Candidates with professional qualifications (' . $qualification . ') are eligible for MBA/MIM programmes or must complete a relevant PGD before M.Sc entry.',
+                ];
+            }
             if ($isBachelors && $isMinSecondClassLower) {
                 return [
                     'eligible' => true,
@@ -437,27 +532,39 @@ class PostgraduateAdmissionService
         $applicant->qualifications()->getQuery()->delete();
 
         $rankMap = [
-            'PH.D' => 6,
-            'PHD' => 6,
-            'M.PHIL' => 5,
-            'MPHIL' => 5,
-            'M.SC' => 4,
-            'MSC' => 4,
-            'M.A' => 4,
-            'M.ENG' => 4,
-            'M.TECH' => 4,
-            'M.ED' => 4,
-            'MBA' => 3,
-            'MIM' => 3,
-            'MPA' => 3,
-            'PGD' => 2,
-            'B.SC' => 1,
-            'B.A' => 1,
-            'B.ENG' => 1,
-            'B.TECH' => 1,
-            'B.ED' => 1,
-            'LL.B' => 1,
-            'HND' => 0,
+            'PH.D' => 7,
+            'PHD' => 7,
+            'M.PHIL' => 6,
+            'MPHIL' => 6,
+            'M.SC' => 5,
+            'MSC' => 5,
+            'M.A' => 5,
+            'M.ENG' => 5,
+            'M.TECH' => 5,
+            'M.ED' => 5,
+            'MBA' => 4,
+            'MIM' => 4,
+            'MPA' => 4,
+            'PGD' => 3,
+            'ICAN' => 3,
+            'ANAN' => 3,
+            'ACCA' => 3,
+            'CIB' => 3,
+            'CIBN' => 3,
+            'CPA' => 3,
+            'CIMA' => 3,
+            'CFA' => 3,
+            'CIPM' => 3,
+            'CIS' => 3,
+            'B.SC' => 2,
+            'B.A' => 2,
+            'B.ENG' => 2,
+            'B.TECH' => 2,
+            'B.ED' => 2,
+            'LL.B' => 2,
+            'HND' => 1,
+            'ND' => 0,
+            'OND' => 0,
         ];
 
         $highestIndex = 0;
@@ -465,7 +572,7 @@ class PostgraduateAdmissionService
 
         foreach ($qualifications as $idx => $qual) {
             $typeKey = strtoupper(trim((string) ($qual['qualification_type'] ?? '')));
-            $rank = $rankMap[$typeKey] ?? 0;
+            $rank = $rankMap[$typeKey] ?? 2;
             if ($rank >= $highestRank) {
                 $highestRank = $rank;
                 $highestIndex = $idx;

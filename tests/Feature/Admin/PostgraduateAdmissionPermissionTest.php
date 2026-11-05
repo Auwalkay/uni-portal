@@ -216,6 +216,14 @@ class PostgraduateAdmissionPermissionTest extends TestCase
 
     public function test_admit_student_permission_enforced_between_ug_and_pg()
     {
+        \App\Models\Invoice::create([
+            'user_id' => $this->pgApplicant->user_id,
+            'type' => 'application_fee',
+            'status' => 'paid',
+            'amount' => 50000,
+            'reference' => 'APP-TEST-'.uniqid(),
+        ]);
+
         $pgReviewerOnly = $this->createStaffWithPermissions(['view_pg_applications', 'review_pg_applications']);
         $pgAdmitter = $this->createStaffWithPermissions(['view_pg_applications', 'review_pg_applications', 'admit_pg_students']);
 
@@ -237,6 +245,44 @@ class PostgraduateAdmissionPermissionTest extends TestCase
         $this->assertEquals('admitted', $freshPg->status);
         $this->assertEquals('800', $freshPg->admitted_level);
         $this->assertEquals($this->pgProgramme->id, $freshPg->admitted_programme_id);
+    }
+
+    public function test_enrolled_applicant_cannot_be_updated()
+    {
+        $pgAdmitter = $this->createStaffWithPermissions(['view_pg_applications', 'review_pg_applications', 'admit_pg_students']);
+        $ugAdmitter = $this->createStaffWithPermissions(['view_applications', 'review_applications', 'admit_students']);
+
+        $this->pgApplicant->update(['status' => 'enrolled']);
+        $this->ugApplicant->update(['status' => 'enrolled']);
+
+        // Attempting to update enrolled PG applicant fails
+        $response = $this->actingAs($pgAdmitter)->put(route('admin.admissions.pg.update', $this->pgApplicant->id), [
+            'status' => 'screening',
+        ]);
+        $response->assertSessionHas('error', 'Enrolled applicant records cannot be modified.');
+        $this->assertEquals('enrolled', $this->pgApplicant->fresh()->status);
+
+        // Attempting to update enrolled UG applicant fails
+        $responseUg = $this->actingAs($ugAdmitter)->put(route('admin.admissions.ug.update', $this->ugApplicant->id), [
+            'status' => 'screening',
+        ]);
+        $responseUg->assertSessionHas('error', 'Enrolled applicant records cannot be modified.');
+        $this->assertEquals('enrolled', $this->ugApplicant->fresh()->status);
+    }
+
+    public function test_download_admission_letter_handles_application_number_with_slashes()
+    {
+        $this->pgApplicant->update([
+            'status' => 'admitted',
+            'application_number' => 'APP/2026/6709',
+        ]);
+
+        $pgViewer = $this->createStaffWithPermissions(['view_pg_applications']);
+
+        $response = $this->actingAs($pgViewer)->get(route('admin.admissions.pg.letter', $this->pgApplicant->id));
+
+        $response->assertOk();
+        $this->assertStringContainsString('SPGS_Admission_Letter_APP_2026_6709.pdf', $response->headers->get('content-disposition'));
     }
 }
 

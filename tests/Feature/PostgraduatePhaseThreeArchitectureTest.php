@@ -6,6 +6,7 @@ use App\Models\Applicant;
 use App\Models\ApplicantReferee;
 use App\Models\Department;
 use App\Models\Faculty;
+use App\Models\Invoice;
 use App\Models\Lga;
 use App\Models\Programme;
 use App\Models\Semester;
@@ -158,6 +159,22 @@ class PostgraduatePhaseThreeArchitectureTest extends TestCase
         $user->assignRole('applicant');
         $this->actingAs($user);
 
+        Applicant::create([
+            'user_id' => $user->id,
+            'application_mode' => 'PG',
+            'program_choice_1' => $mscProgramme->id,
+            'status' => 'draft',
+        ]);
+
+        Invoice::create([
+            'user_id' => $user->id,
+            'type' => 'application_fee',
+            'status' => 'paid',
+            'amount' => 50000,
+            'paid_amount' => 50000,
+            'reference' => 'APP-TEST-'.uniqid(),
+        ]);
+
         // 1. Attempt ineligible Third Class application to M.Sc -> should fail validation
         $invalidResponse = $this->post(route('applicant.apply.store'), [
             'first_name' => 'Ibrahim',
@@ -239,7 +256,7 @@ class PostgraduatePhaseThreeArchitectureTest extends TestCase
             ],
         ]);
 
-        $validResponse->assertRedirect(route('applicant.payment.index'));
+        $validResponse->assertRedirect(route('applicant.apply.show'));
 
         $applicant = Applicant::where('user_id', $user->id)->firstOrFail();
         $this->assertTrue($applicant->isPostgraduate());
@@ -282,7 +299,7 @@ class PostgraduatePhaseThreeArchitectureTest extends TestCase
         $admin = User::factory()->create();
         $admin->assignRole('admin');
 
-        $this->actingAs($admin)->put(route('admin.admissions.update', $applicant->id), [
+        $this->actingAs($admin)->put(route('admin.admissions.pg.update', $applicant->id), [
             'status' => 'admitted',
             'admitted_level' => '800',
             'admitted_programme_id' => $mscProgramme->id,
@@ -344,6 +361,22 @@ class PostgraduatePhaseThreeArchitectureTest extends TestCase
         $user = User::factory()->create();
         $user->assignRole('applicant');
         $this->actingAs($user);
+
+        Applicant::create([
+            'user_id' => $user->id,
+            'application_mode' => 'PG',
+            'program_choice_1' => $mscProgramme->id,
+            'status' => 'draft',
+        ]);
+
+        Invoice::create([
+            'user_id' => $user->id,
+            'type' => 'application_fee',
+            'status' => 'paid',
+            'amount' => 50000,
+            'paid_amount' => 50000,
+            'reference' => 'APP-TEST-'.uniqid(),
+        ]);
 
         // Submit multi-degree application: HND (Upper Credit) + PGD (CGPA 3.85) + Employment + Study Mode
         $response = $this->post(route('applicant.apply.store'), [
@@ -407,7 +440,7 @@ class PostgraduatePhaseThreeArchitectureTest extends TestCase
             ],
         ]);
 
-        $response->assertRedirect(route('applicant.payment.index'));
+        $response->assertRedirect(route('applicant.apply.show'));
 
         $applicant = Applicant::where('user_id', $user->id)->firstOrFail();
         $this->assertCount(2, $applicant->qualifications);
@@ -450,6 +483,22 @@ class PostgraduatePhaseThreeArchitectureTest extends TestCase
         $user = User::factory()->create();
         $user->assignRole('applicant');
         $this->actingAs($user);
+
+        Applicant::create([
+            'user_id' => $user->id,
+            'application_mode' => 'PG',
+            'program_choice_1' => $pgProgramme->id,
+            'status' => 'draft',
+        ]);
+
+        Invoice::create([
+            'user_id' => $user->id,
+            'type' => 'application_fee',
+            'status' => 'paid',
+            'amount' => 50000,
+            'paid_amount' => 50000,
+            'reference' => 'APP-TEST-'.uniqid(),
+        ]);
 
         // 1. Choosing PG mode with a UG programme must be rejected
         $response1 = $this->post(route('applicant.apply.store'), [

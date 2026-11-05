@@ -43,7 +43,9 @@ class AdmissionController extends Controller
             abort(403, 'Unauthorized to view undergraduate applications.');
         }
 
-        $query = Applicant::undergraduate()->with(['user', 'programme']);
+        $query = Applicant::undergraduate()
+            ->with(['user', 'programme'])
+            ->withExists(['invoices as has_paid_application' => fn ($q) => $q->where('type', 'application_fee')->where('status', 'paid')]);
 
         // Stats
         $stats = [
@@ -141,6 +143,7 @@ class AdmissionController extends Controller
         return Inertia::render('Admin/Admissions/Show', [
             'applicant' => $applicant,
             'payment_info' => $paymentInfo,
+            'is_paid' => $applicant->hasPaidApplicationFee(),
             'pg_eligibility' => null,
             'programmes' => fn () => \App\Services\AcademicCacheService::getProgrammes()->filter(fn ($p) => ! $p->isPostgraduate())->values(),
             'scholarships' => fn () => \App\Services\AcademicCacheService::getScholarships(),
@@ -160,9 +163,17 @@ class AdmissionController extends Controller
             abort(403, 'Unauthorized to review undergraduate applications.');
         }
 
+        if ($applicant->status === 'enrolled') {
+            return back()->with('error', 'Enrolled applicant records cannot be modified.');
+        }
+
         if ($request->status === 'admitted') {
             if (! $user->can('admit_students') && ! $user->hasRole(['admin', 'super_admin'])) {
                 abort(403, 'Unauthorized to admit undergraduate students.');
+            }
+
+            if (! $applicant->hasPaidApplicationFee()) {
+                return back()->with('error', 'Cannot admit applicant: Undergraduate application fee has not been paid.');
             }
         }
 
@@ -227,11 +238,12 @@ class AdmissionController extends Controller
         if (! $user->can('view_applications') && ! $user->hasRole(['admin', 'super_admin'])) {
             abort(403, 'Unauthorized to view undergraduate admission letters.');
         }
-        if ($applicant->status !== 'admitted') {
-            abort(403, 'Admission letter is only available for admitted applicants.');
+        if (! in_array($applicant->status, ['admitted', 'enrolled'], true)) {
+            abort(403, 'Admission letter is only available for admitted or enrolled applicants.');
         }
 
-        $identifer = $applicant->jamb_registration_number ?? $applicant->application_number ?? 'Letter';
+        $rawIdentifer = (string) ($applicant->jamb_registration_number ?? $applicant->application_number ?? 'Letter');
+        $identifer = preg_replace('/[^A-Za-z0-9_\-]/', '_', $rawIdentifer);
         $fileName = "Admission_Letter_{$identifer}.pdf";
         $filePath = "admission_letters/{$applicant->user_id}.pdf";
 

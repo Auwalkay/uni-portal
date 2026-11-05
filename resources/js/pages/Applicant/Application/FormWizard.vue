@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { Head, useForm, router } from '@inertiajs/vue3';
 import ApplicantLayout from '@/layouts/ApplicantLayout.vue';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,9 @@ import {
   AlertCircle,
   Plus,
   Trash2,
+  Save,
+  Loader2,
+  FileCheck,
 } from 'lucide-vue-next';
 
 interface StepItem {
@@ -36,6 +39,7 @@ interface StepItem {
 }
 
 const props = defineProps<{
+    applicant?: any;
     mode?: string;
     isPostgraduate?: boolean;
     pgTier?: string | null;
@@ -77,14 +81,15 @@ const steps = computed<StepItem[]>(() =>
 const currentStep = ref(0);
 
 // JAMB Fetch State
-const jambNumber = ref('');
+const jambNumber = ref(props.applicant?.jamb_registration_number || '');
 const isFetching = ref(false);
 const jambError = ref('');
 const fetchedJambData = ref<any>(null);
 
 const defaultQualifications = [
-    'HND', 'B.Sc', 'B.A', 'B.Eng', 'B.Tech', 'B.Ed', 'LL.B',
+    'ND', 'HND', 'B.Sc', 'B.A', 'B.Eng', 'B.Tech', 'B.Ed', 'LL.B',
     'PGD', 'MBA', 'MIM', 'M.Sc', 'M.A', 'M.Eng', 'M.Ed', 'M.Phil',
+    'ICAN', 'ANAN', 'ACCA', 'CIB', 'CIBN', 'Other',
 ];
 
 const defaultDegreeClasses = [
@@ -98,59 +103,39 @@ const defaultDegreeClasses = [
     'Merit',
     'Credit',
     'Pass',
+    'Associate / Member',
+    'Passed / Qualified',
+    'Fellow',
 ];
 
 const qualificationOptions = computed(() => props.qualifications || defaultQualifications);
 const degreeClassOptions = computed(() => props.degreeClasses || defaultDegreeClasses);
 
-const form = useForm({
-    title: 'Mr.',
-    first_name: '',
-    last_name: '',
-    dob: '',
-    phone: '',
-    gender: 'male',
-    marital_status: 'Single',
-    nationality: 'Nigerian',
-    has_name_change: false,
-    previous_full_name: '',
-    address: '',
-    state_id: '',
-    lga_id: '',
-    next_of_kin_name: '',
-    next_of_kin_phone: '',
-    next_of_kin_relationship: '',
-    jamb_score: '',
-    study_mode: 'full_time',
-    area_of_specialization: '',
-    sponsorship_type: 'self',
-    sponsor_name: '',
-    previous_institution: '',
-    previous_qualification: '',
-    previous_course_of_study: '',
-    previous_class_of_degree: '',
-    previous_cgpa: '',
-    graduation_year: '',
-    nysc_status: 'Completed',
-    nysc_certificate_number: '',
-    official_transcript_status: 'not_requested',
-    work_experience_years: '0',
-    statement_of_purpose: '',
-    research_proposal_title: '',
-    mode: props.mode || (isPg.value ? 'PG' : 'UTME'),
-    programme_id: props.programme_id || '',
-    jamb_number: '',
-    passport_photo: null as File | null,
-    waec_result: null as File | null,
-    academic_transcript: null as File | null,
-    degree_certificate: null as File | null,
-    nysc_certificate: null as File | null,
-    cv_resume: null as File | null,
-    concept_note: null as File | null,
-    name_change_evidence: null as File | null,
-    qualifications: [
+const savedApplicant = ref<any>(props.applicant || {});
+const savedDocuments = computed(() => savedApplicant.value?.documents || []);
+
+const getExistingDoc = (type: string) => {
+    return savedDocuments.value?.find((d: any) => d.type === type);
+};
+
+const initialQualifications = computed(() => {
+    if (props.applicant?.qualifications && props.applicant.qualifications.length > 0) {
+        return props.applicant.qualifications.map((q: any) => ({
+            qualification_type: q.qualification_type || '',
+            other_qualification: '',
+            institution_name: q.institution_name || '',
+            course_of_study: q.course_of_study || '',
+            class_of_degree: q.class_of_degree || '',
+            cgpa: q.cgpa != null ? String(q.cgpa) : '',
+            scale_max: q.scale_max != null ? String(q.scale_max) : '5.00',
+            graduation_year: q.graduation_year ? String(q.graduation_year) : String(new Date().getFullYear() - 1),
+            certificate_number: q.certificate_number || '',
+        }));
+    }
+    return [
         {
             qualification_type: '',
+            other_qualification: '',
             institution_name: '',
             course_of_study: '',
             class_of_degree: '',
@@ -159,26 +144,96 @@ const form = useForm({
             graduation_year: String(new Date().getFullYear() - 1),
             certificate_number: '',
         },
-    ],
-    employments: [] as Array<{
-        employer_name: string;
-        job_title: string;
-        department_or_unit: string;
-        start_date: string;
-        end_date: string;
-        is_current: boolean;
-        responsibilities: string;
-    }>,
-    referees: [
+    ];
+});
+
+const initialEmployments = computed(() => {
+    if (props.applicant?.employments && props.applicant.employments.length > 0) {
+        return props.applicant.employments.map((e: any) => ({
+            employer_name: e.employer_name || '',
+            job_title: e.job_title || '',
+            department_or_unit: e.department_or_unit || '',
+            start_date: e.start_date || '',
+            end_date: e.end_date || '',
+            is_current: Boolean(e.is_current),
+            responsibilities: e.responsibilities || '',
+        }));
+    }
+    return [];
+});
+
+const initialReferees = computed(() => {
+    if (props.applicant?.referees && props.applicant.referees.length > 0) {
+        return props.applicant.referees.map((r: any) => ({
+            name: r.name || '',
+            email: r.email || '',
+            phone: r.phone || '',
+            institution_or_organization: r.institution_or_organization || '',
+            position_or_rank: r.position_or_rank || '',
+            relationship: r.relationship || '',
+        }));
+    }
+    return [
         { name: '', email: '', phone: '', institution_or_organization: '', position_or_rank: '', relationship: 'Academic Supervisor' },
         { name: '', email: '', phone: '', institution_or_organization: '', position_or_rank: '', relationship: 'Head of Department / Lecturer' },
         { name: '', email: '', phone: '', institution_or_organization: '', position_or_rank: '', relationship: 'Academic / Professional Referee' },
-    ],
+    ];
+});
+
+const form = useForm({
+    title: props.applicant?.title || 'Mr.',
+    first_name: props.applicant?.first_name || '',
+    last_name: props.applicant?.last_name || '',
+    dob: props.applicant?.dob ? String(props.applicant.dob).substring(0, 10) : '',
+    phone: props.applicant?.phone || '',
+    gender: props.applicant?.gender || 'male',
+    marital_status: props.applicant?.marital_status || 'Single',
+    nationality: props.applicant?.nationality || 'Nigerian',
+    has_name_change: Boolean(props.applicant?.has_name_change),
+    previous_full_name: props.applicant?.previous_full_name || '',
+    address: props.applicant?.address || '',
+    state_id: props.applicant?.state_id ? String(props.applicant.state_id) : '',
+    lga_id: props.applicant?.lga_id ? String(props.applicant.lga_id) : '',
+    next_of_kin_name: props.applicant?.next_of_kin_name || '',
+    next_of_kin_phone: props.applicant?.next_of_kin_phone || '',
+    next_of_kin_relationship: props.applicant?.next_of_kin_relationship || '',
+    jamb_score: props.applicant?.jamb_score ? String(props.applicant.jamb_score) : '',
+    study_mode: props.applicant?.study_mode || 'full_time',
+    area_of_specialization: props.applicant?.area_of_specialization || '',
+    sponsorship_type: props.applicant?.sponsorship_type || 'self',
+    sponsor_name: props.applicant?.sponsor_name || '',
+    previous_institution: props.applicant?.previous_institution || '',
+    previous_qualification: props.applicant?.previous_qualification || '',
+    previous_course_of_study: props.applicant?.previous_course_of_study || '',
+    previous_class_of_degree: props.applicant?.previous_class_of_degree || '',
+    previous_cgpa: props.applicant?.previous_cgpa ? String(props.applicant.previous_cgpa) : '',
+    graduation_year: props.applicant?.graduation_year ? String(props.applicant.graduation_year) : '',
+    nysc_status: props.applicant?.nysc_status || 'Completed',
+    nysc_certificate_number: props.applicant?.nysc_certificate_number || '',
+    official_transcript_status: props.applicant?.official_transcript_status || 'not_requested',
+    work_experience_years: props.applicant?.work_experience_years ? String(props.applicant.work_experience_years) : '0',
+    statement_of_purpose: props.applicant?.statement_of_purpose || '',
+    research_proposal_title: props.applicant?.research_proposal_title || '',
+    mode: props.mode || props.applicant?.application_mode || (isPg.value ? 'PG' : 'UTME'),
+    programme_id: props.programme_id || props.applicant?.program_choice_1 || '',
+    jamb_number: props.applicant?.jamb_registration_number || '',
+    passport_photo: null as File | null,
+    waec_result: null as File | null,
+    academic_transcript: null as File | null,
+    degree_certificate: null as File | null,
+    nysc_certificate: null as File | null,
+    cv_resume: null as File | null,
+    concept_note: null as File | null,
+    name_change_evidence: null as File | null,
+    qualifications: initialQualifications.value,
+    employments: initialEmployments.value,
+    referees: initialReferees.value,
 });
 
 const addQualification = () => {
     form.qualifications.push({
         qualification_type: '',
+        other_qualification: '',
         institution_name: '',
         course_of_study: '',
         class_of_degree: '',
@@ -216,13 +271,24 @@ const fetchJambDetails = async () => {
     }
 };
 
+watch(jambNumber, (val) => {
+    form.jamb_number = val ? val.trim().toUpperCase() : '';
+});
+
+watch(() => form.jamb_number, (val) => {
+    if (val && jambNumber.value !== val) {
+        jambNumber.value = val;
+    }
+});
+
 const confirmJambData = () => {
     if (fetchedJambData.value) {
         form.first_name = fetchedJambData.value.first_name;
         form.last_name = fetchedJambData.value.last_name;
         form.dob = fetchedJambData.value.dob;
-        form.jamb_score = fetchedJambData.value.jamb_score;
+        form.jamb_score = String(fetchedJambData.value.jamb_score);
         form.jamb_number = fetchedJambData.value.jamb_number;
+        jambNumber.value = fetchedJambData.value.jamb_number;
         goToStep(1);
     }
 };
@@ -244,14 +310,17 @@ const stepIsValid = computed(() => {
         case 2:
             if (isPg.value) {
                 const hasMultiQuals = form.qualifications.length > 0 && form.qualifications.every(
-                    q => q.institution_name.trim() && q.qualification_type.trim() && q.class_of_degree.trim() && q.course_of_study.trim()
+                    q => q.institution_name.trim() &&
+                        (q.qualification_type === 'Other' ? (q.other_qualification && q.other_qualification.trim()) : q.qualification_type.trim()) &&
+                        q.class_of_degree.trim() &&
+                        q.course_of_study.trim()
                 );
                 const has3Referees = form.referees.length === 3 && form.referees.every(
                     r => r.name.trim() && r.email.trim() && r.institution_or_organization.trim()
                 );
                 return hasMultiQuals && has3Referees;
             }
-            return !!form.jamb_score;
+            return !!(form.jamb_score && (form.jamb_number || jambNumber.value));
         case 3:
             return true;
         case 4:
@@ -261,36 +330,133 @@ const stepIsValid = computed(() => {
     }
 });
 
+const isSavingStep = ref(false);
+const lastSavedAt = ref<string | null>(null);
+
+const saveStep = async (showNotification = false): Promise<boolean> => {
+    isSavingStep.value = true;
+    try {
+        if (jambNumber.value && !form.jamb_number) {
+            form.jamb_number = jambNumber.value.trim().toUpperCase();
+        }
+
+        const formData = new FormData();
+        const currentStepObj = steps.value[currentStep.value];
+        formData.append('step', currentStepObj?.id || String(currentStep.value));
+
+        // Append form fields
+        Object.keys(form.data()).forEach(key => {
+            const val = (form as any)[key];
+            if (val === null || val === undefined) return;
+
+            if (Array.isArray(val)) {
+                val.forEach((item, idx) => {
+                    if (typeof item === 'object' && item !== null) {
+                        Object.keys(item).forEach(subKey => {
+                            formData.append(`${key}[${idx}][${subKey}]`, item[subKey] ?? '');
+                        });
+                    } else {
+                        formData.append(`${key}[${idx}]`, String(item));
+                    }
+                });
+            } else if (val instanceof File) {
+                formData.append(key, val);
+            } else if (typeof val === 'boolean') {
+                formData.append(key, val ? '1' : '0');
+            } else {
+                formData.append(key, String(val));
+            }
+        });
+
+        const response = await axios.post(route('applicant.apply.save_step'), formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        if (response.data?.success) {
+            const now = new Date();
+            lastSavedAt.value = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            if (response.data.applicant) {
+                savedApplicant.value = response.data.applicant;
+                if (props.applicant) {
+                    props.applicant.documents = response.data.applicant.documents;
+                }
+            }
+
+            if (showNotification) {
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: 'success',
+                    title: 'Draft saved successfully',
+                    showConfirmButton: false,
+                    timer: 2000,
+                });
+            }
+            return true;
+        }
+        return false;
+    } catch (err: any) {
+        console.error('Failed saving step draft:', err);
+        if (showNotification) {
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'error',
+                title: err?.response?.data?.error || 'Failed to save draft',
+                showConfirmButton: false,
+                timer: 3000,
+            });
+        }
+        return false;
+    } finally {
+        isSavingStep.value = false;
+    }
+};
+
 const canNavigateToStep = (targetIndex: number) => {
     if (targetIndex <= currentStep.value) return true;
     if (targetIndex === currentStep.value + 1) return stepIsValid.value;
     return false;
 };
 
-const goToStep = (targetIndex: number) => {
+const goToStep = async (targetIndex: number) => {
     if (targetIndex === currentStep.value) return;
     if (canNavigateToStep(targetIndex)) {
+        await saveStep(false);
         currentStep.value = targetIndex;
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 };
 
-const nextStep = () => {
+const nextStep = async () => {
     if (currentStep.value < steps.value.length - 1 && stepIsValid.value) {
+        await saveStep(false);
         currentStep.value++;
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 };
 
-const prevStep = () => {
+const prevStep = async () => {
     if (currentStep.value > 0) {
+        await saveStep(false);
         currentStep.value--;
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 };
 
 const submitApplication = () => {
+    if (jambNumber.value && !form.jamb_number) {
+        form.jamb_number = jambNumber.value.trim().toUpperCase();
+    }
+
     if (isPg.value && form.qualifications.length > 0) {
+        // If 'Other' was chosen, normalize qualification_type before posting
+        form.qualifications.forEach(q => {
+            if (q.qualification_type === 'Other' && q.other_qualification) {
+                q.qualification_type = q.other_qualification.trim();
+            }
+        });
         const primary = form.qualifications[form.qualifications.length - 1];
         form.previous_institution = primary.institution_name;
         form.previous_qualification = primary.qualification_type;
@@ -369,13 +535,25 @@ const submitApplication = () => {
                     </div>
                 </div>
 
-                <div>
-                    <h1 class="font-serif text-3xl sm:text-4xl font-bold text-foreground tracking-tight">
-                        {{ programme?.name || 'Application Form' }}
-                    </h1>
-                    <p class="text-sm text-muted-foreground mt-1">
-                        Step {{ currentStep + 1 }} of {{ steps.length }}: {{ steps[currentStep]?.label }}
-                    </p>
+                <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+                    <div>
+                        <h1 class="font-serif text-3xl sm:text-4xl font-bold text-foreground tracking-tight">
+                            {{ programme?.name || 'Application Form' }}
+                        </h1>
+                        <p class="text-sm text-muted-foreground mt-1">
+                            Step {{ currentStep + 1 }} of {{ steps.length }}: {{ steps[currentStep]?.label }}
+                        </p>
+                    </div>
+
+                    <!-- Auto-save / Draft status -->
+                    <div class="flex items-center gap-2 text-xs">
+                        <span v-if="isSavingStep" class="inline-flex items-center text-primary font-medium">
+                            <Loader2 class="w-3.5 h-3.5 mr-1.5 animate-spin" /> Saving draft...
+                        </span>
+                        <span v-else-if="lastSavedAt" class="inline-flex items-center text-muted-foreground">
+                            <Check class="w-3.5 h-3.5 mr-1.5 text-emerald-600" /> Draft saved at {{ lastSavedAt }}
+                        </span>
+                    </div>
                 </div>
 
                 <!-- Sleek Minimal Horizontal Stepper -->
@@ -524,7 +702,7 @@ const submitApplication = () => {
                                     </Button>
                                 </div>
 
-                                <Button variant="outline" class="w-full h-11 text-xs" @click="goToStep(1)">
+                                <Button variant="outline" class="w-full h-11 text-xs" @click="() => { if (jambNumber) { form.jamb_number = jambNumber.trim().toUpperCase(); } goToStep(1); }">
                                     Skip & Enter Manually
                                 </Button>
                             </div>
@@ -764,9 +942,21 @@ const submitApplication = () => {
                                                 <Select v-model="qual.qualification_type">
                                                     <SelectTrigger class="h-10 bg-background"><SelectValue placeholder="Select type" /></SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem v-for="q in qualificationOptions" :key="q" :value="q">{{ q }}</SelectItem>
+                                                        <SelectItem v-for="q in qualificationOptions" :key="q" :value="q">
+                                                            {{ q === 'Other' ? 'Other (Specify below)' : q }}
+                                                        </SelectItem>
                                                     </SelectContent>
                                                 </Select>
+                                            </div>
+
+                                            <div v-if="qual.qualification_type === 'Other'" class="space-y-1.5 sm:col-span-2 lg:col-span-1">
+                                                <Label class="text-xs">Specify Qualification <span class="text-destructive">*</span></Label>
+                                                <Input
+                                                    v-model="qual.other_qualification"
+                                                    placeholder="e.g. CPA, CFA, CIPM, CIS"
+                                                    class="h-10 bg-background"
+                                                    required
+                                                />
                                             </div>
 
                                             <div class="space-y-1.5">
@@ -797,6 +987,7 @@ const submitApplication = () => {
                                     </div>
                                 </div>
                             </div>
+
 
                             <Separator />
 
@@ -841,6 +1032,7 @@ const submitApplication = () => {
                                     </div>
                                 </div>
                             </div>
+
 
                             <Separator />
 
@@ -890,16 +1082,44 @@ const submitApplication = () => {
                                     </div>
                                 </div>
                             </div>
+
                         </template>
 
                         <!-- Undergraduate Academic Details -->
                         <template v-else>
-                            <div class="space-y-4 max-w-md">
-                                <div class="space-y-2">
-                                    <Label class="text-sm">Official JAMB Score <span class="text-destructive">*</span></Label>
-                                    <Input type="number" v-model="form.jamb_score" placeholder="e.g. 275" class="h-11 font-semibold" />
+                            <div class="space-y-6 max-w-lg">
+                                <div>
+                                    <h3 class="text-base font-semibold text-foreground">JAMB Examination Details</h3>
+                                    <p class="text-xs text-muted-foreground mt-0.5">Please confirm your official Unified Tertiary Matriculation Examination (UTME) credentials.</p>
+                                </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div class="space-y-2">
+                                        <Label class="text-xs font-medium">JAMB Registration Number <span class="text-destructive">*</span></Label>
+                                        <Input
+                                            v-model="form.jamb_number"
+                                            @input="form.jamb_number = form.jamb_number.toUpperCase()"
+                                            placeholder="e.g. 202612345678AB"
+                                            class="h-11 font-mono uppercase font-semibold"
+                                            required
+                                        />
+                                    </div>
+
+                                    <div class="space-y-2">
+                                        <Label class="text-xs font-medium">Official JAMB Score <span class="text-destructive">*</span></Label>
+                                        <Input
+                                            type="number"
+                                            v-model="form.jamb_score"
+                                            min="0"
+                                            max="400"
+                                            placeholder="e.g. 275"
+                                            class="h-11 font-semibold"
+                                            required
+                                        />
+                                    </div>
                                 </div>
                             </div>
+
                         </template>
                     </div>
 
@@ -919,6 +1139,10 @@ const submitApplication = () => {
                                     accept="image/*"
                                     @update:file="(file) => form.passport_photo = file"
                                 />
+                                <div v-if="getExistingDoc('passport_photo')" class="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded px-2.5 py-1.5">
+                                    <FileCheck class="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span class="truncate font-medium">Uploaded: {{ getExistingDoc('passport_photo')?.original_name }}</span>
+                                </div>
                             </div>
 
                             <div v-if="isPg" class="p-4 rounded-xl border border-border/80 bg-background space-y-2">
@@ -927,6 +1151,10 @@ const submitApplication = () => {
                                     accept=".pdf,image/*"
                                     @update:file="(file) => form.academic_transcript = file"
                                 />
+                                <div v-if="getExistingDoc('academic_transcript')" class="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded px-2.5 py-1.5">
+                                    <FileCheck class="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span class="truncate font-medium">Uploaded: {{ getExistingDoc('academic_transcript')?.original_name }}</span>
+                                </div>
                             </div>
 
                             <div v-if="isPg" class="p-4 rounded-xl border border-border/80 bg-background space-y-2">
@@ -935,6 +1163,10 @@ const submitApplication = () => {
                                     accept=".pdf,image/*"
                                     @update:file="(file) => form.degree_certificate = file"
                                 />
+                                <div v-if="getExistingDoc('degree_certificate')" class="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded px-2.5 py-1.5">
+                                    <FileCheck class="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span class="truncate font-medium">Uploaded: {{ getExistingDoc('degree_certificate')?.original_name }}</span>
+                                </div>
                             </div>
 
                             <div v-if="isPg" class="p-4 rounded-xl border border-border/80 bg-background space-y-2">
@@ -943,6 +1175,10 @@ const submitApplication = () => {
                                     accept=".pdf,image/*"
                                     @update:file="(file) => form.nysc_certificate = file"
                                 />
+                                <div v-if="getExistingDoc('nysc_certificate')" class="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded px-2.5 py-1.5">
+                                    <FileCheck class="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span class="truncate font-medium">Uploaded: {{ getExistingDoc('nysc_certificate')?.original_name }}</span>
+                                </div>
                             </div>
 
                             <div v-if="isPg" class="p-4 rounded-xl border border-border/80 bg-background space-y-2">
@@ -951,6 +1187,10 @@ const submitApplication = () => {
                                     accept=".pdf,.doc,.docx"
                                     @update:file="(file) => form.cv_resume = file"
                                 />
+                                <div v-if="getExistingDoc('cv_resume')" class="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded px-2.5 py-1.5">
+                                    <FileCheck class="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span class="truncate font-medium">Uploaded: {{ getExistingDoc('cv_resume')?.original_name }}</span>
+                                </div>
                             </div>
 
                             <div v-if="isPg" class="p-4 rounded-xl border border-border/80 bg-background space-y-2">
@@ -959,6 +1199,10 @@ const submitApplication = () => {
                                     accept=".pdf,.doc,.docx"
                                     @update:file="(file) => form.concept_note = file"
                                 />
+                                <div v-if="getExistingDoc('concept_note')" class="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded px-2.5 py-1.5">
+                                    <FileCheck class="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span class="truncate font-medium">Uploaded: {{ getExistingDoc('concept_note')?.original_name }}</span>
+                                </div>
                             </div>
 
                             <div v-if="isPg && form.has_name_change" class="p-4 rounded-xl border border-border/80 bg-background space-y-2 sm:col-span-2">
@@ -967,6 +1211,10 @@ const submitApplication = () => {
                                     accept=".pdf,image/*"
                                     @update:file="(file) => form.name_change_evidence = file"
                                 />
+                                <div v-if="getExistingDoc('name_change_evidence')" class="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded px-2.5 py-1.5">
+                                    <FileCheck class="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span class="truncate font-medium">Uploaded: {{ getExistingDoc('name_change_evidence')?.original_name }}</span>
+                                </div>
                             </div>
 
                             <div class="p-4 rounded-xl border border-border/80 bg-background space-y-2">
@@ -975,6 +1223,10 @@ const submitApplication = () => {
                                     accept=".pdf,image/*"
                                     @update:file="(file) => form.waec_result = file"
                                 />
+                                <div v-if="getExistingDoc('waec_result')" class="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded px-2.5 py-1.5">
+                                    <FileCheck class="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span class="truncate font-medium">Uploaded: {{ getExistingDoc('waec_result')?.original_name }}</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1016,6 +1268,7 @@ const submitApplication = () => {
                                 </div>
                             </div>
 
+
                             <!-- Programme & Pathway Summary -->
                             <div class="p-4 rounded-xl border border-border/80 bg-muted/10 space-y-3">
                                 <h4 class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Programme Choice</h4>
@@ -1035,12 +1288,13 @@ const submitApplication = () => {
                                 </div>
                             </div>
 
+
                             <!-- Qualifications & Referees Summary (PG) -->
                             <div v-if="isPg" class="p-4 rounded-xl border border-border/80 bg-muted/10 space-y-3">
                                 <h4 class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Qualifications & Referees</h4>
                                 <div class="space-y-2 text-xs">
                                     <div v-for="(q, idx) in form.qualifications" :key="idx" class="border-b pb-2 last:border-b-0">
-                                        <span class="font-medium text-foreground">{{ q.qualification_type }} in {{ q.course_of_study }}</span>
+                                        <span class="font-medium text-foreground">{{ (q.qualification_type === 'Other' && q.other_qualification) ? q.other_qualification : q.qualification_type }} in {{ q.course_of_study }}</span>
                                         <span class="text-muted-foreground"> — {{ q.institution_name }} ({{ q.class_of_degree }})</span>
                                     </div>
                                 </div>
@@ -1055,6 +1309,22 @@ const submitApplication = () => {
                                 </div>
                             </div>
 
+                            <!-- JAMB Examination Summary (UG) -->
+                            <div v-else class="p-4 rounded-xl border border-border/80 bg-muted/10 space-y-3">
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-muted-foreground">JAMB Examination Details</h4>
+                                <div class="grid grid-cols-2 gap-3 text-xs">
+                                    <div>
+                                        <span class="text-muted-foreground block text-[10px]">JAMB Registration Number</span>
+                                        <span class="font-mono font-bold text-foreground">{{ form.jamb_number }}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-muted-foreground block text-[10px]">JAMB Score</span>
+                                        <span class="font-bold text-primary">{{ form.jamb_score }} / 400</span>
+                                    </div>
+                                </div>
+                            </div>
+
+
                             <!-- Declaration -->
                             <div class="p-4 rounded-xl bg-muted/30 border border-border/80 text-xs text-muted-foreground leading-relaxed">
                                 By clicking <strong>Submit Application</strong>, I confirm that all information provided is accurate and authentic to the best of my knowledge.
@@ -1066,22 +1336,37 @@ const submitApplication = () => {
 
                 <!-- Clean Card Footer -->
                 <CardFooter class="flex items-center justify-between border-t border-border/70 p-6 bg-muted/5">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        @click="prevStep"
-                        :disabled="currentStep === 0"
-                        class="text-xs h-10 px-4"
-                    >
-                        <ChevronLeft class="w-4 h-4 mr-1" />
-                        Previous
-                    </Button>
+                    <div class="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            @click="prevStep"
+                            :disabled="currentStep === 0 || isSavingStep"
+                            class="text-xs h-10 px-4"
+                        >
+                            <ChevronLeft class="w-4 h-4 mr-1" />
+                            Previous
+                        </Button>
+
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            @click="saveStep(true)"
+                            :disabled="isSavingStep"
+                            class="text-xs h-10 px-3 text-muted-foreground hover:text-foreground border border-dashed border-border"
+                        >
+                            <Loader2 v-if="isSavingStep" class="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                            <Save v-else class="w-3.5 h-3.5 mr-1.5" />
+                            Save Draft
+                        </Button>
+                    </div>
 
                     <Button
                         v-if="currentStep < steps.length - 1"
                         size="sm"
                         @click="nextStep"
-                        :disabled="!stepIsValid"
+                        :disabled="!stepIsValid || isSavingStep"
                         class="text-xs h-10 px-5"
                     >
                         Continue
@@ -1092,7 +1377,7 @@ const submitApplication = () => {
                         v-else
                         size="sm"
                         @click="submitApplication"
-                        :disabled="form.processing"
+                        :disabled="form.processing || isSavingStep"
                         class="text-xs h-10 px-6 font-semibold"
                     >
                         <Send class="w-4 h-4 mr-2" />

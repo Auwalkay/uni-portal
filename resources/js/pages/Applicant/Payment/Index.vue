@@ -87,7 +87,7 @@ const payNow = () => {
                         Complete Your Application
                     </h1>
                     <p class="text-xs sm:text-sm text-muted-foreground">
-                        Authorize the mandatory institutional application fee to file and submit your admission dossier.
+                        Authorize the mandatory institutional application fee to file and submit your admission view.
                     </p>
                 </div>
 
@@ -109,7 +109,7 @@ const payNow = () => {
             <!-- Two-Column Checkout Grid -->
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-                <!-- Left Column: Official Invoice Dossier & Breakdown -->
+                <!-- Left Column: Official Invoice Breakdown & Details -->
                 <div class="lg:col-span-7 space-y-6">
 
                     <!-- Invoice Card -->
@@ -171,28 +171,19 @@ const payNow = () => {
 
                                     <div class="divide-y divide-border/60">
                                         <div
-                                            v-for="(item, i) in (invoice.items?.length ? invoice.items : [{ description: 'Postgraduate Application & Screening Fee', amount: invoice.amount }])"
+                                            v-for="(item, i) in (invoice.items?.length ? invoice.items : [{ description: 'Application  Fee', amount: invoice.amount }])"
                                             :key="i"
                                             class="p-3.5 grid grid-cols-12 items-center"
                                         >
                                             <div class="col-span-8 space-y-0.5">
                                                 <span class="font-medium text-foreground block">{{ item.description }}</span>
-                                                <span class="text-[11px] text-muted-foreground">Institutional admission processing & document verification</span>
+                                                <span class="text-[11px] text-muted-foreground">Application form fee</span>
                                             </div>
                                             <span class="col-span-4 text-right font-semibold font-mono text-foreground">
                                                 {{ formatCurrency(item.amount) }}
                                             </span>
                                         </div>
 
-                                        <div class="p-3.5 grid grid-cols-12 items-center bg-muted/10">
-                                            <div class="col-span-8 space-y-0.5">
-                                                <span class="font-medium text-foreground block">Electronic Portal Gateway Charge</span>
-                                                <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">Subsidized by Institution</span>
-                                            </div>
-                                            <span class="col-span-4 text-right font-medium text-muted-foreground">
-                                                ₦0.00
-                                            </span>
-                                        </div>
                                     </div>
 
                                     <div class="p-4 bg-muted/20 border-t border-border/80 flex items-center justify-between text-sm">
@@ -251,8 +242,8 @@ const payNow = () => {
                         <CardContent class="p-6 space-y-6">
                             <!-- Non-Refundable Policy Agreement Component -->
                             <div class="space-y-2">
-                                <NoRefundPolicyAgreement 
-                                    v-model="hasAgreedToPolicy" 
+                                <NoRefundPolicyAgreement
+                                    v-model="hasAgreedToPolicy"
                                     checkbox-id="applicant-policy-agree"
                                     :effective-date="effectiveDate"
                                 />
@@ -260,9 +251,9 @@ const payNow = () => {
 
                             <!-- Primary Pay Action Button -->
                             <div class="space-y-3 pt-2">
-                                <Button 
-                                    class="w-full h-12 text-sm font-bold shadow-md shadow-primary/20 hover:shadow-lg transition-all" 
-                                    @click="payNow" 
+                                <Button
+                                    class="w-full h-12 text-sm font-bold shadow-md shadow-primary/20 hover:shadow-lg transition-all"
+                                    @click="payNow"
                                     :disabled="loading || !hasAgreedToPolicy"
                                 >
                                     <Lock class="w-4 h-4 mr-2" />
@@ -275,18 +266,6 @@ const payNow = () => {
                             </div>
 
                             <!-- Supported Payment Options -->
-                            <div class="pt-2 border-t text-center space-y-2">
-                                <span class="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">
-                                    Accepted Payment Channels
-                                </span>
-                                <div class="flex items-center justify-center gap-2 text-xs text-muted-foreground font-medium flex-wrap">
-                                    <span class="px-2 py-0.5 rounded bg-muted/40 border text-[11px]">Mastercard</span>
-                                    <span class="px-2 py-0.5 rounded bg-muted/40 border text-[11px]">Visa</span>
-                                    <span class="px-2 py-0.5 rounded bg-muted/40 border text-[11px]">Verve</span>
-                                    <span class="px-2 py-0.5 rounded bg-muted/40 border text-[11px]">Bank Transfer</span>
-                                    <span class="px-2 py-0.5 rounded bg-muted/40 border text-[11px]">USSD</span>
-                                </div>
-                            </div>
                         </CardContent>
                     </Card>
 
