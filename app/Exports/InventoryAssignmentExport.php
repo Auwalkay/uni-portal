@@ -2,7 +2,10 @@
 
 namespace App\Exports;
 
+use App\Models\Building;
 use App\Models\InventoryAssignment;
+use App\Models\Staff;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 
@@ -10,7 +13,17 @@ class InventoryAssignmentExport implements FromCollection, WithHeadings
 {
     public function collection()
     {
-        return InventoryAssignment::with(['item', 'building', 'staff.user', 'staff.department', 'assignable'])->get()->map(function ($assignment) {
+        return InventoryAssignment::with([
+            'item',
+            'building',
+            'staff.user',
+            'staff.department',
+            'assignable' => function (MorphTo $morphTo) {
+                $morphTo->morphWith([
+                    Staff::class => ['user', 'department'],
+                ]);
+            },
+        ])->get()->map(function ($assignment) {
             $destType = 'Campus Building';
             $destination = 'N/A';
 
@@ -22,9 +35,14 @@ class InventoryAssignmentExport implements FromCollection, WithHeadings
                 $destination = ($assignment->staff->user?->name ?? 'Staff') .
                     ($assignment->staff->staff_number ? " [{$assignment->staff->staff_number}]" : '') .
                     ($assignment->staff->department ? " - {$assignment->staff->department->name}" : '');
-            } elseif ($assignment->assignable) {
+            } elseif ($assignment->assignable instanceof Building) {
+                $destType = 'Campus Building';
+                $destination = $assignment->assignable->name . ($assignment->assignable->code ? " ({$assignment->assignable->code})" : '');
+            } elseif ($assignment->assignable instanceof Staff) {
                 $destType = 'Staff Custody';
-                $destination = $assignment->assignable->user?->name ?? 'Staff';
+                $destination = ($assignment->assignable->user?->name ?? 'Staff') .
+                    ($assignment->assignable->staff_number ? " [{$assignment->assignable->staff_number}]" : '') .
+                    ($assignment->assignable->department ? " - {$assignment->assignable->department->name}" : '');
             }
 
             return [

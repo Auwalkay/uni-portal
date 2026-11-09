@@ -9,6 +9,7 @@ use App\Models\InventoryItem;
 use App\Models\InventoryStockLog;
 use App\Models\Staff;
 use App\Mail\ItemAssignedMail;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +23,17 @@ class InventoryAssignmentController extends Controller
     {
         Gate::authorize('view_inventory');
 
-        $query = InventoryAssignment::with(['item', 'building', 'staff.user', 'staff.department', 'assignable.user']);
+        $query = InventoryAssignment::with([
+            'item',
+            'building',
+            'staff.user',
+            'staff.department',
+            'assignable' => function (MorphTo $morphTo) {
+                $morphTo->morphWith([
+                    Staff::class => ['user', 'department'],
+                ]);
+            },
+        ]);
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -218,8 +229,10 @@ class InventoryAssignmentController extends Controller
                 $destination = $assignment->building->name . ($assignment->location_details ? " ({$assignment->location_details})" : '');
             } elseif ($assignment->staff) {
                 $destination = ($assignment->staff->user?->name ?? 'Staff') . ($assignment->staff->staff_number ? " [{$assignment->staff->staff_number}]" : '');
-            } elseif ($assignment->assignable?->user) {
-                $destination = $assignment->assignable->user->name;
+            } elseif ($assignment->assignable instanceof Building) {
+                $destination = $assignment->assignable->name . ($assignment->location_details ? " ({$assignment->location_details})" : '');
+            } elseif ($assignment->assignable instanceof Staff) {
+                $destination = ($assignment->assignable->user?->name ?? 'Staff') . ($assignment->assignable->staff_number ? " [{$assignment->assignable->staff_number}]" : '');
             }
 
             if ($validated['status'] === 'returned') {
