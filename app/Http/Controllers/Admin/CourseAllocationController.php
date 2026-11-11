@@ -13,10 +13,18 @@ class CourseAllocationController extends Controller
 {
     public function index(\Illuminate\Http\Request $request)
     {
+        $user = auth()->user();
+        $staff = $user->staff?->loadMissing('department.faculty');
+        $isSuperAdminOrAdmin = $user->hasRole(['admin', 'super_admin']);
+        $isDean = ! $isSuperAdminOrAdmin && ($user->hasRole('dean') || $user->can('view_faculty_courses'));
+        $isHod = ! $isSuperAdminOrAdmin && ! $isDean && ($user->hasRole('hod') || $user->can('view_department_courses'));
+        $hodDeptId = $staff?->department_id;
+        $deanFacultyId = $staff?->department?->faculty_id;
+
         $currentSessionId = Session::current()?->id;
         $sessionId = $request->input('session_id', $currentSessionId);
 
-        $allocations = \App\Models\CourseAllocation::query()
+        $allocationsQuery = \App\Models\CourseAllocation::query()
             ->with([
                 'course.department.faculty',
                 'staff.user',
@@ -25,37 +33,90 @@ class CourseAllocationController extends Controller
                 'department.faculty',
                 'programme',
             ])
-            ->when($sessionId, fn($q) => $q->where('session_id', $sessionId))
-            ->when($request->department_id && $request->department_id !== 'ALL', function ($q, $deptId) {
-                $q->where(function ($sub) use ($deptId) {
+            ->when($sessionId, fn($q) => $q->where('session_id', $sessionId));
+
+        if ($isHod) {
+            if ($hodDeptId) {
+                $allocationsQuery->where(function ($sub) use ($hodDeptId) {
+                    $sub->where('department_id', $hodDeptId)
+                        ->orWhereHas('course', fn($c) => $c->where('department_id', $hodDeptId));
+                });
+            } else {
+                $allocationsQuery->whereRaw('1 = 0');
+            }
+        } elseif ($isDean) {
+            if ($deanFacultyId) {
+                $allocationsQuery->where(function ($sub) use ($deanFacultyId) {
+                    $sub->whereHas('department', fn($d) => $d->where('faculty_id', $deanFacultyId))
+                        ->orWhereHas('course.department', fn($d) => $d->where('faculty_id', $deanFacultyId));
+                });
+
+                if ($request->department_id && $request->department_id !== 'ALL') {
+                    $deptId = $request->department_id;
+                    $allocationsQuery->where(function ($sub) use ($deptId) {
+                        $sub->where('department_id', $deptId)
+                            ->orWhereHas('course', fn($c) => $c->where('department_id', $deptId));
+                    });
+                }
+            } else {
+                $allocationsQuery->whereRaw('1 = 0');
+            }
+        } else {
+            if ($request->department_id && $request->department_id !== 'ALL') {
+                $deptId = $request->department_id;
+                $allocationsQuery->where(function ($sub) use ($deptId) {
                     $sub->where('department_id', $deptId)
                         ->orWhereHas('course', fn($c) => $c->where('department_id', $deptId));
                 });
-            })
-            ->when($request->faculty_id && $request->faculty_id !== 'ALL' && (!$request->department_id || $request->department_id === 'ALL'), function ($q, $facultyId) {
-                $q->where(function ($sub) use ($facultyId) {
+            } elseif ($request->faculty_id && $request->faculty_id !== 'ALL') {
+                $facultyId = $request->faculty_id;
+                $allocationsQuery->where(function ($sub) use ($facultyId) {
                     $sub->whereHas('department', fn($d) => $d->where('faculty_id', $facultyId))
                         ->orWhereHas('course.department', fn($d) => $d->where('faculty_id', $facultyId));
                 });
-            })
-            ->when($request->search, function ($q, $search) {
-                $q->where(function ($sub) use ($search) {
-                    $sub->whereHas('course', fn($c) => $c->where('title', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
-                        ->orWhereHas('staff.user', fn($u) => $u->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"))
-                        ->orWhereHas('staff', fn($s) => $s->where('staff_number', 'like', "%{$search}%"));
-                });
-            })
+            }
+        }
+
+        if ($request->search) {
+            $search = $request->search;
+            $allocationsQuery->where(function ($sub) use ($search) {
+                $sub->whereHas('course', fn($c) => $c->where('title', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
+                    ->orWhereHas('staff.user', fn($u) => $u->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"))
+                    ->orWhereHas('staff', fn($s) => $s->where('staff_number', 'like', "%{$search}%"));
+            });
+        }
+
+        $allocations = $allocationsQuery
             ->latest()
             ->paginate(15)
             ->withQueryString();
 
-        $statsBase = \App\Models\CourseAllocation::query()
-            ->when($sessionId, fn($q) => $q->where('session_id', $sessionId));
+        $statsBase = clone $allocationsQuery;
 
-        $pendingRequestsCount = \App\Models\CourseAllocationRequest::query()
+        $pendingRequestsQuery = \App\Models\CourseAllocationRequest::query()
             ->when($sessionId, fn($q) => $q->where('session_id', $sessionId))
-            ->where('status', 'pending')
-            ->count();
+            ->where('status', 'pending');
+
+        if ($isHod) {
+            if ($hodDeptId) {
+                $pendingRequestsQuery->where(function ($q) use ($hodDeptId) {
+                    $q->where('department_id', $hodDeptId)
+                      ->orWhereHas('course', fn($cq) => $cq->where('department_id', $hodDeptId));
+                });
+            } else {
+                $pendingRequestsQuery->whereRaw('1 = 0');
+            }
+        } elseif ($isDean) {
+            if ($deanFacultyId) {
+                $pendingRequestsQuery->where(function ($q) use ($deanFacultyId) {
+                    $q->whereHas('department', fn($d) => $d->where('faculty_id', $deanFacultyId))
+                      ->orWhereHas('course.department', fn($d) => $d->where('faculty_id', $deanFacultyId));
+                });
+            } else {
+                $pendingRequestsQuery->whereRaw('1 = 0');
+            }
+        }
+        $pendingRequestsCount = $pendingRequestsQuery->count();
 
         $stats = [
             'total_allocations' => (clone $statsBase)->count(),
@@ -68,23 +129,49 @@ class CourseAllocationController extends Controller
             'allocations' => $allocations,
             'stats' => $stats,
             'sessions' => fn() => \App\Services\AcademicCacheService::getSessions(),
-            'faculties' => fn() => \App\Services\AcademicCacheService::getFaculties(),
+            'faculties' => function () use ($isDean, $deanFacultyId) {
+                if ($isDean && $deanFacultyId) {
+                    return Faculty::with(['departments' => fn($q) => $q->where('is_active', true)->where('is_academic', true)->orderBy('name')])
+                        ->where('id', $deanFacultyId)
+                        ->get();
+                }
+                return \App\Services\AcademicCacheService::getFaculties();
+            },
             'filters' => $request->only(['session_id', 'department_id', 'search', 'faculty_id']),
             'currentSessionId' => $currentSessionId,
-            'courses' => fn() => Course::select('id', 'code', 'title', 'units', 'level', 'semester', 'department_id')->orderBy('code')->get(),
+            'courses' => function () use ($isHod, $hodDeptId, $isDean, $deanFacultyId) {
+                $q = Course::select('id', 'code', 'title', 'units', 'level', 'semester', 'department_id');
+                if ($isHod && $hodDeptId) {
+                    $q->where('department_id', $hodDeptId);
+                } elseif ($isDean && $deanFacultyId) {
+                    $q->whereHas('department', fn($d) => $d->where('faculty_id', $deanFacultyId));
+                }
+                return $q->orderBy('code')->get();
+            },
             'programmes' => fn() => \App\Services\AcademicCacheService::getProgrammes(),
-            'lecturers' => fn() => Staff::with(['user:id,name,email', 'department:id,name,code'])
-                ->whereHas('user', function ($q) {
-                    $q->role('lecturer');
-                })
-                ->get()->map(function ($s) {
+            'lecturers' => function () use ($isHod, $hodDeptId, $isDean, $deanFacultyId) {
+                $q = Staff::with(['user:id,name,email', 'department:id,name,code'])
+                    ->whereHas('user', function ($uq) {
+                        $uq->role('lecturer');
+                    });
+
+                if ($isHod && $hodDeptId) {
+                    $q->where('department_id', $hodDeptId);
+                } elseif ($isDean && $deanFacultyId) {
+                    $q->whereHas('department', fn($d) => $d->where('faculty_id', $deanFacultyId));
+                }
+
+                return $q->get()->map(function ($s) {
                     return [
                         'id' => $s->id,
                         'name' => $s->user?->name . ' (' . ($s->department?->code ?? 'Dept') . ')',
                         'email' => $s->user?->email,
                         'staff_number' => $s->staff_number,
                     ];
-                }),
+                });
+            },
+            'isHod' => $isHod,
+            'isDean' => $isDean,
         ]);
     }
 
