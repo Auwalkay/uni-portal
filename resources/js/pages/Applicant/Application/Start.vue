@@ -92,13 +92,8 @@ watch(() => form.mode, () => {
     }
 });
 
-const proceedToForm = () => {
-    router.visit(route('applicant.apply.form'), {
-        data: {
-            mode: form.mode,
-            programme_id: form.programme_id
-        }
-    });
+const proceedToPayment = () => {
+    form.post(route('applicant.apply.select_programme'));
 };
 </script>
 
@@ -229,8 +224,8 @@ const proceedToForm = () => {
                                 </p>
                             </div>
                         </div>
-                        <Button size="lg" class="w-full md:w-auto font-semibold px-8 py-6 text-base tracking-wide shadow-lg hover:shadow-primary/30 transition-all duration-300 group" @click="proceedToForm" :disabled="!form.programme_id">
-                            Continue to Form
+                        <Button size="lg" class="w-full md:w-auto font-semibold px-8 py-6 text-base tracking-wide shadow-lg hover:shadow-primary/30 transition-all duration-300 group" @click="proceedToPayment" :disabled="!form.programme_id || form.processing">
+                            Save & Proceed to Payment
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-2 w-5 h-5 transition-transform group-hover:translate-x-1"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                         </Button>
                     </CardFooter>
@@ -240,7 +235,7 @@ const proceedToForm = () => {
             <div class="text-center mt-8">
                <p class="text-sm text-muted-foreground flex items-center justify-center gap-2">
                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-primary"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                   Ensure you have your O'Level and JAMB results ready before proceeding.
+                   Next: Complete application fee payment, then fill in your personal, academic, and document credentials.
                </p>
             </div>
         </div>

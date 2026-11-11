@@ -34,6 +34,22 @@ class Applicant extends Model
         return $this->belongsTo(Programme::class, 'program_choice_1');
     }
 
+    public function invoices(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Invoice::class, 'user_id', 'user_id');
+    }
+
+    public function hasPaidApplicationFee(): bool
+    {
+        return $this->invoices()
+            ->where('type', 'application_fee')
+            ->where(function ($q) {
+                $q->where('status', 'paid')
+                    ->orWhereRaw('paid_amount >= amount');
+            })
+            ->exists();
+    }
+
     public function documents(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(ApplicantDocument::class);
@@ -61,6 +77,38 @@ class Applicant extends Model
         }
 
         return (bool) $this->programme?->isPostgraduate();
+    }
+
+    /**
+     * Scope query to only include postgraduate applicants.
+     */
+    public function scopePostgraduate($query)
+    {
+        return $query->where(function ($q) {
+            $q->whereIn('application_mode', ['PG', 'POSTGRADUATE', 'pg', 'postgraduate'])
+                ->orWhereHas('programme', function ($pq) {
+                    $pq->where('academic_stream', 'PG')
+                        ->orWhereIn('type', \App\Enums\ProgramType::postgraduateValues());
+                });
+        });
+    }
+
+    /**
+     * Scope query to only include undergraduate applicants.
+     */
+    public function scopeUndergraduate($query)
+    {
+        return $query->where(function ($q) {
+            $q->whereNotIn('application_mode', ['PG', 'POSTGRADUATE', 'pg', 'postgraduate'])
+                ->orWhereNull('application_mode');
+        })->where(function ($q) {
+            $q->whereDoesntHave('programme')
+                ->orWhereHas('programme', function ($pq) {
+                    $pq->where(function ($sub) {
+                        $sub->where('academic_stream', '!=', 'PG')->orWhereNull('academic_stream');
+                    })->whereNotIn('type', \App\Enums\ProgramType::postgraduateValues());
+                });
+        });
     }
 
     public function hasCompletedRefereeRecommendations(int $minimumRequired = 3): bool

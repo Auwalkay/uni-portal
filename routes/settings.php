@@ -66,7 +66,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('applicant')->name('applicant.')->middleware(['permission:access_applicant_portal'])->group(function () {
         Route::get('/dashboard', [ApplicationController::class, 'index'])->name('dashboard');
         Route::get('/apply/start', [ApplicationController::class, 'create'])->name('apply.start');
+        Route::post('/apply/select-programme', [ApplicationController::class, 'selectProgramme'])->name('apply.select_programme');
         Route::get('/apply/form', [ApplicationController::class, 'form'])->name('apply.form');
+        Route::post('/apply/save-step', [ApplicationController::class, 'saveStep'])->name('apply.save_step');
         Route::post('/apply', [ApplicationController::class, 'store'])->name('apply.store');
         Route::get('/application/preview', [ApplicationController::class, 'show'])->name('apply.show');
         Route::get('/application/transcript-label', [ApplicationController::class, 'downloadTranscriptLabel'])->name('apply.transcript_label');
@@ -190,15 +192,39 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::resource('enquiries', EnquiryController::class);
         });
 
-        // Admissions Management
-        Route::middleware(['permission:view_applications'])->group(function () {
-            Route::get('/admissions', [AdmissionController::class, 'index'])->name('admissions.index');
+        // Admissions Management Hub & Modular Applicants
+        Route::get('/admissions', [AdmissionController::class, 'hub'])->name('admissions.index');
+        Route::get('/documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
+
+        // Undergraduate Applicants Module
+        Route::middleware(['permission:view_applications'])->prefix('admissions/ug')->name('admissions.ug.')->group(function () {
+            Route::get('/', [AdmissionController::class, 'index'])->name('index');
+            Route::get('/{applicant}', [AdmissionController::class, 'show'])->name('show');
+            Route::get('/{applicant}/letter', [AdmissionController::class, 'downloadLetter'])->name('letter');
+
+            Route::middleware(['permission:review_applications'])->group(function () {
+                Route::put('/{applicant}', [AdmissionController::class, 'update'])->name('update');
+            });
+        });
+
+        // Postgraduate Applicants Module
+        Route::middleware(['permission:view_pg_applications'])->prefix('admissions/pg')->name('admissions.pg.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\PostgraduateAdmissionController::class, 'index'])->name('index');
+            Route::get('/{applicant}', [\App\Http\Controllers\Admin\PostgraduateAdmissionController::class, 'show'])->name('show');
+            Route::get('/{applicant}/letter', [\App\Http\Controllers\Admin\PostgraduateAdmissionController::class, 'downloadLetter'])->name('letter');
+            Route::get('/{applicant}/transcript-label', [\App\Http\Controllers\Admin\PostgraduateAdmissionController::class, 'downloadTranscriptLabel'])->name('transcript_label');
+
+            Route::middleware(['permission:review_pg_applications'])->group(function () {
+                Route::put('/{applicant}', [\App\Http\Controllers\Admin\PostgraduateAdmissionController::class, 'update'])->name('update');
+            });
+        });
+
+        // Legacy / Generic Admissions Route Fallbacks
+        Route::middleware(['permission:view_applications|view_pg_applications'])->group(function () {
             Route::get('/admissions/{applicant}', [AdmissionController::class, 'show'])->name('admissions.show');
             Route::get('/admissions/{applicant}/letter', [AdmissionController::class, 'downloadLetter'])->name('admissions.letter');
-            Route::get('/documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
 
-            // Restricted Admissions Actions
-            Route::middleware(['permission:review_applications'])->group(function () {
+            Route::middleware(['permission:review_applications|review_pg_applications'])->group(function () {
                 Route::put('/admissions/{applicant}', [AdmissionController::class, 'update'])->name('admissions.update');
             });
         });
@@ -316,6 +342,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/academics/units', [AcademicController::class, 'units'])->name('academics.units');
 
             Route::post('/academics/store', [AcademicController::class, 'store'])->name('academics.store');
+            Route::post('/academics/update', [AcademicController::class, 'update'])->name('academics.update');
             Route::post('/academics/toggle', [AcademicController::class, 'toggle'])->name('academics.toggle');
             Route::post('/academics/bulk-toggle', [AcademicController::class, 'bulkToggle'])->name('academics.bulk_toggle');
             Route::get('/academics/programmes/{programme}/courses', [AcademicController::class, 'programmeCourses'])->name('academics.programmes.courses');

@@ -34,6 +34,7 @@ interface ApplicantItem {
     id: string;
     jamb_registration_number: string;
     status: string;
+    has_paid_application?: boolean;
     created_at: string;
     user: {
         name: string;
@@ -81,10 +82,17 @@ const props = defineProps<{
         per_page?: string | number;
     };
     programmes: Array<{ id: string; name: string }>;
+    user_permissions?: {
+        can_view_ug?: boolean;
+        can_view_pg?: boolean;
+        can_review?: boolean;
+        can_admit?: boolean;
+    };
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Admissions', href: route('admin.admissions.index') },
+    { title: 'Applicants', href: '/admin/admissions' },
+    { title: 'Undergraduate', href: route().has('admin.admissions.ug.index') ? route('admin.admissions.ug.index') : '/admin/admissions/ug' },
 ];
 
 const search = ref(props.filters.search || '');
@@ -93,8 +101,12 @@ const programme = ref(props.filters.programme_id || '');
 const perPage = ref(String(props.filters.per_page || '15'));
 
 const updateFilters = debounce(() => {
+    const targetRoute = route().has('admin.admissions.ug.index') 
+        ? route('admin.admissions.ug.index') 
+        : route('admin.admissions.index');
+        
     router.get(
-        route('admin.admissions.index'),
+        targetRoute,
         { 
             search: search.value, 
             status: status.value,
@@ -136,22 +148,28 @@ const clearFilters = () => {
 </script>
 
 <template>
-    <Head title="Admissions Management" />
+    <Head title="Undergraduate Applicants" />
 
     <AdminLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-6">
             <!-- Header -->
             <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
-                    <h1 class="text-2xl font-bold tracking-tight">Admission Requests</h1>
-                    <p class="text-muted-foreground">
-                        Manage student applications and admission status.
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-2xl font-bold tracking-tight">Undergraduate Applicants</h1>
+                        <Badge variant="outline" class="font-mono text-xs">UTME & DE</Badge>
+                    </div>
+                    <p class="text-muted-foreground text-sm">
+                        Manage undergraduate candidates, JAMB registrations, and admission statuses.
                     </p>
                 </div>
-                <Button variant="outline" class="gap-2">
-                    <Download class="h-4 w-4" />
-                    Export Report
-                </Button>
+                <div class="flex items-center gap-2">
+                    <Link v-if="user_permissions?.can_view_pg" href="/admin/admissions/pg">
+                        <Button variant="outline" size="sm" class="gap-1.5 text-xs">
+                            Switch to PG Applicants →
+                        </Button>
+                    </Link>
+                </div>
             </div>
 
             <!-- Stats Overview -->
@@ -282,12 +300,17 @@ const clearFilters = () => {
                                 {{ format(new Date(applicant.created_at), 'MMM d, yyyy') }}
                             </TableCell>
                             <TableCell>
-                                <Badge :class="getStatusColorClass(applicant.status)" class="capitalize shadow-none">
-                                    {{ applicant.status }}
-                                </Badge>
+                                <div class="flex flex-col gap-1">
+                                    <Badge :class="getStatusColorClass(applicant.status)" class="capitalize shadow-none w-fit">
+                                        {{ applicant.status }}
+                                    </Badge>
+                                    <span class="text-[10px] font-medium" :class="applicant.has_paid_application ? 'text-green-600' : 'text-amber-600'">
+                                        {{ applicant.has_paid_application ? '● Fee Paid' : '○ Fee Unpaid' }}
+                                    </span>
+                                </div>
                             </TableCell>
                             <TableCell class="text-right">
-                                <Link :href="route('admin.admissions.show', applicant.id)">
+                                <Link :href="route().has('admin.admissions.ug.show') ? route('admin.admissions.ug.show', applicant.id) : route('admin.admissions.show', applicant.id)">
                                     <Button variant="ghost" size="sm" class="h-8 w-8 p-0">
                                         <Eye class="h-4 w-4 text-muted-foreground hover:text-primary" />
                                         <span class="sr-only">View</span>

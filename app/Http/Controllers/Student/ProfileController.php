@@ -501,7 +501,8 @@ class ProfileController extends Controller
             return back()->with('error', 'Admission letter is not available.');
         }
 
-        $identifer = $student->matriculation_number ?? $applicant->jamb_registration_number ?? $applicant->application_number ?? 'Letter';
+        $rawIdentifer = (string) ($student->matriculation_number ?? $applicant->jamb_registration_number ?? $applicant->application_number ?? 'Letter');
+        $identifer = preg_replace('/[^A-Za-z0-9_\-]/', '_', $rawIdentifer);
         $fileName = "Admission_Letter_{$identifer}.pdf";
         $filePath = "admission_letters/{$user->id}.pdf";
 
@@ -587,13 +588,10 @@ class ProfileController extends Controller
             return null;
         }
 
+        $progType = $student->program?->type;
+        $isPg = $student->isPostgraduate();
+
         $allConfigs = \App\Models\FeeConfiguration::where('session_id', $sessionId)
-            ->where(function ($q) use ($student) {
-                $q->where('level', $student->current_level)->orWhereNull('level');
-            })
-            ->where(function ($q) use ($student) {
-                $q->where('entry_mode', $student->entry_mode)->orWhereNull('entry_mode');
-            })
             ->where('is_compulsory', true)
             ->with('feeType')
             ->get();
@@ -605,10 +603,16 @@ class ProfileController extends Controller
 
         $grouped = $allConfigs->groupBy('fee_type_id');
         foreach ($grouped as $feeTypeId => $configs) {
-            $resolved = $configs->where('program_id', $student->program_id)->first()
-                ?? $configs->where('department_id', $student->department_id)->whereNull('program_id')->first()
-                ?? $configs->where('faculty_id', $student->faculty_id)->whereNull('department_id')->whereNull('program_id')->first()
-                ?? $configs->whereNull('faculty_id')->whereNull('department_id')->whereNull('program_id')->first();
+            $resolved = \App\Services\Finance\FeeService::resolveConfigFromCollection(
+                $configs,
+                $student->program_id,
+                $student->department_id,
+                $student->faculty_id,
+                $progType,
+                $student->current_level,
+                $student->entry_mode,
+                $isPg
+            );
 
             if ($resolved) {
                 if ($resolved->feeType && $resolved->feeType->is_one_time) {
@@ -675,6 +679,8 @@ class ProfileController extends Controller
         $program = $applicant->programme;
         $deptId = $program?->department_id;
         $facultyId = $program?->department?->faculty_id;
+        $progType = $program?->type;
+        $isPg = $applicant->isPostgraduate();
 
         $entryMode = $applicant->application_mode;
         if ($entryMode === 'DE') {
@@ -684,15 +690,6 @@ class ProfileController extends Controller
         }
 
         $allConfigs = \App\Models\FeeConfiguration::where('session_id', $session->id)
-            ->where(function ($q) use ($entryMode) {
-                $q->where(function ($sub) {
-                    $sub->where('level', '100')->orWhereNull('level');
-                })
-                    ->orWhere('entry_mode', $entryMode);
-            })
-            ->where(function ($q) use ($entryMode) {
-                $q->where('entry_mode', $entryMode)->orWhereNull('entry_mode');
-            })
             ->where('is_compulsory', true)
             ->with('feeType')
             ->get();
@@ -704,10 +701,16 @@ class ProfileController extends Controller
 
         $grouped = $allConfigs->groupBy('fee_type_id');
         foreach ($grouped as $feeTypeId => $configs) {
-            $resolved = $configs->where('program_id', $applicant->program_choice_1)->first()
-                ?? $configs->where('department_id', $deptId)->whereNull('program_id')->first()
-                ?? $configs->where('faculty_id', $facultyId)->whereNull('department_id')->whereNull('program_id')->first()
-                ?? $configs->whereNull('faculty_id')->whereNull('department_id')->whereNull('program_id')->first();
+            $resolved = \App\Services\Finance\FeeService::resolveConfigFromCollection(
+                $configs,
+                $applicant->program_choice_1,
+                $deptId,
+                $facultyId,
+                $progType,
+                '100',
+                $entryMode,
+                $isPg
+            );
 
             if ($resolved) {
                 if ($resolved->feeType && $resolved->feeType->is_one_time) {

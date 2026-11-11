@@ -104,21 +104,68 @@ const resetFilters = () => {
 const isCreateOpen = ref(false);
 const isEditOpen = ref(false);
 const editingBuilding = ref<BuildingItem | null>(null);
+const isCodeManual = ref(false);
+const hasSeating = ref(true);
 
 const form = useForm({
     name: '',
     code: '',
     building_type: 'classroom',
-    capacity: 100,
+    capacity: 100 as number | null,
     usable_for_exams: true,
     status: 'active',
     description: '',
 });
 
+const generateSlug = (text: string) => {
+    return text
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+};
+
+const onNameInput = () => {
+    if (!isCodeManual.value) {
+        form.code = generateSlug(form.name);
+    }
+};
+
+const onCodeInput = () => {
+    if (form.code.trim()) {
+        isCodeManual.value = true;
+    } else {
+        isCodeManual.value = false;
+        form.code = generateSlug(form.name);
+    }
+};
+
+const syncCodeFromSlug = () => {
+    isCodeManual.value = false;
+    form.code = generateSlug(form.name);
+};
+
+const onTypeChange = () => {
+    const typeConfig = props.building_types.find((t: any) => t.value === form.building_type);
+    if (typeConfig && (typeConfig as any).has_seating === false) {
+        hasSeating.value = false;
+        form.capacity = null;
+        form.usable_for_exams = false;
+    } else {
+        hasSeating.value = true;
+        if (!form.capacity) {
+            form.capacity = 100;
+        }
+        form.usable_for_exams = true;
+    }
+};
+
 const openCreateModal = () => {
     form.reset();
     form.clearErrors();
+    isCodeManual.value = false;
     form.building_type = 'classroom';
+    hasSeating.value = true;
     form.capacity = 100;
     form.usable_for_exams = true;
     form.status = 'active';
@@ -128,10 +175,12 @@ const openCreateModal = () => {
 const openEditModal = (building: BuildingItem) => {
     editingBuilding.value = building;
     form.clearErrors();
+    isCodeManual.value = true;
     form.name = building.name;
     form.code = building.code;
     form.building_type = building.building_type;
     form.capacity = building.capacity;
+    hasSeating.value = building.capacity !== null && building.capacity > 0;
     form.usable_for_exams = building.usable_for_exams;
     form.status = building.status;
     form.description = building.description || '';
@@ -139,6 +188,10 @@ const openEditModal = (building: BuildingItem) => {
 };
 
 const submitCreate = () => {
+    if (!hasSeating.value) {
+        form.capacity = null;
+        form.usable_for_exams = false;
+    }
     form.post('/admin/buildings', {
         onSuccess: () => {
             isCreateOpen.value = false;
@@ -149,6 +202,10 @@ const submitCreate = () => {
 
 const submitEdit = () => {
     if (!editingBuilding.value) return;
+    if (!hasSeating.value) {
+        form.capacity = null;
+        form.usable_for_exams = false;
+    }
     form.put(`/admin/buildings/${editingBuilding.value.id}`, {
         onSuccess: () => {
             isEditOpen.value = false;
@@ -402,9 +459,12 @@ const getStatusBadge = (status: string) => {
                                     {{ getBuildingTypeLabel(b.building_type) }}
                                 </td>
                                 <td class="p-4">
-                                    <span class="inline-flex items-center gap-1 font-semibold text-zinc-900 dark:text-zinc-100">
+                                    <span v-if="b.capacity !== null && b.capacity > 0" class="inline-flex items-center gap-1 font-semibold text-zinc-900 dark:text-zinc-100">
                                         <Users class="w-3.5 h-3.5 text-zinc-400" />
-                                        {{ b.capacity }}
+                                        {{ b.capacity }} Seats
+                                    </span>
+                                    <span v-else class="inline-flex items-center text-xs text-zinc-400 dark:text-zinc-500 italic">
+                                        — No Seating
                                     </span>
                                 </td>
                                 <td class="p-4">
@@ -518,25 +578,49 @@ const getStatusBadge = (status: string) => {
                 <form @submit.prevent="submitCreate" class="space-y-4 py-2">
                     <div>
                         <Label for="create-name">Building / Hall Name *</Label>
-                        <Input id="create-name" v-model="form.name" placeholder="e.g. Multipurpose Hall A" required class="mt-1" />
+                        <Input
+                            id="create-name"
+                            v-model="form.name"
+                            @input="onNameInput"
+                            placeholder="e.g. Senate Administrative Complex or Hall A"
+                            required
+                            class="mt-1"
+                        />
                         <span v-if="form.errors.name" class="text-xs text-rose-500 mt-1">{{ form.errors.name }}</span>
                     </div>
 
                     <div>
                         <div class="flex items-center justify-between">
                             <Label for="create-code">Building Code (Optional)</Label>
-                            <span class="text-xs text-zinc-400">Auto-slugified in UPPERCASE if left blank</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-zinc-400">Auto-slugified in UPPERCASE if blank</span>
+                                <button
+                                    type="button"
+                                    @click="syncCodeFromSlug"
+                                    class="text-xs text-indigo-600 hover:text-indigo-700 font-medium hover:underline"
+                                    title="Regenerate code from name"
+                                >
+                                    Re-sync
+                                </button>
+                            </div>
                         </div>
-                        <Input id="create-code" v-model="form.code" placeholder="e.g. MPH-A" class="mt-1 font-mono uppercase" />
+                        <Input
+                            id="create-code"
+                            v-model="form.code"
+                            @input="onCodeInput"
+                            placeholder="e.g. MPH-A"
+                            class="mt-1 font-mono uppercase"
+                        />
                         <span v-if="form.errors.code" class="text-xs text-rose-500 mt-1">{{ form.errors.code }}</span>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <Label for="create-type">Facility Type *</Label>
                             <select
                                 id="create-type"
                                 v-model="form.building_type"
+                                @change="onTypeChange"
                                 class="w-full mt-1 h-10 px-3 py-2 text-sm rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
                                 required
                             >
@@ -546,8 +630,25 @@ const getStatusBadge = (status: string) => {
                         </div>
 
                         <div>
-                            <Label for="create-capacity">Seating Capacity *</Label>
-                            <Input id="create-capacity" type="number" v-model.number="form.capacity" min="1" required class="mt-1" />
+                            <div class="flex items-center justify-between mb-1">
+                                <Label for="create-capacity">Seating Capacity</Label>
+                                <label class="flex items-center gap-1.5 cursor-pointer text-xs text-zinc-500 hover:text-zinc-700">
+                                    <input type="checkbox" v-model="hasSeating" class="w-3.5 h-3.5 rounded text-indigo-600" />
+                                    <span>Has Seaters</span>
+                                </label>
+                            </div>
+                            <Input
+                                v-if="hasSeating"
+                                id="create-capacity"
+                                type="number"
+                                v-model.number="form.capacity"
+                                min="0"
+                                placeholder="e.g. 150"
+                                class="mt-1"
+                            />
+                            <div v-else class="h-10 mt-1 px-3 py-2 rounded-md bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500 flex items-center">
+                                No seating (Admin / Office)
+                            </div>
                             <span v-if="form.errors.capacity" class="text-xs text-rose-500 mt-1">{{ form.errors.capacity }}</span>
                         </div>
                     </div>
@@ -572,9 +673,12 @@ const getStatusBadge = (status: string) => {
                                 id="create-exam"
                                 type="checkbox"
                                 v-model="form.usable_for_exams"
-                                class="w-4 h-4 text-indigo-600 rounded border-zinc-300 focus:ring-indigo-500"
+                                :disabled="!hasSeating"
+                                class="w-4 h-4 text-indigo-600 rounded border-zinc-300 focus:ring-indigo-500 disabled:opacity-40"
                             />
-                            <Label for="create-exam" class="cursor-pointer text-xs font-medium">Usable for Examinations</Label>
+                            <Label for="create-exam" :class="{ 'cursor-pointer': hasSeating, 'opacity-40 cursor-not-allowed': !hasSeating }" class="text-xs font-medium">
+                                Usable for Examinations
+                            </Label>
                         </div>
                     </div>
 
@@ -612,25 +716,36 @@ const getStatusBadge = (status: string) => {
                 <form @submit.prevent="submitEdit" class="space-y-4 py-2">
                     <div>
                         <Label for="edit-name">Building / Hall Name *</Label>
-                        <Input id="edit-name" v-model="form.name" required class="mt-1" />
+                        <Input id="edit-name" v-model="form.name" @input="onNameInput" required class="mt-1" />
                         <span v-if="form.errors.name" class="text-xs text-rose-500 mt-1">{{ form.errors.name }}</span>
                     </div>
 
                     <div>
                         <div class="flex items-center justify-between">
                             <Label for="edit-code">Building Code</Label>
-                            <span class="text-xs text-zinc-400">UPPERCASE Code</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-zinc-400">UPPERCASE Code</span>
+                                <button
+                                    type="button"
+                                    @click="syncCodeFromSlug"
+                                    class="text-xs text-indigo-600 hover:text-indigo-700 font-medium hover:underline"
+                                    title="Regenerate code from name"
+                                >
+                                    Re-sync
+                                </button>
+                            </div>
                         </div>
-                        <Input id="edit-code" v-model="form.code" class="mt-1 font-mono uppercase" />
+                        <Input id="edit-code" v-model="form.code" @input="onCodeInput" class="mt-1 font-mono uppercase" />
                         <span v-if="form.errors.code" class="text-xs text-rose-500 mt-1">{{ form.errors.code }}</span>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <Label for="edit-type">Facility Type *</Label>
                             <select
                                 id="edit-type"
                                 v-model="form.building_type"
+                                @change="onTypeChange"
                                 class="w-full mt-1 h-10 px-3 py-2 text-sm rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
                                 required
                             >
@@ -639,8 +754,24 @@ const getStatusBadge = (status: string) => {
                         </div>
 
                         <div>
-                            <Label for="edit-capacity">Seating Capacity *</Label>
-                            <Input id="edit-capacity" type="number" v-model.number="form.capacity" min="1" required class="mt-1" />
+                            <div class="flex items-center justify-between mb-1">
+                                <Label for="edit-capacity">Seating Capacity</Label>
+                                <label class="flex items-center gap-1.5 cursor-pointer text-xs text-zinc-500 hover:text-zinc-700">
+                                    <input type="checkbox" v-model="hasSeating" class="w-3.5 h-3.5 rounded text-indigo-600" />
+                                    <span>Has Seaters</span>
+                                </label>
+                            </div>
+                            <Input
+                                v-if="hasSeating"
+                                id="edit-capacity"
+                                type="number"
+                                v-model.number="form.capacity"
+                                min="0"
+                                class="mt-1"
+                            />
+                            <div v-else class="h-10 mt-1 px-3 py-2 rounded-md bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500 flex items-center">
+                                No seating (Admin / Office)
+                            </div>
                         </div>
                     </div>
 
@@ -664,9 +795,12 @@ const getStatusBadge = (status: string) => {
                                 id="edit-exam"
                                 type="checkbox"
                                 v-model="form.usable_for_exams"
-                                class="w-4 h-4 text-indigo-600 rounded border-zinc-300 focus:ring-indigo-500"
+                                :disabled="!hasSeating"
+                                class="w-4 h-4 text-indigo-600 rounded border-zinc-300 focus:ring-indigo-500 disabled:opacity-40"
                             />
-                            <Label for="edit-exam" class="cursor-pointer text-xs font-medium">Usable for Examinations</Label>
+                            <Label for="edit-exam" :class="{ 'cursor-pointer': hasSeating, 'opacity-40 cursor-not-allowed': !hasSeating }" class="text-xs font-medium">
+                                Usable for Examinations
+                            </Label>
                         </div>
                     </div>
 

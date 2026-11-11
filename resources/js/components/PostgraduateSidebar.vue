@@ -41,7 +41,7 @@ const overviewItems: NavItem[] = [
         icon: LayoutGrid,
     },
     {
-        title: 'My Profile & Dossier',
+        title: 'My Profile',
         href: '/student/profile',
         icon: User,
     },

@@ -29,6 +29,7 @@ class CourseAllocationRequestController extends Controller
         $query = CourseAllocationRequest::query()
             ->with([
                 'staff.user:id,name,email',
+                'staff.department:id,name,code',
                 'course:id,code,title,units,level,semester',
                 'department:id,name,code,faculty_id',
                 'department.faculty:id,name',
@@ -62,6 +63,15 @@ class CourseAllocationRequestController extends Controller
             $query->where('session_id', $sessionId);
         }
 
+        // Pre-filter stats scoped by role, faculty/dept, and session
+        $statsQuery = clone $query;
+        $stats = [
+            'pending' => (clone $statsQuery)->where('status', 'pending')->count(),
+            'approved' => (clone $statsQuery)->where('status', 'approved')->count(),
+            'rejected' => (clone $statsQuery)->where('status', 'rejected')->count(),
+            'total' => (clone $statsQuery)->count(),
+        ];
+
         if ($request->filled('status') && $request->status !== 'ALL') {
             $query->where('status', $request->status);
         }
@@ -81,6 +91,7 @@ class CourseAllocationRequestController extends Controller
             'requests' => $requests,
             'sessions' => fn() => AcademicCacheService::getSessions(),
             'faculties' => fn() => AcademicCacheService::getFaculties(),
+            'stats' => $stats,
             'filters' => $request->only(['session_id', 'status', 'department_id', 'faculty_id', 'search']),
             'currentSessionId' => $currentSession?->id,
             'isHod' => $isHod,

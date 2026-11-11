@@ -36,46 +36,41 @@ class FeeService
             ? $student->admitted_session_id 
             : $session->id;
 
+        $progType = $student->program?->type;
+        $isPg = $student->isPostgraduate();
+
         $allConfigs = FeeConfiguration::where('session_id', $targetSessionId)
             ->where(function ($q) use ($student) {
                 $q->where('level', $student->current_level)
                     ->orWhereNull('level');
             })
-            ->where(function ($q) use ($student) {
-                $q->where('entry_mode', $student->entry_mode)
-                    ->orWhereNull('entry_mode');
+            ->where(function ($q) use ($student, $progType, $isPg) {
+                $modes = array_filter([$student->entry_mode, $progType]);
+                if ($progType === 'MSC') { $modes[] = 'MSc'; }
+                if ($progType === 'PHD') { $modes[] = 'PhD'; }
+                if ($isPg) { $modes[] = 'Postgraduate'; $modes[] = 'PG'; }
+                $q->whereIn('entry_mode', $modes)->orWhereNull('entry_mode');
             })
             ->where('is_compulsory', true)
             ->where('is_milestone_fee', false)
             ->with('feeType')
             ->get();
 
-        // Specificity Resolver (Mirroring PaymentController logic)
+        // Specificity Resolver
         $resolvedConfigs = collect();
         $groupedConfigs = $allConfigs->groupBy('fee_type_id');
 
         foreach ($groupedConfigs as $feeTypeId => $configs) {
-            $resolved = null;
-            if ($student->program_id) {
-                $resolved = $configs->where('program_id', $student->program_id)->first();
-            }
-            if (!$resolved && $student->department_id) {
-                $resolved = $configs->where('department_id', $student->department_id)
-                    ->whereNull('program_id')
-                    ->first();
-            }
-            if (!$resolved && $student->faculty_id) {
-                $resolved = $configs->where('faculty_id', $student->faculty_id)
-                    ->whereNull('department_id')
-                    ->whereNull('program_id')
-                    ->first();
-            }
-            if (!$resolved) {
-                $resolved = $configs->whereNull('faculty_id')
-                    ->whereNull('department_id')
-                    ->whereNull('program_id')
-                    ->first();
-            }
+            $resolved = static::resolveConfigFromCollection(
+                $configs,
+                $student->program_id,
+                $student->department_id,
+                $student->faculty_id,
+                $progType,
+                $student->current_level,
+                $student->entry_mode,
+                $isPg
+            );
             if ($resolved) {
                 if ($resolved->feeType && $resolved->feeType->is_one_time) {
                     $alreadyCharged = \App\Models\InvoiceItem::whereHas('invoice', function ($q) use ($student) {
@@ -246,24 +241,23 @@ class FeeService
 
         $sessionConfigs = $allConfigsBySession->get($targetSessionId, collect());
 
-        $matchingConfigs = $sessionConfigs->filter(function ($config) use ($student) {
-            if ($config->is_milestone_fee) {
-                return false;
-            }
-            $levelMatch = is_null($config->level) || (string)$config->level === (string)$student->current_level;
-            $entryMatch = is_null($config->entry_mode) || $config->entry_mode === $student->entry_mode;
-            return $levelMatch && $entryMatch;
-        });
+        $progType = $student->program?->type;
+        $isPg = $student->isPostgraduate();
 
         $resolvedConfigs = collect();
-        $groupedConfigs = $matchingConfigs->groupBy('fee_type_id');
+        $groupedConfigs = $sessionConfigs->where('is_milestone_fee', false)->groupBy('fee_type_id');
 
         foreach ($groupedConfigs as $feeTypeId => $configs) {
-            $resolved = null;
-            if ($student->program_id) $resolved = $configs->where('program_id', $student->program_id)->first();
-            if (!$resolved && $student->department_id) $resolved = $configs->where('department_id', $student->department_id)->whereNull('program_id')->first();
-            if (!$resolved && $student->faculty_id) $resolved = $configs->where('faculty_id', $student->faculty_id)->whereNull('department_id')->whereNull('program_id')->first();
-            if (!$resolved) $resolved = $configs->whereNull('faculty_id')->whereNull('department_id')->whereNull('program_id')->first();
+            $resolved = static::resolveConfigFromCollection(
+                $configs,
+                $student->program_id,
+                $student->department_id,
+                $student->faculty_id,
+                $progType,
+                $student->current_level,
+                $student->entry_mode,
+                $isPg
+            );
             if ($resolved) {
                 $resolvedConfigs->push($resolved);
             }
@@ -299,12 +293,19 @@ class FeeService
             ? $student->admitted_session_id 
             : $invoice->session_id;
 
+        $progType = $student->program?->type;
+        $isPg = $student->isPostgraduate();
+
         $allConfigs = FeeConfiguration::where('session_id', $targetSessionId)
             ->where(function ($q) use ($student) {
                 $q->where('level', $student->current_level)->orWhereNull('level');
             })
-            ->where(function ($q) use ($student) {
-                $q->where('entry_mode', $student->entry_mode)->orWhereNull('entry_mode');
+            ->where(function ($q) use ($student, $progType, $isPg) {
+                $modes = array_filter([$student->entry_mode, $progType]);
+                if ($progType === 'MSC') { $modes[] = 'MSc'; }
+                if ($progType === 'PHD') { $modes[] = 'PhD'; }
+                if ($isPg) { $modes[] = 'Postgraduate'; $modes[] = 'PG'; }
+                $q->whereIn('entry_mode', $modes)->orWhereNull('entry_mode');
             })
             ->where('is_compulsory', true)
             ->where('is_milestone_fee', false)
@@ -315,11 +316,16 @@ class FeeService
         $groupedConfigs = $allConfigs->groupBy('fee_type_id');
 
         foreach ($groupedConfigs as $feeTypeId => $configs) {
-            $resolved = null;
-            if ($student->program_id) $resolved = $configs->where('program_id', $student->program_id)->first();
-            if (!$resolved && $student->department_id) $resolved = $configs->where('department_id', $student->department_id)->whereNull('program_id')->first();
-            if (!$resolved && $student->faculty_id) $resolved = $configs->where('faculty_id', $student->faculty_id)->whereNull('department_id')->whereNull('program_id')->first();
-            if (!$resolved) $resolved = $configs->whereNull('faculty_id')->whereNull('department_id')->whereNull('program_id')->first();
+            $resolved = static::resolveConfigFromCollection(
+                $configs,
+                $student->program_id,
+                $student->department_id,
+                $student->faculty_id,
+                $progType,
+                $student->current_level,
+                $student->entry_mode,
+                $isPg
+            );
             if ($resolved) {
                 if ($resolved->feeType && $resolved->feeType->is_one_time) {
                     $alreadyCharged = \App\Models\InvoiceItem::whereHas('invoice', function ($q) use ($student, $invoice) {
@@ -861,5 +867,167 @@ class FeeService
         }
 
         return (float) ($baseForDiscount * ($scholarship->percentage / 100));
+    }
+
+    public static function normalizeTier(?string $val): string
+    {
+        if (! $val) {
+            return '';
+        }
+        $clean = strtoupper(trim(str_replace(['.', ' ', '-'], '', $val)));
+
+        return match ($clean) {
+            'MSC', 'MASTERS', 'MS', 'MENG', 'LLM' => 'MSC',
+            'PHD', 'DOCTORATE' => 'PHD',
+            'PGD' => 'PGD',
+            'MBA' => 'MBA',
+            'MIM' => 'MIM',
+            'UG', 'UTME', 'DIRECTENTRY', 'DE' => 'UG',
+            default => $clean,
+        };
+    }
+
+    public static function resolveConfigFromCollection(
+        $configs,
+        ?string $programId,
+        ?string $departmentId,
+        ?string $facultyId,
+        ?string $programType = null,
+        ?string $level = null,
+        ?string $entryMode = null,
+        bool $isPg = false
+    ): ?FeeConfiguration {
+        $progTier = static::normalizeTier($programType);
+
+        // Filter candidate configs compatible with student level and entry mode / tier
+        $filtered = $configs->filter(function ($c) use ($level, $entryMode, $progTier, $isPg) {
+            // Level check
+            if ($c->level !== null && $c->level !== '') {
+                if ((string) $c->level !== (string) $level) {
+                    return false;
+                }
+            }
+
+            // Safeguard for Inter-University Transfer fees:
+            // Transfer fees must strictly and exclusively apply to students entering via Transfer.
+            $isTransferRule = ($c->entry_mode && strcasecmp($c->entry_mode, 'Transfer') === 0);
+            $isTransferFeeType = false;
+            if ($c->relationLoaded('feeType') && $c->feeType) {
+                $typeName = strtolower($c->feeType->name ?? '');
+                $typeSlug = strtolower($c->feeType->slug ?? '');
+                $isTransferFeeType = str_contains($typeName, 'transfer') || str_contains($typeSlug, 'transfer');
+            }
+
+            $isStudentTransfer = ($entryMode && strcasecmp($entryMode, 'Transfer') === 0);
+
+            if ($isTransferRule || $isTransferFeeType) {
+                return $isStudentTransfer;
+            }
+
+            // Entry mode / Tier check
+            if ($c->entry_mode !== null && $c->entry_mode !== '' && $c->entry_mode !== 'all') {
+                $cNorm = static::normalizeTier($c->entry_mode);
+
+                // Exact entry mode match (e.g. Direct Entry === Direct Entry)
+                if ($entryMode && strcasecmp($c->entry_mode, $entryMode) === 0) {
+                    return true;
+                }
+
+                // Tier match (e.g. rule entry_mode 'MSc' matches program type 'MSC' or 'MBA' matches 'MBA')
+                if ($progTier !== '' && $cNorm === $progTier) {
+                    return true;
+                }
+
+                // Universal 'Postgraduate' rule matches any PG stream or PG tier
+                if (in_array(strtoupper($c->entry_mode), ['POSTGRADUATE', 'PG']) && ($isPg || in_array($progTier, ['PGD', 'MSC', 'MBA', 'MIM', 'MPHIL', 'PHD', 'MASTERS']))) {
+                    return true;
+                }
+
+                return false;
+            }
+
+            return true;
+        });
+
+        if ($filtered->isEmpty()) {
+            return null;
+        }
+
+        // Specificity Ranking:
+        // Rank 1: Program-Specific match
+        if ($programId) {
+            $match = $filtered->firstWhere('program_id', $programId);
+            if ($match) {
+                return $match;
+            }
+        }
+
+        // Rank 2: Department + Degree Tier match
+        if ($departmentId && $progTier !== '') {
+            $match = $filtered->first(function ($c) use ($departmentId, $progTier) {
+                return (string) $c->department_id === (string) $departmentId
+                    && empty($c->program_id)
+                    && static::normalizeTier($c->entry_mode) === $progTier;
+            });
+            if ($match) {
+                return $match;
+            }
+        }
+
+        // Rank 3: Department Generic match
+        if ($departmentId) {
+            $match = $filtered->first(function ($c) use ($departmentId) {
+                return (string) $c->department_id === (string) $departmentId
+                    && empty($c->program_id);
+            });
+            if ($match) {
+                return $match;
+            }
+        }
+
+        // Rank 4: Faculty + Degree Tier match
+        if ($facultyId && $progTier !== '') {
+            $match = $filtered->first(function ($c) use ($facultyId, $progTier) {
+                return (string) $c->faculty_id === (string) $facultyId
+                    && empty($c->department_id)
+                    && empty($c->program_id)
+                    && static::normalizeTier($c->entry_mode) === $progTier;
+            });
+            if ($match) {
+                return $match;
+            }
+        }
+
+        // Rank 5: Faculty Generic match
+        if ($facultyId) {
+            $match = $filtered->first(function ($c) use ($facultyId) {
+                return (string) $c->faculty_id === (string) $facultyId
+                    && empty($c->department_id)
+                    && empty($c->program_id);
+            });
+            if ($match) {
+                return $match;
+            }
+        }
+
+        // Rank 6: University-Wide Degree Tier match
+        if ($progTier !== '') {
+            $match = $filtered->first(function ($c) use ($progTier) {
+                return empty($c->faculty_id)
+                    && empty($c->department_id)
+                    && empty($c->program_id)
+                    && static::normalizeTier($c->entry_mode) === $progTier;
+            });
+            if ($match) {
+                return $match;
+            }
+        }
+
+        // Rank 7: University-Wide Generic match
+        return $filtered->first(function ($c) {
+            return empty($c->faculty_id)
+                && empty($c->department_id)
+                && empty($c->program_id);
+        });
     }
 }

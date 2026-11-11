@@ -44,7 +44,7 @@ class CourseRegistrationController extends Controller
         foreach ($groupedBySession as $sessionId => $sessionRegistrations) {
             $session = $sessionRegistrations->first()->session;
 
-            $semesters = $sessionRegistrations->groupBy('semester_id')->map(function ($semesterRegs) use ($overrides) {
+            $semesters = $sessionRegistrations->groupBy('semester_id')->map(function ($semesterRegs) use ($student, $overrides) {
                 $semester = $semesterRegs->first()->semester;
 
                 return [
@@ -52,10 +52,10 @@ class CourseRegistrationController extends Controller
                     'name' => $semester->name,
                     'is_current' => $semester->is_current,
                     'total_units' => $semesterRegs->sum('course.units'),
-                    'courses' => $semesterRegs->map(function ($r) use ($overrides) {
+                    'courses' => $semesterRegs->map(function ($r) use ($student, $overrides) {
                         $course = $r->course;
                         if ($course) {
-                            $course->is_compulsory = $overrides->has($course->id) ? (bool) $overrides->get($course->id) : false;
+                            $course->is_compulsory = $course->resolveIsCompulsoryFor($student, $overrides);
                         }
                         return $course;
                     }),
@@ -339,12 +339,12 @@ class CourseRegistrationController extends Controller
 
         $registrations = CourseRegistration::where('student_id', $student->id)
             ->where('session_id', $session->id)
-            ->with('course', 'semester')
+            ->with(['course.department', 'semester'])
             ->get();
 
         foreach ($registrations as $reg) {
             if ($reg->course) {
-                $reg->course->is_compulsory = $overrides->has($reg->course->id) ? (bool) $overrides->get($reg->course->id) : false;
+                $reg->course->is_compulsory = $reg->course->resolveIsCompulsoryFor($student, $overrides);
             }
         }
 
@@ -587,18 +587,16 @@ class CourseRegistrationController extends Controller
             },
         ])->orderBy('semester')->orderBy('code')->get();
 
-        if ($student->program) {
-            $overrides = DB::table('course_programme')
+        $overrides = $student->program
+            ? DB::table('course_programme')
                 ->where('programme_id', $student->program->id)
-                ->pluck('is_compulsory', 'course_id');
+                ->pluck('is_compulsory', 'course_id')
+            : collect();
 
-            $courses->transform(function ($course) use ($overrides) {
-                if ($overrides->has($course->id)) {
-                    $course->is_compulsory = (bool) $overrides->get($course->id);
-                }
-                return $course;
-            });
-        }
+        $courses->transform(function ($course) use ($student, $overrides) {
+            $course->is_compulsory = $course->resolveIsCompulsoryFor($student, $overrides);
+            return $course;
+        });
 
         return $courses;
     }

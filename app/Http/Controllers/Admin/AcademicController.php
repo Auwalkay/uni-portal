@@ -336,8 +336,10 @@ class AcademicController extends Controller
                 'course_type' => 'nullable|string|in:lecture_exam,case_study_seminar,practicum_internship,capstone_project,academic_dissertation',
                 'department_id' => 'required|exists:departments,id',
                 'programme_id' => 'nullable|exists:programmes,id',
+                'is_compulsory' => 'nullable|boolean',
             ]);
             $data['course_type'] = $data['course_type'] ?? 'lecture_exam';
+            $data['is_compulsory'] = $request->boolean('is_compulsory', false);
             Course::create($data);
         }
 
@@ -447,9 +449,13 @@ class AcademicController extends Controller
                 'course_type' => 'nullable|string|in:lecture_exam,case_study_seminar,practicum_internship,capstone_project,academic_dissertation',
                 'department_id' => 'required|exists:departments,id',
                 'programme_id' => 'nullable|exists:programmes,id',
+                'is_compulsory' => 'nullable|boolean',
             ]);
             if (empty($data['course_type'])) {
                 $data['course_type'] = $course->course_type ?: 'lecture_exam';
+            }
+            if ($request->has('is_compulsory')) {
+                $data['is_compulsory'] = $request->boolean('is_compulsory');
             }
             $course->update($data);
         }

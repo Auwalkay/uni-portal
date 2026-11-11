@@ -20,26 +20,34 @@ class BuildingImport implements ToModel, WithHeadingRow, WithChunkReading, WithV
 
         $code = isset($row['code']) && !empty(trim($row['code']))
             ? mb_strtoupper(trim($row['code']))
-            : mb_strtoupper(Str::slug($name));
+            : Building::generateUniqueCode($name);
 
         $buildingType = isset($row['building_type']) && !empty(trim($row['building_type']))
-            ? strtolower(trim(str_replace(' ', '_', $row['building_type'])))
+            ? strtolower(trim(str_replace([' ', '-'], '_', $row['building_type'])))
             : 'classroom';
 
-        $validTypes = ['multipurpose_hall', 'auditorium', 'lecture_theatre', 'e_library', 'classroom', 'other'];
+        $validTypes = [
+            'multipurpose_hall', 'auditorium', 'lecture_theatre', 'e_library', 'classroom',
+            'admin_block', 'office', 'laboratory', 'clinic', 'hostel',
+            'sports_complex', 'library', 'maintenance', 'other',
+        ];
         if (!in_array($buildingType, $validTypes)) {
             $buildingType = 'classroom';
         }
 
+        $nonSeatingTypes = ['admin_block', 'office', 'clinic', 'hostel', 'sports_complex', 'maintenance'];
+
         $capacity = isset($row['capacity']) && is_numeric($row['capacity'])
             ? (int) $row['capacity']
-            : 100;
+            : (in_array($buildingType, $nonSeatingTypes) ? null : 100);
 
-        $usableForExams = true;
+        $usableForExams = !in_array($buildingType, $nonSeatingTypes);
         if (isset($row['usable_for_exams'])) {
             $val = strtolower(trim((string) $row['usable_for_exams']));
             if (in_array($val, ['false', '0', 'no', 'disabled'])) {
                 $usableForExams = false;
+            } elseif (in_array($val, ['true', '1', 'yes', 'enabled'])) {
+                $usableForExams = true;
             }
         }
 

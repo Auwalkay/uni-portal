@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\CourseAllocation;
 use App\Models\CourseAllocationRequest;
+use App\Models\Semester;
 use App\Models\Session;
 use App\Models\SystemSetting;
 use App\Services\CourseAllocationNotificationService;
@@ -20,62 +21,54 @@ class SelfCourseAllocationController extends Controller
         $user = auth()->user();
         $staff = $user->staff()->with('department.faculty')->first();
 
-        if (! $staff || ! $staff->department_id) {
-            return Inertia::render('Staff/Course/Allocation', [
-                'hasDepartment' => false,
-                'isOpen' => false,
-                'courses' => ['data' => [], 'links' => []],
-                'requests' => [],
-                'stats' => [
-                    'allocated_units' => 0,
-                    'pending_units' => 0,
-                    'total_units' => 0,
-                    'min_units' => 6,
-                    'max_units' => 24,
-                    'max_courses' => 5,
-                    'allocated_courses_count' => 0,
-                    'pending_courses_count' => 0,
-                ],
-                'currentSession' => null,
-                'filters' => [],
-            ]);
+        if (! $staff) {
+            return redirect()->route('admin.dashboard')->with('error', 'Staff profile required.');
         }
 
         $session = Session::current() ?? Session::latest()->first();
         $sessionId = $session?->id;
+
+        // Resolve current active semester
+        $currentSemester = $session?->semesters()->where('is_current', true)->first()
+            ?? Semester::current();
+
+        $activeSemesterCodes = $currentSemester
+            ? $currentSemester->getMatchingCourseSemesters()
+            : ['1', 'First', 'First Semester'];
 
         $isOpen = filter_var(SystemSetting::get('enable_lecturer_self_course_allocation', true), FILTER_VALIDATE_BOOLEAN);
         $minUnits = intval(SystemSetting::get('lecturer_self_allocation_min_units', 6));
         $maxUnits = intval(SystemSetting::get('lecturer_self_allocation_max_units', 24));
         $maxCourses = intval(SystemSetting::get('lecturer_self_allocation_max_courses', 5));
 
-        // High scale O(1) query strategy: Fetch department allocations & requests for current session
-        $allocations = CourseAllocation::where('session_id', $sessionId)
-            ->where('department_id', $staff->department_id)
-            ->with('staff.user:id,name')
-            ->get(['id', 'course_id', 'staff_id']);
+        // Filters: search, level, department_id (semester is locked to current active semester)
+        $filters = $request->only(['search', 'level', 'department_id']);
+        $selectedDepartmentId = $request->has('department_id')
+            ? $request->input('department_id')
+            : ($staff->department_id ?? 'all');
 
-        $pendingRequests = CourseAllocationRequest::where('session_id', $sessionId)
-            ->where('department_id', $staff->department_id)
+        // Calculate Lecturer's Current Workload across all departments
+        $myAllocatedCourseIds = CourseAllocation::where('session_id', $sessionId)
+            ->where('staff_id', $staff->id)
+            ->pluck('course_id');
+
+        $myPendingCourseIds = CourseAllocationRequest::where('session_id', $sessionId)
+            ->where('staff_id', $staff->id)
             ->where('status', 'pending')
-            ->with('staff.user:id,name')
-            ->get(['id', 'course_id', 'staff_id', 'created_at']);
-
-        $allocationsByCourse = $allocations->keyBy('course_id');
-        $requestsByCourse = $pendingRequests->keyBy('course_id');
-
-        // Calculate Lecturer's Current Workload
-        $myAllocatedCourseIds = $allocations->where('staff_id', $staff->id)->pluck('course_id');
-        $myPendingCourseIds = $pendingRequests->where('staff_id', $staff->id)->pluck('course_id');
+            ->pluck('course_id');
 
         $allocatedUnits = Course::whereIn('id', $myAllocatedCourseIds)->sum('units');
         $pendingUnits = Course::whereIn('id', $myPendingCourseIds)->sum('units');
         $totalUnits = $allocatedUnits + $pendingUnits;
 
-        // Query Department Courses
-        $filters = $request->only(['search', 'level', 'semester']);
-        $courses = Course::where('department_id', $staff->department_id)
+        // Query Courses with department eager loaded, strictly filtered to current active semester only
+        $coursesQuery = Course::query()
+            ->with(['department:id,name,code', 'department.faculty:id,name'])
             ->where('is_active', true)
+            ->whereIn('semester', $activeSemesterCodes)
+            ->when($selectedDepartmentId && $selectedDepartmentId !== 'all', function ($q) use ($selectedDepartmentId) {
+                $q->where('department_id', $selectedDepartmentId);
+            })
             ->when($filters['search'] ?? null, function ($q, $search) {
                 $q->where(function ($sub) use ($search) {
                     $sub->where('code', 'like', "%{$search}%")
@@ -83,57 +76,82 @@ class SelfCourseAllocationController extends Controller
                 });
             })
             ->when($filters['level'] ?? null, fn($q, $lvl) => $q->where('level', $lvl))
-            ->when($filters['semester'] ?? null, fn($q, $sem) => $q->where('semester', (string) $sem))
-            ->orderBy('code')
-            ->paginate(12)
-            ->withQueryString()
-            ->through(function ($course) use ($staff, $allocationsByCourse, $requestsByCourse) {
-                $allocation = $allocationsByCourse->get($course->id);
-                $pendingRequest = $requestsByCourse->get($course->id);
+            ->orderBy('code');
 
-                $status = 'available';
-                $holderName = null;
+        $paginatedCourses = $coursesQuery->paginate(12)->withQueryString();
 
-                if ($allocation) {
-                    if ($allocation->staff_id === $staff->id) {
-                        $status = 'allocated_to_me';
-                        $holderName = 'You';
-                    } else {
-                        $status = 'taken_by_other';
-                        $holderName = $allocation->staff?->user?->name ?? 'Another Lecturer';
-                    }
-                } elseif ($pendingRequest) {
-                    if ($pendingRequest->staff_id === $staff->id) {
-                        $status = 'pending_by_me';
-                        $holderName = 'You (Pending)';
-                    } else {
-                        $status = 'taken_by_other';
-                        $holderName = ($pendingRequest->staff?->user?->name ?? 'Another Lecturer') . ' (Requested)';
-                    }
+        // High scale O(1) page-level allocation & request resolution
+        $pageCourseIds = $paginatedCourses->pluck('id');
+
+        $allocations = CourseAllocation::where('session_id', $sessionId)
+            ->whereIn('course_id', $pageCourseIds)
+            ->with('staff.user:id,name')
+            ->get(['id', 'course_id', 'staff_id'])
+            ->keyBy('course_id');
+
+        $pendingRequests = CourseAllocationRequest::where('session_id', $sessionId)
+            ->whereIn('course_id', $pageCourseIds)
+            ->where('status', 'pending')
+            ->with('staff.user:id,name')
+            ->get(['id', 'course_id', 'staff_id', 'created_at'])
+            ->keyBy('course_id');
+
+        $courses = $paginatedCourses->through(function ($course) use ($staff, $allocations, $pendingRequests) {
+            $allocation = $allocations->get($course->id);
+            $pendingRequest = $pendingRequests->get($course->id);
+
+            $status = 'available';
+            $holderName = null;
+
+            if ($allocation) {
+                if ($allocation->staff_id === $staff->id) {
+                    $status = 'allocated_to_me';
+                    $holderName = 'You';
+                } else {
+                    $status = 'taken_by_other';
+                    $holderName = $allocation->staff?->user?->name ?? 'Another Lecturer';
                 }
+            } elseif ($pendingRequest) {
+                if ($pendingRequest->staff_id === $staff->id) {
+                    $status = 'pending_by_me';
+                    $holderName = 'You (Pending)';
+                } else {
+                    $status = 'taken_by_other';
+                    $holderName = ($pendingRequest->staff?->user?->name ?? 'Another Lecturer') . ' (Requested)';
+                }
+            }
 
-                return [
-                    'id' => $course->id,
-                    'code' => $course->code,
-                    'title' => $course->title,
-                    'units' => $course->units,
-                    'level' => $course->level,
-                    'semester' => $course->semester,
-                    'status' => $status,
-                    'holder_name' => $holderName,
-                ];
-            });
+            return [
+                'id' => $course->id,
+                'code' => $course->code,
+                'title' => $course->title,
+                'units' => $course->units,
+                'level' => $course->level,
+                'semester' => $course->semester,
+                'status' => $status,
+                'holder_name' => $holderName,
+                'department' => $course->department ? $course->department->only(['id', 'name', 'code']) : null,
+            ];
+        });
 
         // Lecturer's Requests History for Session
         $myRequests = CourseAllocationRequest::where('staff_id', $staff->id)
             ->where('session_id', $sessionId)
-            ->with(['course:id,code,title,units', 'reviewer:id,name'])
+            ->with(['course:id,code,title,units', 'course.department:id,name,code', 'department:id,name,code', 'reviewer:id,name'])
             ->latest()
             ->get();
 
+        $departments = \App\Services\AcademicCacheService::getAcademicDepartments(true)
+            ->map(fn($d) => [
+                'id' => $d->id,
+                'name' => $d->name,
+                'code' => $d->code,
+            ]);
+
         return Inertia::render('Staff/Course/Allocation', [
-            'hasDepartment' => true,
-            'department' => $staff->department->only(['id', 'name', 'code']),
+            'hasDepartment' => (bool) $staff->department_id,
+            'department' => $staff->department ? $staff->department->only(['id', 'name', 'code']) : null,
+            'departments' => $departments,
             'isOpen' => $isOpen,
             'courses' => $courses,
             'requests' => $myRequests,
@@ -148,7 +166,15 @@ class SelfCourseAllocationController extends Controller
                 'pending_courses_count' => $myPendingCourseIds->count(),
             ],
             'currentSession' => $session ? $session->only(['id', 'name']) : null,
-            'filters' => $filters,
+            'currentSemester' => $currentSemester ? [
+                'id' => $currentSemester->id,
+                'name' => $currentSemester->name,
+                'code' => $currentSemester->getSemesterCode(),
+            ] : null,
+            'filters' => array_merge($filters, [
+                'department_id' => $selectedDepartmentId,
+                'semester' => $currentSemester?->getSemesterCode() ?? '1',
+            ]),
         ]);
     }
 
@@ -171,20 +197,35 @@ class SelfCourseAllocationController extends Controller
 
         $user = auth()->user();
         $staff = $user->staff;
-        if (! $staff || ! $staff->department_id) {
-            return back()->with('error', 'You must have an assigned academic department to request courses.');
+        if (! $staff) {
+            return back()->with('error', 'You must have an active staff profile to request courses.');
         }
 
         try {
             $allocationRequest = DB::transaction(function () use ($staff, $session, $request) {
+                // Resolve active semester for the current session
+                $currentSemester = $session->semesters()->where('is_current', true)->first()
+                    ?? Semester::current();
+
+                $activeSemesterCodes = $currentSemester
+                    ? $currentSemester->getMatchingCourseSemesters()
+                    : ['1', 'First', 'First Semester'];
+
                 // Pessimistic Lock on the course to serialize concurrent picks for the same course
+                // Allow any active course across departments
                 $course = Course::where('id', $request->course_id)
-                    ->where('department_id', $staff->department_id)
+                    ->where('is_active', true)
                     ->lockForUpdate()
                     ->first();
 
                 if (! $course) {
-                    throw new \DomainException('This course does not belong to your department or is inactive.');
+                    throw new \DomainException('This course does not exist or is inactive.');
+                }
+
+                // Strictly verify the course belongs to the active semester
+                if (! in_array((string) $course->semester, $activeSemesterCodes, true)) {
+                    $semName = $currentSemester?->name ?? 'active';
+                    throw new \DomainException("You can only request courses for the current active semester ({$semName}).");
                 }
 
                 // Check Exclusivity: Active allocation in this session
@@ -239,13 +280,13 @@ class SelfCourseAllocationController extends Controller
                     'staff_id' => $staff->id,
                     'course_id' => $course->id,
                     'session_id' => $session->id,
-                    'department_id' => $staff->department_id,
+                    'department_id' => $course->department_id,
                     'status' => 'pending',
                     'notes' => $request->input('notes'),
                 ]);
             });
 
-            // Dispatch emails to HOD, Dean, and Admins
+            // Dispatch emails to HOD, Dean, and Admins of the offering department
             CourseAllocationNotificationService::notifyReviewers($allocationRequest);
 
             return back()->with('success', 'Course request submitted successfully and sent for review.');

@@ -444,7 +444,7 @@ const greeting = () => {
                         </div>
                     </div>
 
-                    <!-- Right: Supervisory Committee & Candidacy Dossier (Col 3) -->
+                    <!-- Right: Supervisory Committee & Candidacy Details (Col 3) -->
                     <div class="lg:col-span-3 space-y-6">
                         <!-- Supervisory Panel Card -->
                         <Card class="border border-border/70 rounded-2xl bg-card shadow-sm overflow-hidden">

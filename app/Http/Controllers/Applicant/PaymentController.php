@@ -2,15 +2,14 @@
 
 namespace App\Http\Controllers\Applicant;
 
-use App\Http\Controllers\Controller;
-use App\Models\Invoice;
-use App\Models\Payment;
-use App\Models\Applicant;
 use App\Contracts\PaymentGatewayInterface;
+use App\Http\Controllers\Controller;
+use App\Models\Applicant;
+use App\Models\Invoice;
+use App\Models\SystemSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
-use Illuminate\Support\Facades\Log;
 
 class PaymentController extends Controller
 {
@@ -32,7 +31,9 @@ class PaymentController extends Controller
             ->first();
 
         // If no pending invoice, maybe they already paid or need one generated?
-        if (!$invoice) {
+        if (! $invoice) {
+            $applicant = Applicant::where('user_id', $user->id)->first();
+
             // Check if they have a paid one
             $paidInvoice = Invoice::where('user_id', $user->id)
                 ->where('type', 'application_fee')
@@ -40,44 +41,50 @@ class PaymentController extends Controller
                 ->exists();
 
             if ($paidInvoice) {
-                return redirect()->route('applicant.apply.show')->with('info', 'Your application fee has already been paid.');
-            }
-
-            // If an applicant record exists, ensure an application fee invoice is ready for payment
-            $applicant = Applicant::where('user_id', $user->id)->first();
-            if ($applicant) {
-                $currentSession = \App\Services\AcademicCacheService::getCurrentSession();
-                if (!$currentSession) {
-                    return redirect()->route('applicant.dashboard')->with('error', 'No active academic session found for payment.');
+                if ($applicant && in_array($applicant->status, ['submitted', 'screening', 'admitted', 'enrolled'])) {
+                    return redirect()->route('applicant.apply.show')->with('info', 'Your application fee has already been paid.');
                 }
 
-                $invoice = Invoice::create([
-                    'user_id' => $user->id,
-                    'type' => 'application_fee',
-                    'session_id' => $currentSession->id,
-                    'reference' => 'APP-' . strtoupper(uniqid()),
-                    'amount' => \App\Models\SystemSetting::get('application_fee', 100000),
-                    'paid_amount' => 0,
-                    'status' => 'pending',
-                    'due_date' => now()->addDays(7),
-                ]);
-
-                $invoice->items()->create([
-                    'description' => 'Application Fee',
-                    'amount' => \App\Models\SystemSetting::get('application_fee', 100000),
-                    'quantity' => 1,
-                ]);
-
-                $invoice->load('session');
-            } else {
-                return redirect()->route('applicant.apply.start')->with('info', 'Please begin your application first.');
+                return redirect()->route('applicant.apply.form')->with('info', 'Your application fee has already been paid. Please complete and submit your application form.');
             }
+
+            if (! $applicant || ! $applicant->program_choice_1) {
+                return redirect()->route('applicant.apply.start')->with('warning', 'Please select your preferred programme of study first.');
+            }
+
+            $currentSession = \App\Services\AcademicCacheService::getCurrentSession();
+            if (! $currentSession) {
+                return redirect()->route('applicant.dashboard')->with('error', 'No active academic session found for payment.');
+            }
+
+            $appFee = $applicant->isPostgraduate()
+                ? SystemSetting::get('pg_application_fee', 50000)
+                : SystemSetting::get('application_fee', 100000);
+
+            $invoice = Invoice::create([
+                'user_id' => $user->id,
+                'type' => 'application_fee',
+                'session_id' => $currentSession->id,
+                'reference' => 'APP-'.strtoupper(uniqid()),
+                'amount' => $appFee,
+                'paid_amount' => 0,
+                'status' => 'pending',
+                'due_date' => now()->addDays(7),
+            ]);
+
+            $invoice->items()->create([
+                'description' => $applicant->isPostgraduate() ? 'Postgraduate Application Form' : 'Application Fee',
+                'amount' => $appFee,
+                'quantity' => 1,
+            ]);
+
+            $invoice->load('session');
         }
 
         $currentSession = \App\Services\AcademicCacheService::getCurrentSession();
 
         // Ensure pending invoice is associated with current session if session_id is missing
-        if (!$invoice->session_id && $currentSession) {
+        if (! $invoice->session_id && $currentSession) {
             $invoice->update(['session_id' => $currentSession->id]);
             $invoice->setRelation('session', $currentSession);
         }
@@ -116,7 +123,7 @@ class PaymentController extends Controller
             route('applicant.payment.callback')
         );
 
-        if ($initiation && !empty($initiation['authorization_url'])) {
+        if ($initiation && ! empty($initiation['authorization_url'])) {
             return Inertia::location($initiation['authorization_url']);
         }
 
@@ -126,14 +133,20 @@ class PaymentController extends Controller
     public function callback(Request $request)
     {
         $reference = $request->query('reference') ?? $request->query('transaction_ref');
-        if (!$reference) {
+        if (! $reference) {
             return redirect()->route('applicant.payment.index')->with('error', 'No reference supplied.');
         }
 
         $result = app(\App\Services\Payment\PaymentHandler::class)->verifyAndProcessPayment($reference);
 
         if ($result['status'] === 'success') {
-            return redirect()->route('applicant.apply.show')->with('success', 'Payment successful! Application submitted.');
+            $user = $request->user();
+            $applicant = Applicant::where('user_id', $user?->id)->first();
+            if ($applicant && in_array($applicant->status, ['submitted', 'screening', 'admitted', 'enrolled'])) {
+                return redirect()->route('applicant.apply.show')->with('success', 'Payment successful! Application submitted.');
+            }
+
+            return redirect()->route('applicant.apply.form')->with('success', 'Payment confirmed! Please complete and submit your application details.');
         }
 
         return redirect()->route('applicant.payment.index')->with('error', 'Payment verification failed or is pending confirmation.');

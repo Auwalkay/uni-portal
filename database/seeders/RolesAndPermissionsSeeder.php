@@ -53,10 +53,16 @@ class RolesAndPermissionsSeeder extends Seeder
             'publish_results',
             'manage_results', // Global Override
             
-            // Student & Admissions
+            // Student & Admissions (Undergraduate)
             'view_applications',
             'review_applications',
             'admit_students',
+
+            // Postgraduate Admissions (SPGS)
+            'view_pg_applications',
+            'review_pg_applications',
+            'admit_pg_students',
+
             'view_students',
             'create_students',
             'edit_students',
@@ -382,8 +388,19 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_applications',
             'review_applications',
             'admit_students',
+            'view_pg_applications',
+            'review_pg_applications',
+            'admit_pg_students',
             'view_students',
             'edit_students',
+            'view_expenses',
+            'create_expenses',
+        ]);
+
+        $assign('pg_admissions_officer', [
+            'access_admin_dashboard',
+            'view_pg_applications',
+            'review_pg_applications',
             'view_expenses',
             'create_expenses',
         ]);

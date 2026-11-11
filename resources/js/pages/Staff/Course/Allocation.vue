@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
+import Pagination from '@/components/Pagination.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,9 +13,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import SearchableSelect from '@/components/SearchableSelect.vue';
 import {
     BookOpen, Search, ArrowLeft, CheckCircle2, Clock, XCircle, AlertCircle,
-    Lock, Sparkles, Building2, Send, X, Layers, AlertTriangle
+    Lock, Sparkles, Building2, Send, X, Layers, AlertTriangle, Calendar
 } from 'lucide-vue-next';
 import { debounce } from 'lodash';
 import { route } from 'ziggy-js';
@@ -29,6 +31,11 @@ interface CourseItem {
     semester: string;
     status: 'available' | 'allocated_to_me' | 'pending_by_me' | 'taken_by_other';
     holder_name?: string | null;
+    department?: {
+        id: string;
+        name: string;
+        code: string;
+    } | null;
 }
 
 interface RequestItem {
@@ -50,7 +57,8 @@ interface RequestItem {
 
 const props = defineProps<{
     hasDepartment: boolean;
-    department?: { id: string; name: string; code: string };
+    department?: { id: string; name: string; code: string } | null;
+    departments?: Array<{ id: string; name: string; code: string }>;
     isOpen: boolean;
     courses: {
         data: CourseItem[];
@@ -69,7 +77,8 @@ const props = defineProps<{
         pending_courses_count: number;
     };
     currentSession?: { id: string; name: string } | null;
-    filters: { search?: string; level?: string; semester?: string };
+    currentSemester?: { id: string; name: string; code: string } | null;
+    filters: { search?: string; level?: string; semester?: string; department_id?: string };
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -80,17 +89,25 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const search = ref(props.filters.search || '');
 const selectedLevel = ref(props.filters.level || 'all');
-const selectedSemester = ref(props.filters.semester || 'all');
+const selectedDepartment = ref(props.filters.department_id || props.department?.id || 'all');
+
+const departmentOptions = computed(() => [
+    { value: 'all', label: 'All Departments' },
+    ...(props.departments || []).map(d => ({
+        value: d.id,
+        label: `${d.name} (${d.code})`,
+    })),
+]);
 
 const updateFilters = debounce(() => {
     router.get(route('admin.teaching.courses.self_allocation'), {
         search: search.value || undefined,
         level: selectedLevel.value === 'all' ? undefined : selectedLevel.value,
-        semester: selectedSemester.value === 'all' ? undefined : selectedSemester.value,
+        department_id: selectedDepartment.value === 'all' ? undefined : selectedDepartment.value,
     }, { preserveState: true, replace: true });
 }, 300);
 
-watch([search, selectedLevel, selectedSemester], () => {
+watch([search, selectedLevel, selectedDepartment], () => {
     updateFilters();
 });
 
@@ -119,7 +136,7 @@ const submitRequest = () => {
             Swal.fire({
                 icon: 'success',
                 title: 'Request Submitted',
-                text: 'Your course request was sent to the Department HOD and Dean for review.',
+                text: 'Your course request was sent to the course department HOD and Dean for review.',
                 confirmButtonColor: '#4f46e5',
             });
         },
@@ -186,7 +203,7 @@ const isMaxReached = computed(() => {
                             </Link>
                         </Button>
                     </div>
-                    <h1 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100 mt-1 flex items-center gap-2">
+                    <h1 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100 mt-1 flex flex-wrap items-center gap-2">
                         Self Course Allocation
                         <Badge v-if="isOpen" variant="outline" class="border-emerald-500 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30">
                             Window Open
@@ -194,9 +211,13 @@ const isMaxReached = computed(() => {
                         <Badge v-else variant="outline" class="border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950/30">
                             Window Closed
                         </Badge>
+                        <Badge v-if="currentSemester" variant="secondary" class="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                            <Calendar class="w-3.5 h-3.5 mr-1 text-indigo-600 dark:text-indigo-400" />
+                            {{ currentSemester.name }}
+                        </Badge>
                     </h1>
                     <p class="text-muted-foreground mt-1">
-                        Select and request courses for the current academic session ({{ currentSession?.name || 'Active Session' }}).
+                        Select and request courses for the active semester ({{ currentSession?.name || 'Active Session' }} &bull; {{ currentSemester?.name || 'Active Semester' }}).
                     </p>
                 </div>
 
@@ -217,145 +238,149 @@ const isMaxReached = computed(() => {
                 </div>
             </div>
 
-            <!-- Missing Department State -->
-            <div v-if="!hasDepartment" class="p-6 rounded-lg border border-dashed text-center">
-                <AlertCircle class="w-10 h-10 text-amber-500 mx-auto mb-2" />
-                <h3 class="font-semibold text-lg">No Department Assigned</h3>
-                <p class="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-                    Your staff profile has not been assigned to an academic department. Please contact the portal administrator or HR to assign your department.
-                </p>
+            <!-- Missing Department Notice (informational) -->
+            <div v-if="!hasDepartment" class="p-4 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 flex items-start gap-3">
+                <AlertCircle class="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+                <div>
+                    <h4 class="font-semibold">No Primary Department Assigned</h4>
+                    <p class="text-sm mt-0.5">
+                        Your profile does not have an assigned primary department, but you can browse and request courses across any academic department below.
+                    </p>
+                </div>
             </div>
 
-            <template v-else>
-                <!-- Workload Status & Stats -->
-                <div class="grid gap-4 md:grid-cols-4">
-                    <Card class="bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-950/20 dark:to-slate-900 border-indigo-100 dark:border-indigo-900">
-                        <CardHeader class="pb-2">
-                            <CardTitle class="text-sm font-medium text-indigo-700 dark:text-indigo-400">Total Workload</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div class="flex items-baseline justify-between">
-                                <div class="text-2xl font-bold text-indigo-900 dark:text-indigo-100">
-                                    {{ stats.total_units }} <span class="text-sm font-normal text-muted-foreground">/ {{ stats.max_units }} Units</span>
-                                </div>
-                                <span class="text-xs font-semibold text-indigo-600">{{ unitPercentage }}%</span>
+            <!-- Workload Status & Stats -->
+            <div class="grid gap-4 md:grid-cols-4">
+                <Card class="bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-950/20 dark:to-slate-900 border-indigo-100 dark:border-indigo-900">
+                    <CardHeader class="pb-2">
+                        <CardTitle class="text-sm font-medium text-indigo-700 dark:text-indigo-400">Total Workload</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div class="flex items-baseline justify-between">
+                            <div class="text-2xl font-bold text-indigo-900 dark:text-indigo-100">
+                                {{ stats.total_units }} <span class="text-sm font-normal text-muted-foreground">/ {{ stats.max_units }} Units</span>
                             </div>
-                            <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 mt-2 overflow-hidden">
-                                <div
-                                    class="h-full rounded-full transition-all duration-300"
-                                    :class="isMaxReached ? 'bg-amber-500' : 'bg-indigo-600'"
-                                    :style="{ width: `${unitPercentage}%` }"
-                                ></div>
+                            <span class="text-xs font-semibold text-indigo-600">{{ unitPercentage }}%</span>
+                        </div>
+                        <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 mt-2 overflow-hidden">
+                            <div
+                                class="h-full rounded-full transition-all duration-300"
+                                :class="isMaxReached ? 'bg-amber-500' : 'bg-indigo-600'"
+                                :style="{ width: `${unitPercentage}%` }"
+                            ></div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader class="pb-2">
+                        <CardTitle class="text-sm font-medium text-muted-foreground">Confirmed Allocations</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                            {{ stats.allocated_units }} Units
+                        </div>
+                        <p class="text-xs text-muted-foreground mt-1">
+                            {{ stats.allocated_courses_count }} approved course(s)
+                        </p>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader class="pb-2">
+                        <CardTitle class="text-sm font-medium text-muted-foreground">Pending Requests</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div class="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                            {{ stats.pending_units }} Units
+                        </div>
+                        <p class="text-xs text-muted-foreground mt-1">
+                            {{ stats.pending_courses_count }} awaiting HOD/Dean approval
+                        </p>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader class="pb-2">
+                        <CardTitle class="text-sm font-medium text-muted-foreground">Workload Policy</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div class="text-sm space-y-1">
+                            <div class="flex justify-between">
+                                <span class="text-muted-foreground">Min Required:</span>
+                                <span class="font-semibold">{{ stats.min_units }} Units</span>
                             </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader class="pb-2">
-                            <CardTitle class="text-sm font-medium text-muted-foreground">Confirmed Allocations</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                                {{ stats.allocated_units }} Units
+                            <div class="flex justify-between">
+                                <span class="text-muted-foreground">Max Allowed:</span>
+                                <span class="font-semibold">{{ stats.max_units }} Units</span>
                             </div>
-                            <p class="text-xs text-muted-foreground mt-1">
-                                {{ stats.allocated_courses_count }} approved course(s)
-                            </p>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
 
-                    <Card>
-                        <CardHeader class="pb-2">
-                            <CardTitle class="text-sm font-medium text-muted-foreground">Pending Requests</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div class="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                                {{ stats.pending_units }} Units
-                            </div>
-                            <p class="text-xs text-muted-foreground mt-1">
-                                {{ stats.pending_courses_count }} awaiting HOD/Dean approval
-                            </p>
-                        </CardContent>
-                    </Card>
+            <!-- Warning if below min units -->
+            <div v-if="isBelowMin" class="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg text-sm text-blue-800 dark:text-blue-200 flex items-center gap-2">
+                <AlertTriangle class="w-4 h-4 text-blue-600 shrink-0" />
+                <span>
+                    You have currently selected <strong>{{ stats.total_units }} units</strong>. The minimum required workload for this session is <strong>{{ stats.min_units }} units</strong>.
+                </span>
+            </div>
 
-                    <Card>
-                        <CardHeader class="pb-2">
-                            <CardTitle class="text-sm font-medium text-muted-foreground">Workload Policy</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div class="text-sm space-y-1">
-                                <div class="flex justify-between">
-                                    <span class="text-muted-foreground">Min Required:</span>
-                                    <span class="font-semibold">{{ stats.min_units }} Units</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span class="text-muted-foreground">Max Allowed:</span>
-                                    <span class="font-semibold">{{ stats.max_units }} Units</span>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
+            <!-- Main Content Tabs -->
+            <Tabs default-value="available" class="w-full">
+                <TabsList class="grid w-full md:w-[400px] grid-cols-2">
+                    <TabsTrigger value="available">Available Courses</TabsTrigger>
+                    <TabsTrigger value="requests">
+                        My Requests ({{ requests.length }})
+                    </TabsTrigger>
+                </TabsList>
 
-                <!-- Warning if below min units -->
-                <div v-if="isBelowMin" class="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg text-sm text-blue-800 dark:text-blue-200 flex items-center gap-2">
-                    <AlertTriangle class="w-4 h-4 text-blue-600 shrink-0" />
-                    <span>
-                        You have currently selected <strong>{{ stats.total_units }} units</strong>. The minimum required workload for this session is <strong>{{ stats.min_units }} units</strong>.
-                    </span>
-                </div>
-
-                <!-- Main Content Tabs -->
-                <Tabs default-value="available" class="w-full">
-                    <TabsList class="grid w-full md:w-[400px] grid-cols-2">
-                        <TabsTrigger value="available">Department Courses</TabsTrigger>
-                        <TabsTrigger value="requests">
-                            My Requests ({{ requests.length }})
-                        </TabsTrigger>
-                    </TabsList>
-
-                    <!-- Available Department Courses Tab -->
-                    <TabsContent value="available" class="space-y-4 pt-4">
-                        <!-- Filters -->
-                        <div class="flex flex-col md:flex-row gap-3">
-                            <div class="relative flex-1">
-                                <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    v-model="search"
-                                    type="search"
-                                    placeholder="Search by course code or title..."
-                                    class="pl-9 w-full"
-                                />
-                            </div>
-
-                            <Select v-model="selectedLevel">
-                                <SelectTrigger class="w-[140px]">
-                                    <SelectValue placeholder="All Levels" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Levels</SelectItem>
-                                    <SelectItem value="100">100 Level</SelectItem>
-                                    <SelectItem value="200">200 Level</SelectItem>
-                                    <SelectItem value="300">300 Level</SelectItem>
-                                    <SelectItem value="400">400 Level</SelectItem>
-                                    <SelectItem value="500">500 Level</SelectItem>
-                                </SelectContent>
-                            </Select>
-
-                            <Select v-model="selectedSemester">
-                                <SelectTrigger class="w-[150px]">
-                                    <SelectValue placeholder="All Semesters" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Semesters</SelectItem>
-                                    <SelectItem value="1">1st Semester</SelectItem>
-                                    <SelectItem value="2">2nd Semester</SelectItem>
-                                </SelectContent>
-                            </Select>
+                <!-- Available Courses Tab -->
+                <TabsContent value="available" class="space-y-4 pt-4">
+                    <!-- Filters -->
+                    <div class="flex flex-col md:flex-row gap-3 flex-wrap items-center">
+                        <div class="relative flex-1 min-w-[200px]">
+                            <Search class="absolute left-2.5 top-3 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                v-model="search"
+                                type="search"
+                                placeholder="Search by course code or title..."
+                                class="pl-9 h-10 w-full"
+                            />
                         </div>
 
-                        <!-- Courses Grid -->
-                        <div v-if="courses.data.length > 0" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <SearchableSelect
+                            v-model="selectedDepartment"
+                            :options="departmentOptions"
+                            placeholder="All Departments"
+                            search-placeholder="Search department..."
+                            class="w-full md:w-[260px]"
+                        />
+
+                        <Select v-model="selectedLevel">
+                            <SelectTrigger class="w-full md:w-[140px] h-10">
+                                <SelectValue placeholder="All Levels" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Levels</SelectItem>
+                                <SelectItem value="100">100 Level</SelectItem>
+                                <SelectItem value="200">200 Level</SelectItem>
+                                <SelectItem value="300">300 Level</SelectItem>
+                                <SelectItem value="400">400 Level</SelectItem>
+                                <SelectItem value="500">500 Level</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <div class="flex items-center gap-1.5 px-3 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-md text-xs font-semibold text-neutral-700 dark:text-neutral-300 h-10 shrink-0">
+                            <Calendar class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                            <span>Active: {{ currentSemester?.name || 'Active Semester' }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Courses Grid -->
+                    <div v-if="courses.data.length > 0">
+                        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                             <Card
                                 v-for="course in courses.data"
                                 :key="course.id"
@@ -367,10 +392,15 @@ const isMaxReached = computed(() => {
                                 }"
                             >
                                 <CardHeader class="pb-3">
-                                    <div class="flex justify-between items-start gap-2">
-                                        <Badge variant="secondary" class="font-mono bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border-indigo-100">
-                                            {{ course.code }}
-                                        </Badge>
+                                    <div class="flex justify-between items-start gap-2 flex-wrap">
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <Badge variant="secondary" class="font-mono bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border-indigo-100">
+                                                {{ course.code }}
+                                            </Badge>
+                                            <Badge v-if="course.department" variant="outline" class="text-xs bg-slate-50 dark:bg-slate-900 border-slate-200">
+                                                {{ course.department.code }}
+                                            </Badge>
+                                        </div>
                                         <Badge variant="outline" class="text-xs">
                                             {{ course.semester === '1' ? '1st Sem' : '2nd Sem' }} &bull; {{ course.level }}L
                                         </Badge>
@@ -378,9 +408,12 @@ const isMaxReached = computed(() => {
                                     <CardTitle class="text-base mt-2 line-clamp-2">
                                         {{ course.title }}
                                     </CardTitle>
-                                    <CardDescription class="text-xs">
-                                        {{ course.units }} Credit Units
-                                    </CardDescription>
+                                    <div class="flex items-center justify-between text-xs text-muted-foreground mt-1">
+                                        <span>{{ course.units }} Credit Units</span>
+                                        <span v-if="course.department" class="text-[11px] truncate max-w-[150px]" :title="course.department.name">
+                                            {{ course.department.name }}
+                                        </span>
+                                    </div>
                                 </CardHeader>
 
                                 <CardFooter class="pt-2 border-t flex items-center justify-between">
@@ -423,15 +456,19 @@ const isMaxReached = computed(() => {
                             </Card>
                         </div>
 
-                        <!-- Empty State -->
-                        <div v-else class="p-12 text-center border rounded-lg border-dashed text-muted-foreground">
-                            <BookOpen class="w-10 h-10 mx-auto text-slate-300 mb-2" />
-                            <h3 class="font-semibold text-lg">No courses found</h3>
-                            <p class="text-sm mt-1 max-w-sm mx-auto">
-                                No department courses match your filter criteria. Try adjusting your search or level filter.
-                            </p>
-                        </div>
-                    </TabsContent>
+                        <!-- Pagination -->
+                        <Pagination :links="courses.links" class="mt-6" />
+                    </div>
+
+                    <!-- Empty State -->
+                    <div v-else class="p-12 text-center border rounded-lg border-dashed text-muted-foreground">
+                        <BookOpen class="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                        <h3 class="font-semibold text-lg">No courses found</h3>
+                        <p class="text-sm mt-1 max-w-sm mx-auto">
+                            No courses match your filter criteria. Try adjusting your search, department, or level filter.
+                        </p>
+                    </div>
+                </TabsContent>
 
                     <!-- My Requests Tab -->
                     <TabsContent value="requests" class="pt-4">
@@ -511,7 +548,6 @@ const isMaxReached = computed(() => {
                         </div>
                     </TabsContent>
                 </Tabs>
-            </template>
         </div>
 
         <!-- Request Confirmation Modal -->

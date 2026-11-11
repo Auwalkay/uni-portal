@@ -418,7 +418,7 @@ class StudentController extends Controller
             ),
             'permissions' => [
                 'can_view' => $user->can('view_students') || $user->can('manage_users') || $user->hasRole(['admin', 'admission_director', 'vc', 'ict_admin', 'dean', 'hod']),
-                'can_create' => $user->can('create_students') || $user->can('admit_students') || $user->hasRole(['admin', 'admission_director']),
+                'can_create' => $user->can('create_students') || $user->can('admit_students') || $user->can('admit_pg_students') || $user->hasRole(['admin', 'admission_director']),
                 'can_edit' => $user->can('edit_students') || $user->hasRole(['admin', 'admission_director']),
                 'can_delete' => $user->can('delete_students') || $user->hasRole('admin'),
                 'can_import' => $user->can('import_students') || $user->can('create_students') || $user->hasRole(['admin', 'admission_director']),
