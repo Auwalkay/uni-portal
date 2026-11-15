@@ -19,6 +19,7 @@ class CourseAttendanceImport implements ToCollection, WithChunkReading, WithHead
     protected Session $session;
     protected string $attendanceDate;
     protected ?string $recordedBy;
+    protected ?string $lectureSessionId;
 
     protected array $stats = [
         'processed' => 0,
@@ -28,12 +29,13 @@ class CourseAttendanceImport implements ToCollection, WithChunkReading, WithHead
         'errors' => [],
     ];
 
-    public function __construct(Course $course, Session $session, string $attendanceDate, ?string $recordedBy = null)
+    public function __construct(Course $course, Session $session, string $attendanceDate, ?string $recordedBy = null, ?string $lectureSessionId = null)
     {
         $this->course = $course;
         $this->session = $session;
         $this->attendanceDate = $attendanceDate;
         $this->recordedBy = $recordedBy;
+        $this->lectureSessionId = $lectureSessionId;
     }
 
     public function chunkSize(): int
@@ -94,6 +96,7 @@ class CourseAttendanceImport implements ToCollection, WithChunkReading, WithHead
 
             $batch[] = [
                 'id' => (string) Str::uuid(),
+                'course_lecture_session_id' => $this->lectureSessionId,
                 'course_registration_id' => $reg->id,
                 'student_id' => $reg->student_id,
                 'course_id' => $this->course->id,
@@ -118,7 +121,7 @@ class CourseAttendanceImport implements ToCollection, WithChunkReading, WithHead
             DB::table('student_course_attendances')->upsert(
                 $batch,
                 ['course_registration_id', 'attendance_date'],
-                ['status', 'recorded_by', 'updated_at']
+                ['status', 'recorded_by', 'course_lecture_session_id', 'updated_at']
             );
         }
     }
