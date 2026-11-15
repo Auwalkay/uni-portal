@@ -55,4 +55,9 @@ class CourseRegistration extends Model
     {
         return $this->belongsTo(Semester::class);
     }
+
+    public function attendances()
+    {
+        return $this->hasMany(StudentCourseAttendance::class, 'course_registration_id');
+    }
 }

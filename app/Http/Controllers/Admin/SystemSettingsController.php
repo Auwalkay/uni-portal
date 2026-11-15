@@ -42,6 +42,8 @@ class SystemSettingsController extends Controller
                 'lecturer_self_allocation_min_units' => intval(SystemSetting::get('lecturer_self_allocation_min_units', 6)),
                 'lecturer_self_allocation_max_units' => intval(SystemSetting::get('lecturer_self_allocation_max_units', 24)),
                 'lecturer_self_allocation_max_courses' => intval(SystemSetting::get('lecturer_self_allocation_max_courses', 5)),
+                'enforce_attendance_for_exam_docket' => filter_var(SystemSetting::get('enforce_attendance_for_exam_docket', false), FILTER_VALIDATE_BOOLEAN),
+                'attendance_exam_docket_min_percentage' => intval(SystemSetting::get('attendance_exam_docket_min_percentage', 75)),
             ]
         ]);
     }

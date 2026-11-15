@@ -665,7 +665,7 @@ const filteredPayments = computed(() => {
                                         </div>
                                     </div>
                                     
-                                    <div class="pt-4 border-t border-slate-100 dark:border-slate-800 md:border-t-0 md:pt-0">
+                                    <div v-if="invoice.type !== 'school_fee' && invoice.due_date" class="pt-4 border-t border-slate-100 dark:border-slate-800 md:border-t-0 md:pt-0">
                                         <div class="flex md:flex-col justify-between gap-1">
                                             <span class="text-xs font-bold text-slate-400 uppercase">Payment Due</span>
                                             <span class="text-lg font-bold text-slate-900 dark:text-white">{{ formatDate(invoice.due_date, false) }}</span>
