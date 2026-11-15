@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Staff;
 
 use App\Http\Controllers\Controller;
+use App\Imports\CourseAttendanceImport;
 use App\Models\Course;
 use App\Models\CourseAllocation;
 use App\Models\CourseRegistration;
 use App\Models\Session;
+use App\Models\StudentCourseAttendance;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Maatwebsite\Excel\Facades\Excel;
 
 class CourseController extends Controller
 {
@@ -78,11 +81,35 @@ class CourseController extends Controller
                 'registered_at' => $reg->created_at->format('M d, Y'),
             ]);
 
+        // 3. Fetch Recorded Attendance History for this Course
+        $attendanceHistory = [];
+        if ($currentSession) {
+            $attendanceHistory = StudentCourseAttendance::where('course_id', $course->id)
+                ->where('session_id', $currentSession->id)
+                ->select('attendance_date')
+                ->selectRaw('count(*) as total_records')
+                ->selectRaw("sum(case when status = 'present' then 1 else 0 end) as present_count")
+                ->selectRaw("sum(case when status = 'absent' then 1 else 0 end) as absent_count")
+                ->groupBy('attendance_date')
+                ->orderBy('attendance_date', 'desc')
+                ->get()
+                ->map(fn($row) => [
+                    'date' => $row->attendance_date->format('Y-m-d'),
+                    'formatted_date' => $row->attendance_date->format('M d, Y'),
+                    'total_records' => (int) $row->total_records,
+                    'present_count' => (int) $row->present_count,
+                    'absent_count' => (int) $row->absent_count,
+                    'attendance_rate' => $row->total_records > 0 ? round(($row->present_count / $row->total_records) * 100, 1) : 0,
+                ]);
+        }
+
         return Inertia::render('Staff/Course/Show', [
             'course' => $course->only(['id', 'code', 'title', 'units']),
             'session' => $currentSession ? $currentSession->only(['id', 'name']) : ['id' => '', 'name' => 'Current Session'],
             'students' => $registrations,
+            'attendanceHistory' => $attendanceHistory,
             'importSummary' => fn () => session('import_summary'),
+            'attendanceSummary' => fn () => session('attendance_summary'),
         ]);
     }
 
@@ -98,8 +125,10 @@ class CourseController extends Controller
         }
 
         $request->validate([
-            'file' => 'required|file|mimes:xlsx,xls,csv|max:5120',
+            'file' => 'required|file|mimes:xlsx,xls,csv,txt|max:10240',
             'skip_existing' => 'nullable|boolean',
+        ], [
+            'file.mimes' => 'The file must be a spreadsheet or CSV file (.xlsx, .xls, .csv).',
         ]);
 
         $session = Session::current() ?? Session::latest()->first();
@@ -196,6 +225,209 @@ class CourseController extends Controller
         };
 
         $fileName = "students_{$course->code}_" . now()->format('Y_m_d') . ".csv";
+
+        return response()->stream($callback, 200, [
+            "Content-type" => "text/csv",
+            "Content-Disposition" => "attachment; filename={$fileName}",
+            "Pragma" => "no-cache",
+            "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
+            "Expires" => "0"
+        ]);
+    }
+
+    /**
+     * Download pre-populated CSV template with all currently registered students for this course.
+     */
+    public function downloadAttendanceTemplate(Course $course)
+    {
+        $user = auth()->user();
+        $isAllocated = CourseAllocation::where('course_id', $course->id)
+            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
+            ->exists();
+
+        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
+            abort(403, 'You are not assigned to this course.');
+        }
+
+        $currentSession = Session::current() ?? Session::latest()->first();
+        $registrations = CourseRegistration::where('course_id', $course->id)
+            ->when($currentSession, fn($q) => $q->where('session_id', $currentSession->id))
+            ->with(['student.user'])
+            ->get();
+
+        $headers = ['matriculation_number', 'student_name', 'status'];
+
+        $callback = function () use ($headers, $registrations) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, $headers);
+
+            if ($registrations->isEmpty()) {
+                // Example rows if no students registered yet
+                fputcsv($file, ['MAT/2026/001', 'Sample Student 1', 'Present']);
+                fputcsv($file, ['MAT/2026/002', 'Sample Student 2', 'Absent']);
+            } else {
+                foreach ($registrations as $reg) {
+                    fputcsv($file, [
+                        $reg->student?->matriculation_number ?? 'N/A',
+                        $reg->student?->user?->name ?? 'Unknown',
+                        'Present',
+                    ]);
+                }
+            }
+            fclose($file);
+        };
+
+        $fileName = "attendance_template_{$course->code}_" . now()->format('Y_m_d') . ".csv";
+
+        return response()->stream($callback, 200, [
+            "Content-type" => "text/csv",
+            "Content-Disposition" => "attachment; filename={$fileName}",
+            "Pragma" => "no-cache",
+            "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
+            "Expires" => "0"
+        ]);
+    }
+
+    /**
+     * Upload Excel/CSV attendance sheet for a specific lecture date.
+     */
+    public function uploadAttendance(Request $request, Course $course)
+    {
+        $user = auth()->user();
+        $isAllocated = CourseAllocation::where('course_id', $course->id)
+            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
+            ->exists();
+
+        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
+            abort(403, 'You are not assigned to this course.');
+        }
+
+        $request->validate([
+            'attendance_date' => 'required|date',
+            'file' => 'required|file|mimes:xlsx,xls,csv,txt|max:10240',
+        ], [
+            'file.mimes' => 'The file must be a spreadsheet or CSV file (.xlsx, .xls, .csv).',
+        ]);
+
+        $session = Session::current() ?? Session::latest()->first();
+        if (!$session) {
+            return back()->with('error', 'Active academic session not found.');
+        }
+
+        try {
+            $import = new CourseAttendanceImport($course, $session, $request->input('attendance_date'), $user->id);
+            Excel::import($import, $request->file('file'));
+
+            $stats = $import->getStats();
+            $msg = "Attendance for {$request->input('attendance_date')} recorded: {$stats['processed']} student(s) logged ({$stats['present']} Present, {$stats['absent']} Absent).";
+            if ($stats['unregistered'] > 0) {
+                $msg .= " {$stats['unregistered']} unregistered student(s) skipped.";
+            }
+
+            return back()
+                ->with('attendance_summary', $stats)
+                ->with('success', $msg);
+        } catch (\Exception $e) {
+            return back()->with('error', 'Error during attendance upload: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Delete recorded attendance for a specific lecture date.
+     */
+    public function deleteAttendanceDate(Course $course, string $date)
+    {
+        $user = auth()->user();
+        $isAllocated = CourseAllocation::where('course_id', $course->id)
+            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
+            ->exists();
+
+        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
+            abort(403, 'You are not assigned to this course.');
+        }
+
+        $session = Session::current() ?? Session::latest()->first();
+        if (!$session) {
+            return back()->with('error', 'Active academic session not found.');
+        }
+
+        $deleted = StudentCourseAttendance::where('course_id', $course->id)
+            ->where('session_id', $session->id)
+            ->whereDate('attendance_date', $date)
+            ->delete();
+
+        return back()->with('success', "Attendance records for {$date} removed ({$deleted} entries deleted).");
+    }
+
+    /**
+     * Export complete attendance matrix (Dates as columns, Students as rows).
+     */
+    public function exportAttendance(Course $course)
+    {
+        $user = auth()->user();
+        $isAllocated = CourseAllocation::where('course_id', $course->id)
+            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
+            ->exists();
+
+        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
+            abort(403, 'You are not assigned to this course.');
+        }
+
+        $session = Session::current() ?? Session::latest()->first();
+        $registrations = CourseRegistration::where('course_id', $course->id)
+            ->when($session, fn($q) => $q->where('session_id', $session->id))
+            ->with(['student.user', 'attendances' => fn($q) => $q->where('course_id', $course->id)->where('session_id', $session?->id)])
+            ->get();
+
+        // Get unique dates sorted chronologically
+        $dates = StudentCourseAttendance::where('course_id', $course->id)
+            ->when($session, fn($q) => $q->where('session_id', $session->id))
+            ->distinct()
+            ->orderBy('attendance_date', 'asc')
+            ->pluck('attendance_date')
+            ->map(fn($d) => $d instanceof \Carbon\CarbonInterface ? $d->format('Y-m-d') : substr((string)$d, 0, 10))
+            ->toArray();
+
+        $headers = array_merge(['Matric Number', 'Student Name'], $dates, ['Attended', 'Total Classes', 'Attendance %']);
+
+        $callback = function () use ($headers, $dates, $registrations) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, $headers);
+
+            $totalDates = count($dates);
+
+            foreach ($registrations as $reg) {
+                $attMap = $reg->attendances->keyBy(fn($a) => $a->attendance_date instanceof \Carbon\CarbonInterface ? $a->attendance_date->format('Y-m-d') : substr((string)$a->attendance_date, 0, 10));
+
+                $row = [
+                    $reg->student?->matriculation_number ?? 'N/A',
+                    $reg->student?->user?->name ?? 'Unknown',
+                ];
+
+                $attendedCount = 0;
+                foreach ($dates as $d) {
+                    $att = $attMap->get($d);
+                    if ($att) {
+                        $isPres = ($att->status->value ?? $att->status) === 'present';
+                        $row[] = $isPres ? 'P' : 'A';
+                        if ($isPres) $attendedCount++;
+                    } else {
+                        $row[] = '-';
+                    }
+                }
+
+                $pct = $totalDates > 0 ? round(($attendedCount / $totalDates) * 100, 1) . '%' : 'N/A';
+                $row[] = $attendedCount;
+                $row[] = $totalDates;
+                $row[] = $pct;
+
+                fputcsv($file, $row);
+            }
+
+            fclose($file);
+        };
+
+        $fileName = "attendance_matrix_{$course->code}_" . now()->format('Y_m_d') . ".csv";
 
         return response()->stream($callback, 200, [
             "Content-type" => "text/csv",

@@ -155,6 +155,9 @@ watch(() => [form.user_id, form.session_id, form.type], () => {
 });
 
 watch(() => form.type, (newType) => {
+    if (newType === 'school_fee') {
+        form.due_date = '';
+    }
     if (newType !== 'school_fee' && newType !== 'hostel') {
         feeBreakdown.value = null;
     }
@@ -490,15 +493,21 @@ const breadcrumbs = [
                                     </div>
 
                                     <!-- Due Date -->
-                                    <div class="space-y-2">
+                                    <div v-if="form.type !== 'school_fee'" class="space-y-2">
                                         <Label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Payment Due Date <span class="text-rose-500">*</span></Label>
                                         <Input type="date" v-model="form.due_date" class="h-10 border-slate-200 dark:border-slate-800" />
                                         <p v-if="form.errors.due_date" class="text-xs text-rose-500 font-medium">{{ form.errors.due_date }}</p>
                                     </div>
+                                    <div v-else class="space-y-2">
+                                        <Label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Payment Due Date</Label>
+                                        <div class="h-10 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex items-center text-xs text-slate-500 italic">
+                                            No due date for student school fees
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <!-- Quick Due Date Presets -->
-                                <div class="space-y-1.5 pt-1">
+                                <div v-if="form.type !== 'school_fee'" class="space-y-1.5 pt-1">
                                     <span class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">Quick Presets for Due Date:</span>
                                     <div class="flex flex-wrap gap-2">
                                         <Button type="button" variant="outline" size="sm" @click="setDueDatePreset(7)" class="h-7 text-xs px-2.5 rounded-lg border-slate-200 hover:border-indigo-300">
@@ -621,7 +630,10 @@ const breadcrumbs = [
                                 </div>
                                 <div>
                                     <span class="text-muted-foreground block text-[11px]">Due Date:</span>
-                                    <span :class="['font-medium', form.due_date ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400']">
+                                    <span v-if="form.type === 'school_fee'" class="font-medium text-slate-500 italic">
+                                        No due date
+                                    </span>
+                                    <span v-else :class="['font-medium', form.due_date ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400']">
                                         {{ formattedDueDate }}
                                     </span>
                                 </div>

@@ -340,8 +340,8 @@ const getInvoiceCountdown = (invoice: any) => {
                                 <TableCell class="text-red-600 font-medium">{{ formatCurrency(invoice.amount - Number(invoice.paid_amount || 0)) }}</TableCell>
                                 <TableCell>
                                     <div>
-                                        <div class="text-xs">{{ invoice.due_date ? formatDate(new Date(invoice.due_date), 'MMM d, yyyy') : 'N/A' }}</div>
-                                        <div v-if="invoice.status !== 'paid' && invoice.due_date" class="mt-1">
+                                        <div class="text-xs">{{ invoice.type === 'school_fee' ? '—' : (invoice.due_date ? formatDate(new Date(invoice.due_date), 'MMM d, yyyy') : 'N/A') }}</div>
+                                        <div v-if="invoice.type !== 'school_fee' && invoice.status !== 'paid' && invoice.due_date" class="mt-1">
                                             <Badge 
                                                 v-if="getInvoiceCountdown(invoice)?.expired" 
                                                 variant="destructive" 

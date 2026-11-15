@@ -78,11 +78,12 @@ class ExamDocketController extends Controller
         // 3. Fee Clearance Checks
         $isSecondSem = $currentSemester && (stripos($currentSemester->name, 'second') !== false || $currentSemester->name == '2');
 
-        // Auto-cancel 0-paid expired pending invoices so they don't block clearance
+        // Auto-cancel 0-paid expired pending invoices so they don't block clearance (school fees never expire or auto-cancel)
         Invoice::where('user_id', $user->id)
             ->where('status', 'pending')
             ->where('paid_amount', '<=', 0)
             ->where('due_date', '<', now())
+            ->where('type', '!=', 'school_fee')
             ->update(['status' => 'cancelled']);
 
         if ($isSecondSem) {
@@ -119,10 +120,32 @@ class ExamDocketController extends Controller
             $isFeeCleared = ($pendingInvoicesCount === 0 && $hasSchoolFeeCleared);
         }
 
-        $hasRegistrations = ($registeredCourseIds->count() > 0);
-        $isCleared = $isFeeCleared && $hasRegistrations;
+        // 4. Attendance Clearance Check (If Enforced)
+        $enforceAttendance = filter_var(\App\Models\SystemSetting::get('enforce_attendance_for_exam_docket', false), FILTER_VALIDATE_BOOLEAN);
+        $minAttendanceRate = (float) \App\Models\SystemSetting::get('attendance_exam_docket_min_percentage', 75);
+        $isAttendanceCleared = true;
+        $attendanceRate = null;
 
-        // 4. Generate Security Verification Hash / Payload
+        if ($enforceAttendance && $currentSession && $registeredCourseIds->isNotEmpty()) {
+            $attStats = \App\Models\StudentCourseAttendance::where('student_id', $student->id)
+                ->where('session_id', $currentSession->id)
+                ->whereIn('course_id', $registeredCourseIds)
+                ->selectRaw("COUNT(*) as total, SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as attended")
+                ->first();
+
+            $totalLectures = (int) ($attStats->total ?? 0);
+            $attendedLectures = (int) ($attStats->attended ?? 0);
+
+            if ($totalLectures > 0) {
+                $attendanceRate = round(($attendedLectures / $totalLectures) * 100, 1);
+                $isAttendanceCleared = ($attendanceRate >= $minAttendanceRate);
+            }
+        }
+
+        $hasRegistrations = ($registeredCourseIds->count() > 0);
+        $isCleared = $isFeeCleared && $hasRegistrations && $isAttendanceCleared;
+
+        // 5. Generate Security Verification Hash / Payload
         $docketToken = strtoupper(md5($student->id . ($currentSession?->id ?? '') . 'EXAM_PERMIT_SECRET'));
         $verificationQrData = json_encode([
             'matric' => $student->matric_number ?? $student->matriculation_number,
@@ -154,6 +177,10 @@ class ExamDocketController extends Controller
                 'is_cleared' => $isCleared,
                 'fee_cleared' => $isFeeCleared,
                 'course_reg_cleared' => $hasRegistrations,
+                'attendance_cleared' => $isAttendanceCleared,
+                'attendance_enforced' => $enforceAttendance,
+                'attendance_rate' => $attendanceRate,
+                'min_attendance_rate' => $minAttendanceRate,
                 'registered_courses_count' => $registeredCourseIds->count(),
                 'pending_invoices_count' => $pendingInvoicesCount,
             ],

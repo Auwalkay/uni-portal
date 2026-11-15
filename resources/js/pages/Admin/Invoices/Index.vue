@@ -522,7 +522,7 @@ const breadcrumbs = [
                                 </Badge>
                             </TableCell>
                             <TableCell class="text-xs">{{ formatDate(new Date(invoice.created_at), 'MMM dd, yyyy') }}</TableCell>
-                            <TableCell class="text-xs">{{ invoice.due_date ? formatDate(new Date(invoice.due_date), 'MMM dd, yyyy') : 'N/A' }}</TableCell>
+                            <TableCell class="text-xs">{{ invoice.type === 'school_fee' ? '—' : (invoice.due_date ? formatDate(new Date(invoice.due_date), 'MMM dd, yyyy') : 'N/A') }}</TableCell>
                             <TableCell class="text-xs">{{ invoice.session?.name }}</TableCell>
                             <TableCell class="font-bold text-sm">{{ formatCurrency(invoice.amount) }}</TableCell>
                             <TableCell class="text-green-600 text-sm">{{ formatCurrency(invoice.paid_amount || 0) }}</TableCell>

@@ -107,11 +107,12 @@ class ExamManagementService
         // Fee clearance check
         $isSecondSem = $currentSemester && (stripos($currentSemester->name, 'second') !== false || $currentSemester->name == '2');
 
-        // Auto-cancel 0-paid expired pending invoices
+        // Auto-cancel 0-paid expired pending invoices (school fees never expire or auto-cancel)
         Invoice::where('user_id', $student->user_id)
             ->where('status', 'pending')
             ->where('paid_amount', '<=', 0)
             ->where('due_date', '<', now())
+            ->where('type', '!=', 'school_fee')
             ->update(['status' => 'cancelled']);
 
         if ($isSecondSem) {

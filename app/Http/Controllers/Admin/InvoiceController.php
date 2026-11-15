@@ -350,7 +350,7 @@ class InvoiceController extends Controller
              'amount' => 'required|numeric|min:0',
             'type' => 'required|string',
             'description' => 'required|string|max:255',
-            'due_date' => 'required|date',
+            'due_date' => $request->type === 'school_fee' ? 'nullable|date' : 'required|date',
             'session_id' => 'required|exists:academic_sessions,id',
         ]);
 
@@ -365,7 +365,7 @@ class InvoiceController extends Controller
                     'reference' => $reference,
                     'type' => $validated['type'],
                     'amount' => $validated['amount'],
-                    'due_date' => $validated['due_date'],
+                    'due_date' => $validated['type'] === 'school_fee' ? null : ($validated['due_date'] ?? null),
                     'status' => 'pending',
                     'paid_amount' => 0,
                     'created_by' => Auth::id(),

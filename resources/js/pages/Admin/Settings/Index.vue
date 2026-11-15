@@ -61,6 +61,8 @@ const props = defineProps<{
         lecturer_self_allocation_min_units?: number;
         lecturer_self_allocation_max_units?: number;
         lecturer_self_allocation_max_courses?: number;
+        enforce_attendance_for_exam_docket?: boolean;
+        attendance_exam_docket_min_percentage?: number;
     }
 }>();
 
@@ -95,6 +97,11 @@ const resultVisibilityForm = useForm({
 
 const examCardForm = useForm({
     enabled: props.settings.enable_exam_card_download
+});
+
+const examDocketAttendanceForm = useForm({
+    enabled: props.settings.enforce_attendance_for_exam_docket ?? false,
+    minPercentage: props.settings.attendance_exam_docket_min_percentage ?? 75,
 });
 
 const hostelBookingForm = useForm({
@@ -216,14 +223,30 @@ const submitExamCardSetting = () => {
     }, {
         preserveScroll: true,
         onSuccess: () => {
-            Swal.fire({
-                icon: 'success',
-                title: 'Updated',
-                text: 'Exam card download settings updated successfully',
-                toast: true,
-                position: 'top-end',
-                showConfirmButton: false,
-                timer: 3000
+            router.post(route('admin.settings.update'), {
+                key: 'enforce_attendance_for_exam_docket',
+                value: examDocketAttendanceForm.enabled ? '1' : '0'
+            }, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    router.post(route('admin.settings.update'), {
+                        key: 'attendance_exam_docket_min_percentage',
+                        value: String(examDocketAttendanceForm.minPercentage)
+                    }, {
+                        preserveScroll: true,
+                        onSuccess: () => {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Updated',
+                                text: 'Exam card and attendance clearance settings updated successfully',
+                                toast: true,
+                                position: 'top-end',
+                                showConfirmButton: false,
+                                timer: 3000
+                            });
+                        }
+                    });
+                }
             });
         }
     });
@@ -597,6 +620,30 @@ const settingsModules = [
                                     id="enable_exam_card" 
                                     v-model:checked="examCardForm.enabled" 
                                 />
+                            </div>
+
+                            <div class="border-t pt-4 space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <Label for="enforce_attendance_for_exam_docket" class="font-bold">Enforce Lecture Attendance for Exam Docket</Label>
+                                        <p class="text-xs text-muted-foreground">Require students to meet minimum lecture attendance to access exam docket.</p>
+                                    </div>
+                                    <Switch 
+                                        id="enforce_attendance_for_exam_docket" 
+                                        v-model:checked="examDocketAttendanceForm.enabled" 
+                                    />
+                                </div>
+                                <div v-if="examDocketAttendanceForm.enabled" class="space-y-1.5">
+                                    <Label for="attendance_min_percentage" class="text-xs font-bold">Minimum Attendance Percentage (%)</Label>
+                                    <Input 
+                                        id="attendance_min_percentage" 
+                                        type="number" 
+                                        min="1" 
+                                        max="100" 
+                                        v-model="examDocketAttendanceForm.minPercentage"
+                                        class="bg-background max-w-[200px]" 
+                                    />
+                                </div>
                             </div>
                         </div>
                         <Button @click="submitExamCardSetting" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white">
