@@ -110,7 +110,7 @@ class AcademicController extends Controller
         $semester = $request->input('semester');
 
         $courses = Course::with('department.faculty', 'programme')
-            ->when(! $user->can('manage_courses') && ! $user->can('manage_academic_sessions') && ! $user->hasRole('super_admin'), function ($q) use ($user) {
+            ->when(! $user->hasRole(['super_admin', 'admin']) && ! $user->can('manage_academic_sessions'), function ($q) use ($user) {
                 if ($user->hasRole('dean') || $user->can('view_faculty_courses')) {
                     $facultyId = $user->staff?->department?->faculty_id;
                     $q->whereHas('department', fn ($d) => $d->where('faculty_id', $facultyId));

@@ -31,6 +31,10 @@ interface Props {
         is_cleared: boolean;
         fee_cleared: boolean;
         course_reg_cleared: boolean;
+        attendance_cleared?: boolean;
+        attendance_enforced?: boolean;
+        attendance_rate?: number | null;
+        min_attendance_rate?: number;
         registered_courses_count: number;
         pending_invoices_count: number;
     };
@@ -171,6 +175,13 @@ const downloadPdfCard = () => {
                             <CheckCircle2 v-if="clearance.course_reg_cleared" class="w-4 h-4 text-emerald-600" />
                             <XCircle v-else class="w-4 h-4 text-rose-600" />
                             <span>Course Registration Verified ({{ clearance.registered_courses_count }} courses)</span>
+                        </div>
+                        <div v-if="clearance.attendance_enforced" class="flex items-center gap-2">
+                            <CheckCircle2 v-if="clearance.attendance_cleared" class="w-4 h-4 text-emerald-600" />
+                            <XCircle v-else class="w-4 h-4 text-rose-600" />
+                            <span>
+                                Lecture Attendance ({{ clearance.attendance_rate !== null ? `${clearance.attendance_rate}%` : 'No logs' }} / Min: {{ clearance.min_attendance_rate }}%)
+                            </span>
                         </div>
                     </div>
                 </div>

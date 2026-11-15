@@ -1,8 +1,11 @@
 <?php
 
 use App\Models\Course;
+use App\Models\CourseAllocation;
+use App\Models\CourseAllocationRequest;
 use App\Models\Department;
 use App\Models\Faculty;
+use App\Models\Session;
 use App\Models\Staff;
 use App\Models\Student;
 use App\Models\User;
@@ -24,21 +27,25 @@ function setupHodDeanScopingData()
     Permission::findOrCreate('view_students');
     Permission::findOrCreate('view_department_students');
     Permission::findOrCreate('view_faculty_students');
+    Permission::findOrCreate('approve_course_allocations');
+    Permission::findOrCreate('manage_courses');
 
     $hodRole = Role::findOrCreate('hod');
     $hodRole->givePermissionTo([
         'access_admin_dashboard',
-        'view_courses', 'view_department_courses',
+        'view_courses', 'view_department_courses', 'manage_courses',
         'view_staff', 'view_department_staff',
         'view_students', 'view_department_students',
+        'approve_course_allocations',
     ]);
 
     $deanRole = Role::findOrCreate('dean');
     $deanRole->givePermissionTo([
         'access_admin_dashboard',
-        'view_courses', 'view_faculty_courses',
+        'view_courses', 'view_faculty_courses', 'manage_courses',
         'view_staff', 'view_faculty_staff',
         'view_students', 'view_faculty_students',
+        'approve_course_allocations',
     ]);
 
     // Faculty 1 & Faculty 2
@@ -91,10 +98,46 @@ function setupHodDeanScopingData()
     $studentUserC = User::create(['name' => 'Student ENG', 'email' => 'std_eng_' . uniqid() . '@uni.edu', 'password' => bcrypt('password')]);
     $studentC = Student::create(['user_id' => $studentUserC->id, 'department_id' => $deptArt->id, 'matriculation_number' => 'ENG/2026/001']);
 
+    // Academic Session
+    $session = Session::create([
+        'name' => '2026/2027',
+        'start_date' => now()->subMonth(),
+        'end_date' => now()->addMonths(8),
+        'is_current' => true,
+    ]);
+
+    // Course Allocation Requests
+    // 1. Request for Course Sci A (CSC 101 in Dept Sci A, Faculty 1)
+    $reqSciA = CourseAllocationRequest::create([
+        'staff_id' => $staffA->id,
+        'course_id' => $courseSciA->id,
+        'session_id' => $session->id,
+        'department_id' => $deptSciA->id,
+        'status' => 'pending',
+    ]);
+
+    // 2. Request for Course Sci B (MTH 101 in Dept Sci B, Faculty 1)
+    $reqSciB = CourseAllocationRequest::create([
+        'staff_id' => $staffB->id,
+        'course_id' => $courseSciB->id,
+        'session_id' => $session->id,
+        'department_id' => $deptSciB->id,
+        'status' => 'pending',
+    ]);
+
+    // 3. Request for Course Art (ENG 101 in Dept Art, Faculty 2)
+    $reqArt = CourseAllocationRequest::create([
+        'staff_id' => $staffC->id,
+        'course_id' => $courseArt->id,
+        'session_id' => $session->id,
+        'department_id' => $deptArt->id,
+        'status' => 'pending',
+    ]);
+
     return compact(
         'hodUser', 'deanUser', 'faculty1', 'faculty2', 'deptSciA', 'deptSciB', 'deptArt',
         'staffA', 'staffB', 'staffC', 'courseSciA', 'courseSciB', 'courseArt',
-        'studentA', 'studentB', 'studentC'
+        'studentA', 'studentB', 'studentC', 'session', 'reqSciA', 'reqSciB', 'reqArt'
     );
 }
 
@@ -189,5 +232,115 @@ test('Dean can see all students in their faculty but not outside faculty', funct
         expect($studentIds)->toContain($data['studentA']->id);
         expect($studentIds)->toContain($data['studentB']->id);
         expect($studentIds)->not->toContain($data['studentC']->id);
+    });
+});
+
+test('HOD can only see course allocation requests for their department', function () {
+    $data = setupHodDeanScopingData();
+
+    $response = $this->actingAs($data['hodUser'])
+        ->get(route('admin.course-allocations.requests.index'));
+
+    $response->assertOk();
+    $response->assertInertia(function ($page) use ($data) {
+        $requestIds = collect($page->toArray()['props']['requests']['data'])->pluck('id');
+        expect($requestIds)->toContain($data['reqSciA']->id);
+        expect($requestIds)->not->toContain($data['reqSciB']->id);
+        expect($requestIds)->not->toContain($data['reqArt']->id);
+
+        $stats = $page->toArray()['props']['stats'];
+        expect($stats['pending'])->toBe(1);
+        expect($stats['total'])->toBe(1);
+        expect($page->toArray()['props']['isHod'])->toBeTrue();
+        expect($page->toArray()['props']['isDean'])->toBeFalse();
+    });
+});
+
+test('Dean can see course allocation requests in their faculty but not outside faculty', function () {
+    $data = setupHodDeanScopingData();
+
+    $response = $this->actingAs($data['deanUser'])
+        ->get(route('admin.course-allocations.requests.index'));
+
+    $response->assertOk();
+    $response->assertInertia(function ($page) use ($data) {
+        $requestIds = collect($page->toArray()['props']['requests']['data'])->pluck('id');
+        expect($requestIds)->toContain($data['reqSciA']->id);
+        expect($requestIds)->toContain($data['reqSciB']->id);
+        expect($requestIds)->not->toContain($data['reqArt']->id);
+
+        $stats = $page->toArray()['props']['stats'];
+        expect($stats['pending'])->toBe(2);
+        expect($stats['total'])->toBe(2);
+        expect($page->toArray()['props']['isHod'])->toBeFalse();
+        expect($page->toArray()['props']['isDean'])->toBeTrue();
+    });
+});
+
+test('HOD cannot approve or reject course request outside their department', function () {
+    $data = setupHodDeanScopingData();
+
+    // HOD tries to approve request in Dept Sci B -> 403
+    $this->actingAs($data['hodUser'])
+        ->post(route('admin.course-allocations.requests.approve', $data['reqSciB']->id))
+        ->assertForbidden();
+
+    // HOD tries to reject request in Dept Art -> 403
+    $this->actingAs($data['hodUser'])
+        ->post(route('admin.course-allocations.requests.reject', $data['reqArt']->id), [
+            'reason' => 'Invalid',
+        ])
+        ->assertForbidden();
+
+    // HOD approves request in their own department -> succeeds
+    $response = $this->actingAs($data['hodUser'])
+        ->post(route('admin.course-allocations.requests.approve', $data['reqSciA']->id));
+
+    $response->assertRedirect();
+    expect($data['reqSciA']->fresh()->status)->toBe('approved');
+});
+
+test('Dean cannot approve or reject course request outside their faculty', function () {
+    $data = setupHodDeanScopingData();
+
+    // Dean of Science tries to approve request in Faculty of Arts (Dept Art) -> 403
+    $this->actingAs($data['deanUser'])
+        ->post(route('admin.course-allocations.requests.approve', $data['reqArt']->id))
+        ->assertForbidden();
+
+    // Dean of Science tries to reject request in Faculty of Arts -> 403
+    $this->actingAs($data['deanUser'])
+        ->post(route('admin.course-allocations.requests.reject', $data['reqArt']->id), [
+            'reason' => 'Invalid faculty',
+        ])
+        ->assertForbidden();
+
+    // Dean can approve request in their own faculty (Dept Sci B) -> succeeds
+    $response = $this->actingAs($data['deanUser'])
+        ->post(route('admin.course-allocations.requests.approve', $data['reqSciB']->id));
+
+    $response->assertRedirect();
+    expect($data['reqSciB']->fresh()->status)->toBe('approved');
+});
+
+test('Dean department filter options are scoped to their faculty', function () {
+    $data = setupHodDeanScopingData();
+
+    $response = $this->actingAs($data['deanUser'])
+        ->get(route('admin.course-allocations.requests.index'));
+
+    $response->assertOk();
+    $response->assertInertia(function ($page) use ($data) {
+        $faculties = collect($page->toArray()['props']['faculties']);
+        // Only Dean's faculty is present
+        expect($faculties->pluck('id'))->toContain($data['faculty1']->id);
+        expect($faculties->pluck('id'))->not->toContain($data['faculty2']->id);
+
+        // Departments inside faculty are only Sci A and Sci B
+        $deptIds = $faculties->first()['departments'] ?? [];
+        $deptIdList = collect($deptIds)->pluck('id');
+        expect($deptIdList)->toContain($data['deptSciA']->id);
+        expect($deptIdList)->toContain($data['deptSciB']->id);
+        expect($deptIdList)->not->toContain($data['deptArt']->id);
     });
 });

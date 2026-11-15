@@ -435,6 +435,70 @@ class FinanceFeeTest extends TestCase
         $response = $this->get(route('admin.invoices.index', ['sort_field' => 'status', 'sort_order' => 'desc']));
         $response->assertStatus(200);
     }
+
+    public function test_school_fee_invoice_generated_by_fee_service_has_no_due_date()
+    {
+        $feeType = FeeType::create([
+            'name' => 'Tuition Fee',
+            'code' => 'TUI_TEST',
+        ]);
+
+        FeeConfiguration::create([
+            'session_id' => $this->session->id,
+            'fee_type_id' => $feeType->id,
+            'amount' => 100000,
+            'level' => '200',
+            'entry_mode' => 'Transfer',
+            'is_compulsory' => true,
+        ]);
+
+        $feeService = app(\App\Services\Finance\FeeService::class);
+        $invoice = $feeService->generateSchoolFeeInvoice($this->student, $this->session);
+
+        $this->assertNotNull($invoice);
+        $this->assertEquals('school_fee', $invoice->type);
+        $this->assertNull($invoice->due_date);
+    }
+
+    public function test_admin_can_create_school_fee_invoice_without_due_date_and_stores_null()
+    {
+        $this->actingAs($this->admin);
+
+        $response = $this->post(route('admin.invoices.store'), [
+            'user_id' => $this->studentUser->id,
+            'session_id' => $this->session->id,
+            'type' => 'school_fee',
+            'amount' => 75000,
+            'description' => 'Tuition fee for student',
+            'due_date' => '', // omitted / blank
+        ]);
+
+        $response->assertSessionHasNoErrors();
+
+        $invoice = Invoice::where('user_id', $this->studentUser->id)
+            ->where('type', 'school_fee')
+            ->first();
+
+        $this->assertNotNull($invoice);
+        $this->assertNull($invoice->due_date);
+        $response->assertRedirect(route('admin.invoices.show', $invoice->id));
+    }
+
+    public function test_admin_creating_other_fee_invoice_requires_due_date()
+    {
+        $this->actingAs($this->admin);
+
+        $response = $this->post(route('admin.invoices.store'), [
+            'user_id' => $this->studentUser->id,
+            'session_id' => $this->session->id,
+            'type' => 'damage',
+            'amount' => 15000,
+            'description' => 'Lab equipment damage fine',
+            'due_date' => '',
+        ]);
+
+        $response->assertSessionHasErrors(['due_date']);
+    }
 }
 
 

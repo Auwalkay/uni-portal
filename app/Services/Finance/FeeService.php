@@ -139,7 +139,7 @@ class FeeService
                 'amount' => $finalAmount,
                 'paid_amount' => 0.00,
                 'status' => $isPaidInFull ? 'paid' : 'pending',
-                'due_date' => now()->addWeeks(4),
+                'due_date' => null,
                 'late_fine_applied' => $applyLateFine,
             ]);
 
@@ -372,11 +372,12 @@ class FeeService
             $isPaidInFull = $finalAmount <= 0;
             $newStatus = $isPaidInFull ? 'paid' : ($invoice->paid_amount > 0 ? 'partial' : 'pending');
 
-            // Only update if the amount actually changed, late fine status changed, or paid status changed
-            if (abs($invoice->amount - $finalAmount) > 0.01 || $invoice->late_fine_applied !== $applyLateFine || ($isPaidInFull && $invoice->status !== 'paid')) {
+            // Only update if the amount actually changed, late fine status changed, paid status changed, or due date needs nulling
+            if (abs($invoice->amount - $finalAmount) > 0.01 || $invoice->late_fine_applied !== $applyLateFine || ($isPaidInFull && $invoice->status !== 'paid') || $invoice->due_date !== null) {
                 $invoice->update([
                     'amount' => $finalAmount,
                     'status' => $newStatus,
+                    'due_date' => null,
                     'late_fine_applied' => $applyLateFine,
                 ]);
 

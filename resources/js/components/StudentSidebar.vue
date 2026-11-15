@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import { markRaw } from 'vue';
-import { LayoutGrid, BookOpen, CreditCard, FileText, User, GraduationCap, CalendarClock, Home, LifeBuoy, Library, Activity, Megaphone, HelpCircle } from 'lucide-vue-next';
+import { LayoutGrid, BookOpen, CreditCard, FileText, User, GraduationCap, CalendarClock, CalendarCheck, Home, LifeBuoy, Library, Activity, Megaphone, HelpCircle } from 'lucide-vue-next';
 
 const RawLink = markRaw(Link);
 
@@ -55,6 +55,11 @@ const mainNavItems: NavItem[] = [
         title: 'Timetable',
         href: '/student/timetable',
         icon: CalendarClock,
+    },
+    {
+        title: 'My Attendance',
+        href: '/student/attendance',
+        icon: CalendarCheck,
     },
     {
         title: 'Exam Docket Pass',

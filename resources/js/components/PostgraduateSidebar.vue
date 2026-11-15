@@ -8,6 +8,7 @@ import {
     FileText,
     User,
     GraduationCap,
+    CalendarCheck,
     Library,
     LifeBuoy,
     Megaphone,
@@ -62,6 +63,11 @@ const academicsItems: NavItem[] = [
         title: 'Results & Transcript',
         href: '/student/results',
         icon: FileText,
+    },
+    {
+        title: 'My Attendance',
+        href: '/student/attendance',
+        icon: CalendarCheck,
     },
 ];
 

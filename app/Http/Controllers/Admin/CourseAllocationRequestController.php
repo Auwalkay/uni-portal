@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\CourseAllocation;
 use App\Models\CourseAllocationRequest;
+use App\Models\Department;
+use App\Models\Faculty;
 use App\Models\Session;
 use App\Services\AcademicCacheService;
 use App\Services\CourseAllocationNotificationService;
@@ -14,14 +16,31 @@ use Inertia\Inertia;
 
 class CourseAllocationRequestController extends Controller
 {
+    private function resolveUserScope($user): array
+    {
+        $staff = $user->staff?->loadMissing('department.faculty');
+        $isSuperAdminOrAdmin = $user->hasRole(['admin', 'super_admin']);
+        $isDean = ! $isSuperAdminOrAdmin && ($user->hasRole('dean') || $user->can('view_faculty_courses'));
+        $isHod = ! $isSuperAdminOrAdmin && ! $isDean && ($user->hasRole('hod') || $user->can('view_department_courses'));
+
+        return [
+            'staff' => $staff,
+            'isSuperAdmin' => $isSuperAdminOrAdmin,
+            'isDean' => $isDean,
+            'isHod' => $isHod,
+            'hodDeptId' => $staff?->department_id,
+            'deanFacultyId' => $staff?->department?->faculty_id,
+        ];
+    }
+
     public function index(Request $request)
     {
         $user = auth()->user();
-        $staff = $user->staff?->loadMissing('department.faculty');
-
-        $isSuperAdminOrAdmin = $user->hasRole(['admin', 'super_admin']) || $user->can('manage_courses');
-        $isDean = ($user->hasRole('dean') || $user->can('view_faculty_courses')) && ! $isSuperAdminOrAdmin;
-        $isHod = ($user->hasRole('hod') || $user->can('view_department_courses')) && ! $isSuperAdminOrAdmin && ! $isDean;
+        $scope = $this->resolveUserScope($user);
+        $isHod = $scope['isHod'];
+        $isDean = $scope['isDean'];
+        $hodDeptId = $scope['hodDeptId'];
+        $deanFacultyId = $scope['deanFacultyId'];
 
         $currentSession = Session::current() ?? Session::latest()->first();
         $sessionId = $request->input('session_id', $currentSession?->id);
@@ -30,7 +49,7 @@ class CourseAllocationRequestController extends Controller
             ->with([
                 'staff.user:id,name,email',
                 'staff.department:id,name,code',
-                'course:id,code,title,units,level,semester',
+                'course:id,code,title,units,level,semester,department_id',
                 'department:id,name,code,faculty_id',
                 'department.faculty:id,name',
                 'session:id,name',
@@ -39,23 +58,48 @@ class CourseAllocationRequestController extends Controller
 
         // Scoping
         if ($isHod) {
-            $hodDeptId = $staff?->department_id;
             if ($hodDeptId) {
-                $query->where('department_id', $hodDeptId);
+                $query->where(function ($q) use ($hodDeptId) {
+                    $q->where('course_allocation_requests.department_id', $hodDeptId)
+                      ->orWhereHas('course', fn($cq) => $cq->where('department_id', $hodDeptId));
+                });
             } else {
                 $query->whereRaw('1 = 0');
             }
         } elseif ($isDean) {
-            $deanFacultyId = $staff?->department?->faculty_id;
             if ($deanFacultyId) {
-                $query->whereHas('department', fn($d) => $d->where('faculty_id', $deanFacultyId));
+                $query->where(function ($q) use ($deanFacultyId) {
+                    $q->whereHas('department', fn($d) => $d->where('faculty_id', $deanFacultyId))
+                      ->orWhereHas('course.department', fn($d) => $d->where('faculty_id', $deanFacultyId));
+                });
+
+                if ($request->filled('department_id') && $request->department_id !== 'ALL') {
+                    $deptId = $request->department_id;
+                    $deptValid = Department::where('id', $deptId)->where('faculty_id', $deanFacultyId)->exists();
+                    if ($deptValid) {
+                        $query->where(function ($q) use ($deptId) {
+                            $q->where('course_allocation_requests.department_id', $deptId)
+                              ->orWhereHas('course', fn($cq) => $cq->where('department_id', $deptId));
+                        });
+                    } else {
+                        $query->whereRaw('1 = 0');
+                    }
+                }
             } else {
                 $query->whereRaw('1 = 0');
             }
         } elseif ($request->filled('department_id') && $request->department_id !== 'ALL') {
-            $query->where('department_id', $request->department_id);
+            $deptId = $request->department_id;
+            $query->where(function ($q) use ($deptId) {
+                $q->where('course_allocation_requests.department_id', $deptId)
+                  ->orWhereHas('course', fn($cq) => $cq->where('department_id', $deptId));
+            });
         } elseif ($request->filled('faculty_id') && $request->faculty_id !== 'ALL') {
-            $query->whereHas('department', fn($d) => $d->where('faculty_id', $request->faculty_id));
+            $facId = $request->faculty_id;
+            $query->where(function ($q) use ($facId) {
+                $q->whereHas('department', fn($d) => $d->where('faculty_id', $facId))
+                  ->orWhereHas('course.department', fn($d) => $d->where('faculty_id', $facId));
+            });
         }
 
         // Filters
@@ -90,7 +134,14 @@ class CourseAllocationRequestController extends Controller
         return Inertia::render('Admin/CourseAllocation/Requests', [
             'requests' => $requests,
             'sessions' => fn() => AcademicCacheService::getSessions(),
-            'faculties' => fn() => AcademicCacheService::getFaculties(),
+            'faculties' => function () use ($isDean, $deanFacultyId) {
+                if ($isDean && $deanFacultyId) {
+                    return Faculty::with(['departments' => fn($q) => $q->where('is_active', true)->where('is_academic', true)->orderBy('name')])
+                        ->where('id', $deanFacultyId)
+                        ->get();
+                }
+                return AcademicCacheService::getFaculties();
+            },
             'stats' => $stats,
             'filters' => $request->only(['session_id', 'status', 'department_id', 'faculty_id', 'search']),
             'currentSessionId' => $currentSession?->id,
@@ -102,25 +153,31 @@ class CourseAllocationRequestController extends Controller
     public function approve($id)
     {
         $user = auth()->user();
-        $staff = $user->staff?->loadMissing('department.faculty');
+        $scope = $this->resolveUserScope($user);
+        $isHod = $scope['isHod'];
+        $isDean = $scope['isDean'];
+        $hodDeptId = $scope['hodDeptId'];
+        $deanFacultyId = $scope['deanFacultyId'];
 
-        $isSuperAdminOrAdmin = $user->hasRole(['admin', 'super_admin']) || $user->can('manage_courses');
-        $isDean = ($user->hasRole('dean') || $user->can('view_faculty_courses')) && ! $isSuperAdminOrAdmin;
-        $isHod = ($user->hasRole('hod') || $user->can('view_department_courses')) && ! $isSuperAdminOrAdmin && ! $isDean;
-
-        $allocationRequest = CourseAllocationRequest::with('course')->findOrFail($id);
+        $allocationRequest = CourseAllocationRequest::with(['course.department.faculty', 'department.faculty'])->findOrFail($id);
 
         if ($allocationRequest->status !== 'pending') {
             return back()->with('error', 'Only pending requests can be approved.');
         }
 
         // Scoping validation
-        if ($isHod && $allocationRequest->department_id !== $staff?->department_id) {
-            abort(403, 'You can only approve course requests for your own department.');
+        if ($isHod) {
+            $reqDeptId = $allocationRequest->department_id ?? $allocationRequest->course?->department_id;
+            if (! $hodDeptId || $reqDeptId !== $hodDeptId) {
+                abort(403, 'You can only approve course requests for your own department.');
+            }
         }
 
-        if ($isDean && $allocationRequest->department?->faculty_id !== $staff?->department?->faculty_id) {
-            abort(403, 'You can only approve course requests for your own faculty.');
+        if ($isDean) {
+            $reqFacultyId = $allocationRequest->department?->faculty_id ?? $allocationRequest->course?->department?->faculty_id;
+            if (! $deanFacultyId || $reqFacultyId !== $deanFacultyId) {
+                abort(403, 'You can only approve course requests for your own faculty.');
+            }
         }
 
         try {
@@ -167,24 +224,30 @@ class CourseAllocationRequestController extends Controller
     public function reject(Request $request, $id)
     {
         $user = auth()->user();
-        $staff = $user->staff?->loadMissing('department.faculty');
+        $scope = $this->resolveUserScope($user);
+        $isHod = $scope['isHod'];
+        $isDean = $scope['isDean'];
+        $hodDeptId = $scope['hodDeptId'];
+        $deanFacultyId = $scope['deanFacultyId'];
 
-        $isSuperAdminOrAdmin = $user->hasRole(['admin', 'super_admin']) || $user->can('manage_courses');
-        $isDean = ($user->hasRole('dean') || $user->can('view_faculty_courses')) && ! $isSuperAdminOrAdmin;
-        $isHod = ($user->hasRole('hod') || $user->can('view_department_courses')) && ! $isSuperAdminOrAdmin && ! $isDean;
-
-        $allocationRequest = CourseAllocationRequest::findOrFail($id);
+        $allocationRequest = CourseAllocationRequest::with(['course.department.faculty', 'department.faculty'])->findOrFail($id);
 
         if ($allocationRequest->status !== 'pending') {
             return back()->with('error', 'Only pending requests can be rejected.');
         }
 
-        if ($isHod && $allocationRequest->department_id !== $staff?->department_id) {
-            abort(403, 'You can only reject course requests for your own department.');
+        if ($isHod) {
+            $reqDeptId = $allocationRequest->department_id ?? $allocationRequest->course?->department_id;
+            if (! $hodDeptId || $reqDeptId !== $hodDeptId) {
+                abort(403, 'You can only reject course requests for your own department.');
+            }
         }
 
-        if ($isDean && $allocationRequest->department?->faculty_id !== $staff?->department?->faculty_id) {
-            abort(403, 'You can only reject course requests for your own faculty.');
+        if ($isDean) {
+            $reqFacultyId = $allocationRequest->department?->faculty_id ?? $allocationRequest->course?->department?->faculty_id;
+            if (! $deanFacultyId || $reqFacultyId !== $deanFacultyId) {
+                abort(403, 'You can only reject course requests for your own faculty.');
+            }
         }
 
         $reason = $request->input('reason', $request->input('rejection_reason'));
@@ -210,13 +273,13 @@ class CourseAllocationRequestController extends Controller
         ]);
 
         $user = auth()->user();
-        $staff = $user->staff?->loadMissing('department.faculty');
+        $scope = $this->resolveUserScope($user);
+        $isHod = $scope['isHod'];
+        $isDean = $scope['isDean'];
+        $hodDeptId = $scope['hodDeptId'];
+        $deanFacultyId = $scope['deanFacultyId'];
 
-        $isSuperAdminOrAdmin = $user->hasRole(['admin', 'super_admin']) || $user->can('manage_courses');
-        $isDean = ($user->hasRole('dean') || $user->can('view_faculty_courses')) && ! $isSuperAdminOrAdmin;
-        $isHod = ($user->hasRole('hod') || $user->can('view_department_courses')) && ! $isSuperAdminOrAdmin && ! $isDean;
-
-        $requests = CourseAllocationRequest::with('course')
+        $requests = CourseAllocationRequest::with(['course.department.faculty', 'department.faculty'])
             ->whereIn('id', $request->request_ids)
             ->where('status', 'pending')
             ->get();
@@ -225,14 +288,20 @@ class CourseAllocationRequestController extends Controller
         $skippedCount = 0;
 
         foreach ($requests as $allocationRequest) {
-            if ($isHod && $allocationRequest->department_id !== $staff?->department_id) {
-                $skippedCount++;
-                continue;
+            if ($isHod) {
+                $reqDeptId = $allocationRequest->department_id ?? $allocationRequest->course?->department_id;
+                if (! $hodDeptId || $reqDeptId !== $hodDeptId) {
+                    $skippedCount++;
+                    continue;
+                }
             }
 
-            if ($isDean && $allocationRequest->department?->faculty_id !== $staff?->department?->faculty_id) {
-                $skippedCount++;
-                continue;
+            if ($isDean) {
+                $reqFacultyId = $allocationRequest->department?->faculty_id ?? $allocationRequest->course?->department?->faculty_id;
+                if (! $deanFacultyId || $reqFacultyId !== $deanFacultyId) {
+                    $skippedCount++;
+                    continue;
+                }
             }
 
             try {

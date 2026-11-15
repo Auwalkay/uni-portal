@@ -114,6 +114,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/courses/exam-card', [\App\Http\Controllers\Student\CourseRegistrationController::class, 'downloadExamCard'])->name('courses.exam_card');
 
             Route::get('/timetable', [TimetableController::class, 'index'])->name('timetable.index');
+            Route::get('/attendance', [\App\Http\Controllers\Student\AttendanceController::class, 'index'])->name('attendance.index');
             Route::get('/exam-docket', [ExamDocketController::class, 'index'])->name('exam_docket.index');
             Route::get('/exam-docket-alt', [ExamDocketController::class, 'index'])->name('exam-docket.index');
 
@@ -314,6 +315,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/courses/{course}/students/upload', [CourseController::class, 'uploadStudents'])->name('courses.students.upload');
             Route::get('/courses/{course}/students/template', [CourseController::class, 'downloadStudentTemplate'])->name('courses.students.template');
             Route::get('/courses/{course}/students/export', [CourseController::class, 'exportStudents'])->name('courses.students.export');
+            Route::get('/courses/{course}/attendance/template', [CourseController::class, 'downloadAttendanceTemplate'])->name('courses.attendance.template');
+            Route::post('/courses/{course}/attendance/upload', [CourseController::class, 'uploadAttendance'])->name('courses.attendance.upload');
+            Route::delete('/courses/{course}/attendance/{date}', [CourseController::class, 'deleteAttendanceDate'])->name('courses.attendance.delete');
+            Route::get('/courses/{course}/attendance/export', [CourseController::class, 'exportAttendance'])->name('courses.attendance.export');
         });
 
         // Finance & Payments
