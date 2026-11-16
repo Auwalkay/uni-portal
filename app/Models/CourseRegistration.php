@@ -60,4 +60,24 @@ class CourseRegistration extends Model
     {
         return $this->hasMany(StudentCourseAttendance::class, 'course_registration_id');
     }
+
+    public function registeredBy()
+    {
+        return $this->belongsTo(User::class, 'registered_by');
+    }
+
+    public function isSelfRegistered(): bool
+    {
+        return $this->registration_source === 'student';
+    }
+
+    public function isAdminRegistered(): bool
+    {
+        return $this->registration_source === 'admin';
+    }
+
+    public function isImported(): bool
+    {
+        return $this->registration_source === 'import';
+    }
 }

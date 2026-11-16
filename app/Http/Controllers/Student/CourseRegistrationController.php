@@ -616,6 +616,8 @@ class CourseRegistrationController extends Controller
                 ->where('session_id', $session->id)
                 ->delete();
 
+            $registeredById = Auth::id();
+
             if ($firstSemester) {
                 foreach ($firstSemCourses as $course) {
                     CourseRegistration::create([
@@ -624,6 +626,8 @@ class CourseRegistrationController extends Controller
                         'session_id' => $session->id,
                         'semester_id' => $firstSemester->id,
                         'student_session_id' => $studentSession->id,
+                        'registered_by' => $registeredById,
+                        'registration_source' => 'student',
                     ]);
                 }
             }
@@ -636,6 +640,8 @@ class CourseRegistrationController extends Controller
                         'session_id' => $session->id,
                         'semester_id' => $secondSemester->id,
                         'student_session_id' => $studentSession->id,
+                        'registered_by' => $registeredById,
+                        'registration_source' => 'student',
                     ]);
                 }
             }
@@ -648,6 +654,8 @@ class CourseRegistrationController extends Controller
                         'session_id' => $session->id,
                         'semester_id' => $thirdSemester->id,
                         'student_session_id' => $studentSession->id,
+                        'registered_by' => $registeredById,
+                        'registration_source' => 'student',
                     ]);
                 }
             }
