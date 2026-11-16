@@ -20,6 +20,7 @@ class CourseStudentImport implements ToCollection, WithChunkReading, WithHeading
     protected Session $session;
     protected ?Semester $semester;
     protected bool $skipExisting;
+    protected ?string $registeredBy;
 
     protected array $stats = [
         'enrolled' => 0,
@@ -27,12 +28,13 @@ class CourseStudentImport implements ToCollection, WithChunkReading, WithHeading
         'errors' => [],
     ];
 
-    public function __construct(Course $course, Session $session, ?Semester $semester = null, bool $skipExisting = true)
+    public function __construct(Course $course, Session $session, ?Semester $semester = null, bool $skipExisting = true, ?string $registeredBy = null)
     {
         $this->course = $course;
         $this->session = $session;
         $this->semester = $semester;
         $this->skipExisting = $skipExisting;
+        $this->registeredBy = $registeredBy;
 
         if (! $this->semester) {
             $semesters = Semester::where('session_id', $session->id)->get();
@@ -99,6 +101,8 @@ class CourseStudentImport implements ToCollection, WithChunkReading, WithHeading
                     'session_id' => $this->session->id,
                     'semester_id' => $this->semester?->id,
                     'student_session_id' => $studentSession->id,
+                    'registered_by' => $this->registeredBy,
+                    'registration_source' => 'import',
                 ]);
 
                 $this->stats['enrolled']++;

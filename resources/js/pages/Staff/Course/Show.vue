@@ -38,6 +38,10 @@ const props = defineProps<{
         program?: string;
         level: string;
         registered_at: string;
+        registered_by_id?: string;
+        registered_by_name?: string;
+        registration_source?: string;
+        is_self_registered?: boolean;
     }>;
     departments?: Array<{ id: string; name: string; count: number }>;
     programs?: Array<{ id: string; name: string; count: number }>;
@@ -576,10 +580,16 @@ const avgAttendanceRate = computed(() => {
                                         {{ student.program }}
                                     </span>
                                 </div>
-                                <div class="flex items-center gap-1.5 shrink-0">
+                                <div class="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
                                     <Badge variant="outline" class="text-[10px] font-bold px-1.5 py-0">
                                         {{ student.level }} Level
                                     </Badge>
+                                    <span v-if="student.registration_source === 'admin'" class="text-[9px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                                        Admin
+                                    </span>
+                                    <span v-else-if="student.registration_source === 'import'" class="text-[9px] font-semibold text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800">
+                                        Import
+                                    </span>
                                     <span class="text-[10px] text-slate-400">{{ student.registered_at }}</span>
                                 </div>
                             </div>
@@ -652,7 +662,30 @@ const avgAttendanceRate = computed(() => {
                                     </TableCell>
 
                                     <TableCell class="text-center text-xs text-muted-foreground">
-                                        {{ student.registered_at }}
+                                        <div class="flex flex-col items-center gap-0.5">
+                                            <span>{{ student.registered_at }}</span>
+                                            <span 
+                                                v-if="student.registration_source === 'admin'" 
+                                                class="inline-flex items-center text-[10px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800"
+                                                :title="student.registered_by_name ? `Registered by Admin: ${student.registered_by_name}` : 'Registered by Administrator'"
+                                            >
+                                                Admin: {{ student.registered_by_name || 'Staff' }}
+                                            </span>
+                                            <span 
+                                                v-else-if="student.registration_source === 'import'" 
+                                                class="inline-flex items-center text-[10px] font-medium text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800"
+                                                title="Enrolled via bulk CSV/Excel roster import"
+                                            >
+                                                Bulk Import
+                                            </span>
+                                            <span 
+                                                v-else 
+                                                class="inline-flex items-center text-[10px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800"
+                                                title="Self-registered by student via portal"
+                                            >
+                                                Self-Registered
+                                            </span>
+                                        </div>
                                     </TableCell>
 
                                     <TableCell class="text-right">

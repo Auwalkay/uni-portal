@@ -188,7 +188,7 @@ class CourseController extends Controller
         // 1. Role-aware authorization (Admin, Dean, HOD, Allocated Lecturer)
         $this->authorizeCourseAccess($course, $user);
 
-        // 2. Fetch Registered Students with Department and Programme eager-loaded
+        // 2. Fetch Registered Students with Department, Programme, and RegisteredBy eager-loaded
         $registrations = CourseRegistration::where('course_id', $course->id)
             ->when($currentSession, fn($q) => $q->where('session_id', $currentSession->id))
             ->with([
@@ -196,6 +196,7 @@ class CourseController extends Controller
                 'student:id,user_id,matriculation_number,department_id,program_id,current_level',
                 'student.department:id,name',
                 'student.program:id,name',
+                'registeredBy:id,name,email',
             ])
             ->latest()
             ->get();
@@ -212,6 +213,10 @@ class CourseController extends Controller
             'program' => $reg->student?->program?->name ?? 'Unassigned',
             'level' => $reg->student?->current_level ?? 'N/A',
             'registered_at' => $reg->created_at ? $reg->created_at->format('M d, Y') : 'N/A',
+            'registered_by_id' => $reg->registered_by,
+            'registered_by_name' => $reg->registeredBy?->name,
+            'registration_source' => $reg->registration_source ?? 'student',
+            'is_self_registered' => $reg->isSelfRegistered(),
         ]);
 
         // Aggregate unique departments, programs, and levels for fast client-side filtering
@@ -327,7 +332,7 @@ class CourseController extends Controller
         $skipExisting = $request->boolean('skip_existing', true);
 
         try {
-            $import = new \App\Imports\CourseStudentImport($course, $session, null, $skipExisting);
+            $import = new \App\Imports\CourseStudentImport($course, $session, null, $skipExisting, $user->id);
             \Maatwebsite\Excel\Facades\Excel::import($import, $request->file('file'));
 
             $stats = $import->getStats();
@@ -378,7 +383,7 @@ class CourseController extends Controller
         $currentSession = Session::current() ?? Session::latest()->first();
         $query = CourseRegistration::where('course_id', $course->id)
             ->when($currentSession, fn($q) => $q->where('session_id', $currentSession->id))
-            ->with(['student.user', 'student.department', 'student.program'])
+            ->with(['student.user', 'student.department', 'student.program', 'registeredBy'])
             ->latest();
 
         if ($request->filled('department_id') && $request->department_id !== 'all') {
@@ -393,12 +398,19 @@ class CourseController extends Controller
 
         $registrations = $query->get();
 
-        $headers = ['Matric Number', 'Student Name', 'Email', 'Department', 'Programme', 'Level', 'Registered On'];
+        $headers = ['Matric Number', 'Student Name', 'Email', 'Department', 'Programme', 'Level', 'Registered On', 'Registration Source', 'Registered By'];
 
         $callback = function () use ($headers, $registrations) {
             $file = fopen('php://output', 'w');
             fputcsv($file, $headers);
             foreach ($registrations as $reg) {
+                $sourceLabel = match($reg->registration_source) {
+                    'admin' => 'Admin Override',
+                    'import' => 'Bulk Import',
+                    default => 'Student Self-Service',
+                };
+                $registeredByName = $reg->registeredBy?->name ?? ($reg->registration_source === 'student' ? ($reg->student?->user?->name ?? 'Student') : 'System');
+
                 fputcsv($file, [
                     $reg->student?->matriculation_number ?? 'N/A',
                     $reg->student?->user?->name ?? 'Unknown',
@@ -407,6 +419,8 @@ class CourseController extends Controller
                     $reg->student?->program?->name ?? 'N/A',
                     $reg->student?->current_level ?? 'N/A',
                     $reg->created_at ? $reg->created_at->format('Y-m-d') : 'N/A',
+                    $sourceLabel,
+                    $registeredByName,
                 ]);
             }
             fclose($file);
