@@ -6,7 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Imports\CourseAttendanceImport;
 use App\Models\Course;
 use App\Models\CourseAllocation;
+use App\Models\CourseLectureSession;
 use App\Models\CourseRegistration;
+use App\Models\Department;
+use App\Models\Programme;
 use App\Models\Session;
 use App\Models\StudentCourseAttendance;
 use Illuminate\Http\Request;
@@ -15,76 +18,242 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class CourseController extends Controller
 {
+    /**
+     * Authorize user access to view/manage this course.
+     * Allowed:
+     * - Admins / Super Admins / users with 'manage_courses' permission
+     * - Deans / users with 'view_faculty_courses' (if course is in dean's faculty)
+     * - HODs / users with 'manage_department_courses' or 'view_department_courses' (if course is in HOD's department)
+     * - Allocated lecturers teaching the course
+     */
+    protected function authorizeCourseAccess(Course $course, $user): void
+    {
+        if ($user->hasRole(['admin', 'super_admin'])) {
+            return;
+        }
+
+        $staff = $user->staff;
+
+        // Check HOD / Department course management
+        if ($staff && ($user->hasRole('hod') || $user->can('manage_department_courses') || $user->can('view_department_courses'))) {
+            if ($course->department_id === $staff->department_id) {
+                return;
+            }
+        }
+
+        // Check Dean / Faculty course management
+        if ($staff && ($user->hasRole('dean') || $user->can('view_faculty_courses'))) {
+            $facultyId = $staff->department?->faculty_id;
+            if ($facultyId && $course->department?->faculty_id === $facultyId) {
+                return;
+            }
+        }
+
+        // General course managers (Academic Director, etc.) who are not scoped HODs or Deans
+        if ($user->can('manage_courses') && !$user->hasRole('hod') && !$user->hasRole('dean')) {
+            return;
+        }
+
+        // Check Lecturer allocation
+        $isAllocated = CourseAllocation::where('course_id', $course->id)
+            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
+            ->exists();
+
+        if ($isAllocated) {
+            return;
+        }
+
+        abort(403, 'You are not assigned or authorized to view this course.');
+    }
+
     public function index(Request $request)
     {
         $user = auth()->user();
-        $currentSession = Session::current();
+        $currentSession = Session::current() ?? Session::latest()->first();
 
-        $filters = $request->only(['session_id', 'search']);
+        $filters = $request->only(['session_id', 'search', 'scope', 'department_id']);
         $sessionId = $filters['session_id'] ?? $currentSession?->id;
         if ($sessionId === 'all') {
             $sessionId = null;
         }
 
-        $allocations = CourseAllocation::query()
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->when($sessionId, fn($q) => $q->where('session_id', $sessionId))
-            ->when($filters['search'] ?? null, function ($query, $search) {
-                $query->whereHas('course', function ($q) use ($search) {
-                    $q->where('code', 'like', "%{$search}%")
-                        ->orWhere('title', 'like', "%{$search}%");
-                });
-            })
-            ->with(['course', 'session'])
-            ->latest()
-            ->paginate(10)
+        $isSuperOrAdmin = $user->hasRole(['admin', 'super_admin']);
+        $isDean = !$isSuperOrAdmin && ($user->hasRole('dean') || $user->can('view_faculty_courses'));
+        $isHod = !$isSuperOrAdmin && !$isDean && ($user->hasRole('hod') || $user->can('manage_department_courses') || $user->can('view_department_courses'));
+        $isAdmin = $isSuperOrAdmin || (!$isDean && !$isHod && $user->can('manage_courses'));
+
+        $staff = $user->staff;
+        $facultyId = $staff?->department?->faculty_id;
+        $departmentId = $staff?->department_id;
+
+        // Determine active scope and title
+        $hasAllocations = CourseAllocation::whereHas('staff', fn($q) => $q->where('user_id', $user->id))->exists();
+        $scope = $filters['scope'] ?? (($isAdmin || $isDean || $isHod) && !$hasAllocations ? 'all' : ($isAdmin || $isDean || $isHod ? 'managed' : 'assigned'));
+
+        $scopeTitle = 'My Allocated Courses';
+        if ($scope === 'all' || $scope === 'managed') {
+            if ($isAdmin) {
+                $scopeTitle = 'All University Courses';
+            } elseif ($isDean) {
+                $scopeTitle = ($staff?->department?->faculty?->name ?? 'Faculty') . ' Courses';
+            } elseif ($isHod) {
+                $scopeTitle = ($staff?->department?->name ?? 'Department') . ' Courses';
+            }
+        }
+
+        // Build courses query based on jurisdiction
+        $coursesQuery = Course::query();
+
+        if ($scope === 'assigned' && !$isAdmin) {
+            // Courses allocated directly to this staff member
+            $coursesQuery->whereHas('allocations', function ($q) use ($user, $sessionId) {
+                $q->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id))
+                  ->when($sessionId, fn($sq) => $sq->where('session_id', $sessionId));
+            });
+        } elseif ($isAdmin) {
+            // Admin can view all courses, optionally filtered by department
+            if (!empty($filters['department_id']) && $filters['department_id'] !== 'all') {
+                $coursesQuery->where('department_id', $filters['department_id']);
+            }
+        } elseif ($isDean && $facultyId) {
+            // Dean: courses within faculty
+            $coursesQuery->whereHas('department', fn($q) => $q->where('faculty_id', $facultyId));
+            if (!empty($filters['department_id']) && $filters['department_id'] !== 'all') {
+                $coursesQuery->where('department_id', $filters['department_id']);
+            }
+        } elseif ($isHod && $departmentId) {
+            // HOD: courses within department
+            $coursesQuery->where('department_id', $departmentId);
+        } else {
+            // Fallback for regular lecturer
+            $coursesQuery->whereHas('allocations', function ($q) use ($user, $sessionId) {
+                $q->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id))
+                  ->when($sessionId, fn($sq) => $sq->where('session_id', $sessionId));
+            });
+        }
+
+        // Apply search filter
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+            $coursesQuery->where(function ($q) use ($search) {
+                $q->where('code', 'like', "%{$search}%")
+                  ->orWhere('title', 'like', "%{$search}%");
+            });
+        }
+
+        // Eager load relationships & registration count for selected session
+        $courses = $coursesQuery
+            ->with([
+                'department:id,name,code',
+                'department.faculty:id,name',
+                'allocations' => function ($q) use ($sessionId) {
+                    $q->when($sessionId, fn($sq) => $sq->where('session_id', $sessionId))
+                      ->with('staff.user:id,name,email');
+                }
+            ])
+            ->withCount(['registrations' => function ($q) use ($sessionId) {
+                $q->when($sessionId, fn($sq) => $sq->where('session_id', $sessionId));
+            }])
+            ->orderBy('code')
+            ->paginate(12)
             ->withQueryString();
 
+        // Department list for admin/dean filter dropdown
+        $departments = $isAdmin
+            ? Department::where('is_academic', true)->orderBy('name')->get(['id', 'name'])
+            : ($isDean && $facultyId ? Department::where('faculty_id', $facultyId)->orderBy('name')->get(['id', 'name']) : collect());
+
         return Inertia::render('Staff/Course/Index', [
-            'allocations' => $allocations,
+            'courses' => $courses,
             'sessions' => Session::orderBy('start_date', 'desc')->get(['id', 'name']),
             'filters' => $filters,
             'currentSessionId' => $currentSession?->id,
+            'userRole' => [
+                'isAdmin' => $isAdmin,
+                'isDean' => $isDean,
+                'isHod' => $isHod,
+                'hasAllocations' => $hasAllocations,
+                'scope' => $scope,
+                'scopeTitle' => $scopeTitle,
+            ],
+            'departments' => $departments,
         ]);
     }
 
     public function show(Course $course)
     {
         $user = auth()->user();
-        $currentSession = Session::current();
+        $currentSession = Session::current() ?? Session::latest()->first();
 
-        // 1. Authorization: Ensure user is allocated to this course (and optionally current session)
-        // We can loosen the session check if we want them to see history, but for now let's stick to current/active.
-        $isAllocated = CourseAllocation::where('course_id', $course->id)
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->exists();
+        // 1. Role-aware authorization (Admin, Dean, HOD, Allocated Lecturer)
+        $this->authorizeCourseAccess($course, $user);
 
-        // Allow admin bypass or strict check? Let's do strict for "Staff" namespace.
-        if (!$isAllocated && !$user->hasRole('admin')) {
-            abort(403, 'You are not assigned to this course.');
-        }
-
-        // 2. Fetch Registered Students
-        // Assuming CourseRegistration model links student and course
+        // 2. Fetch Registered Students with Department and Programme eager-loaded
         $registrations = CourseRegistration::where('course_id', $course->id)
-            ->where('session_id', $currentSession->id)
-            ->with(['student.user:id,name,email', 'student:id,user_id,matriculation_number,department_id,current_level', 'student.department:id,name'])
+            ->when($currentSession, fn($q) => $q->where('session_id', $currentSession->id))
+            ->with([
+                'student.user:id,name,email',
+                'student:id,user_id,matriculation_number,department_id,program_id,current_level',
+                'student.department:id,name',
+                'student.program:id,name',
+            ])
             ->latest()
-            ->get()
-            ->map(fn($reg) => [
-                'id' => $reg->id,
-                'student_name' => $reg->student->user->name,
-                'matriculation_number' => $reg->student->matriculation_number,
-                'email' => $reg->student->user->email,
-                'department' => $reg->student->department->name,
-                'level' => $reg->student->current_level,
-                'registered_at' => $reg->created_at->format('M d, Y'),
-            ]);
+            ->get();
 
-        // 3. Fetch Recorded Attendance History for this Course
+        $students = $registrations->map(fn($reg) => [
+            'id' => $reg->id,
+            'student_id' => $reg->student?->id,
+            'student_name' => $reg->student?->user?->name ?? 'Unknown',
+            'matriculation_number' => $reg->student?->matriculation_number ?? 'N/A',
+            'email' => $reg->student?->user?->email ?? 'N/A',
+            'department_id' => $reg->student?->department_id,
+            'department' => $reg->student?->department?->name ?? 'Unassigned',
+            'program_id' => $reg->student?->program_id,
+            'program' => $reg->student?->program?->name ?? 'Unassigned',
+            'level' => $reg->student?->current_level ?? 'N/A',
+            'registered_at' => $reg->created_at ? $reg->created_at->format('M d, Y') : 'N/A',
+        ]);
+
+        // Aggregate unique departments, programs, and levels for fast client-side filtering
+        $departments = $students
+            ->filter(fn($s) => !empty($s['department_id']))
+            ->groupBy('department_id')
+            ->map(fn($items, $deptId) => [
+                'id' => (string) $deptId,
+                'name' => $items->first()['department'],
+                'count' => $items->count(),
+            ])
+            ->sortBy('name')
+            ->values();
+
+        $programs = $students
+            ->filter(fn($s) => !empty($s['program_id']))
+            ->groupBy('program_id')
+            ->map(fn($items, $progId) => [
+                'id' => (string) $progId,
+                'name' => $items->first()['program'],
+                'count' => $items->count(),
+            ])
+            ->sortBy('name')
+            ->values();
+
+        $levels = $students
+            ->pluck('level')
+            ->filter(fn($lvl) => !empty($lvl) && $lvl !== 'N/A')
+            ->unique()
+            ->sort()
+            ->values();
+
+        // 3. Fetch Recorded Attendance History for this Course with Lecture Session details
         $attendanceHistory = [];
         if ($currentSession) {
-            $attendanceHistory = StudentCourseAttendance::where('course_id', $course->id)
+            $lectureSessions = CourseLectureSession::where('course_id', $course->id)
+                ->where('session_id', $currentSession->id)
+                ->orderBy('lecture_date', 'desc')
+                ->get()
+                ->keyBy(fn($s) => $s->lecture_date instanceof \Carbon\CarbonInterface ? $s->lecture_date->format('Y-m-d') : substr((string)$s->lecture_date, 0, 10));
+
+            $attendanceStats = StudentCourseAttendance::where('course_id', $course->id)
                 ->where('session_id', $currentSession->id)
                 ->select('attendance_date')
                 ->selectRaw('count(*) as total_records')
@@ -92,21 +261,46 @@ class CourseController extends Controller
                 ->selectRaw("sum(case when status = 'absent' then 1 else 0 end) as absent_count")
                 ->groupBy('attendance_date')
                 ->orderBy('attendance_date', 'desc')
-                ->get()
-                ->map(fn($row) => [
-                    'date' => $row->attendance_date->format('Y-m-d'),
-                    'formatted_date' => $row->attendance_date->format('M d, Y'),
-                    'total_records' => (int) $row->total_records,
-                    'present_count' => (int) $row->present_count,
-                    'absent_count' => (int) $row->absent_count,
-                    'attendance_rate' => $row->total_records > 0 ? round(($row->present_count / $row->total_records) * 100, 1) : 0,
-                ]);
+                ->get();
+
+            $allDates = $attendanceStats->pluck('attendance_date')
+                ->map(fn($d) => $d instanceof \Carbon\CarbonInterface ? $d->format('Y-m-d') : substr((string)$d, 0, 10))
+                ->merge($lectureSessions->keys())
+                ->unique()
+                ->sortDesc()
+                ->values();
+
+            $attendanceHistory = $allDates->map(function ($dateStr) use ($attendanceStats, $lectureSessions) {
+                $stat = $attendanceStats->first(fn($s) => ($s->attendance_date instanceof \Carbon\CarbonInterface ? $s->attendance_date->format('Y-m-d') : substr((string)$s->attendance_date, 0, 10)) === $dateStr);
+                $session = $lectureSessions->get($dateStr);
+                $totalRecords = (int) ($stat?->total_records ?? 0);
+                $presentCount = (int) ($stat?->present_count ?? 0);
+                $absentCount = (int) ($stat?->absent_count ?? 0);
+                $dateObj = \Carbon\Carbon::parse($dateStr);
+
+                return [
+                    'id' => $session?->id,
+                    'date' => $dateStr,
+                    'formatted_date' => $dateObj->format('M d, Y'),
+                    'total_records' => $totalRecords,
+                    'present_count' => $presentCount,
+                    'absent_count' => $absentCount,
+                    'attendance_rate' => $totalRecords > 0 ? round(($presentCount / $totalRecords) * 100, 1) : 0,
+                    'department_ids' => $session?->department_ids,
+                    'department_names' => $session?->department_names ?? [],
+                    'is_all_departments' => empty($session?->department_ids),
+                    'notes' => $session?->notes,
+                ];
+            })->values();
         }
 
         return Inertia::render('Staff/Course/Show', [
             'course' => $course->only(['id', 'code', 'title', 'units']),
             'session' => $currentSession ? $currentSession->only(['id', 'name']) : ['id' => '', 'name' => 'Current Session'],
-            'students' => $registrations,
+            'students' => $students,
+            'departments' => $departments,
+            'programs' => $programs,
+            'levels' => $levels,
             'attendanceHistory' => $attendanceHistory,
             'importSummary' => fn () => session('import_summary'),
             'attendanceSummary' => fn () => session('attendance_summary'),
@@ -116,13 +310,7 @@ class CourseController extends Controller
     public function uploadStudents(Request $request, Course $course)
     {
         $user = auth()->user();
-        $isAllocated = CourseAllocation::where('course_id', $course->id)
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->exists();
-
-        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
-            abort(403, 'You are not assigned to this course.');
-        }
+        $this->authorizeCourseAccess($course, $user);
 
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls,csv,txt|max:10240',
@@ -159,13 +347,7 @@ class CourseController extends Controller
     public function downloadStudentTemplate(Course $course)
     {
         $user = auth()->user();
-        $isAllocated = CourseAllocation::where('course_id', $course->id)
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->exists();
-
-        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
-            abort(403, 'You are not assigned to this course.');
-        }
+        $this->authorizeCourseAccess($course, $user);
 
         $headers = ['matriculation_number', 'student_name'];
 
@@ -188,25 +370,30 @@ class CourseController extends Controller
         ]);
     }
 
-    public function exportStudents(Course $course)
+    public function exportStudents(Request $request, Course $course)
     {
         $user = auth()->user();
-        $isAllocated = CourseAllocation::where('course_id', $course->id)
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->exists();
-
-        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
-            abort(403, 'You are not assigned to this course.');
-        }
+        $this->authorizeCourseAccess($course, $user);
 
         $currentSession = Session::current() ?? Session::latest()->first();
-        $registrations = CourseRegistration::where('course_id', $course->id)
+        $query = CourseRegistration::where('course_id', $course->id)
             ->when($currentSession, fn($q) => $q->where('session_id', $currentSession->id))
-            ->with(['student.user', 'student.department'])
-            ->latest()
-            ->get();
+            ->with(['student.user', 'student.department', 'student.program'])
+            ->latest();
 
-        $headers = ['Matric Number', 'Student Name', 'Email', 'Department', 'Level', 'Registered On'];
+        if ($request->filled('department_id') && $request->department_id !== 'all') {
+            $query->whereHas('student', fn($sq) => $sq->where('department_id', $request->department_id));
+        }
+        if ($request->filled('program_id') && $request->program_id !== 'all') {
+            $query->whereHas('student', fn($sq) => $sq->where('program_id', $request->program_id));
+        }
+        if ($request->filled('level') && $request->level !== 'all') {
+            $query->whereHas('student', fn($sq) => $sq->where('current_level', $request->level));
+        }
+
+        $registrations = $query->get();
+
+        $headers = ['Matric Number', 'Student Name', 'Email', 'Department', 'Programme', 'Level', 'Registered On'];
 
         $callback = function () use ($headers, $registrations) {
             $file = fopen('php://output', 'w');
@@ -217,6 +404,7 @@ class CourseController extends Controller
                     $reg->student?->user?->name ?? 'Unknown',
                     $reg->student?->user?->email ?? 'N/A',
                     $reg->student?->department?->name ?? 'N/A',
+                    $reg->student?->program?->name ?? 'N/A',
                     $reg->student?->current_level ?? 'N/A',
                     $reg->created_at ? $reg->created_at->format('Y-m-d') : 'N/A',
                 ]);
@@ -236,26 +424,35 @@ class CourseController extends Controller
     }
 
     /**
-     * Download pre-populated CSV template with all currently registered students for this course.
+     * Download pre-populated CSV template with registered students for this course.
+     * Optionally filtered by department cohort.
      */
-    public function downloadAttendanceTemplate(Course $course)
+    public function downloadAttendanceTemplate(Request $request, Course $course)
     {
         $user = auth()->user();
-        $isAllocated = CourseAllocation::where('course_id', $course->id)
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->exists();
-
-        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
-            abort(403, 'You are not assigned to this course.');
-        }
+        $this->authorizeCourseAccess($course, $user);
 
         $currentSession = Session::current() ?? Session::latest()->first();
-        $registrations = CourseRegistration::where('course_id', $course->id)
-            ->when($currentSession, fn($q) => $q->where('session_id', $currentSession->id))
-            ->with(['student.user'])
-            ->get();
 
-        $headers = ['matriculation_number', 'student_name', 'status'];
+        $deptParam = $request->input('department_ids');
+        $deptIds = [];
+        if (is_array($deptParam)) {
+            $deptIds = array_filter($deptParam);
+        } elseif (is_string($deptParam) && trim($deptParam) !== '') {
+            $deptIds = array_filter(explode(',', $deptParam));
+        }
+
+        $query = CourseRegistration::where('course_id', $course->id)
+            ->when($currentSession, fn($q) => $q->where('session_id', $currentSession->id))
+            ->with(['student.user', 'student.department']);
+
+        if (!empty($deptIds)) {
+            $query->whereHas('student', fn($sq) => $sq->whereIn('department_id', $deptIds));
+        }
+
+        $registrations = $query->get();
+
+        $headers = ['matriculation_number', 'student_name', 'department', 'status'];
 
         $callback = function () use ($headers, $registrations) {
             $file = fopen('php://output', 'w');
@@ -263,13 +460,14 @@ class CourseController extends Controller
 
             if ($registrations->isEmpty()) {
                 // Example rows if no students registered yet
-                fputcsv($file, ['MAT/2026/001', 'Sample Student 1', 'Present']);
-                fputcsv($file, ['MAT/2026/002', 'Sample Student 2', 'Absent']);
+                fputcsv($file, ['MAT/2026/001', 'Sample Student 1', 'Computer Science', 'Present']);
+                fputcsv($file, ['MAT/2026/002', 'Sample Student 2', 'Software Engineering', 'Absent']);
             } else {
                 foreach ($registrations as $reg) {
                     fputcsv($file, [
                         $reg->student?->matriculation_number ?? 'N/A',
                         $reg->student?->user?->name ?? 'Unknown',
+                        $reg->student?->department?->name ?? 'N/A',
                         'Present',
                     ]);
                 }
@@ -289,21 +487,18 @@ class CourseController extends Controller
     }
 
     /**
-     * Upload Excel/CSV attendance sheet for a specific lecture date.
+     * Upload Excel/CSV attendance sheet for a specific lecture date with optional department cohort targeting.
      */
     public function uploadAttendance(Request $request, Course $course)
     {
         $user = auth()->user();
-        $isAllocated = CourseAllocation::where('course_id', $course->id)
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->exists();
-
-        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
-            abort(403, 'You are not assigned to this course.');
-        }
+        $this->authorizeCourseAccess($course, $user);
 
         $request->validate([
             'attendance_date' => 'required|date',
+            'department_ids' => 'nullable|array',
+            'department_ids.*' => 'string|exists:departments,id',
+            'notes' => 'nullable|string|max:255',
             'file' => 'required|file|mimes:xlsx,xls,csv,txt|max:10240',
         ], [
             'file.mimes' => 'The file must be a spreadsheet or CSV file (.xlsx, .xls, .csv).',
@@ -314,12 +509,45 @@ class CourseController extends Controller
             return back()->with('error', 'Active academic session not found.');
         }
 
+        $deptIds = $request->input('department_ids');
+        $deptIds = is_array($deptIds) ? array_values(array_filter($deptIds)) : null;
+        if (empty($deptIds)) {
+            $deptIds = null;
+        }
+
+        $deptNames = null;
+        if ($deptIds) {
+            $deptNames = Department::whereIn('id', $deptIds)->pluck('name')->toArray();
+        }
+
+        // Create or update CourseLectureSession
+        $lectureSession = CourseLectureSession::updateOrCreate(
+            [
+                'course_id' => $course->id,
+                'session_id' => $session->id,
+                'lecture_date' => $request->input('attendance_date'),
+            ],
+            [
+                'department_ids' => $deptIds,
+                'department_names' => $deptNames,
+                'notes' => $request->input('notes'),
+                'recorded_by' => $user->id,
+            ]
+        );
+
         try {
-            $import = new CourseAttendanceImport($course, $session, $request->input('attendance_date'), $user->id);
+            $import = new CourseAttendanceImport(
+                $course,
+                $session,
+                $request->input('attendance_date'),
+                $user->id,
+                $lectureSession->id
+            );
             Excel::import($import, $request->file('file'));
 
             $stats = $import->getStats();
-            $msg = "Attendance for {$request->input('attendance_date')} recorded: {$stats['processed']} student(s) logged ({$stats['present']} Present, {$stats['absent']} Absent).";
+            $deptText = $deptNames ? ' (' . implode(', ', $deptNames) . ')' : ' (All Enrolled Departments)';
+            $msg = "Attendance for {$request->input('attendance_date')}{$deptText} recorded: {$stats['processed']} student(s) logged ({$stats['present']} Present, {$stats['absent']} Absent).";
             if ($stats['unregistered'] > 0) {
                 $msg .= " {$stats['unregistered']} unregistered student(s) skipped.";
             }
@@ -333,23 +561,22 @@ class CourseController extends Controller
     }
 
     /**
-     * Delete recorded attendance for a specific lecture date.
+     * Delete recorded attendance and lecture session for a specific lecture date.
      */
     public function deleteAttendanceDate(Course $course, string $date)
     {
         $user = auth()->user();
-        $isAllocated = CourseAllocation::where('course_id', $course->id)
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->exists();
-
-        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
-            abort(403, 'You are not assigned to this course.');
-        }
+        $this->authorizeCourseAccess($course, $user);
 
         $session = Session::current() ?? Session::latest()->first();
         if (!$session) {
             return back()->with('error', 'Active academic session not found.');
         }
+
+        CourseLectureSession::where('course_id', $course->id)
+            ->where('session_id', $session->id)
+            ->whereDate('lecture_date', $date)
+            ->delete();
 
         $deleted = StudentCourseAttendance::where('course_id', $course->id)
             ->where('session_id', $session->id)
@@ -361,23 +588,25 @@ class CourseController extends Controller
 
     /**
      * Export complete attendance matrix (Dates as columns, Students as rows).
+     * Optionally filtered by department.
      */
-    public function exportAttendance(Course $course)
+    public function exportAttendance(Request $request, Course $course)
     {
         $user = auth()->user();
-        $isAllocated = CourseAllocation::where('course_id', $course->id)
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->exists();
-
-        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
-            abort(403, 'You are not assigned to this course.');
-        }
+        $this->authorizeCourseAccess($course, $user);
 
         $session = Session::current() ?? Session::latest()->first();
-        $registrations = CourseRegistration::where('course_id', $course->id)
+
+        $deptId = $request->query('department_id');
+        $regQuery = CourseRegistration::where('course_id', $course->id)
             ->when($session, fn($q) => $q->where('session_id', $session->id))
-            ->with(['student.user', 'attendances' => fn($q) => $q->where('course_id', $course->id)->where('session_id', $session?->id)])
-            ->get();
+            ->with(['student.user', 'student.department', 'attendances' => fn($q) => $q->where('course_id', $course->id)->where('session_id', $session?->id)]);
+
+        if ($deptId && $deptId !== 'all') {
+            $regQuery->whereHas('student', fn($sq) => $sq->where('department_id', $deptId));
+        }
+
+        $registrations = $regQuery->get();
 
         // Get unique dates sorted chronologically
         $dates = StudentCourseAttendance::where('course_id', $course->id)
@@ -388,7 +617,7 @@ class CourseController extends Controller
             ->map(fn($d) => $d instanceof \Carbon\CarbonInterface ? $d->format('Y-m-d') : substr((string)$d, 0, 10))
             ->toArray();
 
-        $headers = array_merge(['Matric Number', 'Student Name'], $dates, ['Attended', 'Total Classes', 'Attendance %']);
+        $headers = array_merge(['Matric Number', 'Student Name', 'Department'], $dates, ['Attended', 'Total Classes', 'Attendance %']);
 
         $callback = function () use ($headers, $dates, $registrations) {
             $file = fopen('php://output', 'w');
@@ -402,6 +631,7 @@ class CourseController extends Controller
                 $row = [
                     $reg->student?->matriculation_number ?? 'N/A',
                     $reg->student?->user?->name ?? 'Unknown',
+                    $reg->student?->department?->name ?? 'N/A',
                 ];
 
                 $attendedCount = 0;

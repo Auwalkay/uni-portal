@@ -134,7 +134,7 @@ class StudentLectureAttendanceTest extends TestCase
         $response->assertStatus(200);
         $this->assertStringContainsString('text/csv', $response->headers->get('Content-Type'));
         $content = $response->streamedContent();
-        $this->assertStringContainsString('matriculation_number,student_name,status', $content);
+        $this->assertStringContainsString('matriculation_number,student_name,department,status', $content);
         $this->assertStringContainsString('CSC/2026/001', $content);
         $this->assertTrue(stripos($content, 'Alice Student') !== false);
         $this->assertStringContainsString('Present', $content);
@@ -501,5 +501,212 @@ class StudentLectureAttendanceTest extends TestCase
         $this->assertStringContainsString('Attendance %', $content);
         $this->assertStringContainsString('CSC/2026/001', $content);
         $this->assertStringContainsString('100%', $content);
+    }
+
+    public function test_lecturer_can_download_attendance_template_filtered_by_department()
+    {
+        $this->actingAs($this->lecturerUser);
+
+        $seDept = Department::create(['name' => 'Software Engineering', 'code' => 'SEN', 'faculty_id' => $this->course->department->faculty_id]);
+        $userSe = User::create(['name' => 'Bob SE', 'email' => 'bob@portal.com', 'password' => Hash::make('password')]);
+        $userSe->assignRole('student');
+        $state = \App\Models\State::first();
+        $lga = \App\Models\Lga::first();
+
+        $studentSe = Student::create([
+            'user_id' => $userSe->id,
+            'matriculation_number' => 'SEN/2026/002',
+            'department_id' => $seDept->id,
+            'current_level' => '200',
+            'gender' => 'male',
+            'state_id' => $state->id,
+            'lga_id' => $lga->id,
+            'passport_photo_path' => 'passports/test.jpg',
+            'indigene_letter_path' => 'indigene/test.jpg',
+            'status' => 'active',
+        ]);
+        \App\Models\OLevelResult::create([
+            'student_id' => $studentSe->id,
+            'exam_type' => 'WAEC',
+            'exam_year' => '2024',
+            'exam_number' => '87654321WA',
+            'subjects' => json_encode([['subject' => 'Mathematics', 'grade' => 'A1']]),
+        ]);
+        CourseRegistration::create([
+            'student_id' => $studentSe->id,
+            'course_id' => $this->course->id,
+            'session_id' => $this->session->id,
+            'semester_id' => $this->semester->id,
+        ]);
+
+        // Filter by Computer Science
+        $resCs = $this->get(route('admin.teaching.courses.attendance.template', [$this->course->id, 'department_ids' => [$this->course->department_id]]));
+        $resCs->assertStatus(200);
+        $csContent = $resCs->streamedContent();
+        $this->assertStringContainsString('CSC/2026/001', $csContent);
+        $this->assertStringNotContainsString('SEN/2026/002', $csContent);
+
+        // Filter by Software Engineering
+        $resSe = $this->get(route('admin.teaching.courses.attendance.template', [$this->course->id, 'department_ids' => [$seDept->id]]));
+        $resSe->assertStatus(200);
+        $seContent = $resSe->streamedContent();
+        $this->assertStringContainsString('SEN/2026/002', $seContent);
+        $this->assertStringNotContainsString('CSC/2026/001', $seContent);
+    }
+
+    public function test_lecturer_can_upload_attendance_for_specific_department_cohorts()
+    {
+        $this->actingAs($this->lecturerUser);
+
+        $seDept = Department::create(['name' => 'Software Engineering', 'code' => 'SEN', 'faculty_id' => $this->course->department->faculty_id]);
+
+        $csvContent = "matriculation_number,status\nCSC/2026/001,Present\n";
+        $file = UploadedFile::fake()->createWithContent('attendance_cs.csv', $csvContent);
+
+        $response = $this->post(route('admin.teaching.courses.attendance.upload', $this->course->id), [
+            'attendance_date' => '2026-11-12',
+            'department_ids' => [$this->course->department_id],
+            'file' => $file,
+        ]);
+
+        $response->assertSessionHas('success');
+
+        $sessionRecord = \App\Models\CourseLectureSession::where('course_id', $this->course->id)
+            ->whereDate('lecture_date', '2026-11-12')
+            ->first();
+
+        $this->assertNotNull($sessionRecord);
+        $this->assertEquals([$this->course->department_id], $sessionRecord->department_ids);
+        $this->assertContains('Computer Science', $sessionRecord->department_names);
+
+        $attendance = StudentCourseAttendance::where('course_id', $this->course->id)
+            ->whereDate('attendance_date', '2026-11-12')
+            ->first();
+        $this->assertNotNull($attendance);
+        $this->assertEquals($sessionRecord->id, $attendance->course_lecture_session_id);
+    }
+
+    public function test_student_attendance_calculation_respects_department_cohorts()
+    {
+        $seDept = Department::create(['name' => 'Software Engineering', 'code' => 'SEN', 'faculty_id' => $this->course->department->faculty_id]);
+        $userSe = User::create(['name' => 'Bob SE', 'email' => 'bob@portal.com', 'password' => Hash::make('password')]);
+        $userSe->assignRole('student');
+        $state = \App\Models\State::first();
+        $lga = \App\Models\Lga::first();
+
+        $studentSe = Student::create([
+            'user_id' => $userSe->id,
+            'matriculation_number' => 'SEN/2026/002',
+            'department_id' => $seDept->id,
+            'current_level' => '200',
+            'gender' => 'male',
+            'state_id' => $state->id,
+            'lga_id' => $lga->id,
+            'passport_photo_path' => 'passports/test.jpg',
+            'indigene_letter_path' => 'indigene/test.jpg',
+            'status' => 'active',
+        ]);
+        \App\Models\OLevelResult::create([
+            'student_id' => $studentSe->id,
+            'exam_type' => 'WAEC',
+            'exam_year' => '2024',
+            'exam_number' => '87654321WA',
+            'subjects' => json_encode([['subject' => 'Mathematics', 'grade' => 'A1']]),
+        ]);
+        $regSe = CourseRegistration::create([
+            'student_id' => $studentSe->id,
+            'course_id' => $this->course->id,
+            'session_id' => $this->session->id,
+            'semester_id' => $this->semester->id,
+        ]);
+
+        // Nov 12: Lecture for Computer Science only (Alice attended)
+        $sessionNov12 = \App\Models\CourseLectureSession::create([
+            'course_id' => $this->course->id,
+            'session_id' => $this->session->id,
+            'lecture_date' => '2026-11-12',
+            'department_ids' => [$this->course->department_id],
+            'department_names' => ['Computer Science'],
+        ]);
+        StudentCourseAttendance::create([
+            'course_lecture_session_id' => $sessionNov12->id,
+            'course_registration_id' => $this->registration->id,
+            'student_id' => $this->student->id,
+            'course_id' => $this->course->id,
+            'session_id' => $this->session->id,
+            'attendance_date' => '2026-11-12',
+            'status' => AttendanceStatus::PRESENT,
+        ]);
+
+        // Nov 13: Lecture for Software Engineering only (Bob attended)
+        $sessionNov13 = \App\Models\CourseLectureSession::create([
+            'course_id' => $this->course->id,
+            'session_id' => $this->session->id,
+            'lecture_date' => '2026-11-13',
+            'department_ids' => [$seDept->id],
+            'department_names' => ['Software Engineering'],
+        ]);
+        StudentCourseAttendance::create([
+            'course_lecture_session_id' => $sessionNov13->id,
+            'course_registration_id' => $regSe->id,
+            'student_id' => $studentSe->id,
+            'course_id' => $this->course->id,
+            'session_id' => $this->session->id,
+            'attendance_date' => '2026-11-13',
+            'status' => AttendanceStatus::PRESENT,
+        ]);
+
+        // Nov 14: Combined / Joint Lecture for all departments (Both attended)
+        $sessionNov14 = \App\Models\CourseLectureSession::create([
+            'course_id' => $this->course->id,
+            'session_id' => $this->session->id,
+            'lecture_date' => '2026-11-14',
+            'department_ids' => null, // All departments
+            'department_names' => null,
+        ]);
+        StudentCourseAttendance::create([
+            'course_lecture_session_id' => $sessionNov14->id,
+            'course_registration_id' => $this->registration->id,
+            'student_id' => $this->student->id,
+            'course_id' => $this->course->id,
+            'session_id' => $this->session->id,
+            'attendance_date' => '2026-11-14',
+            'status' => AttendanceStatus::PRESENT,
+        ]);
+        StudentCourseAttendance::create([
+            'course_lecture_session_id' => $sessionNov14->id,
+            'course_registration_id' => $regSe->id,
+            'student_id' => $studentSe->id,
+            'course_id' => $this->course->id,
+            'session_id' => $this->session->id,
+            'attendance_date' => '2026-11-14',
+            'status' => AttendanceStatus::PRESENT,
+        ]);
+
+        // Verify Alice (CS): Total held should be 2 (Nov 12 + Nov 14), NOT 3! Attended = 2 (100%).
+        $this->actingAs($this->studentUser);
+        $resAlice = $this->get(route('student.attendance.index'));
+        $resAlice->assertStatus(200);
+        $resAlice->assertInertia(fn ($page) => $page
+            ->where('stats.total_classes', 2)
+            ->where('stats.total_attended', 2)
+            ->where('stats.overall_percentage', 100)
+            ->where('courses.0.total_classes', 2)
+            ->where('courses.0.attended_classes', 2)
+            ->where('courses.0.attendance_percentage', 100)
+        );
+
+        // Verify Bob (SE): Total held should be 2 (Nov 13 + Nov 14), NOT 3! Attended = 2 (100%).
+        $this->actingAs($userSe);
+        $resBob = $this->get(route('student.attendance.index'));
+        $resBob->assertStatus(200);
+        $resBob->assertInertia(fn ($page) => $page
+            ->where('stats.total_classes', 2)
+            ->where('stats.total_attended', 2)
+            ->where('stats.overall_percentage', 100)
+            ->where('courses.0.total_classes', 2)
+            ->where('courses.0.attended_classes', 2)
+            ->where('courses.0.attendance_percentage', 100)
+        );
     }
 }

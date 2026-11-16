@@ -8,77 +8,175 @@ import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Search, BookOpen, Calendar, ArrowRight, Filter, BookPlus } from 'lucide-vue-next';
+import { 
+    Search, 
+    BookOpen, 
+    Calendar, 
+    ArrowRight, 
+    BookPlus, 
+    Users, 
+    Building2, 
+    Layers, 
+    GraduationCap, 
+    FilterX 
+} from 'lucide-vue-next';
 import debounce from 'lodash/debounce';
 import { route } from 'ziggy-js';
 
 const props = defineProps<{
-    allocations: {
+    courses: {
         data: Array<{
             id: string;
-            course: {
-                id: string;
-                code: string;
-                title: string;
-                units: number;
-            };
-            session: {
-                name: string;
-            };
+            code: string;
+            title: string;
+            units: number;
+            department?: { id: string; name: string; code: string };
+            allocations?: Array<{ id: string; staff?: { user?: { name: string } } }>;
+            registrations_count?: number;
         }>;
         links: any[];
+        total?: number;
     };
     sessions: Array<{ id: string; name: string }>;
-    filters: { session_id?: string; search?: string };
+    filters: { 
+        session_id?: string; 
+        search?: string; 
+        scope?: string; 
+        department_id?: string;
+    };
     currentSessionId?: string;
+    userRole: {
+        isAdmin: boolean;
+        isDean: boolean;
+        isHod: boolean;
+        hasAllocations: boolean;
+        scope: string;
+        scopeTitle: string;
+    };
+    departments?: Array<{ id: string; name: string }>;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/admin/dashboard' },
-    { title: 'My Courses', href: '/admin/staff/courses' },
+    { title: 'Courses & Rosters', href: '/admin/staff/courses' },
 ];
 
 const search = ref(props.filters.search || '');
-const selectedSession = ref(props.filters.session_id || props.currentSessionId);
+const selectedSession = ref(props.filters.session_id || props.currentSessionId || 'all');
+const selectedDepartment = ref(props.filters.department_id || 'all');
+const selectedScope = ref(props.filters.scope || props.userRole.scope || 'assigned');
 
-watch(search, debounce((value) => {
-    router.get(route('admin.teaching.courses.index'), { search: value, session_id: selectedSession.value }, { preserveState: true, replace: true });
+function applyFilters() {
+    router.get(route('admin.teaching.courses.index'), {
+        search: search.value || undefined,
+        session_id: selectedSession.value,
+        department_id: selectedDepartment.value !== 'all' ? selectedDepartment.value : undefined,
+        scope: selectedScope.value,
+    }, { 
+        preserveState: true, 
+        replace: true 
+    });
+}
+
+watch(search, debounce(() => {
+    applyFilters();
 }, 300));
 
-watch(selectedSession, (value) => {
-    router.get(route('admin.teaching.courses.index'), { session_id: value, search: search.value }, { preserveState: true, replace: true });
+watch([selectedSession, selectedDepartment, selectedScope], () => {
+    applyFilters();
 });
+
+function clearFilters() {
+    search.value = '';
+    selectedSession.value = props.currentSessionId || 'all';
+    selectedDepartment.value = 'all';
+    selectedScope.value = props.userRole.isAdmin || props.userRole.isDean || props.userRole.isHod ? 'managed' : 'assigned';
+    applyFilters();
+}
 </script>
 
 <template>
-    <Head title="My Courses" />
+    <Head title="Course Rosters & Management" />
 
     <AdminLayout :breadcrumbs="breadcrumbs">
-        <div class="flex flex-col gap-6 p-6 max-w-7xl mx-auto w-full">
-            <!-- Header -->
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100">My Courses</h1>
-                    <p class="text-muted-foreground mt-1">Manage your allocated courses and view student registrations.</p>
+        <div class="flex flex-col gap-6 p-4 sm:p-6 max-w-7xl mx-auto w-full">
+            <!-- Header Section -->
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm">
+                <div class="space-y-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                            Course Rosters & Attendance
+                        </h1>
+                        <Badge 
+                            variant="secondary" 
+                            class="px-2.5 py-0.5 text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                        >
+                            {{ userRole.scopeTitle }}
+                        </Badge>
+                    </div>
+                    <p class="text-sm text-muted-foreground">
+                        Access course details, real-time student registration lists, and lecture attendance records.
+                    </p>
                 </div>
-                
-                <div class="flex flex-wrap items-center gap-3">
-                    <Button as-child class="bg-indigo-600 hover:bg-indigo-700 text-white">
+
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <Button as-child class="bg-indigo-600 hover:bg-indigo-700 text-white min-h-[40px] shadow-sm">
                         <Link :href="route('admin.teaching.courses.self_allocation')">
                             <BookPlus class="w-4 h-4 mr-2" /> Self Course Allocation
                         </Link>
                     </Button>
-                    <div class="relative w-full md:w-64">
-                        <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            v-model="search"
-                            type="search"
-                            placeholder="Search courses..."
-                            class="pl-9 w-full"
-                        />
-                    </div>
+                </div>
+            </div>
+
+            <!-- Filters Bar -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between flex-wrap">
+                <!-- Search Input -->
+                <div class="relative flex-1 min-w-[220px]">
+                    <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        v-model="search"
+                        type="search"
+                        placeholder="Search by course code or title..."
+                        class="pl-9 w-full bg-slate-50/50 dark:bg-slate-950/50"
+                    />
+                </div>
+
+                <!-- Scope Toggle (if user has elevated role AND personal allocations) -->
+                <div v-if="(userRole.isAdmin || userRole.isDean || userRole.isHod) && userRole.hasAllocations" class="w-full sm:w-auto">
+                    <Select v-model="selectedScope">
+                        <SelectTrigger class="w-full sm:w-[190px] bg-slate-50/50 dark:bg-slate-950/50">
+                            <SelectValue placeholder="Scope" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="managed">
+                                <span class="font-medium">
+                                    {{ userRole.isAdmin ? 'All Courses' : (userRole.isHod ? 'Dept Courses' : 'Faculty Courses') }}
+                                </span>
+                            </SelectItem>
+                            <SelectItem value="assigned">My Allocated Only</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <!-- Department Filter (for Admin and Dean) -->
+                <div v-if="departments && departments.length > 0" class="w-full sm:w-auto">
+                    <Select v-model="selectedDepartment">
+                        <SelectTrigger class="w-full sm:w-[210px] bg-slate-50/50 dark:bg-slate-950/50">
+                            <SelectValue placeholder="All Departments" />
+                        </SelectTrigger>
+                        <SelectContent class="max-h-[300px]">
+                            <SelectItem value="all">All Departments</SelectItem>
+                            <SelectItem v-for="dept in departments" :key="dept.id" :value="String(dept.id)">
+                                {{ dept.name }}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <!-- Session Select -->
+                <div class="w-full sm:w-auto">
                     <Select v-model="selectedSession">
-                        <SelectTrigger class="w-[180px]">
+                        <SelectTrigger class="w-full sm:w-[190px] bg-slate-50/50 dark:bg-slate-950/50">
                             <SelectValue placeholder="All Sessions" />
                         </SelectTrigger>
                         <SelectContent>
@@ -89,74 +187,156 @@ watch(selectedSession, (value) => {
                         </SelectContent>
                     </Select>
                 </div>
+
+                <!-- Clear Filters button if filters are active -->
+                <Button 
+                    v-if="search || selectedDepartment !== 'all' || (selectedSession !== currentSessionId && selectedSession !== 'all')" 
+                    variant="ghost" 
+                    size="sm" 
+                    class="text-xs text-muted-foreground hover:text-foreground"
+                    @click="clearFilters"
+                >
+                    <FilterX class="w-3.5 h-3.5 mr-1" /> Reset
+                </Button>
             </div>
 
-            <!-- Stats Summary -->
-             <div class="grid gap-4 md:grid-cols-3">
-                 <Card class="bg-indigo-50 dark:bg-indigo-950/20 border-indigo-100 dark:border-indigo-900">
-                    <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle class="text-sm font-medium text-indigo-700 dark:text-indigo-400">Total Allocations</CardTitle>
+            <!-- Summary KPI Bar -->
+            <div class="grid gap-3 grid-cols-2 md:grid-cols-3">
+                <Card class="bg-indigo-50/70 dark:bg-indigo-950/20 border-indigo-100 dark:border-indigo-900/60 shadow-none">
+                    <CardHeader class="flex flex-row items-center justify-between space-y-0 p-3.5 pb-1">
+                        <CardTitle class="text-xs font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">Total Courses</CardTitle>
                         <BookOpen class="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                     </CardHeader>
-                    <CardContent>
-                        <div class="text-2xl font-bold text-indigo-900 dark:text-indigo-100">{{ allocations.data.length }}</div>
-                        <p class="text-xs text-indigo-600/80 dark:text-indigo-400/80">
-                            {{ selectedSession ? 'In selected session' : 'All time' }}
+                    <CardContent class="p-3.5 pt-1">
+                        <div class="text-2xl font-bold text-indigo-950 dark:text-indigo-100">
+                            {{ courses.total ?? courses.data.length }}
+                        </div>
+                        <p class="text-[11px] text-indigo-600/80 dark:text-indigo-400/80 mt-0.5 truncate">
+                            In current view
                         </p>
                     </CardContent>
                 </Card>
-             </div>
+
+                <Card class="bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/60 shadow-none">
+                    <CardHeader class="flex flex-row items-center justify-between space-y-0 p-3.5 pb-1">
+                        <CardTitle class="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Student Rosters</CardTitle>
+                        <Users class="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    </CardHeader>
+                    <CardContent class="p-3.5 pt-1">
+                        <div class="text-2xl font-bold text-emerald-950 dark:text-emerald-100">
+                            {{ courses.data.reduce((acc, c) => acc + (c.registrations_count || 0), 0) }}
+                        </div>
+                        <p class="text-[11px] text-emerald-600/80 dark:text-emerald-400/80 mt-0.5 truncate">
+                            Registered on this page
+                        </p>
+                    </CardContent>
+                </Card>
+
+                <Card class="col-span-2 md:col-span-1 bg-slate-50/80 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 shadow-none">
+                    <CardHeader class="flex flex-row items-center justify-between space-y-0 p-3.5 pb-1">
+                        <CardTitle class="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Selected Session</CardTitle>
+                        <Calendar class="h-4 w-4 text-slate-500" />
+                    </CardHeader>
+                    <CardContent class="p-3.5 pt-1">
+                        <div class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">
+                            {{ sessions.find(s => String(s.id) === String(selectedSession))?.name ?? 'All Sessions' }}
+                        </div>
+                        <p class="text-[11px] text-muted-foreground mt-0.5">
+                            Academic period
+                        </p>
+                    </CardContent>
+                </Card>
+            </div>
 
             <!-- Course Grid -->
-            <div v-if="allocations.data.length > 0" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                <a 
-                    v-for="allocation in allocations.data" 
-                    :key="allocation.id"
-                    :href="route('admin.teaching.courses.show', allocation.course.id)"
-                    class="group block h-full"
+            <div v-if="courses.data.length > 0" class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                <Link 
+                    v-for="course in courses.data" 
+                    :key="course.id"
+                    :href="route('admin.teaching.courses.show', course.id)"
+                    class="group block h-full focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-xl"
                 >
-                    <Card class="h-full hover:shadow-lg transition-all duration-300 border-l-4 border-l-indigo-500 overflow-hidden">
-                        <CardHeader class="pb-3">
-                            <div class="flex justify-between items-start">
-                                <Badge variant="secondary" class="font-mono bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-100">
-                                    {{ allocation.course.code }}
+                    <Card class="h-full bg-white dark:bg-slate-900 hover:shadow-md transition-all duration-200 border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 flex flex-col justify-between overflow-hidden">
+                        <CardHeader class="p-4 pb-3">
+                            <div class="flex items-center justify-between gap-2">
+                                <Badge variant="secondary" class="font-mono font-bold text-xs bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                    {{ course.code }}
                                 </Badge>
-                                <Badge variant="outline" class="text-muted-foreground">
-                                    {{ allocation.session.name }}
-                                </Badge>
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+                                    {{ course.units }} {{ course.units === 1 ? 'Unit' : 'Units' }}
+                                </span>
                             </div>
-                            <CardTitle class="text-lg mt-2 group-hover:text-indigo-600 transition-colors">
-                                {{ allocation.course.title }}
+
+                            <CardTitle class="text-base font-semibold leading-snug mt-2.5 text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2">
+                                {{ course.title }}
                             </CardTitle>
+
+                            <!-- Department & Lecturer Details -->
+                            <div class="mt-2 space-y-1 text-xs text-muted-foreground">
+                                <div v-if="course.department" class="flex items-center gap-1.5 truncate">
+                                    <Building2 class="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                                    <span class="truncate">{{ course.department.name }}</span>
+                                </div>
+                                <div v-if="course.allocations && course.allocations.length > 0" class="flex items-center gap-1.5 truncate">
+                                    <GraduationCap class="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                                    <span class="truncate">Lecturer: {{ course.allocations[0]?.staff?.user?.name || 'Staff' }}</span>
+                                </div>
+                            </div>
                         </CardHeader>
-                        <CardContent>
-                             <div class="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
-                                <div class="text-sm text-muted-foreground">
-                                    <span class="font-medium text-slate-700 dark:text-slate-300">{{ allocation.course.units }}</span> Units
-                                </div>
-                                <div class="flex items-center text-sm font-medium text-indigo-600 group-hover:translate-x-1 transition-transform">
-                                    Manage <ArrowRight class="ml-1 h-3 w-3" />
-                                </div>
+
+                        <CardContent class="p-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-950/30 flex items-center justify-between">
+                            <!-- Registered Students Badge -->
+                            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80">
+                                <Users class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                <span>{{ course.registrations_count ?? 0 }} Registered</span>
+                            </div>
+
+                            <!-- Action hint -->
+                            <div class="flex items-center text-xs font-semibold text-indigo-600 dark:text-indigo-400 group-hover:translate-x-0.5 transition-transform">
+                                Manage Roster <ArrowRight class="ml-1 h-3.5 w-3.5" />
                             </div>
                         </CardContent>
                     </Card>
-                </a>
+                </Link>
             </div>
 
             <!-- Empty State -->
-            <div v-else class="flex flex-col items-center justify-center py-12 text-center text-muted-foreground border rounded-lg border-dashed">
-                <div class="bg-slate-50 dark:bg-slate-900 p-4 rounded-full mb-3">
-                    <BookOpen class="w-8 h-8 text-slate-400" />
+            <div v-else class="flex flex-col items-center justify-center py-16 px-4 text-center bg-white dark:bg-slate-900 border border-dashed rounded-xl border-slate-200 dark:border-slate-800">
+                <div class="bg-indigo-50 dark:bg-indigo-950/50 p-4 rounded-full mb-3 text-indigo-600 dark:text-indigo-400">
+                    <BookOpen class="w-8 h-8" />
                 </div>
-                <h3 class="font-semibold text-lg">No courses found</h3>
-                <p class="text-sm max-w-sm mt-1">
-                    No courses matched your search or filter criteria. Try creating a new allocation or adjusting filters.
+                <h3 class="font-semibold text-lg text-slate-900 dark:text-slate-100">No courses found</h3>
+                <p class="text-sm text-muted-foreground max-w-md mt-1">
+                    No courses matched your current scope or filters. Try adjusting your search term, department, or session filter.
                 </p>
-                <div class="mt-4" v-if="filters.search || filters.session_id">
-                     <Button variant="outline" size="sm" @click="() => { search = ''; selectedSession = ''; }">
-                        Clear Filters
+                <div class="mt-4">
+                    <Button variant="outline" size="sm" @click="clearFilters">
+                        Clear All Filters
                     </Button>
                 </div>
+            </div>
+
+            <!-- Pagination -->
+            <div v-if="courses.links && courses.links.length > 3" class="flex flex-wrap items-center justify-center gap-1.5 mt-2">
+                <template v-for="(link, i) in courses.links" :key="i">
+                    <Link
+                        v-if="link.url"
+                        :href="link.url"
+                        class="px-3 py-1.5 text-xs rounded-md border transition-colors min-h-[36px] flex items-center justify-center font-medium"
+                        :class="[
+                            link.active 
+                                ? 'bg-indigo-600 text-white border-indigo-600 font-semibold shadow-sm' 
+                                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
+                        ]"
+                        v-html="link.label"
+                        preserve-scroll
+                    />
+                    <span 
+                        v-else 
+                        class="px-3 py-1.5 text-xs text-slate-400 border border-transparent select-none min-h-[36px] flex items-center justify-center"
+                        v-html="link.label"
+                    />
+                </template>
             </div>
         </div>
     </AdminLayout>
