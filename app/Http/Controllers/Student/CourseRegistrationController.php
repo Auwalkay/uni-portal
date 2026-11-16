@@ -212,6 +212,11 @@ class CourseRegistrationController extends Controller
             abort(404, 'No active session.');
         }
 
+        // Strictly enforce session-level registration closing
+        if (!$currentSession->registration_enabled) {
+            return back()->with('error', 'Course registration is currently closed for this academic session.');
+        }
+
         $paymentInfo = $this->resolveSchoolFeePayment((string) Auth::id(), (string) $currentSession->id);
 
         if (!$paymentInfo['hasPaid']) {
@@ -226,29 +231,6 @@ class CourseRegistrationController extends Controller
         $secondSemester = $semesters->filter(fn ($s) => stripos($s->name, 'Second') !== false || stripos($s->name, 'Trimester 2') !== false || $s->name == '2')->first();
         $thirdSemester = $semesters->filter(fn ($s) => stripos($s->name, 'Third') !== false || stripos($s->name, 'Trimester 3') !== false || $s->name == '3')->first();
 
-        $now = now();
-        $isFirstSemLocked = false;
-        if ($firstSemester) {
-            if (($firstSemester->registration_starts_at && $now->lt($firstSemester->registration_starts_at)) ||
-                ($firstSemester->registration_ends_at && $now->gt($firstSemester->registration_ends_at))) {
-                $isFirstSemLocked = true;
-            }
-        }
-        if ($secondSemester && $secondSemester->is_current) {
-            $isFirstSemLocked = true;
-        }
-
-        $isSecondSemLocked = false;
-        if ($secondSemester) {
-            if (($secondSemester->registration_starts_at && $now->lt($secondSemester->registration_starts_at)) ||
-                ($secondSemester->registration_ends_at && $now->gt($secondSemester->registration_ends_at))) {
-                $isSecondSemLocked = true;
-            }
-        }
-        if ($paymentInfo['isPartial']) {
-            $isSecondSemLocked = true;
-        }
-
         $programme = $student->program;
         $maxUnits = $programme ? $programme->max_credit_units : 24;
 
@@ -256,9 +238,9 @@ class CourseRegistrationController extends Controller
         if ($selectedCourses->count() !== count($request->courses)) {
             return back()->with('error', 'One or more selected courses are inactive or no longer available for registration.');
         }
-        $firstSemCourses = $selectedCourses->where('semester', '1');
-        $secondSemCourses = $selectedCourses->where('semester', '2');
-        $thirdSemCourses = $selectedCourses->where('semester', '3');
+        $firstSemCourses = $selectedCourses->filter(fn ($c) => $c->semester === '1' || $c->semester == 1);
+        $secondSemCourses = $selectedCourses->filter(fn ($c) => $c->semester === '2' || $c->semester == 2);
+        $thirdSemCourses = $selectedCourses->filter(fn ($c) => $c->semester === '3' || $c->semester == 3);
 
         if ($paymentInfo['isPartial'] && ($secondSemCourses->isNotEmpty() || $thirdSemCourses->isNotEmpty())) {
             return back()->with('error', 'Because you made a partial school fee payment, you are only allowed to register for First Semester courses. Full payment of school fees is required to register for Second Semester courses.');
@@ -275,23 +257,32 @@ class CourseRegistrationController extends Controller
         }
 
         // Enforce Locks on Semester-specific changes
+        $locks = $this->getSemesterRegistrationLocks($semesters, $paymentInfo['isPartial']);
+
         $existingRegistrations = CourseRegistration::where('student_id', $student->id)
             ->where('session_id', $currentSession->id)
             ->with('course')
             ->get();
 
-        $existingFirstSemIds = $existingRegistrations->filter(fn ($r) => $r->course?->semester === '1')->pluck('course_id')->toArray();
+        $existingFirstSemIds = $existingRegistrations->filter(fn ($r) => $r->course?->semester === '1' || $r->course?->semester == 1)->pluck('course_id')->toArray();
         $newFirstSemIds = $firstSemCourses->pluck('id')->toArray();
 
-        if ($isFirstSemLocked && (array_diff($existingFirstSemIds, $newFirstSemIds) || array_diff($newFirstSemIds, $existingFirstSemIds))) {
-            return back()->with('error', 'First Semester registration is locked and cannot be modified.');
+        if ($locks['1'] && (array_diff($existingFirstSemIds, $newFirstSemIds) || array_diff($newFirstSemIds, $existingFirstSemIds))) {
+            return back()->with('error', 'First Semester registration is closed and cannot be modified.');
         }
 
-        $existingSecondSemIds = $existingRegistrations->filter(fn ($r) => $r->course?->semester === '2')->pluck('course_id')->toArray();
+        $existingSecondSemIds = $existingRegistrations->filter(fn ($r) => $r->course?->semester === '2' || $r->course?->semester == 2)->pluck('course_id')->toArray();
         $newSecondSemIds = $secondSemCourses->pluck('id')->toArray();
 
-        if ($isSecondSemLocked && (array_diff($existingSecondSemIds, $newSecondSemIds) || array_diff($newSecondSemIds, $existingSecondSemIds))) {
-            return back()->with('error', 'Second Semester registration is locked and cannot be modified.');
+        if ($locks['2'] && (array_diff($existingSecondSemIds, $newSecondSemIds) || array_diff($newSecondSemIds, $existingSecondSemIds))) {
+            return back()->with('error', 'Second Semester registration is closed and cannot be modified.');
+        }
+
+        $existingThirdSemIds = $existingRegistrations->filter(fn ($r) => $r->course?->semester === '3' || $r->course?->semester == 3)->pluck('course_id')->toArray();
+        $newThirdSemIds = $thirdSemCourses->pluck('id')->toArray();
+
+        if ($locks['3'] && (array_diff($existingThirdSemIds, $newThirdSemIds) || array_diff($newThirdSemIds, $existingThirdSemIds))) {
+            return back()->with('error', 'Third Trimester registration is closed and cannot be modified.');
         }
 
         $this->syncCourseRegistrations($student, $currentSession, $firstSemester, $secondSemester, $firstSemCourses, $secondSemCourses, $thirdSemester, $thirdSemCourses);
@@ -509,8 +500,10 @@ class CourseRegistrationController extends Controller
         $locks = ['1' => false, '2' => false, '3' => false];
 
         if ($firstSemester) {
-            if (($firstSemester->registration_starts_at && $now->lt($firstSemester->registration_starts_at)) ||
-                ($firstSemester->registration_ends_at && $now->gt($firstSemester->registration_ends_at))) {
+            $startsAt = $firstSemester->registration_starts_at ? \Carbon\Carbon::parse($firstSemester->registration_starts_at)->startOfDay() : null;
+            $endsAt = $firstSemester->registration_ends_at ? \Carbon\Carbon::parse($firstSemester->registration_ends_at)->endOfDay() : null;
+
+            if (($startsAt && $now->lt($startsAt)) || ($endsAt && $now->gt($endsAt))) {
                 $locks['1'] = true;
             }
         }
@@ -519,15 +512,19 @@ class CourseRegistrationController extends Controller
         }
 
         if ($secondSemester) {
-            if (($secondSemester->registration_starts_at && $now->lt($secondSemester->registration_starts_at)) ||
-                ($secondSemester->registration_ends_at && $now->gt($secondSemester->registration_ends_at))) {
+            $startsAt = $secondSemester->registration_starts_at ? \Carbon\Carbon::parse($secondSemester->registration_starts_at)->startOfDay() : null;
+            $endsAt = $secondSemester->registration_ends_at ? \Carbon\Carbon::parse($secondSemester->registration_ends_at)->endOfDay() : null;
+
+            if (($startsAt && $now->lt($startsAt)) || ($endsAt && $now->gt($endsAt))) {
                 $locks['2'] = true;
             }
         }
 
         if ($thirdSemester) {
-            if (($thirdSemester->registration_starts_at && $now->lt($thirdSemester->registration_starts_at)) ||
-                ($thirdSemester->registration_ends_at && $now->gt($thirdSemester->registration_ends_at))) {
+            $startsAt = $thirdSemester->registration_starts_at ? \Carbon\Carbon::parse($thirdSemester->registration_starts_at)->startOfDay() : null;
+            $endsAt = $thirdSemester->registration_ends_at ? \Carbon\Carbon::parse($thirdSemester->registration_ends_at)->endOfDay() : null;
+
+            if (($startsAt && $now->lt($startsAt)) || ($endsAt && $now->gt($endsAt))) {
                 $locks['3'] = true;
             }
         }

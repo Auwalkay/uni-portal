@@ -18,36 +18,165 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class CourseController extends Controller
 {
+    /**
+     * Authorize user access to view/manage this course.
+     * Allowed:
+     * - Admins / Super Admins / users with 'manage_courses' permission
+     * - Deans / users with 'view_faculty_courses' (if course is in dean's faculty)
+     * - HODs / users with 'manage_department_courses' or 'view_department_courses' (if course is in HOD's department)
+     * - Allocated lecturers teaching the course
+     */
+    protected function authorizeCourseAccess(Course $course, $user): void
+    {
+        if ($user->hasRole(['admin', 'super_admin'])) {
+            return;
+        }
+
+        $staff = $user->staff;
+
+        // Check HOD / Department course management
+        if ($staff && ($user->hasRole('hod') || $user->can('manage_department_courses') || $user->can('view_department_courses'))) {
+            if ($course->department_id === $staff->department_id) {
+                return;
+            }
+        }
+
+        // Check Dean / Faculty course management
+        if ($staff && ($user->hasRole('dean') || $user->can('view_faculty_courses'))) {
+            $facultyId = $staff->department?->faculty_id;
+            if ($facultyId && $course->department?->faculty_id === $facultyId) {
+                return;
+            }
+        }
+
+        // General course managers (Academic Director, etc.) who are not scoped HODs or Deans
+        if ($user->can('manage_courses') && !$user->hasRole('hod') && !$user->hasRole('dean')) {
+            return;
+        }
+
+        // Check Lecturer allocation
+        $isAllocated = CourseAllocation::where('course_id', $course->id)
+            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
+            ->exists();
+
+        if ($isAllocated) {
+            return;
+        }
+
+        abort(403, 'You are not assigned or authorized to view this course.');
+    }
+
     public function index(Request $request)
     {
         $user = auth()->user();
-        $currentSession = Session::current();
+        $currentSession = Session::current() ?? Session::latest()->first();
 
-        $filters = $request->only(['session_id', 'search']);
+        $filters = $request->only(['session_id', 'search', 'scope', 'department_id']);
         $sessionId = $filters['session_id'] ?? $currentSession?->id;
         if ($sessionId === 'all') {
             $sessionId = null;
         }
 
-        $allocations = CourseAllocation::query()
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->when($sessionId, fn($q) => $q->where('session_id', $sessionId))
-            ->when($filters['search'] ?? null, function ($query, $search) {
-                $query->whereHas('course', function ($q) use ($search) {
-                    $q->where('code', 'like', "%{$search}%")
-                        ->orWhere('title', 'like', "%{$search}%");
-                });
-            })
-            ->with(['course', 'session'])
-            ->latest()
-            ->paginate(10)
+        $isSuperOrAdmin = $user->hasRole(['admin', 'super_admin']);
+        $isDean = !$isSuperOrAdmin && ($user->hasRole('dean') || $user->can('view_faculty_courses'));
+        $isHod = !$isSuperOrAdmin && !$isDean && ($user->hasRole('hod') || $user->can('manage_department_courses') || $user->can('view_department_courses'));
+        $isAdmin = $isSuperOrAdmin || (!$isDean && !$isHod && $user->can('manage_courses'));
+
+        $staff = $user->staff;
+        $facultyId = $staff?->department?->faculty_id;
+        $departmentId = $staff?->department_id;
+
+        // Determine active scope and title
+        $hasAllocations = CourseAllocation::whereHas('staff', fn($q) => $q->where('user_id', $user->id))->exists();
+        $scope = $filters['scope'] ?? (($isAdmin || $isDean || $isHod) && !$hasAllocations ? 'all' : ($isAdmin || $isDean || $isHod ? 'managed' : 'assigned'));
+
+        $scopeTitle = 'My Allocated Courses';
+        if ($scope === 'all' || $scope === 'managed') {
+            if ($isAdmin) {
+                $scopeTitle = 'All University Courses';
+            } elseif ($isDean) {
+                $scopeTitle = ($staff?->department?->faculty?->name ?? 'Faculty') . ' Courses';
+            } elseif ($isHod) {
+                $scopeTitle = ($staff?->department?->name ?? 'Department') . ' Courses';
+            }
+        }
+
+        // Build courses query based on jurisdiction
+        $coursesQuery = Course::query();
+
+        if ($scope === 'assigned' && !$isAdmin) {
+            // Courses allocated directly to this staff member
+            $coursesQuery->whereHas('allocations', function ($q) use ($user, $sessionId) {
+                $q->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id))
+                  ->when($sessionId, fn($sq) => $sq->where('session_id', $sessionId));
+            });
+        } elseif ($isAdmin) {
+            // Admin can view all courses, optionally filtered by department
+            if (!empty($filters['department_id']) && $filters['department_id'] !== 'all') {
+                $coursesQuery->where('department_id', $filters['department_id']);
+            }
+        } elseif ($isDean && $facultyId) {
+            // Dean: courses within faculty
+            $coursesQuery->whereHas('department', fn($q) => $q->where('faculty_id', $facultyId));
+            if (!empty($filters['department_id']) && $filters['department_id'] !== 'all') {
+                $coursesQuery->where('department_id', $filters['department_id']);
+            }
+        } elseif ($isHod && $departmentId) {
+            // HOD: courses within department
+            $coursesQuery->where('department_id', $departmentId);
+        } else {
+            // Fallback for regular lecturer
+            $coursesQuery->whereHas('allocations', function ($q) use ($user, $sessionId) {
+                $q->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id))
+                  ->when($sessionId, fn($sq) => $sq->where('session_id', $sessionId));
+            });
+        }
+
+        // Apply search filter
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+            $coursesQuery->where(function ($q) use ($search) {
+                $q->where('code', 'like', "%{$search}%")
+                  ->orWhere('title', 'like', "%{$search}%");
+            });
+        }
+
+        // Eager load relationships & registration count for selected session
+        $courses = $coursesQuery
+            ->with([
+                'department:id,name,code',
+                'department.faculty:id,name',
+                'allocations' => function ($q) use ($sessionId) {
+                    $q->when($sessionId, fn($sq) => $sq->where('session_id', $sessionId))
+                      ->with('staff.user:id,name,email');
+                }
+            ])
+            ->withCount(['registrations' => function ($q) use ($sessionId) {
+                $q->when($sessionId, fn($sq) => $sq->where('session_id', $sessionId));
+            }])
+            ->orderBy('code')
+            ->paginate(12)
             ->withQueryString();
 
+        // Department list for admin/dean filter dropdown
+        $departments = $isAdmin
+            ? Department::where('is_academic', true)->orderBy('name')->get(['id', 'name'])
+            : ($isDean && $facultyId ? Department::where('faculty_id', $facultyId)->orderBy('name')->get(['id', 'name']) : collect());
+
         return Inertia::render('Staff/Course/Index', [
-            'allocations' => $allocations,
+            'courses' => $courses,
             'sessions' => Session::orderBy('start_date', 'desc')->get(['id', 'name']),
             'filters' => $filters,
             'currentSessionId' => $currentSession?->id,
+            'userRole' => [
+                'isAdmin' => $isAdmin,
+                'isDean' => $isDean,
+                'isHod' => $isHod,
+                'hasAllocations' => $hasAllocations,
+                'scope' => $scope,
+                'scopeTitle' => $scopeTitle,
+            ],
+            'departments' => $departments,
         ]);
     }
 
@@ -56,15 +185,8 @@ class CourseController extends Controller
         $user = auth()->user();
         $currentSession = Session::current() ?? Session::latest()->first();
 
-        // 1. Authorization: Ensure user is allocated to this course (and optionally current session)
-        $isAllocated = CourseAllocation::where('course_id', $course->id)
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->exists();
-
-        // Allow admin bypass or strict check for "Staff" namespace
-        if (!$isAllocated && !$user->hasRole('admin')) {
-            abort(403, 'You are not assigned to this course.');
-        }
+        // 1. Role-aware authorization (Admin, Dean, HOD, Allocated Lecturer)
+        $this->authorizeCourseAccess($course, $user);
 
         // 2. Fetch Registered Students with Department and Programme eager-loaded
         $registrations = CourseRegistration::where('course_id', $course->id)
@@ -188,13 +310,7 @@ class CourseController extends Controller
     public function uploadStudents(Request $request, Course $course)
     {
         $user = auth()->user();
-        $isAllocated = CourseAllocation::where('course_id', $course->id)
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->exists();
-
-        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
-            abort(403, 'You are not assigned to this course.');
-        }
+        $this->authorizeCourseAccess($course, $user);
 
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls,csv,txt|max:10240',
@@ -231,13 +347,7 @@ class CourseController extends Controller
     public function downloadStudentTemplate(Course $course)
     {
         $user = auth()->user();
-        $isAllocated = CourseAllocation::where('course_id', $course->id)
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->exists();
-
-        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
-            abort(403, 'You are not assigned to this course.');
-        }
+        $this->authorizeCourseAccess($course, $user);
 
         $headers = ['matriculation_number', 'student_name'];
 
@@ -263,13 +373,7 @@ class CourseController extends Controller
     public function exportStudents(Request $request, Course $course)
     {
         $user = auth()->user();
-        $isAllocated = CourseAllocation::where('course_id', $course->id)
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->exists();
-
-        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
-            abort(403, 'You are not assigned to this course.');
-        }
+        $this->authorizeCourseAccess($course, $user);
 
         $currentSession = Session::current() ?? Session::latest()->first();
         $query = CourseRegistration::where('course_id', $course->id)
@@ -326,13 +430,7 @@ class CourseController extends Controller
     public function downloadAttendanceTemplate(Request $request, Course $course)
     {
         $user = auth()->user();
-        $isAllocated = CourseAllocation::where('course_id', $course->id)
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->exists();
-
-        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
-            abort(403, 'You are not assigned to this course.');
-        }
+        $this->authorizeCourseAccess($course, $user);
 
         $currentSession = Session::current() ?? Session::latest()->first();
 
@@ -394,13 +492,7 @@ class CourseController extends Controller
     public function uploadAttendance(Request $request, Course $course)
     {
         $user = auth()->user();
-        $isAllocated = CourseAllocation::where('course_id', $course->id)
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->exists();
-
-        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
-            abort(403, 'You are not assigned to this course.');
-        }
+        $this->authorizeCourseAccess($course, $user);
 
         $request->validate([
             'attendance_date' => 'required|date',
@@ -474,13 +566,7 @@ class CourseController extends Controller
     public function deleteAttendanceDate(Course $course, string $date)
     {
         $user = auth()->user();
-        $isAllocated = CourseAllocation::where('course_id', $course->id)
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->exists();
-
-        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
-            abort(403, 'You are not assigned to this course.');
-        }
+        $this->authorizeCourseAccess($course, $user);
 
         $session = Session::current() ?? Session::latest()->first();
         if (!$session) {
@@ -507,13 +593,7 @@ class CourseController extends Controller
     public function exportAttendance(Request $request, Course $course)
     {
         $user = auth()->user();
-        $isAllocated = CourseAllocation::where('course_id', $course->id)
-            ->whereHas('staff', fn($q) => $q->where('user_id', $user->id))
-            ->exists();
-
-        if (!$isAllocated && !$user->hasRole('admin') && !$user->can('manage_courses')) {
-            abort(403, 'You are not assigned to this course.');
-        }
+        $this->authorizeCourseAccess($course, $user);
 
         $session = Session::current() ?? Session::latest()->first();
 
