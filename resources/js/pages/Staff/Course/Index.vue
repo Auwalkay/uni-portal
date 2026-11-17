@@ -9,6 +9,14 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { 
+    Table, 
+    TableHeader, 
+    TableBody, 
+    TableHead, 
+    TableRow, 
+    TableCell 
+} from '@/components/ui/table';
+import { 
     Search, 
     BookOpen, 
     Calendar, 
@@ -18,7 +26,9 @@ import {
     Building2, 
     Layers, 
     GraduationCap, 
-    FilterX 
+    FilterX,
+    LayoutGrid,
+    LayoutList
 } from 'lucide-vue-next';
 import debounce from 'lodash/debounce';
 import { route } from 'ziggy-js';
@@ -36,6 +46,10 @@ const props = defineProps<{
         }>;
         links: any[];
         total?: number;
+        current_page?: number;
+        per_page?: number;
+        from?: number;
+        to?: number;
     };
     sessions: Array<{ id: string; name: string }>;
     filters: { 
@@ -65,6 +79,7 @@ const search = ref(props.filters.search || '');
 const selectedSession = ref(props.filters.session_id || props.currentSessionId || 'all');
 const selectedDepartment = ref(props.filters.department_id || 'all');
 const selectedScope = ref(props.filters.scope || props.userRole.scope || 'assigned');
+const viewMode = ref<'table' | 'grid'>('table');
 
 function applyFilters() {
     router.get(route('admin.teaching.courses.index'), {
@@ -248,8 +263,147 @@ function clearFilters() {
                 </Card>
             </div>
 
-            <!-- Course Grid -->
-            <div v-if="courses.data.length > 0" class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <!-- View Toggle & Summary Count Bar -->
+            <div class="flex items-center justify-between gap-3 text-xs text-muted-foreground flex-wrap">
+                <span class="font-medium">
+                    Showing <strong class="text-foreground">{{ courses.from ?? 1 }}</strong> to <strong class="text-foreground">{{ courses.to ?? courses.data.length }}</strong> of <strong class="text-foreground">{{ courses.total ?? courses.data.length }}</strong> courses
+                </span>
+
+                <!-- View Switcher -->
+                <div class="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <button
+                        type="button"
+                        :class="[
+                            'px-2.5 py-1 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-all cursor-pointer',
+                            viewMode === 'table' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
+                        ]"
+                        @click="viewMode = 'table'"
+                        title="Tabular View"
+                    >
+                        <LayoutList class="w-3.5 h-3.5" />
+                        <span>Table</span>
+                    </button>
+                    <button
+                        type="button"
+                        :class="[
+                            'px-2.5 py-1 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-all cursor-pointer',
+                            viewMode === 'grid' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
+                        ]"
+                        @click="viewMode = 'grid'"
+                        title="Grid Card View"
+                    >
+                        <LayoutGrid class="w-3.5 h-3.5" />
+                        <span>Grid</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabular View (Default) -->
+            <div v-if="courses.data.length > 0 && viewMode === 'table'" class="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-xs">
+                <div class="overflow-x-auto">
+                    <Table>
+                        <TableHeader class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800">
+                            <TableRow class="hover:bg-transparent">
+                                <TableHead class="w-12 text-center text-xs font-bold text-slate-700 dark:text-slate-300 uppercase">#</TableHead>
+                                <TableHead class="w-28 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase">Course Code</TableHead>
+                                <TableHead class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase min-w-[240px]">Course Title</TableHead>
+                                <TableHead class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase min-w-[180px]">Department</TableHead>
+                                <TableHead class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase min-w-[180px]">Assigned Lecturer</TableHead>
+                                <TableHead class="w-20 text-center text-xs font-bold text-slate-700 dark:text-slate-300 uppercase">Units</TableHead>
+                                <TableHead class="w-32 text-center text-xs font-bold text-slate-700 dark:text-slate-300 uppercase">Enrolled Roster</TableHead>
+                                <TableHead class="w-36 text-right pr-4 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody class="divide-y divide-slate-100 dark:divide-slate-800">
+                            <TableRow 
+                                v-for="(course, index) in courses.data" 
+                                :key="course.id"
+                                class="hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors group cursor-pointer"
+                                @click="router.visit(route('admin.teaching.courses.show', course.id))"
+                            >
+                                <!-- S/N -->
+                                <TableCell class="text-center font-mono text-xs text-slate-400 font-semibold">
+                                    {{ ((courses.current_page || 1) - 1) * (courses.per_page || 20) + index + 1 }}
+                                </TableCell>
+
+                                <!-- Course Code -->
+                                <TableCell class="font-mono">
+                                    <Badge variant="secondary" class="font-bold text-xs bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60">
+                                        {{ course.code }}
+                                    </Badge>
+                                </TableCell>
+
+                                <!-- Course Title -->
+                                <TableCell>
+                                    <div class="font-semibold text-slate-900 dark:text-slate-100 text-sm group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                        {{ course.title }}
+                                    </div>
+                                </TableCell>
+
+                                <!-- Department -->
+                                <TableCell>
+                                    <div v-if="course.department" class="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+                                        <Building2 class="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                        <span class="truncate">{{ course.department.name }}</span>
+                                    </div>
+                                    <span v-else class="text-xs text-slate-400 italic">General / Unassigned</span>
+                                </TableCell>
+
+                                <!-- Assigned Lecturer -->
+                                <TableCell>
+                                    <div v-if="course.allocations && course.allocations.length > 0" class="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-200 font-medium">
+                                        <div class="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold text-[10px] flex items-center justify-center shrink-0">
+                                            {{ (course.allocations[0]?.staff?.user?.name || 'S').substring(0, 1).toUpperCase() }}
+                                        </div>
+                                        <span class="truncate">{{ course.allocations[0]?.staff?.user?.name || 'Staff' }}</span>
+                                    </div>
+                                    <Badge v-else variant="outline" class="text-[10px] text-slate-400 border-dashed font-normal">
+                                        Unassigned
+                                    </Badge>
+                                </TableCell>
+
+                                <!-- Units -->
+                                <TableCell class="text-center font-bold text-xs text-slate-700 dark:text-slate-300">
+                                    {{ course.units }} {{ course.units === 1 ? 'Unit' : 'Units' }}
+                                </TableCell>
+
+                                <!-- Enrolled Students Count -->
+                                <TableCell class="text-center">
+                                    <Badge 
+                                        :class="[
+                                            (course.registrations_count || 0) > 0
+                                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                                : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+                                            'font-semibold text-xs px-2.5 py-0.5 gap-1 shadow-2xs'
+                                        ]"
+                                    >
+                                        <Users class="w-3 h-3 shrink-0" />
+                                        <span>{{ course.registrations_count ?? 0 }}</span>
+                                    </Badge>
+                                </TableCell>
+
+                                <!-- Action -->
+                                <TableCell class="text-right pr-4" @click.stop>
+                                    <Button
+                                        as-child
+                                        variant="ghost"
+                                        size="sm"
+                                        class="h-8 px-2.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-2xs"
+                                    >
+                                        <Link :href="route('admin.teaching.courses.show', course.id)">
+                                            <span>Manage Roster</span>
+                                            <ArrowRight class="w-3.5 h-3.5 ml-1" />
+                                        </Link>
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        </TableBody>
+                    </Table>
+                </div>
+            </div>
+
+            <!-- Alternative Grid View -->
+            <div v-else-if="courses.data.length > 0 && viewMode === 'grid'" class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 <Link 
                     v-for="course in courses.data" 
                     :key="course.id"

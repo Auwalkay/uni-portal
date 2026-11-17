@@ -6,6 +6,8 @@ use App\Models\CourseRegistration;
 use App\Models\ExamAttendance;
 use App\Models\ExamSchedule;
 use App\Models\Invoice;
+use App\Models\Semester;
+use App\Models\Session;
 use App\Models\Student;
 use Illuminate\Support\Facades\DB;
 
@@ -67,45 +69,136 @@ class ExamManagementService
     }
 
     /**
+     * Generate a human-readable, standard examination clearance pass token.
+     * Format: EXM-{YEAR}-{SEMESTER}-{CLEAN_MATRIC}-{CHECKSUM}
+     * Example: EXM-2026-S1-U25CS001-7F3A
+     */
+    public static function generatePassToken(Student $student, ?Session $session = null, ?Semester $semester = null): string
+    {
+        $session = $session ?? AcademicCacheService::getCurrentSession();
+        $semester = $semester ?? AcademicCacheService::getCurrentSemester();
+
+        // 1. Session / Year (e.g. "2025/2026" -> "2026" or current year)
+        $year = now()->format('Y');
+        if ($session && $session->name) {
+            if (preg_match('/(\d{4})\s*\/\s*(\d{4})/', $session->name, $matches)) {
+                $year = $matches[2];
+            } elseif (preg_match('/\d{4}/', $session->name, $matches)) {
+                $year = $matches[0];
+            }
+        }
+
+        // 2. Semester code (e.g. S1 or S2)
+        $semCode = 'S1';
+        if ($semester && $semester->name) {
+            if (stripos($semester->name, 'second') !== false || stripos($semester->name, '2') !== false) {
+                $semCode = 'S2';
+            } elseif (stripos($semester->name, 'summer') !== false || stripos($semester->name, '3') !== false) {
+                $semCode = 'S3';
+            }
+        }
+
+        // 3. Clean student matriculation number
+        $rawMatric = $student->matriculation_number ?? $student->matric_number ?? '';
+        $cleanMatric = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $rawMatric));
+
+        if (empty($cleanMatric)) {
+            $cleanMatric = 'STU' . strtoupper(substr(str_replace('-', '', $student->id), 0, 6));
+        }
+
+        // 4. 4-character cryptographic checksum
+        $secretPayload = $student->id . ($session?->id ?? '') . ($semester?->id ?? '') . 'EXAM_ATTENDANCE_SECRET';
+        $checksum = strtoupper(substr(hash_hmac('sha256', $secretPayload, config('app.key', 'exam-pass-secret')), 0, 4));
+
+        return "EXM-{$year}-{$semCode}-{$cleanMatric}-{$checksum}";
+    }
+
+    /**
      * Verify candidate pass token or matric number and return candidate profile, fee clearance, and registered exam schedules.
      */
-    public function verifyStudentPass(string $token): ?array
+    public function verifyStudentPass(string $token, ?string $sessionId = null, ?string $semesterId = null): ?array
     {
-        $currentSession = AcademicCacheService::getCurrentSession();
+        $token = trim($token);
 
-        // Search student by token, matriculation number, or user ID
-        $student = Student::where('matriculation_number', $token)
-            ->orWhere('id', $token)
-            ->orWhere('matriculation_number', 'like', "%{$token}%")
-            ->orWhereHas('user', fn ($q) => $q->where('name', 'like', "%{$token}%"))
-            ->with(['user', 'department', 'programme'])
-            ->first();
+        // If a full URL was passed/scanned (e.g. https://.../admin/exams/verify-pass/EXM-...), extract token
+        if (str_contains($token, '/verify-pass/')) {
+            $token = basename(parse_url($token, PHP_URL_PATH));
+        }
+
+        // If JSON payload was passed (from Docket QR code), extract token or matric
+        if (str_starts_with($token, '{') && str_ends_with($token, '}')) {
+            $decoded = json_decode($token, true);
+            if (is_array($decoded)) {
+                $token = $decoded['token'] ?? $decoded['matric'] ?? $token;
+            }
+        }
+
+        $student = null;
+
+        // 1. If it's a standard EXM pass token: EXM-{YEAR}-{SEM}-{MATRIC}-{CODE}
+        if (str_starts_with($token, 'EXM-')) {
+            $parts = explode('-', $token);
+            if (count($parts) >= 4) {
+                // If 5 parts: EXM, YEAR, SEM, MATRIC, CODE
+                // If more parts (in case matric had hyphens): extract candidate matric segment
+                $candidateMatric = (count($parts) === 5) ? $parts[3] : implode('', array_slice($parts, 3, -1));
+
+                $student = Student::whereRaw("REPLACE(REPLACE(REPLACE(matriculation_number, '/', ''), '-', ''), ' ', '') = ?", [$candidateMatric])
+                    ->orWhere('matriculation_number', $candidateMatric)
+                    ->orWhere('id', 'like', "{$candidateMatric}%")
+                    ->with(['user', 'department', 'programme'])
+                    ->first();
+            }
+        }
+
+        // 2. Direct exact or sanitized match (matriculation number, UUID, or user name)
+        if (! $student) {
+            $cleanToken = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $token));
+
+            $student = Student::where('matriculation_number', $token)
+                ->orWhere('id', $token)
+                ->when($cleanToken, fn ($q) => $q->orWhereRaw("REPLACE(REPLACE(REPLACE(matriculation_number, '/', ''), '-', ''), ' ', '') = ?", [$cleanToken]))
+                ->orWhere('matriculation_number', 'like', "%{$token}%")
+                ->orWhereHas('user', fn ($q) => $q->where('name', 'like', "%{$token}%"))
+                ->with(['user', 'department', 'programme'])
+                ->first();
+        }
 
         if (! $student) {
             return null;
         }
 
-        $currentSemester = AcademicCacheService::getCurrentSemester();
+        $session = $sessionId 
+            ? Session::find($sessionId) 
+            : (AcademicCacheService::getCurrentSessionForStream('UG', 'semester') ?? AcademicCacheService::getCurrentSession());
 
-        // Fetch student registered course IDs for the session and current semester
-        $registeredCourseIds = CourseRegistration::where('student_id', $student->id)
-            ->when($currentSession, fn ($q) => $q->where('session_id', $currentSession->id))
-            ->when($currentSemester, fn ($q) => $q->where('semester_id', $currentSemester->id))
-            ->pluck('course_id');
+        $semester = $semesterId
+            ? Semester::find($semesterId)
+            : ($session ? Semester::where('session_id', $session->id)->where('is_current', true)->first() : null)
+                ?? AcademicCacheService::getCurrentSemester();
+
+        // Fetch student registered course registrations with course details
+        $registrations = CourseRegistration::with('course')
+            ->where('student_id', $student->id)
+            ->when($session, fn ($q) => $q->where('session_id', $session->id))
+            ->when($semester, fn ($q) => $q->where('semester_id', $semester->id))
+            ->get();
+
+        $registeredCourseIds = $registrations->pluck('course_id');
 
         // Fetch exam schedules with attendance logs for this candidate
         $schedules = ExamSchedule::with(['course', 'department', 'attendances' => function ($q) use ($student) {
             $q->where('student_id', $student->id);
         }])
             ->whereIn('course_id', $registeredCourseIds)
-            ->when($currentSession, fn ($q) => $q->where('session_id', $currentSession->id))
-            ->when($currentSemester, fn ($q) => $q->where('semester_id', $currentSemester->id))
+            ->when($session, fn ($q) => $q->where('session_id', $session->id))
+            ->when($semester, fn ($q) => $q->where('semester_id', $semester->id))
             ->orderBy('exam_date', 'asc')
             ->orderBy('start_time', 'asc')
             ->get();
 
         // Fee clearance check
-        $isSecondSem = $currentSemester && (stripos($currentSemester->name, 'second') !== false || $currentSemester->name == '2');
+        $isSecondSem = $semester && (stripos($semester->name, 'second') !== false || $semester->name == '2');
 
         // Auto-cancel 0-paid expired pending invoices (school fees never expire or auto-cancel)
         Invoice::where('user_id', $student->user_id)
@@ -122,7 +215,7 @@ class ExamManagementService
 
             $hasSchoolFeePaid = Invoice::where('user_id', $student->user_id)
                 ->where('type', 'school_fee')
-                ->when($currentSession, fn ($q) => $q->where('session_id', $currentSession->id))
+                ->when($session, fn ($q) => $q->where('session_id', $session->id))
                 ->where('status', 'paid')
                 ->exists();
 
@@ -138,7 +231,7 @@ class ExamManagementService
 
             $hasSchoolFeeCleared = Invoice::where('user_id', $student->user_id)
                 ->where('type', 'school_fee')
-                ->when($currentSession, fn ($q) => $q->where('session_id', $currentSession->id))
+                ->when($session, fn ($q) => $q->where('session_id', $session->id))
                 ->whereIn('status', ['paid', 'partial'])
                 ->exists();
 
@@ -161,6 +254,12 @@ class ExamManagementService
             'pending_invoices' => $pendingInvoices,
             'schedules' => $schedules,
             'registered_course_ids' => $registeredCourseIds->toArray(),
+            'registered_courses' => $registrations->map(fn ($r) => [
+                'id' => $r->course_id,
+                'code' => $r->course?->code,
+                'title' => $r->course?->title,
+                'units' => $r->course?->units,
+            ])->values()->toArray(),
             'token' => $token,
         ];
     }

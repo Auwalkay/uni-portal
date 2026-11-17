@@ -7,6 +7,7 @@ use App\Models\CourseRegistration;
 use App\Models\ExamSchedule;
 use App\Models\Invoice;
 use App\Services\AcademicCacheService;
+use App\Services\ExamManagementService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -146,7 +147,7 @@ class ExamDocketController extends Controller
         $isCleared = $isFeeCleared && $hasRegistrations && $isAttendanceCleared;
 
         // 5. Generate Security Verification Hash / Payload
-        $docketToken = strtoupper(md5($student->id . ($currentSession?->id ?? '') . 'EXAM_PERMIT_SECRET'));
+        $docketToken = ExamManagementService::generatePassToken($student, $currentSession, $currentSemester);
         $verificationQrData = json_encode([
             'matric' => $student->matric_number ?? $student->matriculation_number,
             'name' => $user->name,
@@ -155,7 +156,7 @@ class ExamDocketController extends Controller
             'token' => $docketToken,
         ]);
         $verifyUrl = route('admin.exams.verify_pass', $docketToken);
-        $qrCodeUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' . urlencode($verifyUrl);
+        $qrCodeUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' . urlencode($docketToken);
 
         return Inertia::render('Student/Exams/Docket', [
             'student' => [

@@ -271,7 +271,7 @@
                 <td class="info-label">Level & Gender:</td>
                 <td class="info-value">{{ $student->current_level }} Level ({{ $student->gender ?? 'N/A' }})</td>
                 <td class="info-label">Clearance Token:</td>
-                <td class="info-value" style="font-family: monospace; color: #000a29;">{{ $verificationToken ?? strtoupper(substr(md5($student->id . now()), 0, 10)) }}</td>
+                <td class="info-value" style="font-family: monospace; font-size: 8.5px; font-weight: bold; color: #000a29;">{{ $verificationToken ?? \App\Services\ExamManagementService::generatePassToken($student, $session ?? null, $semester ?? null) }}</td>
             </tr>
         </table>
     </div>
@@ -353,7 +353,7 @@
 
                 <td style="width: 25%; text-align: center; vertical-align: middle;">
                     <div class="qr-box" style="text-align: center;">
-                        <img src="{{ $qrCodeUrl ?? ('https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' . urlencode(url('/admin/exams/verify-pass/' . ($verificationToken ?? 'PERMIT')))) }}" alt="Verification QR" style="width: 75px; height: 75px; display: block; margin: 0 auto;">
+                        <img src="{{ $qrCodeUrl ?? ('https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' . urlencode($verificationToken ?? 'PERMIT')) }}" alt="Verification QR" style="width: 75px; height: 75px; display: block; margin: 0 auto;">
                         <span class="scan-text" style="display: block; font-size: 7.5px; font-weight: bold; color: #000a29; margin-top: 3px; text-transform: uppercase;">Scan to Verify Student</span>
                     </div>
                 </td>
