@@ -12,6 +12,7 @@ use App\Models\Session;
 use App\Models\Student;
 use App\Models\StudentSession;
 use App\Services\AcademicCacheService;
+use App\Services\ExamManagementService;
 use App\Services\Finance\FeeService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -427,7 +428,7 @@ class CourseRegistrationController extends Controller
                 ->keyBy('course_id');
         }
 
-        $verificationToken = strtoupper(md5($student->id . $session->id . ($semester->id ?? '') . 'EXAM_ATTENDANCE_SECRET'));
+        $verificationToken = ExamManagementService::generatePassToken($student, $session, $semester);
         $qrCodeData = $verificationToken;
         $directApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' . urlencode($qrCodeData);
 

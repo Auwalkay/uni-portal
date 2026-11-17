@@ -155,7 +155,7 @@ class CourseController extends Controller
                 $q->when($sessionId, fn($sq) => $sq->where('session_id', $sessionId));
             }])
             ->orderBy('code')
-            ->paginate(12)
+            ->paginate(20)
             ->withQueryString();
 
         // Department list for admin/dean filter dropdown
