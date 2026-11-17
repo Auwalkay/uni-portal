@@ -420,15 +420,24 @@ class CourseRegistrationController extends Controller
             ->orderBy('code')
             ->get();
 
-        $registeredCourses = CourseRegistration::where('student_id', $student->id)
+        $registrations = CourseRegistration::where('student_id', $student->id)
             ->where('session_id', $currentSession->id)
             ->whereHas('course', fn ($q) => $q->where('is_active', true))
-            ->with(['course' => fn ($q) => $q->where('is_active', true)])
-            ->get()
+            ->with(['course' => fn ($q) => $q->where('is_active', true), 'registeredBy:id,name,email'])
+            ->get();
+
+        $registeredCourses = $registrations
             ->pluck('course')
             ->filter();
 
         $registeredCourseIds = $registeredCourses->pluck('id')->values()->all();
+
+        $firstReg = $registrations->first();
+        $registrationInfo = [
+            'registered_by_name' => $firstReg?->registeredBy?->name,
+            'registration_source' => $firstReg?->registration_source ?? 'student',
+            'registered_at' => $firstReg?->created_at ? $firstReg->created_at->format('M d, Y') : null,
+        ];
 
         return Inertia::render('Admin/Students/CourseRegistration', [
             'student' => $student->load('user', 'academicDepartment'),
@@ -440,6 +449,7 @@ class CourseRegistrationController extends Controller
             'courses' => $availableCourses,
             'registeredCourses' => $registeredCourses,
             'registeredCourseIds' => $registeredCourseIds,
+            'registrationInfo' => $registrationInfo,
             'maxUnits' => 24, // Default or fetch from program
             'filters' => request()->only(['faculty_id', 'department_id', 'programme_id', 'level']),
         ]);
@@ -500,6 +510,8 @@ class CourseRegistrationController extends Controller
                     'session_id' => $currentSession->id,
                     'semester_id' => $semesterId,
                     'student_session_id' => $studentSession->id,
+                    'registered_by' => auth()->id(),
+                    'registration_source' => 'admin',
                 ]);
             }
         });
@@ -529,7 +541,7 @@ class CourseRegistrationController extends Controller
         $allRegistrations = CourseRegistration::where('student_id', $student->id)
             ->where('session_id', $currentSession->id)
             ->whereHas('course', fn ($q) => $q->where('is_active', true))
-            ->with(['course.department' => fn ($q) => $q->where('is_active', true), 'semester'])
+            ->with(['course.department' => fn ($q) => $q->where('is_active', true), 'semester', 'registeredBy:id,name,email'])
             ->get();
 
         foreach ($allRegistrations as $reg) {
@@ -557,11 +569,20 @@ class CourseRegistrationController extends Controller
             return $pdf->download("Course_Form_{$safeMatric}.pdf");
         }
 
+        $firstReg = $allRegistrations->first();
+        $registrationInfo = [
+            'registered_by_name' => $firstReg?->registeredBy?->name,
+            'registered_by_email' => $firstReg?->registeredBy?->email,
+            'registration_source' => $firstReg?->registration_source ?? 'student',
+            'registered_at' => $firstReg?->created_at ? $firstReg->created_at->format('M d, Y h:i A') : null,
+        ];
+
         return Inertia::render('Admin/Students/CourseRegistrationFormView', [
             'student' => $student->load(['user', 'academicDepartment.faculty', 'program']),
             'registrations' => $registrations,
             'session' => $currentSession,
             'total_units' => $registrations->flatten()->sum('course.units'),
+            'registrationInfo' => $registrationInfo,
         ]);
     }
 }

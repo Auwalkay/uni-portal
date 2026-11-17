@@ -11,6 +11,7 @@ class StudentCourseAttendance extends Model
     use HasUuids;
 
     protected $fillable = [
+        'course_lecture_session_id',
         'course_registration_id',
         'student_id',
         'course_id',
@@ -48,5 +49,10 @@ class StudentCourseAttendance extends Model
     public function recordedBy()
     {
         return $this->belongsTo(User::class, 'recorded_by');
+    }
+
+    public function lectureSession()
+    {
+        return $this->belongsTo(CourseLectureSession::class, 'course_lecture_session_id');
     }
 }

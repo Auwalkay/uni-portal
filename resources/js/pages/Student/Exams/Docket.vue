@@ -339,7 +339,7 @@ const downloadPdfCard = () => {
                         <div class="flex flex-col items-center justify-center p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 print:bg-white print:border-black">
                             <img :src="qrCodeUrl || ('https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(verificationQrData))" alt="Security Verification QR Code" class="w-24 h-24 object-contain mb-1" />
                             <span class="text-[9px] font-extrabold text-[#000a29] uppercase tracking-wider text-center print:text-black">SCAN TO VERIFY</span>
-                            <span class="text-[8px] font-mono text-slate-500 font-semibold print:text-slate-800 text-center">{{ docketToken.substring(0, 10) }}</span>
+                            <span class="text-[8.5px] font-mono font-bold text-slate-700 dark:text-slate-300 print:text-black text-center break-all">{{ docketToken }}</span>
                         </div>
                     </div>
 

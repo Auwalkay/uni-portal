@@ -428,6 +428,18 @@ class ExamScheduleController extends Controller
         $canManageExams = $this->canManageExams();
         $staff = Staff::where('user_id', auth()->id())->first();
 
+        // 1. Resolve active Undergraduate session by default, or fallback to current session
+        $defaultSession = AcademicCacheService::getCurrentSessionForStream('UG', 'semester')
+            ?? AcademicCacheService::getCurrentSession();
+        $selectedSessionId = $request->input('session_id', $defaultSession?->id);
+
+        // 2. Resolve active semester by default
+        $defaultSemester = AcademicCacheService::getCurrentSemester();
+        $selectedSemesterId = $request->input('semester_id', $defaultSemester?->id);
+
+        $sessions = AcademicCacheService::getSessions() ?? Session::orderBy('name', 'desc')->get();
+        $semesters = AcademicCacheService::getSemesters() ?? Semester::orderBy('name', 'asc')->get();
+
         $schedules = ExamSchedule::with([
             'course',
             'department',
@@ -436,6 +448,8 @@ class ExamScheduleController extends Controller
             'invigilators.staff.user',
         ])
             ->withCount(['attendances'])
+            ->when($selectedSessionId, fn ($q) => $q->where('session_id', $selectedSessionId))
+            ->when($selectedSemesterId, fn ($q) => $q->where('semester_id', $selectedSemesterId))
             ->when(! $canManageExams, function ($q) use ($staff) {
                 $q->whereHas('invigilators', fn ($iq) => $iq->where('staff_id', $staff?->id ?? '00000000-0000-0000-0000-000000000000'));
             })
@@ -443,11 +457,16 @@ class ExamScheduleController extends Controller
             ->orderBy('start_time', 'asc')
             ->get();
 
-        $activeScheduleId = $request->input('schedule_id', $schedules->first()?->id);
+        // Default to empty string if no course is explicitly selected (General Verification Mode)
+        $activeScheduleId = $request->input('schedule_id', '');
 
         return Inertia::render('Admin/Exams/Scanner', [
             'schedules' => $schedules,
             'activeScheduleId' => $activeScheduleId,
+            'sessions' => $sessions,
+            'semesters' => $semesters,
+            'selectedSessionId' => $selectedSessionId,
+            'selectedSemesterId' => $selectedSemesterId,
             'canManageExams' => $canManageExams,
         ]);
     }
@@ -894,7 +913,9 @@ class ExamScheduleController extends Controller
 
     public function verifyPass(Request $request, $token)
     {
-        $verificationResult = $this->examService->verifyStudentPass($token);
+        $sessionId = $request->input('session_id');
+        $semesterId = $request->input('semester_id');
+        $verificationResult = $this->examService->verifyStudentPass($token, $sessionId, $semesterId);
 
         if (! $verificationResult) {
             return back()->with('warning', "Unrecognized student verification pass token: {$token}");

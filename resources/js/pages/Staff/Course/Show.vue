@@ -4,7 +4,8 @@ import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import {
     BookOpen, Users, ArrowLeft, Download, Search, MoreHorizontal,
     Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, X, Loader2,
-    Calendar, CalendarCheck, Trash2, ShieldCheck, User
+    Calendar, CalendarCheck, Trash2, ShieldCheck, User, Filter, RotateCcw,
+    Building2, GraduationCap, Layers, CheckSquare, Square
 } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -27,20 +28,36 @@ const props = defineProps<{
     session: { id: string; name: string };
     students: Array<{
         id: string;
+        student_id?: string;
         student_name: string;
         matriculation_number: string;
         email: string;
+        department_id?: string;
         department: string;
+        program_id?: string;
+        program?: string;
         level: string;
         registered_at: string;
+        registered_by_id?: string;
+        registered_by_name?: string;
+        registration_source?: string;
+        is_self_registered?: boolean;
     }>;
+    departments?: Array<{ id: string; name: string; count: number }>;
+    programs?: Array<{ id: string; name: string; count: number }>;
+    levels?: string[];
     attendanceHistory?: Array<{
+        id?: string;
         date: string;
         formatted_date: string;
         total_records: number;
         present_count: number;
         absent_count: number;
         attendance_rate: number;
+        department_ids?: string[] | null;
+        department_names?: string[];
+        is_all_departments?: boolean;
+        notes?: string | null;
     }>;
     importSummary?: {
         enrolled: number;
@@ -57,17 +74,95 @@ const props = defineProps<{
 }>();
 
 const activeTab = ref<'students' | 'attendance'>('students');
-const search = ref('');
 
+// Filters state for Enrolled Students
+const search = ref('');
+const selectedDepartment = ref('all');
+const selectedProgram = ref('all');
+const selectedLevel = ref('all');
+
+const hasActiveFilters = computed(() => {
+    return selectedDepartment.value !== 'all' ||
+        selectedProgram.value !== 'all' ||
+        selectedLevel.value !== 'all' ||
+        search.value.trim() !== '';
+});
+
+const resetFilters = () => {
+    selectedDepartment.value = 'all';
+    selectedProgram.value = 'all';
+    selectedLevel.value = 'all';
+    search.value = '';
+};
+
+// Filtered students computation
 const filteredStudents = computed(() => {
-    if (!search.value) return props.students;
-    const lower = search.value.toLowerCase().trim();
-    return props.students.filter(s =>
-        (s.student_name || '').toLowerCase().includes(lower) ||
-        (s.matriculation_number || '').toLowerCase().includes(lower) ||
-        (s.email || '').toLowerCase().includes(lower) ||
-        (s.department || '').toLowerCase().includes(lower)
-    );
+    return props.students.filter(s => {
+        // Department filter
+        if (selectedDepartment.value !== 'all') {
+            if (s.department_id !== selectedDepartment.value && s.department !== selectedDepartment.value) {
+                return false;
+            }
+        }
+        // Program filter
+        if (selectedProgram.value !== 'all') {
+            if (s.program_id !== selectedProgram.value && s.program !== selectedProgram.value) {
+                return false;
+            }
+        }
+        // Level filter
+        if (selectedLevel.value !== 'all') {
+            if (String(s.level) !== String(selectedLevel.value)) {
+                return false;
+            }
+        }
+        // Search text
+        if (search.value) {
+            const lower = search.value.toLowerCase().trim();
+            const matchName = (s.student_name || '').toLowerCase().includes(lower);
+            const matchMatric = (s.matriculation_number || '').toLowerCase().includes(lower);
+            const matchEmail = (s.email || '').toLowerCase().includes(lower);
+            const matchDept = (s.department || '').toLowerCase().includes(lower);
+            const matchProg = (s.program || '').toLowerCase().includes(lower);
+            if (!matchName && !matchMatric && !matchEmail && !matchDept && !matchProg) {
+                return false;
+            }
+        }
+        return true;
+    });
+});
+
+// Dynamic export URL for students with active filters
+const exportStudentsUrl = computed(() => {
+    const params = new URLSearchParams();
+    if (selectedDepartment.value !== 'all') params.append('department_id', selectedDepartment.value);
+    if (selectedProgram.value !== 'all') params.append('program_id', selectedProgram.value);
+    if (selectedLevel.value !== 'all') params.append('level', selectedLevel.value);
+    const qs = params.toString();
+    return route('admin.teaching.courses.students.export', props.course.id) + (qs ? `?${qs}` : '');
+});
+
+// Attendance Register Department Filter
+const registerDeptFilter = ref('all');
+
+const filteredAttendanceHistory = computed(() => {
+    if (!props.attendanceHistory) return [];
+    if (registerDeptFilter.value === 'all') return props.attendanceHistory;
+
+    return props.attendanceHistory.filter(att => {
+        // If All Departments, it applies to this department
+        if (att.is_all_departments || !att.department_ids || att.department_ids.length === 0) {
+            return true;
+        }
+        return att.department_ids.includes(registerDeptFilter.value);
+    });
+});
+
+const exportAttendanceUrl = computed(() => {
+    const params = new URLSearchParams();
+    if (registerDeptFilter.value !== 'all') params.append('department_id', registerDeptFilter.value);
+    const qs = params.toString();
+    return route('admin.teaching.courses.attendance.export', props.course.id) + (qs ? `?${qs}` : '');
 });
 
 const breadcrumbs = [
@@ -75,7 +170,7 @@ const breadcrumbs = [
     { title: props.course.code, href: '#' }
 ];
 
-// Upload dialog & state
+// Upload dialog & state (Student enrolment)
 const showUploadModal = ref(false);
 const showResultsModal = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -127,14 +222,20 @@ const submitUpload = () => {
     });
 };
 
-// Attendance upload state & handlers
+// Attendance upload state & handlers (Department-Aware)
 const showAttendanceModal = ref(false);
 const showAttendanceSummaryModal = ref(false);
 const attendanceFileInput = ref<HTMLInputElement | null>(null);
 const selectedAttendanceFile = ref<File | null>(null);
 
+// Cohort selection for lecture attendance
+const cohortType = ref<'all' | 'specific'>('all');
+const selectedCohortDepartmentIds = ref<string[]>([]);
+
 const attendanceForm = useForm({
     attendance_date: new Date().toISOString().split('T')[0],
+    department_ids: [] as string[],
+    notes: '',
     file: null as File | null,
 });
 
@@ -164,14 +265,63 @@ const removeAttendanceFile = () => {
     }
 };
 
+const toggleDepartmentCohort = (deptId: string) => {
+    const idx = selectedCohortDepartmentIds.value.indexOf(deptId);
+    if (idx > -1) {
+        selectedCohortDepartmentIds.value.splice(idx, 1);
+    } else {
+        selectedCohortDepartmentIds.value.push(deptId);
+    }
+};
+
+const selectAllDepartments = () => {
+    if (props.departments) {
+        selectedCohortDepartmentIds.value = props.departments.map(d => d.id);
+    }
+};
+
+const clearAllDepartments = () => {
+    selectedCohortDepartmentIds.value = [];
+};
+
+// Compute student count for selected cohort in upload modal
+const cohortStudentCount = computed(() => {
+    if (cohortType.value === 'all') {
+        return props.students.length;
+    }
+    if (!props.departments) return 0;
+    return props.departments
+        .filter(d => selectedCohortDepartmentIds.value.includes(d.id))
+        .reduce((sum, d) => sum + d.count, 0);
+});
+
+// Dynamic download template URL (filters to selected departments if specific cohort)
+const attendanceTemplateUrl = computed(() => {
+    const params = new URLSearchParams();
+    if (cohortType.value === 'specific' && selectedCohortDepartmentIds.value.length > 0) {
+        selectedCohortDepartmentIds.value.forEach(id => params.append('department_ids[]', id));
+    }
+    const qs = params.toString();
+    return route('admin.teaching.courses.attendance.template', props.course.id) + (qs ? `?${qs}` : '');
+});
+
 const submitAttendanceUpload = () => {
     if (!attendanceForm.file || !attendanceForm.attendance_date) return;
+
+    if (cohortType.value === 'specific' && selectedCohortDepartmentIds.value.length === 0) {
+        alert('Please select at least one department cohort for this lecture session.');
+        return;
+    }
+
+    attendanceForm.department_ids = cohortType.value === 'all' ? [] : [...selectedCohortDepartmentIds.value];
 
     attendanceForm.post(route('admin.teaching.courses.attendance.upload', props.course.id), {
         preserveScroll: true,
         onSuccess: () => {
             showAttendanceModal.value = false;
             removeAttendanceFile();
+            selectedCohortDepartmentIds.value = [];
+            cohortType.value = 'all';
         },
     });
 };
@@ -228,7 +378,7 @@ const avgAttendanceRate = computed(() => {
                 <!-- Header Actions (Touch-friendly 2-col on mobile, flex on desktop) -->
                 <div class="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full lg:w-auto pt-1 sm:pt-0 shrink-0">
                     <template v-if="activeTab === 'students'">
-                        <a :href="route('admin.teaching.courses.students.export', course.id)" class="w-full sm:w-auto">
+                        <a :href="exportStudentsUrl" class="w-full sm:w-auto">
                             <Button variant="outline" size="sm" class="w-full h-9 gap-1.5 text-xs font-semibold rounded-xl border-slate-200 dark:border-slate-700 justify-center">
                                 <Download class="w-3.5 h-3.5 text-slate-600 dark:text-slate-400 shrink-0" />
                                 <span>Export List</span>
@@ -236,7 +386,7 @@ const avgAttendanceRate = computed(() => {
                         </a>
                         <Button
                             size="sm"
-                            class="w-full sm:w-auto h-9 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 gap-1.5 text-xs font-bold rounded-xl shadow-xs justify-center"
+                            class="w-full sm:w-auto h-9 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 gap-1.5 text-xs font-bold rounded-xl shadow-xs justify-center cursor-pointer"
                             @click="showUploadModal = true"
                         >
                             <Upload class="w-3.5 h-3.5 shrink-0" />
@@ -245,7 +395,7 @@ const avgAttendanceRate = computed(() => {
                     </template>
 
                     <template v-else>
-                        <a :href="route('admin.teaching.courses.attendance.export', course.id)" class="w-full sm:w-auto">
+                        <a :href="exportAttendanceUrl" class="w-full sm:w-auto">
                             <Button variant="outline" size="sm" class="w-full h-9 gap-1.5 text-xs font-semibold rounded-xl border-slate-200 dark:border-slate-700 justify-center">
                                 <Download class="w-3.5 h-3.5 text-slate-600 dark:text-slate-400 shrink-0" />
                                 <span>Export CSV</span>
@@ -253,11 +403,11 @@ const avgAttendanceRate = computed(() => {
                         </a>
                         <Button
                             size="sm"
-                            class="w-full sm:w-auto h-9 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs font-bold rounded-xl shadow-xs justify-center"
+                            class="w-full sm:w-auto h-9 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs font-bold rounded-xl shadow-xs justify-center cursor-pointer"
                             @click="showAttendanceModal = true"
                         >
                             <CalendarCheck class="w-3.5 h-3.5 shrink-0" />
-                            <span>Upload Date</span>
+                            <span>Upload Attendance</span>
                         </Button>
                     </template>
                 </div>
@@ -302,11 +452,11 @@ const avgAttendanceRate = computed(() => {
                 </button>
             </div>
 
-            <!-- 3. TAB 1: Unified Enrolled Students View -->
+            <!-- 3. TAB 1: Unified Enrolled Students View with Multi-Attribute Filter Bar -->
             <div v-if="activeTab === 'students'" class="space-y-4 w-full min-w-0">
                 <Card class="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs rounded-2xl overflow-hidden w-full min-w-0">
-                    <CardHeader class="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800">
-                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                    <CardHeader class="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 space-y-3">
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                             <div class="space-y-0.5">
                                 <CardTitle class="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                     <span>Class Roster</span>
@@ -319,13 +469,80 @@ const avgAttendanceRate = computed(() => {
                                 </CardDescription>
                             </div>
 
-                            <div class="relative w-full sm:w-72">
-                                <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                            <!-- Reset filters button if any filter is active -->
+                            <Button
+                                v-if="hasActiveFilters"
+                                variant="ghost"
+                                size="sm"
+                                class="h-8 text-xs text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 gap-1.5 cursor-pointer px-2"
+                                @click="resetFilters"
+                            >
+                                <RotateCcw class="w-3.5 h-3.5" />
+                                <span>Reset Filters</span>
+                            </Button>
+                        </div>
+
+                        <!-- Multi-Attribute Filter Bar (Search, Department, Program, Level) -->
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5 pt-1">
+                            <!-- Search by keyword (Full width on mobile, 1 col on desktop) -->
+                            <div class="col-span-2 lg:col-span-1 relative w-full">
+                                <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
                                 <Input
                                     v-model="search"
-                                    placeholder="Search by name, matric, dept..."
+                                    placeholder="Search name, matric..."
                                     class="pl-9 h-9 text-xs bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 rounded-xl w-full"
                                 />
+                            </div>
+
+                            <!-- Department Filter (Full width on mobile, 1 col on tablet/desktop) -->
+                            <div class="col-span-2 sm:col-span-1 lg:col-span-1 relative w-full">
+                                <select
+                                    v-model="selectedDepartment"
+                                    class="w-full h-9 px-3 text-xs bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-slate-400 focus:outline-hidden cursor-pointer"
+                                >
+                                    <option value="all">All Departments ({{ students.length }})</option>
+                                    <option
+                                        v-for="dept in (departments || [])"
+                                        :key="dept.id"
+                                        :value="dept.id"
+                                    >
+                                        {{ dept.name }} ({{ dept.count }})
+                                    </option>
+                                </select>
+                            </div>
+
+                            <!-- Programme Filter (1 col on mobile and tablet) -->
+                            <div class="col-span-1 relative w-full">
+                                <select
+                                    v-model="selectedProgram"
+                                    class="w-full h-9 px-2.5 sm:px-3 text-xs bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-slate-400 focus:outline-hidden cursor-pointer truncate"
+                                >
+                                    <option value="all">All Programmes</option>
+                                    <option
+                                        v-for="prog in (programs || [])"
+                                        :key="prog.id"
+                                        :value="prog.id"
+                                    >
+                                        {{ prog.name }} ({{ prog.count }})
+                                    </option>
+                                </select>
+                            </div>
+
+                            <!-- Level Filter (1 col on mobile and tablet) -->
+                            <div class="col-span-1 relative w-full">
+                                <select
+                                    v-model="selectedLevel"
+                                    class="w-full h-9 px-2.5 sm:px-3 text-xs bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-slate-400 focus:outline-hidden cursor-pointer"
+                                >
+                                    <option value="all">All Levels</option>
+                                    <option
+                                        v-for="lvl in (levels || [])"
+                                        :key="lvl"
+                                        :value="lvl"
+                                    >
+                                        {{ lvl }} Level
+                                    </option>
+                                </select>
                             </div>
                         </div>
                     </CardHeader>
@@ -335,39 +552,61 @@ const avgAttendanceRate = computed(() => {
                         <div
                             v-for="(student, index) in filteredStudents"
                             :key="student.id"
-                            class="p-4 space-y-2 hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors"
+                            class="p-3.5 space-y-2 hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors"
                         >
-                            <div class="flex items-start justify-between gap-2">
-                                <div class="space-y-0.5 min-w-0">
-                                    <p class="font-bold text-xs text-slate-900 dark:text-white uppercase truncate">
-                                        {{ student.student_name }}
-                                    </p>
-                                    <p class="text-[11px] text-muted-foreground font-mono truncate">
-                                        {{ student.email }}
-                                    </p>
+                            <div class="flex items-start justify-between gap-2.5">
+                                <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                                    <div class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center shrink-0 uppercase border border-slate-200/80 dark:border-slate-700">
+                                        {{ student.student_name ? student.student_name.charAt(0) : 'S' }}
+                                    </div>
+                                    <div class="space-y-0.5 min-w-0 flex-1">
+                                        <p class="font-bold text-xs text-slate-900 dark:text-white uppercase truncate">
+                                            {{ student.student_name }}
+                                        </p>
+                                        <p class="text-[11px] text-muted-foreground font-mono truncate">
+                                            {{ student.email }}
+                                        </p>
+                                    </div>
                                 </div>
                                 <span class="font-mono text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200/60 dark:border-slate-700 shrink-0">
                                     {{ student.matriculation_number }}
                                 </span>
                             </div>
 
-                            <div class="flex items-center justify-between text-xs text-muted-foreground pt-1">
-                                <span class="truncate max-w-[200px]">{{ student.department }}</span>
-                                <Badge variant="outline" class="text-[10px] font-bold px-1.5 py-0">
-                                    {{ student.level }} Level
-                                </Badge>
+                            <div class="flex items-center justify-between text-xs text-muted-foreground pt-0.5 flex-wrap gap-1.5 pl-10.5">
+                                <div class="truncate max-w-[200px]">
+                                    <span class="font-semibold text-slate-700 dark:text-slate-300">{{ student.department }}</span>
+                                    <span v-if="student.program && student.program !== student.department" class="text-[10px] text-slate-400 block truncate">
+                                        {{ student.program }}
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                                    <Badge variant="outline" class="text-[10px] font-bold px-1.5 py-0">
+                                        {{ student.level }} Level
+                                    </Badge>
+                                    <span v-if="student.registration_source === 'admin'" class="text-[9px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                                        Admin
+                                    </span>
+                                    <span v-else-if="student.registration_source === 'import'" class="text-[9px] font-semibold text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800">
+                                        Import
+                                    </span>
+                                    <span class="text-[10px] text-slate-400">{{ student.registered_at }}</span>
+                                </div>
                             </div>
                         </div>
 
                         <div v-if="filteredStudents.length === 0" class="p-8 text-center text-muted-foreground space-y-2">
                             <Users class="w-8 h-8 mx-auto text-slate-300" />
-                            <p class="text-xs font-semibold text-slate-700 dark:text-slate-300">No students found.</p>
+                            <p class="text-xs font-semibold text-slate-700 dark:text-slate-300">No students match the current filters.</p>
+                            <Button v-if="hasActiveFilters" variant="outline" size="sm" class="text-xs mt-2" @click="resetFilters">
+                                Reset Filters
+                            </Button>
                         </div>
                     </div>
 
                     <!-- Desktop & Tablet Table (>= 640px) -->
                     <div class="hidden sm:block w-full min-w-0 max-w-full overflow-x-auto">
-                        <Table class="min-w-[650px]">
+                        <Table class="min-w-[700px]">
                             <TableHeader class="bg-slate-50/70 dark:bg-slate-800/50">
                                 <TableRow class="hover:bg-transparent">
                                     <TableHead class="w-[50px] text-xs font-bold uppercase text-center">#</TableHead>
@@ -405,8 +644,15 @@ const avgAttendanceRate = computed(() => {
                                         </span>
                                     </TableCell>
 
-                                    <TableCell class="text-xs font-medium text-slate-700 dark:text-slate-300">
-                                        {{ student.department }}
+                                    <TableCell>
+                                        <div class="flex flex-col">
+                                            <span class="text-xs font-medium text-slate-800 dark:text-slate-200">
+                                                {{ student.department }}
+                                            </span>
+                                            <span v-if="student.program && student.program !== student.department" class="text-[10px] text-muted-foreground">
+                                                {{ student.program }}
+                                            </span>
+                                        </div>
                                     </TableCell>
 
                                     <TableCell class="text-center">
@@ -416,7 +662,30 @@ const avgAttendanceRate = computed(() => {
                                     </TableCell>
 
                                     <TableCell class="text-center text-xs text-muted-foreground">
-                                        {{ student.registered_at }}
+                                        <div class="flex flex-col items-center gap-0.5">
+                                            <span>{{ student.registered_at }}</span>
+                                            <span 
+                                                v-if="student.registration_source === 'admin'" 
+                                                class="inline-flex items-center text-[10px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800"
+                                                :title="student.registered_by_name ? `Registered by Admin: ${student.registered_by_name}` : 'Registered by Administrator'"
+                                            >
+                                                Admin: {{ student.registered_by_name || 'Staff' }}
+                                            </span>
+                                            <span 
+                                                v-else-if="student.registration_source === 'import'" 
+                                                class="inline-flex items-center text-[10px] font-medium text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800"
+                                                title="Enrolled via bulk CSV/Excel roster import"
+                                            >
+                                                Bulk Import
+                                            </span>
+                                            <span 
+                                                v-else 
+                                                class="inline-flex items-center text-[10px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800"
+                                                title="Self-registered by student via portal"
+                                            >
+                                                Self-Registered
+                                            </span>
+                                        </div>
                                     </TableCell>
 
                                     <TableCell class="text-right">
@@ -428,9 +697,12 @@ const avgAttendanceRate = computed(() => {
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end" class="text-xs">
-                                                <DropdownMenuLabel>Student Options</DropdownMenuLabel>
+                                                <DropdownMenuLabel>Student Details</DropdownMenuLabel>
                                                 <DropdownMenuItem disabled>
-                                                    View Student Profile
+                                                    {{ student.department }}
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem disabled>
+                                                    {{ student.level }} Level
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
@@ -442,11 +714,11 @@ const avgAttendanceRate = computed(() => {
                                         <div class="flex flex-col items-center justify-center gap-2">
                                             <Users class="w-8 h-8 text-slate-300 dark:text-slate-600" />
                                             <p class="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                                                {{ search ? 'No students match your search criteria.' : 'No students enrolled in this course yet.' }}
+                                                {{ hasActiveFilters ? 'No students match your selected filters.' : 'No students enrolled in this course yet.' }}
                                             </p>
-                                            <p class="text-xs text-muted-foreground">
-                                                {{ search ? 'Try searching by a different name or matriculation number.' : 'Enroll students using the spreadsheet upload button above.' }}
-                                            </p>
+                                            <Button v-if="hasActiveFilters" variant="outline" size="sm" class="text-xs mt-1" @click="resetFilters">
+                                                Reset Filters
+                                            </Button>
                                         </div>
                                     </TableCell>
                                 </TableRow>
@@ -456,7 +728,7 @@ const avgAttendanceRate = computed(() => {
                 </Card>
             </div>
 
-            <!-- 4. TAB 2: Attendance Register View -->
+            <!-- 4. TAB 2: Attendance Register View with Cohort Details -->
             <div v-else class="space-y-4 sm:space-y-6 w-full min-w-0">
                 <!-- Attendance Overview KPIs -->
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 w-full min-w-0">
@@ -490,45 +762,62 @@ const avgAttendanceRate = computed(() => {
                         <CardContent class="p-4 sm:p-5 space-y-2">
                             <p class="text-[11px] sm:text-xs font-bold text-muted-foreground uppercase tracking-wider">Class Attendance Sheet</p>
                             <p class="text-[11px] sm:text-xs text-muted-foreground leading-relaxed">
-                                Auto-populated template with {{ students.length }} registered students defaulted to 'Present'.
+                                Download pre-filled template with enrolled students or by specific department.
                             </p>
-                            <a :href="route('admin.teaching.courses.attendance.template', course.id)" download class="block pt-1">
-                                <Button size="sm" variant="outline" class="w-full h-8 text-xs font-bold gap-1.5 border-slate-200 dark:border-slate-700">
-                                    <Download class="w-3.5 h-3.5" /> Download Template
-                                </Button>
-                            </a>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                class="w-full h-8 text-xs font-bold gap-1.5 border-slate-200 dark:border-slate-700 cursor-pointer"
+                                @click="showAttendanceModal = true"
+                            >
+                                <Download class="w-3.5 h-3.5" /> Download Template / Upload
+                            </Button>
                         </CardContent>
                     </Card>
                 </div>
 
-                <!-- Attendance History Table -->
+                <!-- Attendance History Table with Department Cohort Badges -->
                 <Card class="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs rounded-2xl overflow-hidden w-full min-w-0">
                     <CardHeader class="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800">
                         <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                            <div>
+                            <div class="space-y-0.5">
                                 <CardTitle class="text-sm sm:text-base font-bold text-slate-900 dark:text-white">Uploaded Lecture Sessions</CardTitle>
-                                <CardDescription class="text-xs text-muted-foreground mt-0.5">
-                                    All attendance sheets recorded for {{ course.code }} in {{ session.name }}.
+                                <CardDescription class="text-xs text-muted-foreground">
+                                    All attendance sessions recorded for {{ course.code }} in {{ session.name }}.
                                 </CardDescription>
                             </div>
 
-                            <Button
-                                size="sm"
-                                class="h-9 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs font-bold rounded-xl shadow-xs"
-                                @click="showAttendanceModal = true"
-                            >
-                                <Upload class="w-3.5 h-3.5" />
-                                <span>Upload New Date</span>
-                            </Button>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <!-- Department filter for history -->
+                                <select
+                                    v-if="departments && departments.length > 1"
+                                    v-model="registerDeptFilter"
+                                    class="h-9 px-3 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-medium cursor-pointer"
+                                >
+                                    <option value="all">All Department Cohorts</option>
+                                    <option v-for="d in departments" :key="d.id" :value="d.id">
+                                        {{ d.name }}
+                                    </option>
+                                </select>
+
+                                <Button
+                                    size="sm"
+                                    class="h-9 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs font-bold rounded-xl shadow-xs cursor-pointer"
+                                    @click="showAttendanceModal = true"
+                                >
+                                    <Upload class="w-3.5 h-3.5" />
+                                    <span>Upload New Date</span>
+                                </Button>
+                            </div>
                         </div>
                     </CardHeader>
 
                     <!-- Mobile Attendance Date Cards (< 640px) -->
                     <div class="block sm:hidden divide-y divide-slate-100 dark:divide-slate-800">
                         <div
-                            v-for="att in (attendanceHistory || [])"
+                            v-for="att in filteredAttendanceHistory"
                             :key="att.date"
-                            class="p-4 space-y-2 hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors"
+                            class="p-4 space-y-2.5 hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors"
                         >
                             <div class="flex items-center justify-between gap-2">
                                 <div class="flex items-center gap-2">
@@ -538,6 +827,29 @@ const avgAttendanceRate = computed(() => {
                                 <span class="text-xs font-black" :class="att.attendance_rate >= 75 ? 'text-emerald-600' : 'text-rose-600'">
                                     {{ att.attendance_rate }}% Rate
                                 </span>
+                            </div>
+
+                            <!-- Cohort badge mobile -->
+                            <div>
+                                <Badge
+                                    v-if="att.is_all_departments || !att.department_names || att.department_names.length === 0"
+                                    variant="outline"
+                                    class="text-[10px] font-semibold text-slate-600 dark:text-slate-400 border-slate-200"
+                                >
+                                    All Departments
+                                </Badge>
+                                <Badge
+                                    v-else-if="att.department_names.length === 1"
+                                    class="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border-indigo-200 text-[10px] font-semibold"
+                                >
+                                    {{ att.department_names[0] }}
+                                </Badge>
+                                <div v-else class="space-y-1">
+                                    <Badge class="bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 text-[10px] font-semibold">
+                                        Mixed Cohort ({{ att.department_names.length }})
+                                    </Badge>
+                                    <p class="text-[10px] text-muted-foreground truncate">{{ att.department_names.join(', ') }}</p>
+                                </div>
                             </div>
 
                             <div class="flex items-center justify-between text-xs pt-1">
@@ -561,19 +873,20 @@ const avgAttendanceRate = computed(() => {
                             </div>
                         </div>
 
-                        <div v-if="!attendanceHistory || attendanceHistory.length === 0" class="p-8 text-center text-muted-foreground space-y-2">
+                        <div v-if="filteredAttendanceHistory.length === 0" class="p-8 text-center text-muted-foreground space-y-2">
                             <CalendarCheck class="w-8 h-8 mx-auto text-slate-300" />
-                            <p class="text-xs font-semibold text-slate-700 dark:text-slate-300">No attendance uploaded yet.</p>
+                            <p class="text-xs font-semibold text-slate-700 dark:text-slate-300">No attendance uploaded for this filter.</p>
                         </div>
                     </div>
 
                     <!-- Desktop & Tablet Table (>= 640px) -->
                     <div class="hidden sm:block w-full min-w-0 max-w-full overflow-x-auto">
-                        <Table class="min-w-[650px]">
+                        <Table class="min-w-[750px]">
                             <TableHeader class="bg-slate-50/70 dark:bg-slate-800/50">
                                 <TableRow class="hover:bg-transparent">
                                     <TableHead class="w-[50px] text-xs font-bold uppercase text-center">#</TableHead>
                                     <TableHead class="text-xs font-bold uppercase">Lecture Date</TableHead>
+                                    <TableHead class="text-xs font-bold uppercase">Department Cohort</TableHead>
                                     <TableHead class="text-xs font-bold uppercase text-center">Total Logged</TableHead>
                                     <TableHead class="text-xs font-bold uppercase text-center">Present</TableHead>
                                     <TableHead class="text-xs font-bold uppercase text-center">Absent</TableHead>
@@ -584,7 +897,7 @@ const avgAttendanceRate = computed(() => {
 
                             <TableBody>
                                 <TableRow
-                                    v-for="(att, idx) in (attendanceHistory || [])"
+                                    v-for="(att, idx) in filteredAttendanceHistory"
                                     :key="att.date"
                                     class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"
                                 >
@@ -592,9 +905,33 @@ const avgAttendanceRate = computed(() => {
 
                                     <TableCell>
                                         <div class="flex items-center gap-2">
-                                            <Calendar class="w-4 h-4 text-emerald-600" />
-                                            <span class="font-bold text-xs text-slate-900 dark:text-white">{{ att.formatted_date }}</span>
-                                            <span class="text-[11px] text-muted-foreground font-mono">({{ att.date }})</span>
+                                            <Calendar class="w-4 h-4 text-emerald-600 shrink-0" />
+                                            <div>
+                                                <p class="font-bold text-xs text-slate-900 dark:text-white">{{ att.formatted_date }}</p>
+                                                <p class="text-[10px] text-muted-foreground font-mono">{{ att.date }}</p>
+                                            </div>
+                                        </div>
+                                    </TableCell>
+
+                                    <!-- Cohort Column -->
+                                    <TableCell>
+                                        <div v-if="att.is_all_departments || !att.department_names || att.department_names.length === 0">
+                                            <Badge variant="outline" class="text-[10px] font-semibold text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700">
+                                                All Departments
+                                            </Badge>
+                                        </div>
+                                        <div v-else-if="att.department_names.length === 1">
+                                            <Badge class="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-semibold text-[10px]">
+                                                {{ att.department_names[0] }}
+                                            </Badge>
+                                        </div>
+                                        <div v-else class="space-y-0.5">
+                                            <Badge class="bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800 font-semibold text-[10px]">
+                                                Mixed ({{ att.department_names.length }} Departments)
+                                            </Badge>
+                                            <p class="text-[10px] text-muted-foreground max-w-xs truncate" :title="att.department_names.join(', ')">
+                                                {{ att.department_names.join(', ') }}
+                                            </p>
                                         </div>
                                     </TableCell>
 
@@ -614,7 +951,7 @@ const avgAttendanceRate = computed(() => {
 
                                     <TableCell class="text-center">
                                         <div class="flex items-center justify-center gap-2">
-                                            <div class="w-20 bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                                            <div class="w-16 bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
                                                 <div
                                                     class="h-full rounded-full transition-all"
                                                     :class="att.attendance_rate >= 75 ? 'bg-emerald-500' : (att.attendance_rate >= 60 ? 'bg-amber-500' : 'bg-rose-500')"
@@ -638,11 +975,11 @@ const avgAttendanceRate = computed(() => {
                                     </TableCell>
                                 </TableRow>
 
-                                <TableRow v-if="!attendanceHistory || attendanceHistory.length === 0">
-                                    <TableCell colspan="7" class="h-36 text-center text-muted-foreground">
+                                <TableRow v-if="filteredAttendanceHistory.length === 0">
+                                    <TableCell colspan="8" class="h-36 text-center text-muted-foreground">
                                         <div class="flex flex-col items-center justify-center gap-2">
                                             <CalendarCheck class="w-8 h-8 text-slate-300 dark:text-slate-600" />
-                                            <p class="text-sm font-semibold text-slate-700 dark:text-slate-300">No attendance records uploaded yet.</p>
+                                            <p class="text-sm font-semibold text-slate-700 dark:text-slate-300">No attendance records found for this cohort.</p>
                                         </div>
                                     </TableCell>
                                 </TableRow>
@@ -668,13 +1005,13 @@ const avgAttendanceRate = computed(() => {
 
                 <form @submit.prevent="submitUpload" class="space-y-4 pt-2">
                     <!-- Template Download Helper -->
-                    <div class="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex items-center justify-between gap-2">
+                    <div class="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                         <div class="text-xs text-slate-900 dark:text-slate-200 min-w-0">
                             <span class="font-bold">Need the standard template?</span>
-                            <p class="text-[11px] text-muted-foreground truncate">Includes required matriculation_number column.</p>
+                            <p class="text-[11px] text-muted-foreground">Includes required matriculation_number column.</p>
                         </div>
-                        <a :href="route('admin.teaching.courses.students.template', course.id)" download class="shrink-0">
-                            <Button type="button" variant="outline" size="sm" class="h-8 text-xs gap-1.5 font-bold border-slate-200 dark:border-slate-700">
+                        <a :href="route('admin.teaching.courses.students.template', course.id)" download class="shrink-0 w-full sm:w-auto">
+                            <Button type="button" variant="outline" size="sm" class="w-full sm:w-auto h-8 text-xs gap-1.5 font-bold border-slate-200 dark:border-slate-700 justify-center">
                                 <Download class="w-3.5 h-3.5" /> Sample
                             </Button>
                         </a>
@@ -742,7 +1079,7 @@ const avgAttendanceRate = computed(() => {
                         </Button>
                         <Button
                             type="submit"
-                            class="bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 font-bold gap-2"
+                            class="bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 font-bold gap-2 cursor-pointer"
                             :disabled="!selectedFile || form.processing"
                         >
                             <Loader2 v-if="form.processing" class="w-4 h-4 animate-spin" />
@@ -808,20 +1145,20 @@ const avgAttendanceRate = computed(() => {
             </DialogContent>
         </Dialog>
 
-        <!-- 7. Upload Attendance Dialog Modal -->
+        <!-- 7. Department-Aware Upload Attendance Dialog Modal -->
         <Dialog v-model:open="showAttendanceModal">
-            <DialogContent class="w-[calc(100vw-1.5rem)] max-w-[560px] p-4 sm:p-6 max-h-[90vh] overflow-y-auto rounded-2xl">
+            <DialogContent class="w-[calc(100vw-1.5rem)] max-w-[580px] p-4 sm:p-6 max-h-[90vh] overflow-y-auto rounded-2xl">
                 <DialogHeader>
                     <DialogTitle class="flex items-center gap-2 text-base sm:text-lg">
                         <CalendarCheck class="w-5 h-5 text-emerald-600" />
                         <span>Upload Lecture Attendance</span>
                     </DialogTitle>
                     <DialogDescription class="text-xs sm:text-sm">
-                        Specify the lecture date and upload the attendance sheet for <strong>{{ course.code }}</strong>.
+                        Select date, choose the target department cohort, and upload student attendance for <strong>{{ course.code }}</strong>.
                     </DialogDescription>
                 </DialogHeader>
 
-                <form @submit.prevent="submitAttendanceUpload" class="space-y-4 pt-2">
+                <form @submit.prevent="submitAttendanceUpload" class="space-y-4 pt-1">
                     <!-- Lecture Date Picker -->
                     <div class="space-y-1.5">
                         <label class="text-xs font-bold text-slate-700 dark:text-slate-300">
@@ -838,15 +1175,107 @@ const avgAttendanceRate = computed(() => {
                         </p>
                     </div>
 
-                    <!-- Template Download Helper -->
-                    <div class="bg-emerald-50/70 border border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900 rounded-xl p-3 flex items-center justify-between gap-2">
-                        <div class="text-xs text-emerald-950 dark:text-emerald-200 min-w-0">
-                            <span class="font-bold">Need the class template?</span>
-                            <p class="text-[11px] text-emerald-700 dark:text-emerald-400 truncate">Pre-filled with {{ students.length }} students.</p>
+                    <!-- Department Cohort Selector -->
+                    <div class="space-y-2 rounded-xl border border-slate-200 dark:border-slate-800 p-3.5 bg-slate-50/70 dark:bg-slate-850">
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                <Building2 class="w-3.5 h-3.5 text-slate-500" />
+                                <span>Target Department Cohort</span>
+                            </label>
+                            <Badge variant="outline" class="text-[10px] font-mono">
+                                {{ cohortStudentCount }} student(s) in scope
+                            </Badge>
                         </div>
-                        <a :href="route('admin.teaching.courses.attendance.template', course.id)" download class="shrink-0">
-                            <Button type="button" variant="outline" size="sm" class="h-8 text-xs border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 gap-1.5 font-bold">
-                                <Download class="w-3.5 h-3.5" /> Template
+
+                        <!-- Cohort Mode Radio -->
+                        <div class="grid grid-cols-2 gap-2 pt-1">
+                            <button
+                                type="button"
+                                @click="cohortType = 'all'"
+                                class="p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-0.5"
+                                :class="cohortType === 'all'
+                                    ? 'bg-emerald-50/90 border-emerald-500 text-emerald-950 dark:bg-emerald-950/40 dark:border-emerald-600 dark:text-emerald-200 shadow-xs'
+                                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300'"
+                            >
+                                <span class="text-xs font-bold flex items-center justify-between">
+                                    All Departments
+                                    <span v-if="cohortType === 'all'" class="w-2 h-2 rounded-full bg-emerald-600"></span>
+                                </span>
+                                <span class="text-[10px] text-muted-foreground">Combined / joint lecture for all {{ students.length }} registered</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                @click="cohortType = 'specific'"
+                                class="p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-0.5"
+                                :class="cohortType === 'specific'
+                                    ? 'bg-emerald-50/90 border-emerald-500 text-emerald-950 dark:bg-emerald-950/40 dark:border-emerald-600 dark:text-emerald-200 shadow-xs'
+                                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300'"
+                            >
+                                <span class="text-xs font-bold flex items-center justify-between">
+                                    Specific / Mixed
+                                    <span v-if="cohortType === 'specific'" class="w-2 h-2 rounded-full bg-emerald-600"></span>
+                                </span>
+                                <span class="text-[10px] text-muted-foreground">Select one or more department cohorts</span>
+                            </button>
+                        </div>
+
+                        <!-- Department Checkboxes when specific is active -->
+                        <div v-if="cohortType === 'specific'" class="mt-2.5 pt-2.5 border-t border-slate-200 dark:border-slate-700/80 space-y-2">
+                            <div class="flex items-center justify-between text-xs text-muted-foreground">
+                                <span>Choose department(s) held today:</span>
+                                <div class="flex items-center gap-2">
+                                    <button type="button" @click="selectAllDepartments" class="text-emerald-600 hover:underline font-bold text-[11px] cursor-pointer">
+                                        Select All
+                                    </button>
+                                    <span>•</span>
+                                    <button type="button" @click="clearAllDepartments" class="text-slate-500 hover:underline font-medium text-[11px] cursor-pointer">
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
+                                <div
+                                    v-for="dept in (departments || [])"
+                                    :key="dept.id"
+                                    @click="toggleDepartmentCohort(dept.id)"
+                                    class="p-2 rounded-lg border text-xs cursor-pointer flex items-center justify-between transition-colors select-none"
+                                    :class="selectedCohortDepartmentIds.includes(dept.id)
+                                        ? 'bg-emerald-50/80 border-emerald-400 dark:bg-emerald-950/30 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 font-bold'
+                                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50'"
+                                >
+                                    <div class="flex items-center gap-2 truncate">
+                                        <input
+                                            type="checkbox"
+                                            :checked="selectedCohortDepartmentIds.includes(dept.id)"
+                                            class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5 pointer-events-none"
+                                        />
+                                        <span class="truncate">{{ dept.name }}</span>
+                                    </div>
+                                    <Badge variant="outline" class="text-[9px] px-1 py-0 shrink-0 font-mono ml-1">
+                                        {{ dept.count }}
+                                    </Badge>
+                                </div>
+                            </div>
+
+                            <p v-if="selectedCohortDepartmentIds.length === 0" class="text-[11px] text-rose-500 font-semibold">
+                                Please select at least one department cohort above.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Template Download Helper (Dynamic to selected cohort) -->
+                    <div class="bg-emerald-50/70 border border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900 rounded-xl p-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                        <div class="text-xs text-emerald-950 dark:text-emerald-200 min-w-0">
+                            <span class="font-bold">Need the class attendance template?</span>
+                            <p class="text-[11px] text-emerald-700 dark:text-emerald-400">
+                                Pre-filled with {{ cohortStudentCount }} registered student(s) defaulted to 'Present'.
+                            </p>
+                        </div>
+                        <a :href="attendanceTemplateUrl" download class="shrink-0 w-full sm:w-auto">
+                            <Button type="button" variant="outline" size="sm" class="w-full sm:w-auto h-8 text-xs border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 gap-1.5 font-bold cursor-pointer justify-center">
+                                <Download class="w-3.5 h-3.5" /> Class Template
                             </Button>
                         </a>
                     </div>
@@ -885,7 +1314,7 @@ const avgAttendanceRate = computed(() => {
                                 <p class="text-[10px] text-muted-foreground">{{ (selectedAttendanceFile.size / 1024).toFixed(1) }} KB</p>
                             </div>
                         </div>
-                        <Button type="button" variant="ghost" size="sm" class="h-8 w-8 p-0 text-slate-400 hover:text-red-600 shrink-0" @click="removeAttendanceFile">
+                        <Button type="button" variant="ghost" size="sm" class="h-8 w-8 p-0 text-slate-400 hover:text-red-600 shrink-0 cursor-pointer" @click="removeAttendanceFile">
                             <X class="w-4 h-4" />
                         </Button>
                     </div>
@@ -895,13 +1324,13 @@ const avgAttendanceRate = computed(() => {
                     </div>
 
                     <DialogFooter class="gap-2 sm:gap-0 pt-2">
-                        <Button type="button" variant="outline" @click="showAttendanceModal = false">
+                        <Button type="button" variant="outline" @click="showAttendanceModal = false" class="cursor-pointer">
                             Cancel
                         </Button>
                         <Button
                             type="submit"
-                            class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2"
-                            :disabled="!selectedAttendanceFile || !attendanceForm.attendance_date || attendanceForm.processing"
+                            class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2 cursor-pointer"
+                            :disabled="!selectedAttendanceFile || !attendanceForm.attendance_date || attendanceForm.processing || (cohortType === 'specific' && selectedCohortDepartmentIds.length === 0)"
                         >
                             <Loader2 v-if="attendanceForm.processing" class="w-4 h-4 animate-spin" />
                             <Upload v-else class="w-4 h-4" />
@@ -964,7 +1393,7 @@ const avgAttendanceRate = computed(() => {
                 </div>
 
                 <DialogFooter>
-                    <Button class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold" @click="showAttendanceSummaryModal = false">
+                    <Button class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer" @click="showAttendanceSummaryModal = false">
                         Done
                     </Button>
                 </DialogFooter>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\CourseLectureSession;
 use App\Models\CourseRegistration;
 use App\Models\Semester;
 use App\Models\Session;
@@ -114,27 +115,46 @@ class AttendanceController extends Controller
         $courseIds = $registrations->pluck('course_id');
         $regIds = $registrations->pluck('id');
 
-        // 9. Batch count of total lectures held per course in this session
-        $courseTotalHeld = StudentCourseAttendance::where('session_id', $selectedSession->id)
+        // 9. Batch count of applicable lectures held per course in this session (department-aware)
+        $coursesWithSessions = CourseLectureSession::where('session_id', $selectedSession->id)
             ->whereIn('course_id', $courseIds)
-            ->when($regIds->isNotEmpty(), fn ($q) => $q->whereIn('course_registration_id', $regIds))
             ->select('course_id')
-            ->selectRaw('count(distinct attendance_date) as total_held')
+            ->distinct()
+            ->pluck('course_id')
+            ->flip();
+
+        $studentDeptId = $student->department_id;
+
+        $applicableSessionsQuery = CourseLectureSession::where('session_id', $selectedSession->id)
+            ->whereIn('course_id', $courseIds);
+
+        if ($studentDeptId) {
+            $applicableSessionsQuery->where(function ($q) use ($studentDeptId) {
+                $q->whereNull('department_ids')
+                    ->orWhere('department_ids', '[]')
+                    ->orWhereJsonContains('department_ids', (string) $studentDeptId);
+            });
+        }
+
+        $applicableLectureCounts = $applicableSessionsQuery
+            ->select('course_id')
+            ->selectRaw('count(distinct lecture_date) as total_held')
             ->groupBy('course_id')
             ->pluck('total_held', 'course_id');
 
-        // 10. Batch count of student's attended classes per course
-        $studentAttended = StudentCourseAttendance::where('session_id', $selectedSession->id)
-            ->where('student_id', $student->id)
-            ->where('status', 'present')
-            ->whereIn('course_id', $courseIds)
-            ->when($regIds->isNotEmpty(), fn ($q) => $q->whereIn('course_registration_id', $regIds))
-            ->select('course_id')
-            ->selectRaw('count(distinct attendance_date) as total_attended')
-            ->groupBy('course_id')
-            ->pluck('total_attended', 'course_id');
+        // Only query fallback for legacy courses that do NOT have any CourseLectureSession records
+        $coursesNeedingFallback = $courseIds->diff($coursesWithSessions->keys());
+        $fallbackTotalHeld = collect();
+        if ($coursesNeedingFallback->isNotEmpty()) {
+            $fallbackTotalHeld = StudentCourseAttendance::where('session_id', $selectedSession->id)
+                ->whereIn('course_id', $coursesNeedingFallback)
+                ->select('course_id')
+                ->selectRaw('count(distinct attendance_date) as total_held')
+                ->groupBy('course_id')
+                ->pluck('total_held', 'course_id');
+        }
 
-        // 11. Batch fetch student's date-by-date attendance logs for each course
+        // 10. Single indexed query to fetch student's date-by-date attendance logs for each course
         $logsByCourse = StudentCourseAttendance::where('session_id', $selectedSession->id)
             ->where('student_id', $student->id)
             ->whereIn('course_id', $courseIds)
@@ -144,12 +164,32 @@ class AttendanceController extends Controller
             ->get()
             ->groupBy('course_id');
 
+        // 11. High-performance in-memory calculation of student attended count (zero redundant DB queries)
+        $studentAttended = $logsByCourse->map(function ($logs) {
+            return $logs->filter(function ($item) {
+                $val = $item->status instanceof \BackedEnum ? $item->status->value : (string) $item->status;
+                return strtolower($val) === 'present';
+            })->pluck('attendance_date')->map(function ($d) {
+                return $d instanceof \Carbon\CarbonInterface ? $d->format('Y-m-d') : substr((string) $d, 0, 10);
+            })->unique()->count();
+        });
+
         $totalClassesSum = 0;
         $totalAttendedSum = 0;
 
-        $coursesData = $registrations->map(function ($reg) use ($courseTotalHeld, $studentAttended, $logsByCourse, &$totalClassesSum, &$totalAttendedSum) {
-            $totalHeld = (int) ($courseTotalHeld->get($reg->course_id) ?? 0);
+        $coursesData = $registrations->map(function ($reg) use ($applicableLectureCounts, $fallbackTotalHeld, $coursesWithSessions, $studentAttended, $logsByCourse, &$totalClassesSum, &$totalAttendedSum) {
+            $hasSessionRecords = isset($coursesWithSessions[$reg->course_id]);
+            $totalHeld = $hasSessionRecords
+                ? (int) ($applicableLectureCounts->get($reg->course_id) ?? 0)
+                : (int) ($fallbackTotalHeld->get($reg->course_id) ?? 0);
+
             $attended = (int) ($studentAttended->get($reg->course_id) ?? 0);
+
+            // Defensive: student attended cannot exceed total held
+            if ($attended > $totalHeld) {
+                $totalHeld = $attended;
+            }
+
             $missed = max(0, $totalHeld - $attended);
             $percentage = $totalHeld > 0 ? round(($attended / $totalHeld) * 100, 1) : null;
 
