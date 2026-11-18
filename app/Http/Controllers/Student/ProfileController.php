@@ -483,6 +483,9 @@ class ProfileController extends Controller
             }
         }
 
+        \Illuminate\Support\Facades\Cache::forget("user_auth_student_{$student->user_id}");
+        \Illuminate\Support\Facades\Cache::forget("student_profile_completed_{$student->id}");
+
         return redirect()->route('student.dashboard')->with('status', 'Profile updated successfully.');
     }
 

@@ -66,6 +66,41 @@ class AcademicCacheService
         });
     }
 
+    public static function getSessionsForStream(string $stream = 'UG')
+    {
+        $stream = strtoupper($stream);
+
+        return Cache::remember("academic_sessions_list_{$stream}", self::TTL, function () use ($stream) {
+            return Session::where('academic_stream', $stream)
+                ->orderBy('start_date', 'desc')
+                ->latest('id')
+                ->get(['id', 'name', 'academic_stream', 'calendar_type', 'is_current']);
+        });
+    }
+
+    public static function getCurrentSemesterForStream(string $stream = 'UG', string $calendarType = 'semester')
+    {
+        $stream = strtoupper($stream);
+        $calendarType = strtolower($calendarType);
+        $cacheKey = "current_semester_{$stream}_{$calendarType}";
+
+        return Cache::remember($cacheKey, self::TTL, function () use ($stream, $calendarType) {
+            $session = self::getCurrentSessionForStream($stream, $calendarType);
+            if (! $session) {
+                return null;
+            }
+
+            return \App\Models\Semester::where('session_id', $session->id)
+                ->where('is_current', true)
+                ->with('session')
+                ->first()
+                ?? \App\Models\Semester::where('session_id', $session->id)
+                    ->orderBy('name', 'asc')
+                    ->with('session')
+                    ->first();
+        });
+    }
+
     public static function getCurrentSession()
     {
         return Cache::remember('current_session', self::TTL, function () {
@@ -345,6 +380,13 @@ class AcademicCacheService
         });
     }
 
+    public static function getFeeTypes()
+    {
+        return Cache::remember('all_fee_types_list', self::TTL, function () {
+            return \App\Models\FeeType::orderBy('name')->get();
+        });
+    }
+
     public static function clearAll()
     {
         self::clearTimetableCache();
@@ -358,11 +400,16 @@ class AcademicCacheService
         Cache::forget('states_with_lgas');
         Cache::forget('all_scholarships');
         Cache::forget('academic_sessions_list');
+        Cache::forget('academic_sessions_list_UG');
+        Cache::forget('academic_sessions_list_PG');
         Cache::forget('current_session');
         Cache::forget('current_session_UG_semester');
         Cache::forget('current_session_PG_semester');
         Cache::forget('current_session_PG_trimester');
         Cache::forget('current_semester');
+        Cache::forget('current_semester_UG_semester');
+        Cache::forget('current_semester_PG_semester');
+        Cache::forget('current_semester_PG_trimester');
         Cache::forget('all_semesters_list');
         Cache::forget('all_faculties');
         Cache::forget('all_active_faculties');
@@ -381,6 +428,7 @@ class AcademicCacheService
         Cache::forget('all_active_courses_lookup');
         Cache::forget('staff_list_for_dropdowns');
         Cache::forget('exam_buildings_active');
+        Cache::forget('all_fee_types_list');
         Cache::forget('academic_stats_summary');
     }
 }

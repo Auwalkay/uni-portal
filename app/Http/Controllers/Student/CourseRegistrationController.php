@@ -71,10 +71,13 @@ class CourseRegistrationController extends Controller
             ];
         }
 
+        $stream = $student->isPostgraduate() ? 'PG' : 'UG';
+        $calendar = $programme?->calendar_type ?: 'semester';
         $currentSession = $student->resolveCurrentSession() ?? Session::current();
         $currentSemester = $currentSession
-            ? Semester::where('session_id', $currentSession->id)->where('is_current', true)->first()
-            : Semester::current();
+            ? (AcademicCacheService::getCurrentSemesterForStream($stream, $calendar)
+                ?? Semester::where('session_id', $currentSession->id)->where('is_current', true)->first())
+            : AcademicCacheService::getCurrentSemester();
         $isSecondSemActive = $currentSemester && (
             stripos($currentSemester->name, 'Second') !== false ||
             stripos($currentSemester->name, 'Trimester 2') !== false ||
@@ -82,14 +85,16 @@ class CourseRegistrationController extends Controller
             $currentSemester->name == '2'
         );
 
-        $pendingInvoicesCount = $isSecondSemActive
-            ? Invoice::where('user_id', Auth::id())->where('status', '!=', 'paid')->count()
-            : Invoice::where('user_id', Auth::id())->whereNotIn('status', ['paid', 'partial'])->where('paid_amount', '<=', 0)->count();
+        $userInvoices = Invoice::where('user_id', Auth::id())
+            ->get(['id', 'type', 'status', 'paid_amount', 'session_id']);
 
-        $schoolFeeStatus = Invoice::where('user_id', Auth::id())
-            ->where('type', 'school_fee')
-            ->where('session_id', $currentSession?->id)
-            ->first()?->status ?? 'unpaid';
+        $pendingInvoicesCount = $isSecondSemActive
+            ? $userInvoices->where('status', '!=', 'paid')->count()
+            : $userInvoices->filter(fn ($inv) => ! in_array($inv->status, ['paid', 'partial'], true) && (float) $inv->paid_amount <= 0)->count();
+
+        $schoolFeeStatus = $currentSession
+            ? ($userInvoices->first(fn ($inv) => $inv->type === 'school_fee' && (string) $inv->session_id === (string) $currentSession->id)?->status ?? 'unpaid')
+            : 'unpaid';
 
         return Inertia::render('Student/Courses/Index', [
             'history' => $formattedHistory,

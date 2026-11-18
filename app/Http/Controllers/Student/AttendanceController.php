@@ -31,23 +31,18 @@ class AttendanceController extends Controller
         $isPg = $student->isPostgraduate();
         $stream = $isPg ? 'PG' : 'UG';
 
-        // 2. Resolve default active session for this student type (PG or UG)
-        $defaultSession = null;
-        if ($student->program) {
-            $defaultSession = Session::currentForProgram($student->program);
-        }
-        if (!$defaultSession) {
-            $defaultSession = Session::where('academic_stream', $stream)->where('is_current', true)->first()
-                ?? Session::currentForStream($stream)
-                ?? Session::where('academic_stream', $stream)->orderBy('start_date', 'desc')->first()
-                ?? Session::current()
-                ?? Session::latest()->first();
-        }
+        // 2. Resolve default active session for this student type (PG or UG) via cache
+        $calendar = $student->program?->calendar_type ?: 'semester';
+        $defaultSession = \App\Services\AcademicCacheService::getCurrentSessionForStream($stream, $calendar)
+            ?? \App\Services\AcademicCacheService::getCurrentSession();
 
-        // 3. Fetch all available academic sessions for the filter dropdown
-        $sessions = Session::orderBy('start_date', 'desc')->get(['id', 'name', 'academic_stream', 'is_current']);
+        // 3. Fetch cached academic sessions scoped to the student's stream
+        $sessions = \App\Services\AcademicCacheService::getSessionsForStream($stream);
         if ($sessions->isEmpty()) {
-            $sessions = Session::latest()->get(['id', 'name', 'academic_stream', 'is_current']);
+            $sessions = \App\Services\AcademicCacheService::getSessions();
+        }
+        if (! $defaultSession) {
+            $defaultSession = $sessions->first();
         }
 
         // 4. Resolve selected session

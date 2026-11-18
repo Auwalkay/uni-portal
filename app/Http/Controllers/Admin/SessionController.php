@@ -216,7 +216,7 @@ class SessionController extends Controller
             ->whereNull('program_id')
             ->get();
 
-        $feeTypes = \App\Models\FeeType::all();
+        $feeTypes = \App\Services\AcademicCacheService::getFeeTypes();
 
         return Inertia::render('Admin/Sessions/Show', [
             'session' => $session,

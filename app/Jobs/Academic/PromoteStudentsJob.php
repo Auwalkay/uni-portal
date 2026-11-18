@@ -25,6 +25,7 @@ class PromoteStudentsJob implements ShouldQueue
     public function __construct($sessionId)
     {
         $this->sessionId = $sessionId;
+        $this->onQueue('bulk');
     }
 
     /**
