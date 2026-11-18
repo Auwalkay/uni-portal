@@ -175,4 +175,47 @@ class SpeedOptimizationTest extends TestCase
         $this->assertCount(1, AcademicCacheService::getSessionsForStream('UG'));
         $this->assertCount(1, AcademicCacheService::getSessionsForStream('PG'));
     }
+
+    public function test_semester_requires_full_fee_clearance_and_fee_service_clearance(): void
+    {
+        $this->assertFalse(\App\Models\Semester::isSubsequentTermName('First Semester'));
+        $this->assertFalse(\App\Models\Semester::isSubsequentTermName('Trimester 1'));
+        $this->assertFalse(\App\Models\Semester::isSubsequentTermName('1'));
+        $this->assertTrue(\App\Models\Semester::isSubsequentTermName('Second Semester'));
+        $this->assertTrue(\App\Models\Semester::isSubsequentTermName('Trimester 2'));
+        $this->assertTrue(\App\Models\Semester::isSubsequentTermName('Trimester 3'));
+        $this->assertTrue(\App\Models\Semester::isSubsequentTermName('2'));
+
+        $user = User::factory()->create();
+        $session = \App\Models\Session::create([
+            'name' => '2026/2027',
+            'academic_stream' => 'UG',
+            'calendar_type' => 'semester',
+            'start_date' => '2026-09-01',
+            'end_date' => '2027-07-31',
+            'is_current' => true,
+        ]);
+
+        $feeService = app(\App\Services\Finance\FeeService::class);
+        $unpaid = $feeService->getSchoolFeeClearance($user->id, $session->id);
+        $this->assertFalse($unpaid['hasPaid']);
+        $this->assertEquals('unpaid', $unpaid['status']);
+
+        \App\Models\Invoice::create([
+            'user_id' => $user->id,
+            'session_id' => $session->id,
+            'type' => 'school_fee',
+            'reference' => 'REF-TEST-001',
+            'invoice_number' => 'INV-TEST-001',
+            'amount' => 100000,
+            'paid_amount' => 50000,
+            'status' => 'partial',
+            'due_date' => now()->addDays(30),
+        ]);
+
+        $partial = $feeService->getSchoolFeeClearance($user->id, $session->id);
+        $this->assertTrue($partial['hasPaid']);
+        $this->assertTrue($partial['isPartial']);
+        $this->assertEquals('partial', $partial['status']);
+    }
 }

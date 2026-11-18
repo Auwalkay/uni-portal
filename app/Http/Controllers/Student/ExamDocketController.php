@@ -77,7 +77,7 @@ class ExamDocketController extends Controller
         })->values();
 
         // 3. Fee Clearance Checks
-        $isSecondSem = $currentSemester && (stripos($currentSemester->name, 'second') !== false || $currentSemester->name == '2');
+        $isSecondSem = $currentSemester?->requiresFullFeeClearance() ?? false;
 
         // Auto-cancel 0-paid expired pending invoices so they don't block clearance (school fees never expire or auto-cancel)
         Invoice::where('user_id', $user->id)

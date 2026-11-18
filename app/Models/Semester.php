@@ -28,6 +28,29 @@ class Semester extends Model
     }
 
     /**
+     * Determine whether a semester/trimester name requires full fee clearance
+     * (Second/Third Semester or Trimester 2/3).
+     */
+    public static function isSubsequentTermName(?string $name): bool
+    {
+        $normalized = strtolower(trim((string) $name));
+
+        return str_contains($normalized, 'second')
+            || str_contains($normalized, 'third')
+            || str_contains($normalized, 'trimester 2')
+            || str_contains($normalized, 'trimester 3')
+            || str_contains($normalized, '2nd')
+            || str_contains($normalized, '3rd')
+            || $normalized === '2'
+            || $normalized === '3';
+    }
+
+    public function requiresFullFeeClearance(): bool
+    {
+        return static::isSubsequentTermName($this->name);
+    }
+
+    /**
      * Get the standardized semester code ('1', '2', '3') from the semester name.
      */
     public function getSemesterCode(): string
