@@ -48,6 +48,32 @@ class HandleInertiaRequests extends Middleware
                 ]
             );
 
+            $studentData = \Illuminate\Support\Facades\Cache::remember(
+                "user_auth_student_{$user->id}",
+                300,
+                function () use ($user) {
+                    $student = $user->student()->with(['programme', 'program', 'pgProfile'])->first();
+                    if (! $student) {
+                        return null;
+                    }
+
+                    return [
+                        'id' => $student->id,
+                        'department_id' => $student->effective_department_id,
+                        'program_id' => $student->program_id,
+                        'is_postgraduate' => $student->isPostgraduate(),
+                        'academic_stream' => $student->academic_stream ?? $student->programme?->academic_stream ?? 'UG',
+                        'current_level' => $student->current_level,
+                        'matriculation_number' => $student->matriculation_number,
+                        'spgs_file_number' => $student->pgProfile?->spgs_file_number,
+                        'candidacy_status' => $student->pgProfile?->candidacy_status,
+                        'study_mode' => $student->pgProfile?->study_mode,
+                        'degree_type' => $student->programme?->type ?? $student->program?->type,
+                        'programme_name' => $student->programme?->name ?? $student->program?->name,
+                    ];
+                }
+            );
+
             $authData = [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -55,20 +81,7 @@ class HandleInertiaRequests extends Middleware
                 'profile_photo_path' => $user->profile_photo_path,
                 'roles' => $userRolesAndPerms['roles'],
                 'permissions' => $userRolesAndPerms['permissions'],
-                'student' => $user->student ? [
-                    'id' => $user->student->id,
-                    'department_id' => $user->student->effective_department_id,
-                    'program_id' => $user->student->program_id,
-                    'is_postgraduate' => $user->student->isPostgraduate(),
-                    'academic_stream' => $user->student->academic_stream ?? $user->student->programme?->academic_stream ?? 'UG',
-                    'current_level' => $user->student->current_level,
-                    'matriculation_number' => $user->student->matriculation_number,
-                    'spgs_file_number' => $user->student->pgProfile?->spgs_file_number,
-                    'candidacy_status' => $user->student->pgProfile?->candidacy_status,
-                    'study_mode' => $user->student->pgProfile?->study_mode,
-                    'degree_type' => $user->student->programme?->type ?? $user->student->program?->type,
-                    'programme_name' => $user->student->programme?->name ?? $user->student->program?->name,
-                ] : null,
+                'student' => $studentData,
             ];
         }
 
@@ -88,13 +101,13 @@ class HandleInertiaRequests extends Middleware
                 'status' => fn() => $request->session()->get('status'),
                 'verified_candidate' => fn() => $request->session()->get('verified_candidate'),
             ],
-            'ziggy' => function () use ($request) {
-                return array_merge((new \Tighten\Ziggy\Ziggy)->toArray(), [
+            'ziggy' => \Inertia\Inertia::once(function () use ($request) {
+                return [
                     'location' => $request->url(),
                     'url' => $request->schemeAndHttpHost(),
                     'port' => (int) $request->getPort() ?: null,
-                ]);
-            },
+                ];
+            }),
         ];
     }
 }

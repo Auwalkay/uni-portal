@@ -19,9 +19,15 @@ class EnsureStudentProfileCompleted
         if ($user && $user->hasRole('student')) {
             $student = $user->student;
             if ($student) {
+                $cacheKey = "student_profile_completed_{$student->id}";
+                if (\Illuminate\Support\Facades\Cache::get($cacheKey) === true) {
+                    return $next($request);
+                }
+
                 if ($student->isPostgraduate()) {
                     // Postgraduate students use postgraduate_student_profiles and do not require UG indigene letters or O-Level sitting forms
                     if ($student->pgProfile()->exists() || !empty($student->gender)) {
+                        \Illuminate\Support\Facades\Cache::put($cacheKey, true, 3600);
                         return $next($request);
                     }
                 }
@@ -40,6 +46,8 @@ class EnsureStudentProfileCompleted
                         return redirect()->route('student.profile.edit')
                             ->with('warning', 'You must complete your profile details (Gender, State of Origin, LGA, Passport Photo, Indigene Letter, and O-Level sittings) to proceed.');
                     }
+                } else {
+                    \Illuminate\Support\Facades\Cache::put($cacheKey, true, 3600);
                 }
             }
         }

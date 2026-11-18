@@ -63,13 +63,10 @@ class PostgraduateResearchController extends Controller
 
         // 5M-Scale Scalable Sample Initializers (Max 15 for modal init)
         $pgStudents = Student::with(['user:id,name,email', 'program:id,name,type,academic_stream'])
-            ->where(function ($q) {
-                $q->where('current_level', '>=', 700)
-                    ->orWhereHas('program', fn ($pq) => $pq->where('academic_stream', 'PG'));
-            })
+            ->where('academic_stream', 'PG')
             ->orderBy('matriculation_number')
             ->limit(15)
-            ->get(['id', 'user_id', 'matriculation_number', 'program_id', 'current_level']);
+            ->get(['id', 'user_id', 'matriculation_number', 'program_id', 'current_level', 'academic_stream']);
 
         $supervisors = Staff::with(['user:id,name,email', 'department:id,name'])
             ->orderBy('staff_number')
@@ -114,16 +111,13 @@ class PostgraduateResearchController extends Controller
         }
 
         $candidates = Student::with(['user:id,name,email', 'program:id,name'])
-            ->where(function ($q) {
-                $q->where('current_level', '>=', 700)
-                    ->orWhereHas('program', fn ($pq) => $pq->where('academic_stream', 'PG'));
-            })
+            ->where('academic_stream', 'PG')
             ->where(function ($q) use ($search) {
                 $q->where('matriculation_number', 'like', "%{$search}%")
                     ->orWhereHas('user', fn ($uq) => $uq->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"));
             })
             ->limit(15)
-            ->get(['id', 'user_id', 'matriculation_number', 'program_id', 'current_level']);
+            ->get(['id', 'user_id', 'matriculation_number', 'program_id', 'current_level', 'academic_stream']);
 
         return response()->json($candidates);
     }

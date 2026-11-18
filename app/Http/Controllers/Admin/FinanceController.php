@@ -294,7 +294,7 @@ class FinanceController extends Controller
                 'feeConfigurations.department.faculty',
                 'feeConfigurations.program.department.faculty',
             ]),
-            'feeTypes' => FeeType::all(),
+            'feeTypes' => \App\Services\AcademicCacheService::getFeeTypes(),
             'faculties' => AcademicCacheService::getAllFaculties(),
             'departments' => AcademicCacheService::getAllDepartments(),
             'programs' => AcademicCacheService::getAllProgrammes(),

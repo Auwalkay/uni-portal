@@ -49,28 +49,31 @@ class LogSystemRequests
 
         $user = $request->user();
         $statusCode = method_exists($response, 'getStatusCode') ? $response->getStatusCode() : 200;
-
-        // 1. File Logger (storage/logs/laravel.log)
-        Log::info('[SYSTEM_REQUEST]', [
-            'method' => $request->method(),
-            'url' => $request->fullUrl(),
-            'path' => '/' . ltrim($path, '/'),
-            'route_name' => $request->route()?->getName() ?? 'unnamed_route',
-            'status_code' => $statusCode,
-            'duration_ms' => "{$duration}ms",
-            'ip_address' => $request->ip(),
-            'user_id' => $user?->id ?? null,
-            'user_email' => $user?->email ?? 'guest',
-            'user_role' => $user ? ($user->getRoleNames()->first() ?? 'user') : 'guest',
-            'payload' => !empty($input) ? $input : null,
-            'user_agent' => substr((string) $request->header('User-Agent'), 0, 150),
-        ]);
-
-        // 2. Database Activity Log: Only record state-mutating actions (POST, PUT, PATCH, DELETE)
-        // or auth failures to avoid massive write contention on routine GET/Inertia requests
         $isStateMutating = !in_array($request->method(), ['GET', 'HEAD', 'OPTIONS']);
         $isFailedAuth = $statusCode === 401 || $statusCode === 403;
 
+        // Skip routine GET file logging unless explicitly enabled to prevent disk I/O contention under high load
+        $shouldLogToFile = $isStateMutating || $isFailedAuth || (bool) env('LOG_GET_REQUESTS', false);
+
+        if ($shouldLogToFile) {
+            Log::info('[SYSTEM_REQUEST]', [
+                'method' => $request->method(),
+                'url' => $request->fullUrl(),
+                'path' => '/' . ltrim($path, '/'),
+                'route_name' => $request->route()?->getName() ?? 'unnamed_route',
+                'status_code' => $statusCode,
+                'duration_ms' => "{$duration}ms",
+                'ip_address' => $request->ip(),
+                'user_id' => $user?->id ?? null,
+                'user_email' => $user?->email ?? 'guest',
+                'user_role' => $user ? ($user->getRoleNames()->first() ?? 'user') : 'guest',
+                'payload' => !empty($input) ? $input : null,
+                'user_agent' => substr((string) $request->header('User-Agent'), 0, 150),
+            ]);
+        }
+
+        // 2. Database Activity Log: Only record state-mutating actions (POST, PUT, PATCH, DELETE)
+        // or auth failures to avoid massive write contention on routine GET/Inertia requests
         if ($isStateMutating || $isFailedAuth) {
             try {
                 if (function_exists('activity')) {
