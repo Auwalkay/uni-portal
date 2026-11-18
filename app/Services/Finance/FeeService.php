@@ -1031,4 +1031,35 @@ class FeeService
                 && empty($c->program_id);
         });
     }
+
+    /**
+     * Resolve school fee clearance status for a user in a given academic session.
+     *
+     * @return array{invoice: ?\App\Models\Invoice, hasPaid: bool, isPartial: bool, status: string}
+     */
+    public function getSchoolFeeClearance(string $userId, string $sessionId): array
+    {
+        $schoolFeeInvoice = Invoice::where('user_id', $userId)
+            ->where('type', 'school_fee')
+            ->where('session_id', $sessionId)
+            ->first();
+
+        $hasPaid = $schoolFeeInvoice && (
+            $schoolFeeInvoice->status === 'paid' ||
+            $schoolFeeInvoice->status === 'partial' ||
+            (float) $schoolFeeInvoice->paid_amount > 0
+        );
+
+        $isPartial = $schoolFeeInvoice && (
+            $schoolFeeInvoice->status === 'partial' ||
+            ((float) $schoolFeeInvoice->paid_amount > 0 && (float) $schoolFeeInvoice->paid_amount < (float) $schoolFeeInvoice->amount)
+        );
+
+        return [
+            'invoice' => $schoolFeeInvoice,
+            'hasPaid' => $hasPaid,
+            'isPartial' => $isPartial,
+            'status' => $schoolFeeInvoice?->status ?? 'unpaid',
+        ];
+    }
 }

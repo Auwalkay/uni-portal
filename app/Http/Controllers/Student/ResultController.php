@@ -106,7 +106,7 @@ class ResultController extends Controller
                     ->groupBy('semester.name');
 
                 foreach ($registrationsInSession as $semesterName => $regs) {
-                    $isSecondSem = stripos($semesterName, 'Second') !== false || strpos($semesterName, '2') !== false;
+                    $isSecondSem = \App\Models\Semester::isSubsequentTermName((string) $semesterName);
                     $isBlocked = $isSecondSem && (!$schoolFeeCleared || !$hostelFeeCleared);
 
                     foreach ($regs as $reg) {
@@ -143,7 +143,7 @@ class ResultController extends Controller
 
             $cgpaRegs = $allPublishedRegs->filter(function ($reg) use ($enforceSchoolFee, $enforceHostelFee, $schoolFeeInvoices, $hostelBookings) {
                 $semesterName = $reg->semester?->name ?? '';
-                $isSecondSem = stripos($semesterName, 'Second') !== false || strpos($semesterName, '2') !== false;
+                $isSecondSem = \App\Models\Semester::isSubsequentTermName($semesterName);
                 
                 if (!$isSecondSem) {
                     return true; // First Sem is never blocked

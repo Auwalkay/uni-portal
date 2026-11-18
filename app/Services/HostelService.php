@@ -109,4 +109,83 @@ class HostelService
             'errors' => $import->errors,
         ];
     }
+
+    /**
+     * Cancel/unbook a student's hostel booking and release room capacity.
+     */
+    public function unbookBooking(HostelBooking $booking, User $actor): HostelBooking
+    {
+        $booking->update([
+            'status' => 'cancelled',
+            'updated_by' => $actor->id,
+        ]);
+
+        activity('hostel')
+            ->performedOn($booking)
+            ->causedBy($actor)
+            ->withProperties([
+                'student_name' => $booking->student?->user?->name,
+                'hostel' => $booking->room?->floor?->block?->hostel?->name,
+                'room_number' => $booking->room?->room_number,
+            ])
+            ->log("Cancelled hostel allocation for student {$booking->student?->user?->name}");
+
+        return $booking;
+    }
+
+    /**
+     * Reactivate/reallocate a previously cancelled or expired hostel booking.
+     *
+     * @throws \InvalidArgumentException
+     */
+    public function reallocateBooking(HostelBooking $booking, User $actor): HostelBooking
+    {
+        $room = $booking->room;
+        $currentSession = Session::current();
+
+        if (! $currentSession) {
+            throw new \InvalidArgumentException('No active academic session found.');
+        }
+
+        $bookedCount = $room->bookings()
+            ->where('session_id', $currentSession->id)
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->where('id', '!=', $booking->id)
+            ->count();
+
+        if ($bookedCount >= $room->capacity) {
+            throw new \InvalidArgumentException('Cannot re-allocate. This room is already fully booked.');
+        }
+
+        $activeBookingExists = HostelBooking::where('student_id', $booking->student_id)
+            ->where('session_id', $currentSession->id)
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->where('id', '!=', $booking->id)
+            ->exists();
+
+        if ($activeBookingExists) {
+            throw new \InvalidArgumentException('This student already has another active hostel booking for this session.');
+        }
+
+        $invoiceStatus = $booking->invoice ? $booking->invoice->status : 'unpaid';
+        $newStatus = in_array($invoiceStatus, ['paid', 'partial'], true) ? 'confirmed' : 'pending';
+
+        $booking->update([
+            'status' => $newStatus,
+            'updated_by' => $actor->id,
+        ]);
+
+        activity('hostel')
+            ->performedOn($booking)
+            ->causedBy($actor)
+            ->withProperties([
+                'student_name' => $booking->student?->user?->name,
+                'hostel' => $booking->room?->floor?->block?->hostel?->name,
+                'room_number' => $booking->room?->room_number,
+                'status' => $newStatus,
+            ])
+            ->log("Re-allocated room {$booking->room?->room_number} to student {$booking->student?->user?->name}");
+
+        return $booking;
+    }
 }

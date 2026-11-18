@@ -72,7 +72,7 @@ class ProfileController extends Controller
 
             $cgpaRegs = $allRegs->filter(function ($reg) use ($enforceSchoolFee, $enforceHostelFee, $student) {
                 $semesterName = $reg->semester?->name ?? '';
-                $isSecondSem = stripos($semesterName, 'Second') !== false || strpos($semesterName, '2') !== false;
+                $isSecondSem = \App\Models\Semester::isSubsequentTermName($semesterName);
 
                 if (! $isSecondSem) {
                     return true; // First Sem is never blocked
