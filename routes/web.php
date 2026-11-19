@@ -326,6 +326,10 @@ Route::middleware('throttle:webhooks')->group(function () {
     Route::post('webhooks/seerbit', [SeerbitWebhookController::class, 'handle'])->name('webhooks.seerbit');
 });
 
+// Public Programmes & Fee Schedule
+Route::get('programmes', [\App\Http\Controllers\Public\ProgrammeController::class, 'index'])
+    ->name('public.programmes.index');
+
 // Public Verification & Postgraduate Referee Recommendations
 Route::get('verify-admission/{identifier}', [AdmissionVerificationController::class, 'verify'])
     ->middleware('throttle:public-verification')

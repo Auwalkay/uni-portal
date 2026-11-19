@@ -86,6 +86,7 @@ const events = [
                     <div class="hidden md:flex items-center gap-6">
                         <a href="#about" class="text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-primary transition-colors">About</a>
                         <a href="#academics" class="text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-primary transition-colors">Academics</a>
+                        <Link href="/programmes" class="text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-primary transition-colors">Programmes & Fees</Link>
                         <a href="#news" class="text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-primary transition-colors">News</a>
                     </div>
                     
