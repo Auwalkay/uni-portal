@@ -5,7 +5,7 @@ import {
     BookOpen, Users, ArrowLeft, Download, Search, MoreHorizontal,
     Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, X, Loader2,
     Calendar, CalendarCheck, Trash2, ShieldCheck, User, Filter, RotateCcw,
-    Building2, GraduationCap, Layers, CheckSquare, Square
+    Building2, GraduationCap, Layers, CheckSquare, Square, Eye
 } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -333,6 +333,71 @@ const deleteAttendanceDate = (date: string) => {
         });
     }
 };
+
+const showDateDetailsModal = ref(false);
+const dateDetailsLoading = ref(false);
+const dateDetailsSearch = ref('');
+const dateDetailsStatus = ref<'all' | 'present' | 'absent'>('all');
+const selectedDateMeta = ref<{
+    date: string;
+    formatted_date: string;
+    present_count: number;
+    absent_count: number;
+    attendance_rate: number;
+} | null>(null);
+const dateDetailsRecords = ref<Array<{
+    id: string;
+    student_id: string;
+    student_name: string;
+    matriculation_number: string;
+    department: string;
+    status: string;
+    remarks?: string | null;
+}>>([]);
+
+async function openDateDetails(att: {
+    date: string;
+    formatted_date: string;
+    present_count: number;
+    absent_count: number;
+    attendance_rate: number;
+}) {
+    selectedDateMeta.value = att;
+    dateDetailsSearch.value = '';
+    dateDetailsStatus.value = 'all';
+    dateDetailsRecords.value = [];
+    showDateDetailsModal.value = true;
+    dateDetailsLoading.value = true;
+
+    try {
+        const res = await fetch(route('admin.teaching.courses.attendance.details', [props.course.id, att.date]), {
+            headers: { Accept: 'application/json' },
+        });
+        if (res.ok) {
+            const data = await res.json();
+            dateDetailsRecords.value = data.records || [];
+        }
+    } finally {
+        dateDetailsLoading.value = false;
+    }
+}
+
+const filteredDateDetailsRecords = computed(() => {
+    const q = dateDetailsSearch.value.trim().toLowerCase();
+    return dateDetailsRecords.value.filter((r) => {
+        if (dateDetailsStatus.value !== 'all' && r.status !== dateDetailsStatus.value) {
+            return false;
+        }
+        if (q) {
+            return (
+                r.student_name.toLowerCase().includes(q) ||
+                r.matriculation_number.toLowerCase().includes(q) ||
+                r.department.toLowerCase().includes(q)
+            );
+        }
+        return true;
+    });
+});
 
 const avgAttendanceRate = computed(() => {
     if (!props.attendanceHistory || props.attendanceHistory.length === 0) return 0;
@@ -862,14 +927,25 @@ const avgAttendanceRate = computed(() => {
                                     </Badge>
                                 </div>
 
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    class="text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-7 text-xs font-semibold px-2"
-                                    @click="deleteAttendanceDate(att.date)"
-                                >
+                                <div class="flex items-center gap-1">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        class="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 h-7 text-xs font-semibold px-2"
+                                        @click="openDateDetails(att)"
+                                    >
+                                        <Eye class="w-3.5 h-3.5 mr-1" />
+                                        View
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        class="text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-7 text-xs font-semibold px-2"
+                                        @click="deleteAttendanceDate(att.date)"
+                                    >
                                     <Trash2 class="w-3 h-3 mr-1" /> Delete
                                 </Button>
+                                </div>
                             </div>
                         </div>
 
@@ -963,15 +1039,26 @@ const avgAttendanceRate = computed(() => {
                                     </TableCell>
 
                                     <TableCell class="text-right">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            class="text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 h-8 gap-1 text-xs font-semibold rounded-lg cursor-pointer"
-                                            @click="deleteAttendanceDate(att.date)"
-                                        >
-                                            <Trash2 class="w-3.5 h-3.5" />
-                                            <span>Delete</span>
-                                        </Button>
+                                        <div class="inline-flex items-center gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                class="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 h-8 gap-1 text-xs font-semibold rounded-lg cursor-pointer"
+                                                @click="openDateDetails(att)"
+                                            >
+                                                <Eye class="w-3.5 h-3.5" />
+                                                <span>View Details</span>
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                class="text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 h-8 gap-1 text-xs font-semibold rounded-lg cursor-pointer"
+                                                @click="deleteAttendanceDate(att.date)"
+                                            >
+                                                <Trash2 class="w-3.5 h-3.5" />
+                                                <span>Delete</span>
+                                            </Button>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
 
@@ -1396,6 +1483,108 @@ const avgAttendanceRate = computed(() => {
                     <Button class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer" @click="showAttendanceSummaryModal = false">
                         Done
                     </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <!-- Per-Date Attendance Details Modal -->
+        <Dialog v-model:open="showDateDetailsModal">
+            <DialogContent class="sm:max-w-3xl max-h-[85vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle class="flex items-center gap-2">
+                        <CalendarCheck class="w-5 h-5 text-indigo-600" />
+                        <span>{{ course.code }} Attendance · {{ selectedDateMeta?.formatted_date }}</span>
+                    </DialogTitle>
+                    <DialogDescription v-if="selectedDateMeta" class="flex flex-wrap items-center gap-2 pt-1">
+                        <Badge class="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 text-xs">
+                            {{ selectedDateMeta.present_count }} Present
+                        </Badge>
+                        <Badge class="bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 text-xs">
+                            {{ selectedDateMeta.absent_count }} Absent
+                        </Badge>
+                        <Badge variant="outline" class="text-xs font-bold">
+                            {{ selectedDateMeta.attendance_rate }}% Rate
+                        </Badge>
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div class="flex flex-col sm:flex-row gap-2 py-2">
+                    <div class="relative flex-1">
+                        <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            v-model="dateDetailsSearch"
+                            placeholder="Search student name, matric no., or department..."
+                            class="pl-9 h-9 text-xs"
+                        />
+                    </div>
+                    <div class="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800">
+                        <button
+                            type="button"
+                            @click="dateDetailsStatus = 'all'"
+                            :class="['px-2.5 py-1 text-xs font-semibold rounded-md transition', dateDetailsStatus === 'all' ? 'bg-white dark:bg-slate-900 shadow-xs text-slate-900 dark:text-white' : 'text-muted-foreground']"
+                        >
+                            All
+                        </button>
+                        <button
+                            type="button"
+                            @click="dateDetailsStatus = 'present'"
+                            :class="['px-2.5 py-1 text-xs font-semibold rounded-md transition', dateDetailsStatus === 'present' ? 'bg-emerald-600 text-white shadow-xs' : 'text-muted-foreground']"
+                        >
+                            Present
+                        </button>
+                        <button
+                            type="button"
+                            @click="dateDetailsStatus = 'absent'"
+                            :class="['px-2.5 py-1 text-xs font-semibold rounded-md transition', dateDetailsStatus === 'absent' ? 'bg-rose-600 text-white shadow-xs' : 'text-muted-foreground']"
+                        >
+                            Absent
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-xl">
+                    <div v-if="dateDetailsLoading" class="flex items-center justify-center py-12 gap-2 text-xs text-muted-foreground">
+                        <Loader2 class="w-4 h-4 animate-spin" />
+                        <span>Loading attendance records...</span>
+                    </div>
+                    <Table v-else>
+                        <TableHeader class="bg-slate-50 dark:bg-slate-800/60">
+                            <TableRow>
+                                <TableHead class="w-10 text-xs">#</TableHead>
+                                <TableHead class="text-xs">Student</TableHead>
+                                <TableHead class="text-xs">Matric No.</TableHead>
+                                <TableHead class="text-xs">Department</TableHead>
+                                <TableHead class="text-xs text-right">Status</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            <TableRow v-for="(rec, idx) in filteredDateDetailsRecords" :key="rec.id">
+                                <TableCell class="text-xs text-muted-foreground">{{ idx + 1 }}</TableCell>
+                                <TableCell class="text-xs font-semibold text-slate-900 dark:text-white">{{ rec.student_name }}</TableCell>
+                                <TableCell class="text-xs font-mono">{{ rec.matriculation_number }}</TableCell>
+                                <TableCell class="text-xs text-muted-foreground">{{ rec.department }}</TableCell>
+                                <TableCell class="text-right">
+                                    <Badge
+                                        :class="rec.status === 'present'
+                                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200'
+                                            : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200'"
+                                        class="text-[10px] font-bold uppercase"
+                                    >
+                                        {{ rec.status }}
+                                    </Badge>
+                                </TableCell>
+                            </TableRow>
+                            <TableRow v-if="filteredDateDetailsRecords.length === 0">
+                                <TableCell colspan="5" class="text-center py-10 text-xs text-muted-foreground">
+                                    No attendance records match this filter.
+                                </TableCell>
+                            </TableRow>
+                        </TableBody>
+                    </Table>
+                </div>
+
+                <DialogFooter>
+                    <Button variant="outline" @click="showDateDetailsModal = false">Close</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
