@@ -687,4 +687,41 @@ class CourseController extends Controller
             "Expires" => "0"
         ]);
     }
+
+    /**
+     * Return individual student attendance records for a specific course and lecture date.
+     */
+    public function attendanceDateDetails(Course $course, string $date)
+    {
+        $user = auth()->user();
+        $this->authorizeCourseAccess($course, $user);
+
+        $currentSession = Session::current() ?? Session::latest()->first();
+
+        $records = StudentCourseAttendance::where('course_id', $course->id)
+            ->when($currentSession, fn ($q) => $q->where('session_id', $currentSession->id))
+            ->whereDate('attendance_date', $date)
+            ->with([
+                'student:id,user_id,matriculation_number,department_id',
+                'student.user:id,name',
+                'student.department:id,name',
+            ])
+            ->get()
+            ->map(fn ($r) => [
+                'id' => $r->id,
+                'student_id' => $r->student_id,
+                'student_name' => $r->student?->user?->name ?? 'Unknown',
+                'matriculation_number' => $r->student?->matriculation_number ?? 'N/A',
+                'department' => $r->student?->department?->name ?? 'Unassigned',
+                'status' => strtolower($r->status instanceof \BackedEnum ? (string) $r->status->value : (string) $r->status),
+                'remarks' => $r->remarks,
+            ])
+            ->sortBy('student_name')
+            ->values();
+
+        return response()->json([
+            'date' => $date,
+            'records' => $records,
+        ]);
+    }
 }
