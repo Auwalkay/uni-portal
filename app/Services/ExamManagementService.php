@@ -198,7 +198,7 @@ class ExamManagementService
             ->get();
 
         // Fee clearance check
-        $isSecondSem = $semester && (stripos($semester->name, 'second') !== false || $semester->name == '2');
+        $isSecondSem = $semester?->requiresFullFeeClearance() ?? false;
 
         // Auto-cancel 0-paid expired pending invoices (school fees never expire or auto-cancel)
         Invoice::where('user_id', $student->user_id)
@@ -310,5 +310,30 @@ class ExamManagementService
                 'notes' => $notes ?? null,
             ]
         );
+    }
+
+    /**
+     * Create exam schedules across one or more courses and comma-separated venues.
+     */
+    public function createSchedules(array $validated, array $courseIds, ?string $createdBy): int
+    {
+        $validated['exam_type'] = $validated['exam_type'] ?? 'final';
+        $venues = array_filter(array_map('trim', explode(',', (string) $validated['venue'])));
+
+        $createdCount = 0;
+        foreach ($courseIds as $cId) {
+            foreach ($venues as $v) {
+                $item = $validated;
+                unset($item['course_ids']);
+                $item['course_id'] = $cId;
+                $item['venue'] = $v;
+                $item['reference_id'] = 'EXM-' . strtoupper(substr(uniqid(), -6));
+                $item['created_by'] = $createdBy;
+                ExamSchedule::create($item);
+                $createdCount++;
+            }
+        }
+
+        return $createdCount;
     }
 }

@@ -728,20 +728,7 @@ class HostelBookingController extends Controller
             return back()->with('error', 'Unauthorized. You do not have permission to unbook or cancel student hostel allocations.');
         }
 
-        $booking->update([
-            'status' => 'cancelled',
-            'updated_by' => Auth::id(),
-        ]);
-
-        activity('hostel')
-            ->performedOn($booking)
-            ->causedBy(Auth::user())
-            ->withProperties([
-                'student_name' => $booking->student?->user?->name,
-                'hostel' => $booking->room?->floor?->block?->hostel?->name,
-                'room_number' => $booking->room?->room_number,
-            ])
-            ->log("Cancelled hostel allocation for student {$booking->student?->user?->name}");
+        app(\App\Services\HostelService::class)->unbookBooking($booking, $user);
 
         return back()->with('success', 'Student unbooked successfully. Room capacity has been released.');
     }
@@ -753,56 +740,13 @@ class HostelBookingController extends Controller
             return back()->with('error', 'Unauthorized. You do not have permission to reallocate hostel rooms.');
         }
 
-        $room = $booking->room;
-        $currentSession = Session::current();
-        
-        if (!$currentSession) {
-            return back()->with('error', 'No active academic session found.');
+        try {
+            app(\App\Services\HostelService::class)->reallocateBooking($booking, $user);
+
+            return back()->with('success', 'Student room allocation reactivated successfully!');
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        // Room capacity check for current session (excluding this booking)
-        $bookedCount = $room->bookings()
-            ->where('session_id', $currentSession->id)
-            ->whereIn('status', ['pending', 'confirmed'])
-            ->where('id', '!=', $booking->id)
-            ->count();
-            
-        if ($bookedCount >= $room->capacity) {
-            return back()->with('error', 'Cannot re-allocate. This room is already fully booked.');
-        }
-
-        // Check if student already has another active booking for this session (excluding this booking)
-        $activeBookingExists = HostelBooking::where('student_id', $booking->student_id)
-            ->where('session_id', $currentSession->id)
-            ->whereIn('status', ['pending', 'confirmed'])
-            ->where('id', '!=', $booking->id)
-            ->exists();
-
-        if ($activeBookingExists) {
-            return back()->with('error', 'This student already has another active hostel booking for this session.');
-        }
-
-        // If invoice is fully or partially paid, set as confirmed, otherwise pending
-        $invoiceStatus = $booking->invoice ? $booking->invoice->status : 'unpaid';
-        $newStatus = in_array($invoiceStatus, ['paid', 'partial']) ? 'confirmed' : 'pending';
-
-        $booking->update([
-            'status' => $newStatus,
-            'updated_by' => Auth::id(),
-        ]);
-
-        activity('hostel')
-            ->performedOn($booking)
-            ->causedBy(Auth::user())
-            ->withProperties([
-                'student_name' => $booking->student?->user?->name,
-                'hostel' => $booking->room?->floor?->block?->hostel?->name,
-                'room_number' => $booking->room?->room_number,
-                'status' => $newStatus,
-            ])
-            ->log("Re-allocated room {$booking->room?->room_number} to student {$booking->student?->user?->name}");
-
-        return back()->with('success', 'Student room allocation reactivated successfully!');
     }
 
     public function changeRoom(HostelBooking $booking, Request $request)

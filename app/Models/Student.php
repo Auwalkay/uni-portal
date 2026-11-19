@@ -32,8 +32,24 @@ class Student extends Model
             }
         });
 
+        static::saving(function ($model) {
+            if ((int) ($model->current_level ?? 0) >= 700 || strtolower((string) ($model->entry_mode ?? '')) === 'postgraduate') {
+                $model->academic_stream = 'PG';
+            } elseif ($model->program_id && ($model->isDirty('program_id') || empty($model->academic_stream))) {
+                $stream = $model->relationLoaded('program') && $model->program
+                    ? $model->program->academic_stream
+                    : Programme::where('id', $model->program_id)->value('academic_stream');
+                $model->academic_stream = $stream ?: 'UG';
+            } elseif (empty($model->academic_stream)) {
+                $model->academic_stream = 'UG';
+            }
+        });
+
         static::saved(function ($student) {
             static::clearStatsCache();
+            if ($student->user_id) {
+                \Illuminate\Support\Facades\Cache::forget("user_auth_student_{$student->user_id}");
+            }
         });
 
         static::deleted(function ($student) {
@@ -85,6 +101,7 @@ class Student extends Model
         'department_id',
         'faculty_id',
         'program_id',
+        'academic_stream',
         'admitted_session_id',
         'program_duration',
         'current_level',
@@ -324,6 +341,10 @@ class Student extends Model
 
     public function isPostgraduate(): bool
     {
+        if (strtoupper((string) ($this->attributes['academic_stream'] ?? '')) === 'PG') {
+            return true;
+        }
+
         if ((int) ($this->current_level ?? 0) >= 700) {
             return true;
         }

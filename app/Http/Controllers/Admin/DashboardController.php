@@ -528,9 +528,7 @@ class DashboardController extends Controller
                 $user->load('staff');
             }
 
-            $myAllocations = \App\Models\CourseAllocation::whereHas('staff', function ($q) use ($user) {
-                $q->where('user_id', $user->id);
-            })
+            $myAllocations = \App\Models\CourseAllocation::where('staff_id', $user->staff->id)
                 ->where('session_id', $sessionId)
                 ->with(['course'])
                 ->get();

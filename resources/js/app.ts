@@ -7,6 +7,7 @@ import type { DefineComponent } from 'vue';
 import { createApp, h } from 'vue';
 
 import { initializeTheme } from './composables/useAppearance';
+import FullPageLoader from './components/FullPageLoader.vue';
 
 import { ZiggyVue } from 'ziggy-js';
 import { Ziggy } from './ziggy';
@@ -21,24 +22,23 @@ createInertiaApp({
             import.meta.glob<DefineComponent>('./pages/**/*.vue'),
         ),
     setup({ el, App, props, plugin }) {
-        const rawZiggy = (props.initialPage.props as any)?.ziggy || Ziggy;
+        const serverZiggy = (props.initialPage.props as any)?.ziggy || {};
         const ziggyConfig = typeof window !== 'undefined'
             ? {
-                ...rawZiggy,
+                ...Ziggy,
+                ...serverZiggy,
                 location: window.location.href,
                 url: window.location.origin,
                 port: window.location.port ? parseInt(window.location.port) : null,
             }
-            : rawZiggy;
+            : { ...Ziggy, ...serverZiggy };
 
-        createApp({ render: () => h(App, props) })
+        createApp({ render: () => [h(App, props), h(FullPageLoader)] })
             .use(plugin)
             .use(ZiggyVue, ziggyConfig as any)
             .mount(el);
     },
-    progress: {
-        color: '#4B5563',
-    },
+    progress: false,
 });
 
 // This will set light / dark mode on page load...

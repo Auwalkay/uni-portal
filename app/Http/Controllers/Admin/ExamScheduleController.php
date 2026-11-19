@@ -487,29 +487,13 @@ class ExamScheduleController extends Controller
         return back()->with('success', "Exam timetable is now {$statusStr}.");
     }
 
-    public function store(Request $request)
+    public function store(\App\Http\Requests\Admin\StoreExamScheduleRequest $request)
     {
         if (! $this->canManageExams()) {
             abort(403, 'Unauthorized: Only Exams Office can create exam schedules.');
         }
 
-        $validated = $request->validate([
-            'exam_id' => 'nullable|exists:exams,id',
-            'session_id' => 'required|exists:academic_sessions,id',
-            'semester_id' => 'required|exists:semesters,id',
-            'department_id' => 'nullable|exists:departments,id',
-            'level' => 'nullable|string',
-            'course_id' => 'nullable|exists:courses,id',
-            'course_ids' => 'nullable|array',
-            'course_ids.*' => 'exists:courses,id',
-            'exam_date' => 'required|date',
-            'start_time' => 'required',
-            'end_time' => 'required|after:start_time',
-            'venue' => 'required|string|max:500',
-            'exam_type' => 'nullable|string|in:final,mid_term,cbt,resit',
-            'max_capacity' => 'required|integer|min:1',
-            'instructions' => 'nullable|string',
-        ]);
+        $validated = $request->validated();
 
         $courseIds = [];
         if (! empty($validated['course_ids'])) {
@@ -522,22 +506,7 @@ class ExamScheduleController extends Controller
             return back()->withErrors(['course_id' => 'Please select at least one course.']);
         }
 
-        $validated['exam_type'] = $validated['exam_type'] ?? 'final';
-        $venues = array_filter(array_map('trim', explode(',', $validated['venue'])));
-
-        $createdCount = 0;
-        foreach ($courseIds as $cId) {
-            foreach ($venues as $v) {
-                $item = $validated;
-                unset($item['course_ids']);
-                $item['course_id'] = $cId;
-                $item['venue'] = $v;
-                $item['reference_id'] = 'EXM-'.strtoupper(substr(uniqid(), -6));
-                $item['created_by'] = auth()->id();
-                ExamSchedule::create($item);
-                $createdCount++;
-            }
-        }
+        $createdCount = $this->examService->createSchedules($validated, $courseIds, auth()->id());
 
         if ($createdCount > 1) {
             return redirect()->route('admin.exams.index')->with('success', "Successfully scheduled {$createdCount} exam timetables for selected courses & venues.");
@@ -546,28 +515,13 @@ class ExamScheduleController extends Controller
         return redirect()->route('admin.exams.index')->with('success', 'Exam schedule created successfully.');
     }
 
-    public function update(Request $request, ExamSchedule $exam)
+    public function update(\App\Http\Requests\Admin\UpdateExamScheduleRequest $request, ExamSchedule $exam)
     {
         if (! $this->canManageExams()) {
             abort(403, 'Unauthorized: Only Exams Office can update exam schedules.');
         }
 
-        $validated = $request->validate([
-            'exam_id' => 'nullable|exists:exams,id',
-            'session_id' => 'required|exists:academic_sessions,id',
-            'semester_id' => 'required|exists:semesters,id',
-            'department_id' => 'nullable|exists:departments,id',
-            'level' => 'nullable|string',
-            'course_id' => 'required|exists:courses,id',
-            'exam_date' => 'required|date',
-            'start_time' => 'required',
-            'end_time' => 'required|after:start_time',
-            'venue' => 'required|string|max:255',
-            'exam_type' => 'nullable|string|in:final,mid_term,cbt,resit',
-            'max_capacity' => 'required|integer|min:1',
-            'instructions' => 'nullable|string',
-        ]);
-
+        $validated = $request->validated();
         $validated['exam_type'] = $validated['exam_type'] ?? 'final';
 
         $exam->update($validated);

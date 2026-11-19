@@ -86,9 +86,14 @@ class CourseController extends Controller
         $facultyId = $staff?->department?->faculty_id;
         $departmentId = $staff?->department_id;
 
-        // Determine active scope and title
+        $canViewOtherCourses = $isAdmin || $isDean || $isHod;
+
+        // Default to the user's allocated courses when they have allocations (or lack elevated permissions)
         $hasAllocations = CourseAllocation::whereHas('staff', fn($q) => $q->where('user_id', $user->id))->exists();
-        $scope = $filters['scope'] ?? (($isAdmin || $isDean || $isHod) && !$hasAllocations ? 'all' : ($isAdmin || $isDean || $isHod ? 'managed' : 'assigned'));
+        $scope = $filters['scope'] ?? ($hasAllocations || !$canViewOtherCourses ? 'assigned' : 'managed');
+        if (!$canViewOtherCourses) {
+            $scope = 'assigned';
+        }
 
         $scopeTitle = 'My Allocated Courses';
         if ($scope === 'all' || $scope === 'managed') {
@@ -104,7 +109,7 @@ class CourseController extends Controller
         // Build courses query based on jurisdiction
         $coursesQuery = Course::query();
 
-        if ($scope === 'assigned' && !$isAdmin) {
+        if ($scope === 'assigned') {
             // Courses allocated directly to this staff member
             $coursesQuery->whereHas('allocations', function ($q) use ($user, $sessionId) {
                 $q->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id))
@@ -172,6 +177,7 @@ class CourseController extends Controller
                 'isAdmin' => $isAdmin,
                 'isDean' => $isDean,
                 'isHod' => $isHod,
+                'canViewOtherCourses' => $canViewOtherCourses,
                 'hasAllocations' => $hasAllocations,
                 'scope' => $scope,
                 'scopeTitle' => $scopeTitle,

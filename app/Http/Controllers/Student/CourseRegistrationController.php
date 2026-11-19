@@ -71,25 +71,25 @@ class CourseRegistrationController extends Controller
             ];
         }
 
+        $stream = $student->isPostgraduate() ? 'PG' : 'UG';
+        $calendar = $programme?->calendar_type ?: 'semester';
         $currentSession = $student->resolveCurrentSession() ?? Session::current();
         $currentSemester = $currentSession
-            ? Semester::where('session_id', $currentSession->id)->where('is_current', true)->first()
-            : Semester::current();
-        $isSecondSemActive = $currentSemester && (
-            stripos($currentSemester->name, 'Second') !== false ||
-            stripos($currentSemester->name, 'Trimester 2') !== false ||
-            stripos($currentSemester->name, 'Trimester 3') !== false ||
-            $currentSemester->name == '2'
-        );
+            ? (AcademicCacheService::getCurrentSemesterForStream($stream, $calendar)
+                ?? Semester::where('session_id', $currentSession->id)->where('is_current', true)->first())
+            : AcademicCacheService::getCurrentSemester();
+        $isSecondSemActive = $currentSemester?->requiresFullFeeClearance() ?? false;
+
+        $userInvoices = Invoice::where('user_id', Auth::id())
+            ->get(['id', 'type', 'status', 'paid_amount', 'session_id']);
 
         $pendingInvoicesCount = $isSecondSemActive
-            ? Invoice::where('user_id', Auth::id())->where('status', '!=', 'paid')->count()
-            : Invoice::where('user_id', Auth::id())->whereNotIn('status', ['paid', 'partial'])->where('paid_amount', '<=', 0)->count();
+            ? $userInvoices->where('status', '!=', 'paid')->count()
+            : $userInvoices->filter(fn ($inv) => ! in_array($inv->status, ['paid', 'partial'], true) && (float) $inv->paid_amount <= 0)->count();
 
-        $schoolFeeStatus = Invoice::where('user_id', Auth::id())
-            ->where('type', 'school_fee')
-            ->where('session_id', $currentSession?->id)
-            ->first()?->status ?? 'unpaid';
+        $schoolFeeStatus = $currentSession
+            ? ($userInvoices->first(fn ($inv) => $inv->type === 'school_fee' && (string) $inv->session_id === (string) $currentSession->id)?->status ?? 'unpaid')
+            : 'unpaid';
 
         return Inertia::render('Student/Courses/Index', [
             'history' => $formattedHistory,
@@ -396,8 +396,8 @@ class CourseRegistrationController extends Controller
         }
 
         $currentSemester = Semester::current();
-        $isSecondSemActive = $currentSemester && (stripos($currentSemester->name, 'Second') !== false || $currentSemester->name == '2');
-        $isSecondSemRequested = str_contains(strtolower($semester->name), 'second') || $semester->name == '2';
+        $isSecondSemActive = $currentSemester?->requiresFullFeeClearance() ?? false;
+        $isSecondSemRequested = $semester->requiresFullFeeClearance();
 
         if ($isSecondSemActive || $isSecondSemRequested) {
             $hasSchoolFeePaid = Invoice::where('user_id', Auth::id())
@@ -467,28 +467,7 @@ class CourseRegistrationController extends Controller
 
     private function resolveSchoolFeePayment(string $userId, string $sessionId): array
     {
-        $schoolFeeInvoice = Invoice::where('user_id', $userId)
-            ->where('type', 'school_fee')
-            ->where('session_id', $sessionId)
-            ->first();
-
-        $hasPaid = $schoolFeeInvoice && (
-            $schoolFeeInvoice->status === 'paid' ||
-            $schoolFeeInvoice->status === 'partial' ||
-            (float) $schoolFeeInvoice->paid_amount > 0
-        );
-
-        $isPartial = $schoolFeeInvoice && (
-            $schoolFeeInvoice->status === 'partial' ||
-            ((float) $schoolFeeInvoice->paid_amount > 0 && (float) $schoolFeeInvoice->paid_amount < (float) $schoolFeeInvoice->amount)
-        );
-
-        return [
-            'invoice' => $schoolFeeInvoice,
-            'hasPaid' => $hasPaid,
-            'isPartial' => $isPartial,
-            'status' => $schoolFeeInvoice?->status ?? 'unpaid',
-        ];
+        return app(FeeService::class)->getSchoolFeeClearance($userId, $sessionId);
     }
 
     private function getSemesterRegistrationLocks($semesters, bool $isPartialPayment): array

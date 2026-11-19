@@ -63,6 +63,7 @@ const props = defineProps<{
         isAdmin: boolean;
         isDean: boolean;
         isHod: boolean;
+        canViewOtherCourses?: boolean;
         hasAllocations: boolean;
         scope: string;
         scopeTitle: string;
@@ -105,7 +106,7 @@ function clearFilters() {
     search.value = '';
     selectedSession.value = props.currentSessionId || 'all';
     selectedDepartment.value = 'all';
-    selectedScope.value = props.userRole.isAdmin || props.userRole.isDean || props.userRole.isHod ? 'managed' : 'assigned';
+    selectedScope.value = props.userRole.hasAllocations || !props.userRole.canViewOtherCourses ? 'assigned' : 'managed';
     applyFilters();
 }
 </script>
@@ -156,21 +157,35 @@ function clearFilters() {
                     />
                 </div>
 
-                <!-- Scope Toggle (if user has elevated role AND personal allocations) -->
-                <div v-if="(userRole.isAdmin || userRole.isDean || userRole.isHod) && userRole.hasAllocations" class="w-full sm:w-auto">
-                    <Select v-model="selectedScope">
-                        <SelectTrigger class="w-full sm:w-[190px] bg-slate-50/50 dark:bg-slate-950/50">
-                            <SelectValue placeholder="Scope" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="managed">
-                                <span class="font-medium">
-                                    {{ userRole.isAdmin ? 'All Courses' : (userRole.isHod ? 'Dept Courses' : 'Faculty Courses') }}
-                                </span>
-                            </SelectItem>
-                            <SelectItem value="assigned">My Allocated Only</SelectItem>
-                        </SelectContent>
-                    </Select>
+                <!-- Scope Switch (defaults to My Allocated Courses; shows All/Faculty/Dept Courses if permitted) -->
+                <div
+                    v-if="userRole.canViewOtherCourses"
+                    class="inline-flex items-center rounded-lg border border-slate-200 bg-slate-100 p-1 dark:border-slate-800 dark:bg-slate-950"
+                >
+                    <button
+                        type="button"
+                        @click="selectedScope = 'assigned'"
+                        :class="[
+                            'rounded-md px-3 py-1.5 text-xs font-semibold transition',
+                            selectedScope === 'assigned'
+                                ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-300'
+                                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200',
+                        ]"
+                    >
+                        My Allocated Courses
+                    </button>
+                    <button
+                        type="button"
+                        @click="selectedScope = 'managed'"
+                        :class="[
+                            'rounded-md px-3 py-1.5 text-xs font-semibold transition',
+                            selectedScope === 'managed' || selectedScope === 'all'
+                                ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-300'
+                                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200',
+                        ]"
+                    >
+                        {{ userRole.isAdmin ? 'All University Courses' : (userRole.isHod ? 'Dept Courses' : 'Faculty Courses') }}
+                    </button>
                 </div>
 
                 <!-- Department Filter (for Admin and Dean) -->

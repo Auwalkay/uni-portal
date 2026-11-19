@@ -207,12 +207,17 @@ class StudentController extends Controller
         }
 
         // 4. Lecturers / Course Coordinators: View students registered in allocated courses
-        $query->whereHas('registrations', function ($q) use ($user) {
-            $q->whereHas('course', function ($cq) use ($user) {
-                $cq->whereHas('allocations', function ($aq) use ($user) {
-                    $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
-                });
-            });
+        $staffId = $staff?->id;
+        if (! $staffId) {
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        $query->whereIn('students.id', function ($sub) use ($staffId) {
+            $sub->select('course_registrations.student_id')
+                ->from('course_registrations')
+                ->join('course_allocations', 'course_registrations.course_id', '=', 'course_allocations.course_id')
+                ->where('course_allocations.staff_id', $staffId);
         });
     }
 
@@ -241,11 +246,15 @@ class StudentController extends Controller
             }
         }
 
-        return $student->registrations()->whereHas('course', function ($q) use ($user) {
-            $q->whereHas('allocations', function ($aq) use ($user) {
-                $aq->whereHas('staff', fn($sq) => $sq->where('user_id', $user->id));
-            });
-        })->exists();
+        $staffId = $staff?->id;
+        if (! $staffId) {
+            return false;
+        }
+
+        return \App\Models\CourseRegistration::where('student_id', $student->id)
+            ->join('course_allocations', 'course_registrations.course_id', '=', 'course_allocations.course_id')
+            ->where('course_allocations.staff_id', $staffId)
+            ->exists();
     }
 
     public function index(Request $request)
@@ -281,9 +290,11 @@ class StudentController extends Controller
 
         // Faculty Filter
         if ($request->filled('faculty_id') && $request->faculty_id !== 'ALL_FACULTIES') {
-            $query->whereHas('academicDepartment', function ($q) use ($request) {
-                $q->where('faculty_id', $request->faculty_id);
-            });
+            $facultyDeptIds = \App\Services\AcademicCacheService::getAllDepartments(false)
+                ->where('faculty_id', $request->faculty_id)
+                ->pluck('id')
+                ->all();
+            $query->whereIn('department_id', $facultyDeptIds);
         }
 
         // Department Filter
@@ -340,33 +351,40 @@ class StudentController extends Controller
             $query->where('entry_mode', $request->entry_mode);
         }
 
-        // Age Filter
+        // Age Filter (Sargable date bounds on dob)
         if ($request->filled('age_range') && $request->age_range !== 'ALL_AGES' && $request->age_range !== 'all') {
             $range = $request->age_range;
+            $today = now();
             if ($range === '15-19') {
-                $query->whereNotNull('dob')
-                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) >= 15')
-                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) <= 19');
+                $query->whereBetween('dob', [
+                    $today->copy()->subYears(20)->addDay()->toDateString(),
+                    $today->copy()->subYears(15)->toDateString(),
+                ]);
             } elseif ($range === '20-30') {
-                $query->whereNotNull('dob')
-                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) >= 20')
-                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) <= 30');
+                $query->whereBetween('dob', [
+                    $today->copy()->subYears(31)->addDay()->toDateString(),
+                    $today->copy()->subYears(20)->toDateString(),
+                ]);
             } elseif ($range === '30_above' || $range === '30+') {
                 $query->whereNotNull('dob')
-                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) >= 30');
+                    ->where('dob', '<=', $today->copy()->subYears(30)->toDateString());
             }
         } elseif ($request->filled('min_age') || $request->filled('max_age') || $request->filled('age')) {
+            $today = now();
             if ($request->filled('min_age')) {
                 $query->whereNotNull('dob')
-                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) >= ?', [(int) $request->min_age]);
+                    ->where('dob', '<=', $today->copy()->subYears((int) $request->min_age)->toDateString());
             }
             if ($request->filled('max_age')) {
                 $query->whereNotNull('dob')
-                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) <= ?', [(int) $request->max_age]);
+                    ->where('dob', '>=', $today->copy()->subYears((int) $request->max_age + 1)->addDay()->toDateString());
             }
             if ($request->filled('age') && !$request->filled('min_age') && !$request->filled('max_age')) {
-                $query->whereNotNull('dob')
-                    ->whereRaw('TIMESTAMPDIFF(YEAR, dob, CURDATE()) = ?', [(int) $request->age]);
+                $age = (int) $request->age;
+                $query->whereBetween('dob', [
+                    $today->copy()->subYears($age + 1)->addDay()->toDateString(),
+                    $today->copy()->subYears($age)->toDateString(),
+                ]);
             }
         }
 

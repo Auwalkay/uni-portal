@@ -55,10 +55,10 @@ class AppServiceProvider extends ServiceProvider
      */
     protected function configureRateLimiting(): void
     {
-        // Global IP Rate Limiter (Default: 120 requests/minute per IP)
+        // Global IP Rate Limiter (keyed by authenticated user ID to avoid blocking campus NAT IPs)
         \Illuminate\Support\Facades\RateLimiter::for('global-ip', function (\Illuminate\Http\Request $request) {
             return \Illuminate\Cache\RateLimiting\Limit::perMinute((int) env('THROTTLE_GLOBAL_LIMIT', 120))
-                ->by($request->ip());
+                ->by($request->user()?->id ?: $request->ip());
         });
 
         // API Rate Limiter (Default: 60 requests/minute per IP)
@@ -88,6 +88,11 @@ class AppServiceProvider extends ServiceProvider
     protected function configureDefaults(): void
     {
         Date::use(CarbonImmutable::class);
+
+        \Illuminate\Database\Eloquent\Model::preventLazyLoading(! app()->isProduction());
+        \Illuminate\Database\Eloquent\Model::handleLazyLoadingViolationUsing(function ($model, $relation) {
+            \Illuminate\Support\Facades\Log::warning("Lazy loading detected on " . get_class($model) . "::{$relation}");
+        });
 
         DB::prohibitDestructiveCommands(
             app()->isProduction(),
