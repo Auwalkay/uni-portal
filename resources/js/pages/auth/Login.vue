@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, useForm, usePage, router } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage, router } from '@inertiajs/vue3';
 import { watch } from 'vue';
 import Swal from 'sweetalert2';
 
@@ -138,5 +138,14 @@ const submit = () => {
                 </form>
             </TabsContent>
         </Tabs>
+
+        <div class="mt-6 border-t border-slate-200/80 pt-5 text-center dark:border-slate-800">
+            <Link
+                href="/programmes"
+                class="inline-flex w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold tracking-wider text-slate-700 uppercase transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200 dark:hover:border-red-700 dark:hover:bg-red-950/40 dark:hover:text-red-300"
+            >
+                View Programmes &amp; School Fees
+            </Link>
+        </div>
     </AuthBase>
 </template>

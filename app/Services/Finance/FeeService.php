@@ -43,12 +43,12 @@ class FeeService
             ->where(function ($q) use ($student) {
                 $q->where('level', $student->current_level)
                     ->orWhereNull('level');
+                if ($student->entry_mode && str_contains(strtolower($student->entry_mode), 'transfer')) {
+                    $q->orWhere('entry_mode', 'like', '%transfer%');
+                }
             })
             ->where(function ($q) use ($student, $progType, $isPg) {
-                $modes = array_filter([$student->entry_mode, $progType]);
-                if ($progType === 'MSC') { $modes[] = 'MSc'; }
-                if ($progType === 'PHD') { $modes[] = 'PhD'; }
-                if ($isPg) { $modes[] = 'Postgraduate'; $modes[] = 'PG'; }
+                $modes = static::expandEntryModes($student->entry_mode, $progType, $isPg);
                 $q->whereIn('entry_mode', $modes)->orWhereNull('entry_mode');
             })
             ->where('is_compulsory', true)
@@ -299,12 +299,12 @@ class FeeService
         $allConfigs = FeeConfiguration::where('session_id', $targetSessionId)
             ->where(function ($q) use ($student) {
                 $q->where('level', $student->current_level)->orWhereNull('level');
+                if ($student->entry_mode && str_contains(strtolower($student->entry_mode), 'transfer')) {
+                    $q->orWhere('entry_mode', 'like', '%transfer%');
+                }
             })
             ->where(function ($q) use ($student, $progType, $isPg) {
-                $modes = array_filter([$student->entry_mode, $progType]);
-                if ($progType === 'MSC') { $modes[] = 'MSc'; }
-                if ($progType === 'PHD') { $modes[] = 'PhD'; }
-                if ($isPg) { $modes[] = 'Postgraduate'; $modes[] = 'PG'; }
+                $modes = static::expandEntryModes($student->entry_mode, $progType, $isPg);
                 $q->whereIn('entry_mode', $modes)->orWhereNull('entry_mode');
             })
             ->where('is_compulsory', true)
@@ -538,6 +538,9 @@ class FeeService
             ->where(function ($q) use ($student) {
                 $q->where('level', $student->current_level)
                     ->orWhereNull('level');
+                if ($student->entry_mode && str_contains(strtolower($student->entry_mode), 'transfer')) {
+                    $q->orWhere('entry_mode', 'like', '%transfer%');
+                }
             })
             ->where(function ($q) use ($student) {
                 $q->where('entry_mode', $student->entry_mode)
@@ -902,16 +905,9 @@ class FeeService
 
         // Filter candidate configs compatible with student level and entry mode / tier
         $filtered = $configs->filter(function ($c) use ($level, $entryMode, $progTier, $isPg) {
-            // Level check
-            if ($c->level !== null && $c->level !== '') {
-                if ((string) $c->level !== (string) $level) {
-                    return false;
-                }
-            }
-
             // Safeguard for Inter-University Transfer fees:
-            // Transfer fees must strictly and exclusively apply to students entering via Transfer.
-            $isTransferRule = ($c->entry_mode && strcasecmp($c->entry_mode, 'Transfer') === 0);
+            // Transfer fees must strictly and exclusively apply to students entering via Transfer (at any level).
+            $isTransferRule = ($c->entry_mode && str_contains(strtolower($c->entry_mode), 'transfer'));
             $isTransferFeeType = false;
             if ($c->relationLoaded('feeType') && $c->feeType) {
                 $typeName = strtolower($c->feeType->name ?? '');
@@ -919,18 +915,33 @@ class FeeService
                 $isTransferFeeType = str_contains($typeName, 'transfer') || str_contains($typeSlug, 'transfer');
             }
 
-            $isStudentTransfer = ($entryMode && strcasecmp($entryMode, 'Transfer') === 0);
+            $isStudentTransfer = ($entryMode && str_contains(strtolower($entryMode), 'transfer'));
 
             if ($isTransferRule || $isTransferFeeType) {
                 return $isStudentTransfer;
             }
 
+            // Level check
+            if ($c->level !== null && $c->level !== '') {
+                if ((string) $c->level !== (string) $level) {
+                    return false;
+                }
+            }
+
             // Entry mode / Tier check
             if ($c->entry_mode !== null && $c->entry_mode !== '' && $c->entry_mode !== 'all') {
                 $cNorm = static::normalizeTier($c->entry_mode);
+                $cUpper = strtoupper(trim($c->entry_mode));
+                $entryUpper = strtoupper(trim((string) $entryMode));
 
                 // Exact entry mode match (e.g. Direct Entry === Direct Entry)
-                if ($entryMode && strcasecmp($c->entry_mode, $entryMode) === 0) {
+                if ($entryMode && strcasecmp(trim($c->entry_mode), trim($entryMode)) === 0) {
+                    return true;
+                }
+
+                // Direct Entry alias match ('DE' <-> 'Direct Entry')
+                if (in_array($cUpper, ['DE', 'DIRECT ENTRY', 'DIRECTENTRY'], true)
+                    && in_array($entryUpper, ['DE', 'DIRECT ENTRY', 'DIRECTENTRY'], true)) {
                     return true;
                 }
 
@@ -1060,6 +1071,101 @@ class FeeService
             'hasPaid' => $hasPaid,
             'isPartial' => $isPartial,
             'status' => $schoolFeeInvoice?->status ?? 'unpaid',
+        ];
+    }
+
+    /**
+     * Expand a student's entry_mode and programme type into all matching FeeConfiguration entry_mode aliases.
+     *
+     * @return array<int, string>
+     */
+    public static function expandEntryModes(?string $entryMode, ?string $progType = null, bool $isPg = false): array
+    {
+        $trimmed = trim((string) $entryMode);
+        $modes = array_filter([$trimmed, $progType]);
+
+        $upper = strtoupper($trimmed);
+        if (in_array($upper, ['DE', 'DIRECT ENTRY', 'DIRECTENTRY'], true)) {
+            $modes[] = 'DE';
+            $modes[] = 'Direct Entry';
+        } elseif (str_contains(strtolower($trimmed), 'transfer')) {
+            $modes[] = 'Transfer';
+            $modes[] = 'Inter-University Transfer';
+        }
+
+        if ($progType === 'MSC') { $modes[] = 'MSc'; }
+        if ($progType === 'PHD') { $modes[] = 'PhD'; }
+        if ($isPg) {
+            $modes[] = 'Postgraduate';
+            $modes[] = 'PG';
+        }
+
+        return array_values(array_unique($modes));
+    }
+
+    /**
+     * Resolve itemized compulsory fee schedule for a programme using a preloaded collection of session FeeConfigurations.
+     *
+     * @return array{items: array<int, array<string, mixed>>, total_fee: float}
+     */
+    public function resolveScheduleForProgramme(
+        \App\Models\Programme $programme,
+        $sessionConfigs,
+        ?string $entryMode = null,
+        ?string $level = null
+    ): array {
+        $isPg = $programme->isPostgraduate();
+        $resolvedLevel = $level ?? ($isPg ? '700' : '100');
+        $resolvedEntryMode = $entryMode ?? ($isPg ? 'Postgraduate' : 'UTME');
+        $departmentId = $programme->department_id;
+        $facultyId = $programme->department?->faculty_id;
+
+        $items = [];
+        $total = 0.0;
+
+        foreach ($sessionConfigs->groupBy('fee_type_id') as $configsForType) {
+            $best = static::resolveConfigFromCollection(
+                $configsForType,
+                (string) $programme->id,
+                $departmentId ? (string) $departmentId : null,
+                $facultyId ? (string) $facultyId : null,
+                $programme->type,
+                $resolvedLevel,
+                $resolvedEntryMode,
+                $isPg
+            );
+
+            if ($best) {
+                $amount = (float) $best->amount;
+                $items[] = [
+                    'id' => $best->id,
+                    'name' => $best->feeType?->name ?? 'Tuition / Academic Fee',
+                    'amount' => $amount,
+                    'is_one_time' => (bool) ($best->feeType?->is_one_time ?? false),
+                ];
+                $total += $amount;
+            }
+        }
+
+        usort($items, fn ($a, $b) => $b['amount'] <=> $a['amount']);
+
+        return [
+            'items' => $items,
+            'total_fee' => $total,
+        ];
+    }
+
+    /**
+     * Resolve UG fee schedules across UTME (100L), Direct Entry (200L), and Transfer (200L) entry modes.
+     *
+     * @return array{UTME: array, DE: array, Transfer: array}
+     */
+    public function resolveUgSchedulesByEntryMode(\App\Models\Programme $programme, $sessionConfigs): array
+    {
+        return [
+            'UTME' => $this->resolveScheduleForProgramme($programme, $sessionConfigs, 'UTME', '100'),
+            'DE' => $this->resolveScheduleForProgramme($programme, $sessionConfigs, 'Direct Entry', '200'),
+            'Transfer' => $this->resolveScheduleForProgramme($programme, $sessionConfigs, 'Transfer', '200'),
         ];
     }
 }

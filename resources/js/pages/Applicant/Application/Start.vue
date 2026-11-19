@@ -132,7 +132,7 @@ const proceedToPayment = () => {
                     <!-- Mode Selection -->
                     <div class="space-y-4">
                         <Label class="text-base font-semibold text-foreground">1. Application Mode</Label>
-                        <RadioGroup v-model="form.mode" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <RadioGroup v-model="form.mode" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div>
                                 <RadioGroupItem id="utme" value="UTME" class="peer sr-only" />
                                 <Label for="utme" class="flex flex-col items-center justify-between rounded-xl border-2 border-border/50 bg-background p-5 hover:bg-muted/50 hover:border-primary/50 hover:text-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 peer-data-[state=checked]:text-primary cursor-pointer transition-all duration-300">
@@ -145,6 +145,13 @@ const proceedToPayment = () => {
                                 <Label for="de" class="flex flex-col items-center justify-between rounded-xl border-2 border-border/50 bg-background p-5 hover:bg-muted/50 hover:border-primary/50 hover:text-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 peer-data-[state=checked]:text-primary cursor-pointer transition-all duration-300">
                                     <span class="text-xl font-bold mb-2 tracking-tight">Direct Entry</span>
                                     <span class="text-xs text-center font-medium opacity-80">Diploma / A-Level</span>
+                                </Label>
+                            </div>
+                            <div>
+                                <RadioGroupItem id="transfer" value="Transfer" class="peer sr-only" />
+                                <Label for="transfer" class="flex flex-col items-center justify-between rounded-xl border-2 border-border/50 bg-background p-5 hover:bg-muted/50 hover:border-primary/50 hover:text-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 peer-data-[state=checked]:text-primary cursor-pointer transition-all duration-300">
+                                    <span class="text-xl font-bold mb-2 tracking-tight">Transfer</span>
+                                    <span class="text-xs text-center font-medium opacity-80">Inter-University Transfer</span>
                                 </Label>
                             </div>
                             <div>

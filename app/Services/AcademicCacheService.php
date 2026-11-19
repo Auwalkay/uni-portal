@@ -429,6 +429,8 @@ class AcademicCacheService
         Cache::forget('staff_list_for_dropdowns');
         Cache::forget('exam_buildings_active');
         Cache::forget('all_fee_types_list');
+        Cache::forget('public_programmes_fees_schedule');
+        Cache::forget('public_programmes_fees_schedule_v2');
         Cache::forget('academic_stats_summary');
     }
 }
