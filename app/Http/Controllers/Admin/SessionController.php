@@ -234,11 +234,32 @@ class SessionController extends Controller
             'school_fee_payment_enabled' => 'boolean',
             'late_payment_deadline' => 'nullable|date',
             'late_fee_amount' => 'nullable|numeric|min:0',
+            'sync_unpaid_invoices' => 'nullable|boolean',
         ]);
+
+        $shouldSync = $request->boolean('sync_unpaid_invoices', false);
+        unset($validated['sync_unpaid_invoices']);
 
         $session->update($validated);
 
+        if ($shouldSync && (float) ($session->late_fee_amount ?? 0) > 0) {
+            \App\Jobs\Finance\SyncLateFeeInvoicesJob::dispatch($session->id, auth()->id());
+
+            return back()->with('success', 'Session settings updated. Unpaid school fee invoices are being synced in the background.');
+        }
+
         return back()->with('success', 'Session settings updated successfully.');
+    }
+
+    public function syncLateFees(Session $session)
+    {
+        if ((float) ($session->late_fee_amount ?? 0) <= 0) {
+            return back()->with('error', 'Late payment fine amount must be greater than 0 to sync unpaid invoices.');
+        }
+
+        \App\Jobs\Finance\SyncLateFeeInvoicesJob::dispatch($session->id, auth()->id());
+
+        return back()->with('success', 'Late fee sync has been queued in the background for all unpaid school fee invoices.');
     }
 
     public function storeFee(Request $request, Session $session)

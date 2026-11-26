@@ -71,7 +71,19 @@ const settingsForm = useForm({
     school_fee_payment_enabled: props.session.school_fee_payment_enabled === undefined ? true : !!props.session.school_fee_payment_enabled,
     late_payment_deadline: formatDateForInput(props.session.late_payment_deadline),
     late_fee_amount: props.session.late_fee_amount || 0,
+    sync_unpaid_invoices: true,
 });
+
+const syncLateFeesNow = () => {
+    router.post(
+        route('admin.sessions.sync_late_fees', props.session.id),
+        {},
+        {
+            preserveScroll: true,
+            onSuccess: () => Swal.fire('Synced', 'Unpaid school fee invoices have been updated with the current late fee.', 'success'),
+        }
+    );
+};
 
 const isFeeModalOpen = ref(false);
 const feeForm = useForm({
@@ -422,10 +434,19 @@ if (typeof route !== 'function') {
                             <div class="grid gap-2">
                                 <Label class="text-base font-semibold">Late Payment Fine Amount (NGN)</Label>
                                 <p class="text-sm text-muted-foreground">The fine amount applied to school fee invoices after the deadline passes.</p>
-                                <Input type="number" step="0.01" min="0" v-model="settingsForm.late_fee_amount" class="max-w-md" placeholder="e.g. 10000.00" />
+                                <Input type="number" step="0.01" min="0" v-model="settingsForm.late_fee_amount" class="max-w-md" placeholder="e.g. 125000.00" />
+                            </div>
+                            <div class="flex items-center space-x-2 pt-2">
+                                <Switch id="sync_unpaid_invoices" :checked="settingsForm.sync_unpaid_invoices" @update:checked="settingsForm.sync_unpaid_invoices = $event" />
+                                <Label for="sync_unpaid_invoices" class="text-sm font-medium cursor-pointer">
+                                    Also update all existing unpaid (pending) school fee invoices with this late fine
+                                </Label>
                             </div>
                         </CardContent>
-                        <CardFooter class="bg-muted/20 border-t p-4 flex justify-end">
+                        <CardFooter class="bg-muted/20 border-t p-4 flex flex-wrap gap-2 justify-end">
+                            <Button type="button" variant="outline" @click="syncLateFeesNow" :disabled="settingsForm.processing || Number(settingsForm.late_fee_amount) <= 0">
+                                Re-sync Unpaid Invoices
+                            </Button>
                             <Button @click="saveSettings" :disabled="settingsForm.processing">
                                 <Save class="mr-2 h-4 w-4" /> Save Changes
                             </Button>

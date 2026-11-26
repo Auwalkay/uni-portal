@@ -4,10 +4,7 @@ import { onMounted, onUnmounted, ref } from 'vue';
 
 const isVisible = ref(false);
 let showTimer: ReturnType<typeof setTimeout> | null = null;
-let activeVisits = 0;
-
-let removeStartListener: (() => void) | null = null;
-let removeFinishListener: (() => void) | null = null;
+const unsubscribers: Array<() => void> = [];
 
 function clearShowTimer() {
     if (showTimer !== null) {
@@ -16,40 +13,40 @@ function clearShowTimer() {
     }
 }
 
-onMounted(() => {
-    removeStartListener = router.on('start', (event) => {
-        if ((event.detail.visit as any)?.prefetch) {
-            return;
-        }
+function hideLoader() {
+    clearShowTimer();
+    isVisible.value = false;
+}
 
-        activeVisits++;
-        if (showTimer === null && !isVisible.value) {
+onMounted(() => {
+    unsubscribers.push(
+        router.on('start', (event) => {
+            if ((event.detail.visit as any)?.prefetch) {
+                return;
+            }
+
+            clearShowTimer();
             showTimer = setTimeout(() => {
-                if (activeVisits > 0) {
-                    isVisible.value = true;
-                }
+                isVisible.value = true;
                 showTimer = null;
             }, 120);
-        }
-    });
-
-    removeFinishListener = router.on('finish', (event) => {
-        if ((event.detail.visit as any)?.prefetch) {
-            return;
-        }
-
-        activeVisits = Math.max(0, activeVisits - 1);
-        if (activeVisits === 0) {
-            clearShowTimer();
-            isVisible.value = false;
-        }
-    });
+        }),
+        router.on('finish', (event) => {
+            if ((event.detail.visit as any)?.prefetch) {
+                return;
+            }
+            hideLoader();
+        }),
+        router.on('navigate', hideLoader),
+        router.on('error', hideLoader),
+        router.on('invalid', hideLoader),
+        router.on('exception', hideLoader),
+    );
 });
 
 onUnmounted(() => {
-    clearShowTimer();
-    removeStartListener?.();
-    removeFinishListener?.();
+    hideLoader();
+    unsubscribers.forEach((off) => off());
 });
 </script>
 

@@ -1168,4 +1168,98 @@ class FeeService
             'Transfer' => $this->resolveScheduleForProgramme($programme, $sessionConfigs, 'Transfer', '200'),
         ];
     }
+
+    /**
+     * Re-sync late payment fine amount on all unpaid (pending) school fee invoices for a session.
+     * If late_fee_amount <= 0, late fees are disabled, or the deadline has not passed, no changes are made.
+     *
+     * @return array{updated: int, added: int}
+     */
+    public function syncLateFeeOnUnpaidInvoices(Session $session): array
+    {
+        $isEnabled = filter_var(SystemSetting::get('late_fee_enabled', true), FILTER_VALIDATE_BOOLEAN);
+        $targetFine = (float) ($session->late_fee_amount ?? 0);
+
+        if (! $isEnabled || $targetFine <= 0 || ! $session->late_payment_deadline || ! $session->late_payment_deadline->isPast()) {
+            return ['updated' => 0, 'added' => 0];
+        }
+
+        $updatedCount = 0;
+        $addedCount = 0;
+
+        Invoice::where('session_id', $session->id)
+            ->where('type', 'school_fee')
+            ->where('status', 'pending')
+            ->where('paid_amount', '<=', 0)
+            ->where('late_fine_waived', false)
+            ->orderBy('id')
+            ->chunkById(200, function ($invoices) use ($session, $targetFine, &$updatedCount, &$addedCount) {
+                $userIds = $invoices->pluck('user_id')->unique()->all();
+                $studentsByUser = Student::with('scholarship')
+                    ->whereIn('user_id', $userIds)
+                    ->get()
+                    ->keyBy('user_id');
+
+                $invoiceIds = $invoices->pluck('id')->all();
+                $fineItemsByInvoice = InvoiceItem::whereIn('invoice_id', $invoiceIds)
+                    ->where('description', 'like', '%Late Payment Fine%')
+                    ->get()
+                    ->groupBy('invoice_id');
+
+                foreach ($invoices as $invoice) {
+                    $student = $studentsByUser->get($invoice->user_id);
+                    if (! $student || ! $student->isReturningStudent($session)) {
+                        continue;
+                    }
+                    if ($student->scholarship && $student->scholarship->waives_late_fees) {
+                        continue;
+                    }
+
+                    $existingFineItems = $fineItemsByInvoice->get($invoice->id, collect());
+
+                    DB::transaction(function () use ($invoice, $session, $targetFine, $existingFineItems, &$updatedCount, &$addedCount) {
+                        if ($existingFineItems->isNotEmpty()) {
+                            $oldFine = (float) $existingFineItems->sum('amount');
+                            if (abs($oldFine - $targetFine) < 0.01) {
+                                if (! $invoice->late_fine_applied) {
+                                    $invoice->update(['late_fine_applied' => true]);
+                                }
+                                return;
+                            }
+
+                            $primaryItem = $existingFineItems->first();
+                            $primaryItem->update([
+                                'description' => 'Late Payment Fine (' . $session->name . ')',
+                                'amount' => $targetFine,
+                            ]);
+
+                            if ($existingFineItems->count() > 1) {
+                                InvoiceItem::whereIn('id', $existingFineItems->slice(1)->pluck('id'))->delete();
+                            }
+
+                            $newInvoiceAmount = max(0.0, (float) $invoice->amount - $oldFine + $targetFine);
+                            $invoice->update([
+                                'amount' => $newInvoiceAmount,
+                                'late_fine_applied' => true,
+                            ]);
+                            $updatedCount++;
+                        } else {
+                            InvoiceItem::create([
+                                'invoice_id' => $invoice->id,
+                                'description' => 'Late Payment Fine (' . $session->name . ')',
+                                'amount' => $targetFine,
+                            ]);
+
+                            $invoice->update([
+                                'amount' => (float) $invoice->amount + $targetFine,
+                                'late_fine_applied' => true,
+                            ]);
+                            $addedCount++;
+                        }
+                    });
+                }
+            });
+
+        return ['updated' => $updatedCount, 'added' => $addedCount];
+    }
 }
