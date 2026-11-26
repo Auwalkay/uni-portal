@@ -51,7 +51,7 @@ const form = useForm({
 });
 
 const isLocked = computed(() => {
-    return Object.values(props.locks).every(l => l === true);
+    return semesterCodes.value.length > 0 && semesterCodes.value.every(code => !!props.locks[code]);
 });
 
 // Selected Courses Map (for Preview)
@@ -510,8 +510,8 @@ const getSemesterCourses = (semesterCode: string) => {
 
                          <!-- Mobile Action Button (Submit) -->
                         <div class="lg:hidden">
-                             <Button @click="submit" size="lg" :disabled="form.processing || form.courses.length === 0" class="w-full bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-200">
-                                {{ registeredCourseIds.length > 0 ? 'Update Registration' : 'Complete Registration' }}
+                             <Button @click="submit" size="lg" :disabled="form.processing || form.courses.length === 0 || isLocked" class="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-emerald-200">
+                                {{ isLocked ? 'Registration Locked' : (registeredCourseIds.length > 0 ? 'Update Registration' : 'Complete Registration') }}
                             </Button>
                         </div>
                     </div>
@@ -663,8 +663,8 @@ const getSemesterCourses = (semesterCode: string) => {
                         </div>
                         <div class="flex items-center gap-4 w-full sm:w-auto justify-end">
                             <Link :href="route('student.courses.index')" class="text-sm font-medium text-gray-500 hover:text-gray-900 hidden sm:block">Cancel</Link>
-                             <Button @click="submit" size="lg" :disabled="form.processing || form.courses.length === 0" class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-900/10 text-base font-semibold px-8 rounded-full transition-transform active:scale-95">
-                                {{ registeredCourseIds.length > 0 ? 'Update Registration' : 'Submit Courses' }}
+                             <Button @click="submit" size="lg" :disabled="form.processing || form.courses.length === 0 || isLocked" class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-900/10 text-base font-semibold px-8 rounded-full transition-transform active:scale-95">
+                                {{ isLocked ? 'Registration Locked' : (registeredCourseIds.length > 0 ? 'Update Registration' : 'Submit Courses') }}
                             </Button>
                         </div>
                     </div>
