@@ -249,13 +249,18 @@ class PostgraduateAdmissionController extends Controller
         $currentSession = \App\Models\Session::current();
 
         $feesData = $this->calculateEstimatedFeesForApplicant($applicant, $currentSession);
+        $letterService = app(\App\Services\AdmissionLetterService::class);
+        $pgTier = $letterService->resolvePgTier($applicant->programme);
+        $degreeLabel = $letterService->resolveDegreeLabel($applicant->programme, $pgTier);
 
-        $pdf = Pdf::loadView('documents.admission_letter', [
+        $pdf = Pdf::loadView($letterService->resolveView(true), [
             'applicant' => $applicant,
             'faculty_name' => $applicant->programme?->department->faculty->name ?? 'School of Postgraduate Studies',
             'programme_name' => $applicant->programme?->name ?? 'N/A',
             'session_name' => $currentSession->name ?? '2025/2026',
             'fees' => $feesData,
+            'pg_tier' => $pgTier,
+            'degree_label' => $degreeLabel,
         ])->setOptions([
             'defaultFont' => 'DejaVu Sans',
             'isHtml5ParserEnabled' => true,

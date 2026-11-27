@@ -36,7 +36,7 @@ class Programme extends Model
     protected $guarded = [];
 
     protected $casts = [
-        'duration' => 'integer',
+        'duration' => 'float',
         'is_active' => 'boolean',
         'min_graduation_cgpa' => 'float',
     ];

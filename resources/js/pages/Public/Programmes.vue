@@ -330,7 +330,7 @@ const formatCurrency = (amount: number) => {
 
                             <span v-if="prog.duration" class="inline-flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
                                 <Clock class="h-3.5 w-3.5" />
-                                {{ prog.duration }} {{ prog.duration === 1 ? 'Year' : 'Years' }}
+                                {{ prog.duration === 1.5 ? '1.5 Years (3 Semesters)' : `${prog.duration} ${prog.duration === 1 ? 'Year' : 'Years'}` }}
                             </span>
                         </div>
 

@@ -571,7 +571,17 @@ class ProfileController extends Controller
             ];
         }
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.admission_letter', $data)
+        $letterService = app(\App\Services\AdmissionLetterService::class);
+        $isPostgraduate = $student ? $student->isPostgraduate() : (bool) $applicant?->isPostgraduate();
+        $programme = $student ? $student->program : $applicant?->programme;
+
+        if ($isPostgraduate) {
+            $pgTier = $letterService->resolvePgTier($programme);
+            $data['pg_tier'] = $pgTier;
+            $data['degree_label'] = $letterService->resolveDegreeLabel($programme, $pgTier);
+        }
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($letterService->resolveView($isPostgraduate), $data)
             ->setOptions([
                 'defaultFont' => 'DejaVu Sans',
                 'isHtml5ParserEnabled' => true,

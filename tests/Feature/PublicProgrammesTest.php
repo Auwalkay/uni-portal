@@ -178,4 +178,34 @@ class PublicProgrammesTest extends TestCase
         $this->assertNotNull($transferInvoice);
         $this->assertEquals(400000, (float) $transferInvoice->amount);
     }
+
+    public function test_miu_postgraduate_programmes_and_fees_seeder_populates_all_30_programmes(): void
+    {
+        Session::create([
+            'name' => '2026/2027 PG',
+            'academic_stream' => 'PG',
+            'calendar_type' => 'semester',
+            'start_date' => '2026-10-01',
+            'end_date' => '2027-08-31',
+            'is_current' => true,
+        ]);
+
+        $this->seed(\Database\Seeders\MiuPostgraduateProgrammesAndFeesSeeder::class);
+
+        $this->assertEquals(34, Programme::where('academic_stream', 'PG')->count());
+
+        $response = $this->get('/programmes');
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('Public/Programmes')
+            ->has('programmes', 34)
+        );
+
+        // Verify M.Sc. Cyber Security = 350,000 tuition + 50,000 enrolment = 400,000
+        $cyberMsc = Programme::where('name', 'M.Sc. Cyber Security')->first();
+        $this->assertNotNull($cyberMsc);
+        $props = $response->original->getData()['page']['props'];
+        $cyberItem = collect($props['programmes'])->firstWhere('id', $cyberMsc->id);
+        $this->assertEquals(400000, $cyberItem['total_fee']);
+    }
 }
