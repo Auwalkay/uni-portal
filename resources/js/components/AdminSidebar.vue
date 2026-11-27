@@ -187,6 +187,12 @@ const academicsItems = computed(() => {
             icon: BookOpen,
             show: hasPermission('manage_student_registrations'),
         },
+        {
+            title: 'Student Attendance',
+            href: '/admin/student-attendance',
+            icon: UserCheck,
+            show: hasRole(['admin', 'super_admin', 'dean', 'hod']) || hasPermission('manage_courses') || hasPermission('view_results'),
+        },
     ].filter(i => i.show);
 });
 

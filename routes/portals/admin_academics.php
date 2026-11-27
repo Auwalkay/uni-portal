@@ -134,7 +134,14 @@ Route::middleware(['permission:view_results'])->prefix('teaching')->name('teachi
     Route::get('/courses/{course}/attendance/template', [CourseController::class, 'downloadAttendanceTemplate'])->name('courses.attendance.template');
     Route::post('/courses/{course}/attendance/upload', [CourseController::class, 'uploadAttendance'])->name('courses.attendance.upload');
     Route::delete('/courses/{course}/attendance/{date}', [CourseController::class, 'deleteAttendanceDate'])->name('courses.attendance.delete');
+    Route::get('/courses/{course}/attendance/{date}/details', [CourseController::class, 'attendanceDateDetails'])->name('courses.attendance.details');
     Route::get('/courses/{course}/attendance/export', [CourseController::class, 'exportAttendance'])->name('courses.attendance.export');
+});
+
+// University-Wide Student Attendance Records (Admin / Dean / HOD)
+Route::middleware(['permission:manage_courses|view_results|view_department_courses|view_faculty_courses'])->group(function () {
+    Route::get('/student-attendance', [\App\Http\Controllers\Admin\StudentAttendanceController::class, 'index'])->name('student_attendance.index');
+    Route::get('/student-attendance/export', [\App\Http\Controllers\Admin\StudentAttendanceController::class, 'export'])->name('student_attendance.export');
 });
 
 // General Academics & Sessions
@@ -174,6 +181,7 @@ Route::middleware(['permission:manage_academic_sessions'])->group(function () {
     Route::post('/sessions', [SessionController::class, 'store'])->name('sessions.store');
     Route::put('/sessions/{session}', [SessionController::class, 'update'])->name('sessions.update');
     Route::put('/sessions/{session}/settings', [SessionController::class, 'updateSettings'])->name('sessions.settings');
+    Route::post('/sessions/{session}/sync-late-fees', [SessionController::class, 'syncLateFees'])->name('sessions.sync_late_fees');
     Route::post('/sessions/{session}/fees', [SessionController::class, 'storeFee'])->name('sessions.fees.store');
     Route::delete('/sessions/{session}/fees/{feeConfiguration}', [SessionController::class, 'destroyFee'])->name('sessions.fees.destroy');
     Route::post('/sessions/{session}/activation', [SessionController::class, 'activate'])->name('sessions.activate');

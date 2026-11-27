@@ -260,6 +260,11 @@ class CourseRegistrationController extends Controller
         // Enforce Locks on Semester-specific changes
         $locks = $this->getSemesterRegistrationLocks($semesters, $paymentInfo['isPartial']);
 
+        $allLocked = $locks['1'] && $locks['2'] && (!$thirdSemester || $locks['3']);
+        if ($allLocked) {
+            return back()->with('error', 'Course registration is currently closed for all semesters.');
+        }
+
         $existingRegistrations = CourseRegistration::where('student_id', $student->id)
             ->where('session_id', $currentSession->id)
             ->with('course')
@@ -286,7 +291,7 @@ class CourseRegistrationController extends Controller
             return back()->with('error', 'Third Trimester registration is closed and cannot be modified.');
         }
 
-        $this->syncCourseRegistrations($student, $currentSession, $firstSemester, $secondSemester, $firstSemCourses, $secondSemCourses, $thirdSemester, $thirdSemCourses);
+        $this->syncCourseRegistrations($student, $currentSession, $firstSemester, $secondSemester, $firstSemCourses, $secondSemCourses, $thirdSemester, $thirdSemCourses, $locks);
 
         if ($currentSemester) {
             $perCourseFeeConfig = FeeConfiguration::where('session_id', $currentSession->id)
@@ -470,43 +475,49 @@ class CourseRegistrationController extends Controller
         return app(FeeService::class)->getSchoolFeeClearance($userId, $sessionId);
     }
 
+    private function isSemesterWindowOpen(?Semester $semester): bool
+    {
+        if (! $semester) {
+            return false;
+        }
+
+        $now = now();
+        $startsAt = $semester->registration_starts_at ? \Carbon\Carbon::parse($semester->registration_starts_at)->startOfDay() : null;
+        $endsAt = $semester->registration_ends_at ? \Carbon\Carbon::parse($semester->registration_ends_at)->endOfDay() : null;
+
+        if (! $startsAt && ! $endsAt) {
+            return (bool) $semester->is_current;
+        }
+
+        if ($startsAt && $now->lt($startsAt)) {
+            return false;
+        }
+
+        if ($endsAt && $now->gt($endsAt)) {
+            return false;
+        }
+
+        return true;
+    }
+
     private function getSemesterRegistrationLocks($semesters, bool $isPartialPayment): array
     {
         $firstSemester = $semesters->filter(fn ($s) => stripos($s->name, 'First') !== false || stripos($s->name, 'Trimester 1') !== false || $s->name == '1')->first();
         $secondSemester = $semesters->filter(fn ($s) => stripos($s->name, 'Second') !== false || stripos($s->name, 'Trimester 2') !== false || $s->name == '2')->first();
         $thirdSemester = $semesters->filter(fn ($s) => stripos($s->name, 'Third') !== false || stripos($s->name, 'Trimester 3') !== false || $s->name == '3')->first();
 
-        $now = now();
-        $locks = ['1' => false, '2' => false, '3' => false];
+        $locks = [
+            '1' => ! $this->isSemesterWindowOpen($firstSemester),
+            '2' => ! $this->isSemesterWindowOpen($secondSemester),
+            '3' => ! $this->isSemesterWindowOpen($thirdSemester),
+        ];
 
-        if ($firstSemester) {
-            $startsAt = $firstSemester->registration_starts_at ? \Carbon\Carbon::parse($firstSemester->registration_starts_at)->startOfDay() : null;
-            $endsAt = $firstSemester->registration_ends_at ? \Carbon\Carbon::parse($firstSemester->registration_ends_at)->endOfDay() : null;
-
-            if (($startsAt && $now->lt($startsAt)) || ($endsAt && $now->gt($endsAt))) {
-                $locks['1'] = true;
-            }
-        }
-        if ($secondSemester && $secondSemester->is_current) {
+        if (($secondSemester && $secondSemester->is_current) || ($thirdSemester && $thirdSemester->is_current)) {
             $locks['1'] = true;
         }
 
-        if ($secondSemester) {
-            $startsAt = $secondSemester->registration_starts_at ? \Carbon\Carbon::parse($secondSemester->registration_starts_at)->startOfDay() : null;
-            $endsAt = $secondSemester->registration_ends_at ? \Carbon\Carbon::parse($secondSemester->registration_ends_at)->endOfDay() : null;
-
-            if (($startsAt && $now->lt($startsAt)) || ($endsAt && $now->gt($endsAt))) {
-                $locks['2'] = true;
-            }
-        }
-
-        if ($thirdSemester) {
-            $startsAt = $thirdSemester->registration_starts_at ? \Carbon\Carbon::parse($thirdSemester->registration_starts_at)->startOfDay() : null;
-            $endsAt = $thirdSemester->registration_ends_at ? \Carbon\Carbon::parse($thirdSemester->registration_ends_at)->endOfDay() : null;
-
-            if (($startsAt && $now->lt($startsAt)) || ($endsAt && $now->gt($endsAt))) {
-                $locks['3'] = true;
-            }
+        if ($thirdSemester && $thirdSemester->is_current) {
+            $locks['2'] = true;
         }
 
         if ($isPartialPayment) {
@@ -578,9 +589,9 @@ class CourseRegistrationController extends Controller
         return $courses;
     }
 
-    private function syncCourseRegistrations(Student $student, Session $session, ?Semester $firstSemester, ?Semester $secondSemester, $firstSemCourses, $secondSemCourses, ?Semester $thirdSemester = null, $thirdSemCourses = null): void
+    private function syncCourseRegistrations(Student $student, Session $session, ?Semester $firstSemester, ?Semester $secondSemester, $firstSemCourses, $secondSemCourses, ?Semester $thirdSemester = null, $thirdSemCourses = null, array $locks = ['1' => false, '2' => false, '3' => false]): void
     {
-        DB::transaction(function () use ($student, $session, $firstSemester, $secondSemester, $firstSemCourses, $secondSemCourses, $thirdSemester, $thirdSemCourses) {
+        DB::transaction(function () use ($student, $session, $firstSemester, $secondSemester, $firstSemCourses, $secondSemCourses, $thirdSemester, $thirdSemCourses, $locks) {
             $studentSession = StudentSession::firstOrCreate(
                 [
                     'student_id' => $student->id,
@@ -592,13 +603,27 @@ class CourseRegistrationController extends Controller
                 ]
             );
 
-            CourseRegistration::where('student_id', $student->id)
-                ->where('session_id', $session->id)
-                ->delete();
+            $openSemesterIds = [];
+            if ($firstSemester && empty($locks['1'])) {
+                $openSemesterIds[] = $firstSemester->id;
+            }
+            if ($secondSemester && empty($locks['2'])) {
+                $openSemesterIds[] = $secondSemester->id;
+            }
+            if ($thirdSemester && empty($locks['3'])) {
+                $openSemesterIds[] = $thirdSemester->id;
+            }
+
+            if (! empty($openSemesterIds)) {
+                CourseRegistration::where('student_id', $student->id)
+                    ->where('session_id', $session->id)
+                    ->whereIn('semester_id', $openSemesterIds)
+                    ->delete();
+            }
 
             $registeredById = Auth::id();
 
-            if ($firstSemester) {
+            if ($firstSemester && empty($locks['1'])) {
                 foreach ($firstSemCourses as $course) {
                     CourseRegistration::create([
                         'student_id' => $student->id,
@@ -612,7 +637,7 @@ class CourseRegistrationController extends Controller
                 }
             }
 
-            if ($secondSemester) {
+            if ($secondSemester && empty($locks['2'])) {
                 foreach ($secondSemCourses as $course) {
                     CourseRegistration::create([
                         'student_id' => $student->id,
@@ -626,7 +651,7 @@ class CourseRegistrationController extends Controller
                 }
             }
 
-            if ($thirdSemester && $thirdSemCourses) {
+            if ($thirdSemester && $thirdSemCourses && empty($locks['3'])) {
                 foreach ($thirdSemCourses as $course) {
                     CourseRegistration::create([
                         'student_id' => $student->id,
