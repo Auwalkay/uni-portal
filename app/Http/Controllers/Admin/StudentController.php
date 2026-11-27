@@ -176,11 +176,32 @@ class StudentController extends Controller
 
     protected function applyStudentAccessScope($query, $user)
     {
-        // 1. Global Admins & University Leadership: Full access across all departments
-        if ($user->can('manage_users') || $user->hasAnyRole([
-            'admin', 'super_admin', 'vc', 'ict_admin', 'registrar', 
+        // 1. Global Admins, University Leadership & All-Students Viewers: Full access
+        if ($user->can('view_students') || $user->can('manage_users') || $user->hasAnyRole([
+            'admin', 'super_admin', 'vc', 'ict_admin', 'registrar',
             'bursar', 'admission_director', 'admissions_officer', 'admissions_manager', 'student_affairs_officer'
         ])) {
+            return;
+        }
+
+        // 1b. Stream-scoped student permissions (UG / PG)
+        $canViewUg = $user->can('view_ug_students');
+        $canViewPg = $user->can('view_pg_students') || $user->hasRole('dean_spgs');
+
+        if ($canViewUg && $canViewPg) {
+            return;
+        }
+
+        if ($canViewPg) {
+            $query->where('students.academic_stream', 'PG');
+            return;
+        }
+
+        if ($canViewUg) {
+            $query->where(function ($q) {
+                $q->where('students.academic_stream', '!=', 'PG')
+                    ->orWhereNull('students.academic_stream');
+            });
             return;
         }
 
@@ -223,11 +244,26 @@ class StudentController extends Controller
 
     protected function isUserAuthorizedForStudent(Student $student, $user): bool
     {
-        if ($user->can('manage_users') || $user->hasAnyRole([
-            'admin', 'super_admin', 'vc', 'ict_admin', 'registrar', 
+        if ($user->can('view_students') || $user->can('manage_users') || $user->hasAnyRole([
+            'admin', 'super_admin', 'vc', 'ict_admin', 'registrar',
             'bursar', 'admission_director', 'admissions_officer', 'admissions_manager', 'student_affairs_officer'
         ])) {
             return true;
+        }
+
+        $canViewUg = $user->can('view_ug_students');
+        $canViewPg = $user->can('view_pg_students') || $user->hasRole('dean_spgs');
+
+        if ($canViewUg && $canViewPg) {
+            return true;
+        }
+
+        if ($canViewPg) {
+            return $student->isPostgraduate();
+        }
+
+        if ($canViewUg) {
+            return ! $student->isPostgraduate();
         }
 
         $staff = $user->staff?->loadMissing('department');
@@ -270,6 +306,26 @@ class StudentController extends Controller
 
         // Access Control: Apply role/department/faculty scope
         $this->applyStudentAccessScope($query, $user);
+
+        $canViewAllStudents = $user->can('view_students') || $user->can('manage_users') || $user->hasAnyRole([
+            'admin', 'super_admin', 'vc', 'ict_admin', 'registrar',
+            'bursar', 'admission_director', 'admissions_officer', 'admissions_manager', 'student_affairs_officer'
+        ]);
+        $canViewUgStudents = $canViewAllStudents || $user->can('view_ug_students');
+        $canViewPgStudents = $canViewAllStudents || $user->can('view_pg_students') || $user->hasRole('dean_spgs');
+
+        // Academic Stream Filter (UG / PG)
+        if ($request->filled('academic_stream') && in_array(strtoupper($request->academic_stream), ['UG', 'PG'], true)) {
+            $streamFilter = strtoupper($request->academic_stream);
+            if ($streamFilter === 'PG' && $canViewPgStudents) {
+                $query->where('students.academic_stream', 'PG');
+            } elseif ($streamFilter === 'UG' && $canViewUgStudents) {
+                $query->where(function ($q) {
+                    $q->where('students.academic_stream', '!=', 'PG')
+                        ->orWhereNull('students.academic_stream');
+                });
+            }
+        }
 
         // Search Filter
         if ($request->filled('search')) {
@@ -414,7 +470,7 @@ class StudentController extends Controller
         return Inertia::render('Admin/Students/Index', [
             'students' => $students,
             'filters' => $request->only([
-                'search', 'session_id', 'faculty_id', 'department_id', 'level',
+                'search', 'academic_stream', 'session_id', 'faculty_id', 'department_id', 'level',
                 'program_id', 'program', 'scholarship_id', 'date_from', 'date_to',
                 'gender', 'status', 'entry_mode', 'age_range', 'min_age', 'max_age', 'age', 'sort_by', 'sort_order', 'per_page'
             ]),
@@ -424,23 +480,37 @@ class StudentController extends Controller
             'programmes' => fn() => AcademicCacheService::getProgrammes(),
             'scholarships' => fn() => AcademicCacheService::getScholarships(),
             'stats' => fn() => \Illuminate\Support\Facades\Cache::remember(
-                'students_stats_' . ($user->can('manage_users') ? 'admin' : $user->id),
+                'students_stats_' . ($canViewAllStudents ? 'all' : ($canViewUgStudents && $canViewPgStudents ? 'all' : ($canViewPgStudents ? 'pg' : ($canViewUgStudents ? 'ug' : $user->id)))),
                 60 * 5, // Cache for 5 minutes
                 function () use ($statsQuery) {
+                    $latestSessionId = Session::latest('start_date')->value('id');
+                    $agg = (clone $statsQuery)->selectRaw(
+                        "COUNT(*) as total,
+                         SUM(CASE WHEN academic_stream = 'PG' THEN 1 ELSE 0 END) as pg,
+                         SUM(CASE WHEN academic_stream != 'PG' OR academic_stream IS NULL THEN 1 ELSE 0 END) as ug,
+                         SUM(CASE WHEN current_level IN ('400', '500', '600') THEN 1 ELSE 0 END) as graduating,
+                         SUM(CASE WHEN admitted_session_id = ? THEN 1 ELSE 0 END) as new_intake",
+                        [$latestSessionId ?? 0]
+                    )->first();
+
                     return [
-                        'total' => (clone $statsQuery)->count(),
-                        'new' => (clone $statsQuery)->where('admitted_session_id', Session::latest('start_date')->value('id'))->count(),
-                        'graduating' => (clone $statsQuery)->whereIn('current_level', ['400', '500', '600'])->count(),
+                        'total' => (int) ($agg->total ?? 0),
+                        'ug' => (int) ($agg->ug ?? 0),
+                        'pg' => (int) ($agg->pg ?? 0),
+                        'new' => (int) ($agg->new_intake ?? 0),
+                        'graduating' => (int) ($agg->graduating ?? 0),
                     ];
                 }
             ),
             'permissions' => [
-                'can_view' => $user->can('view_students') || $user->can('manage_users') || $user->hasRole(['admin', 'admission_director', 'vc', 'ict_admin', 'dean', 'hod']),
+                'can_view' => $canViewUgStudents || $canViewPgStudents || $user->can('view_department_students') || $user->can('view_faculty_students') || $user->hasRole(['dean', 'hod']),
+                'can_view_ug' => $canViewUgStudents,
+                'can_view_pg' => $canViewPgStudents,
                 'can_create' => $user->can('create_students') || $user->can('admit_students') || $user->can('admit_pg_students') || $user->hasRole(['admin', 'admission_director']),
                 'can_edit' => $user->can('edit_students') || $user->hasRole(['admin', 'admission_director']),
                 'can_delete' => $user->can('delete_students') || $user->hasRole('admin'),
                 'can_import' => $user->can('import_students') || $user->can('create_students') || $user->hasRole(['admin', 'admission_director']),
-                'can_export' => $user->can('view_students') || $user->can('export_students') || $user->hasRole(['admin', 'admission_director', 'vc', 'ict_admin', 'dean', 'hod']),
+                'can_export' => $canViewUgStudents || $canViewPgStudents || $user->can('export_students') || $user->hasRole(['dean', 'hod']),
                 'can_assign_scholarship' => $user->can('edit_students') || $user->can('manage_scholarships') || $user->hasRole(['admin', 'bursar', 'admission_director']),
                 'can_toggle_status' => $user->can('edit_students') || $user->hasRole('admin'),
             ],

@@ -26,8 +26,12 @@ import {
 const props = defineProps<{
     stats: {
         total_students: number;
+        ug_students?: number | null;
+        pg_students?: number | null;
         fresh_students: number;
         applications: number;
+        ug_applicants?: number | null;
+        pg_applicants?: number | null;
         revenue: number;
         active_courses: number;
         revenue_growth: number;
@@ -49,6 +53,8 @@ const props = defineProps<{
         active_students?: number | null;
         admissions_funnel?: {
             total_applicants: number;
+            ug_applicants?: number;
+            pg_applicants?: number;
             screened_applicants: number;
             pending_screening: number;
         } | null;
@@ -521,8 +527,10 @@ const staffChartData = {
                         </CardHeader>
                         <CardContent>
                             <div class="text-3xl sm:text-4xl font-bold">{{ stats.admissions_funnel?.total_applicants || 0 }}</div>
-                            <div class="mt-2 flex items-center gap-1.5 text-xs text-amber-200">
-                                <FileText class="w-3 h-3" /> All applicants
+                            <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-amber-100">
+                                <span class="inline-flex items-center gap-1"><FileText class="w-3 h-3" /> UG: {{ (stats.admissions_funnel?.ug_applicants ?? stats.ug_applicants ?? 0).toLocaleString() }}</span>
+                                <span>·</span>
+                                <span>PG: {{ (stats.admissions_funnel?.pg_applicants ?? stats.pg_applicants ?? 0).toLocaleString() }}</span>
                             </div>
                         </CardContent>
                     </Card>
@@ -566,8 +574,19 @@ const staffChartData = {
                         </CardHeader>
                         <CardContent>
                             <div class="text-3xl sm:text-4xl font-extrabold">{{ (stats.total_students || 0).toLocaleString() }}</div>
-                            <div class="mt-2 flex items-center gap-1.5 text-xs text-emerald-400 font-bold">
-                                <Users class="w-3 h-3" /> Total Enrolled Students
+                            <div class="mt-2 flex flex-wrap items-center gap-2 text-xs font-bold">
+                                <span class="inline-flex items-center gap-1 text-emerald-400">
+                                    <Users class="w-3 h-3" /> UG: {{ (stats.ug_students ?? 0).toLocaleString() }}
+                                </span>
+                                <span class="text-slate-500">·</span>
+                                <span class="text-purple-300">
+                                    PG: {{ (stats.pg_students ?? 0).toLocaleString() }}
+                                </span>
+                            </div>
+                            <div v-if="stats.ug_applicants !== null && stats.pg_applicants !== null" class="mt-1.5 flex items-center gap-2 text-[11px] text-slate-300">
+                                <span>Applicants — UG: {{ (stats.ug_applicants ?? 0).toLocaleString() }}</span>
+                                <span>·</span>
+                                <span>PG: {{ (stats.pg_applicants ?? 0).toLocaleString() }}</span>
                             </div>
                         </CardContent>
                     </Card>

@@ -18,6 +18,7 @@ class PostgraduateRolesAndPermissionsSeeder extends Seeder
             'view_pg_applications',
             'review_pg_applications',
             'admit_pg_students',
+            'view_pg_students',
             'manage_pg_supervisors',
             'view_pg_supervisors',
             'supervise_pg_students',
@@ -46,7 +47,8 @@ class PostgraduateRolesAndPermissionsSeeder extends Seeder
 
         // 2. Dean of SPGS Role
         $deanSpgsRole = Role::firstOrCreate(['name' => 'dean_spgs', 'guard_name' => 'web']);
-        $deanSpgsRole->givePermissionTo($permissions);
+        Permission::firstOrCreate(['name' => 'access_admin_dashboard', 'guard_name' => 'web']);
+        $deanSpgsRole->givePermissionTo(array_merge($permissions, ['access_admin_dashboard']));
 
         // 3. Faculty Dean Role
         $deanRole = Role::where('name', 'dean')->first();

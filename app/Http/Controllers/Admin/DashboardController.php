@@ -52,8 +52,12 @@ class DashboardController extends Controller
             return Inertia::render('Admin/Dashboard', [
                 'stats' => [
                     'total_students' => 0,
+                    'ug_students' => 0,
+                    'pg_students' => 0,
                     'fresh_students' => 0,
                     'applications' => 0,
+                    'ug_applicants' => 0,
+                    'pg_applicants' => 0,
                     'revenue' => 0,
                     'active_courses' => 0,
                     'revenue_growth' => 0,
@@ -111,7 +115,11 @@ class DashboardController extends Controller
             $endDate = now()->endOfDay();
 
             $totalStudents = 0;
+            $ugStudents = 0;
+            $pgStudents = 0;
             $freshStudents = 0;
+            $ugApplicants = 0;
+            $pgApplicants = 0;
             $revenue = 0;
             $revenueGrowth = 0;
             $studentGrowth = 0;
@@ -126,7 +134,14 @@ class DashboardController extends Controller
 
             // Conditional Calculations based on permissions
             if ($canViewGlobalAnalytics) {
-                $totalStudents = Student::count();
+                $studentCounts = Student::selectRaw(
+                    "COUNT(*) as total,
+                     SUM(CASE WHEN academic_stream = 'PG' THEN 1 ELSE 0 END) as pg,
+                     SUM(CASE WHEN academic_stream != 'PG' OR academic_stream IS NULL THEN 1 ELSE 0 END) as ug"
+                )->first();
+                $totalStudents = (int) ($studentCounts->total ?? 0);
+                $ugStudents = (int) ($studentCounts->ug ?? 0);
+                $pgStudents = (int) ($studentCounts->pg ?? 0);
                 $freshStudents = Student::where('admitted_session_id', $sessionId)
                     ->whereBetween('created_at', [$startDate, $endDate])
                     ->count();
@@ -291,9 +306,13 @@ class DashboardController extends Controller
             $expenseCategoryChart = ['labels' => [], 'data' => []];
 
             if ($canViewFinance) {
+                $monthExpr = DB::connection()->getDriverName() === 'sqlite'
+                    ? 'strftime("%Y-%m", updated_at)'
+                    : 'DATE_FORMAT(updated_at, "%Y-%m")';
+
                 $revenueTrend = Invoice::where('session_id', $sessionId)
                     ->where('status', 'paid')
-                    ->selectRaw('DATE_FORMAT(updated_at, "%Y-%m") as month, SUM(amount) as total')
+                    ->selectRaw("{$monthExpr} as month, SUM(amount) as total")
                     ->groupBy('month')
                     ->orderBy('month')
                     ->get();
@@ -304,7 +323,7 @@ class DashboardController extends Controller
                 ];
 
                 $expenseTrend = Expense::where('status', 'approved')
-                    ->selectRaw('DATE_FORMAT(updated_at, "%Y-%m") as month, SUM(amount) as total')
+                    ->selectRaw("{$monthExpr} as month, SUM(amount) as total")
                     ->groupBy('month')
                     ->orderBy('month')
                     ->get()
@@ -387,10 +406,23 @@ class DashboardController extends Controller
                 ];
             }
 
-            $admissionsFunnel = ['total_applicants' => 0, 'screened_applicants' => 0, 'pending_screening' => 0];
+            $admissionsFunnel = ['total_applicants' => 0, 'ug_applicants' => 0, 'pg_applicants' => 0, 'screened_applicants' => 0, 'pending_screening' => 0];
+            if ($canViewAdmissions || $canViewGlobalAnalytics) {
+                $applicantCounts = \App\Models\Applicant::leftJoin('programmes', 'applicants.program_choice_1', '=', 'programmes.id')
+                    ->selectRaw(
+                        "COUNT(*) as total,
+                         SUM(CASE WHEN UPPER(COALESCE(applicants.application_mode, '')) IN ('PG', 'POSTGRADUATE') OR programmes.academic_stream = 'PG' THEN 1 ELSE 0 END) as pg,
+                         SUM(CASE WHEN UPPER(COALESCE(applicants.application_mode, '')) NOT IN ('PG', 'POSTGRADUATE') AND (programmes.academic_stream != 'PG' OR programmes.academic_stream IS NULL) THEN 1 ELSE 0 END) as ug"
+                    )->first();
+                $ugApplicants = (int) ($applicantCounts->ug ?? 0);
+                $pgApplicants = (int) ($applicantCounts->pg ?? 0);
+            }
+
             if ($canViewAdmissions) {
                 $admissionsFunnel = [
                     'total_applicants' => $applicationsCount,
+                    'ug_applicants' => $ugApplicants,
+                    'pg_applicants' => $pgApplicants,
                     'screened_applicants' => User::role('applicant')->whereHas('student', function ($q) {
                         $q->whereNotNull('matriculation_number');
                     })->count(),
@@ -411,7 +443,11 @@ class DashboardController extends Controller
 
             return [
                 'totalStudents' => $totalStudents,
+                'ugStudents' => $ugStudents,
+                'pgStudents' => $pgStudents,
                 'freshStudents' => $freshStudents,
+                'ugApplicants' => $ugApplicants,
+                'pgApplicants' => $pgApplicants,
                 'revenue' => $revenue,
                 'activeCoursesCount' => $activeCoursesCount,
                 'applicationsCount' => $applicationsCount,
@@ -437,7 +473,11 @@ class DashboardController extends Controller
 
         // Extract cached values
         $totalStudents = $globalData['totalStudents'];
+        $ugStudents = $globalData['ugStudents'] ?? 0;
+        $pgStudents = $globalData['pgStudents'] ?? 0;
         $freshStudents = $globalData['freshStudents'];
+        $ugApplicants = $globalData['ugApplicants'] ?? 0;
+        $pgApplicants = $globalData['pgApplicants'] ?? 0;
         $revenue = $globalData['revenue'];
         $activeCoursesCount = $globalData['activeCoursesCount'];
         $applicationsCount = $globalData['applicationsCount'];
@@ -497,8 +537,12 @@ class DashboardController extends Controller
         // Stats Object with sensitivity filtering
         $dashboardStats = [
             'total_students' => $canViewGlobalAnalytics ? $totalStudents : null,
+            'ug_students' => $canViewGlobalAnalytics ? $ugStudents : null,
+            'pg_students' => $canViewGlobalAnalytics ? $pgStudents : null,
             'fresh_students' => $canViewGlobalAnalytics ? $freshStudents : null,
             'applications' => $canViewAdmissions ? $applicationsCount : null,
+            'ug_applicants' => ($canViewAdmissions || $canViewGlobalAnalytics) ? $ugApplicants : null,
+            'pg_applicants' => ($canViewAdmissions || $canViewGlobalAnalytics) ? $pgApplicants : null,
             'revenue' => $canViewFinance ? $revenue : null,
             'active_courses' => $canViewResults ? $activeCoursesCount : null,
             'revenue_growth' => $canViewFinance ? round($revenueGrowth, 1) : null,
