@@ -125,7 +125,7 @@ const academicsItems = computed(() => {
             title: 'Students',
             href: '/admin/students',
             icon: GraduationCap,
-            show: hasRole(['admin', 'dean', 'hod']) || hasPermission('view_students') || hasPermission('view_department_students') || hasPermission('view_faculty_students'),
+            show: hasRole(['admin', 'dean', 'dean_spgs', 'hod']) || hasPermission('view_students') || hasPermission('view_ug_students') || hasPermission('view_pg_students') || hasPermission('view_department_students') || hasPermission('view_faculty_students'),
         },
         {
             title: 'My Courses',

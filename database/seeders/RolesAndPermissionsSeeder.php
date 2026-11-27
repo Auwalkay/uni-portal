@@ -64,6 +64,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'admit_pg_students',
 
             'view_students',
+            'view_ug_students',
+            'view_pg_students',
             'create_students',
             'edit_students',
             'edit_student_name_email',

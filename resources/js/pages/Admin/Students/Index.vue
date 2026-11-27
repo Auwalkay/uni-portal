@@ -70,6 +70,7 @@ const props = defineProps<{
     };
     filters: {
         search?: string;
+        academic_stream?: string;
         session_id?: string;
         faculty_id?: string;
         department_id?: string;
@@ -95,11 +96,15 @@ const props = defineProps<{
     scholarships: Array<{ id: string; name: string }>;
     stats: {
         total: number;
+        ug?: number;
+        pg?: number;
         new: number;
         graduating: number;
     };
     permissions?: {
         can_view?: boolean;
+        can_view_ug?: boolean;
+        can_view_pg?: boolean;
         can_create?: boolean;
         can_edit?: boolean;
         can_delete?: boolean;
@@ -112,6 +117,8 @@ const props = defineProps<{
 
 const userPermissions = computed(() => ({
     can_view: props.permissions?.can_view ?? true,
+    can_view_ug: props.permissions?.can_view_ug ?? true,
+    can_view_pg: props.permissions?.can_view_pg ?? true,
     can_create: props.permissions?.can_create ?? true,
     can_edit: props.permissions?.can_edit ?? true,
     can_delete: props.permissions?.can_delete ?? true,
@@ -122,6 +129,7 @@ const userPermissions = computed(() => ({
 }));
 
 const search = ref(props.filters.search || '');
+const selectedAcademicStream = ref(props.filters.academic_stream || '');
 const selectedSession = ref(props.filters.session_id || '');
 const selectedFaculty = ref(props.filters.faculty_id || '');
 const selectedDepartment = ref(props.filters.department_id || '');
@@ -229,6 +237,7 @@ const handleSort = (column: string) => {
 const updateFilters = debounce(() => {
     router.get(route('admin.students.index'), {
         search: search.value,
+        academic_stream: selectedAcademicStream.value,
         session_id: selectedSession.value,
         faculty_id: selectedFaculty.value,
         department_id: selectedDepartment.value,
@@ -255,6 +264,7 @@ const updateFilters = debounce(() => {
 
 watch([
     search, 
+    selectedAcademicStream,
     selectedSession, 
     selectedFaculty, 
     selectedDepartment, 
@@ -551,7 +561,14 @@ const handleExport = () => {
                         </CardHeader>
                         <CardContent>
                             <div class="text-2xl font-bold">{{ stats.total }}</div>
-                            <p class="text-xs text-muted-foreground">Registered on platform</p>
+                            <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                <span v-if="userPermissions.can_view_ug" class="inline-flex items-center rounded bg-blue-500/10 px-1.5 py-0.5 font-medium text-blue-600 dark:text-blue-400">
+                                    UG: {{ stats.ug ?? 0 }}
+                                </span>
+                                <span v-if="userPermissions.can_view_pg" class="inline-flex items-center rounded bg-purple-500/10 px-1.5 py-0.5 font-medium text-purple-600 dark:text-purple-400">
+                                    PG: {{ stats.pg ?? 0 }}
+                                </span>
+                            </div>
                         </CardContent>
                     </Card>
                     <Card>
@@ -590,6 +607,18 @@ const handleExport = () => {
                               v-model="search"
                             />
                           </div>
+
+                        <!-- Academic Stream (UG / PG) -->
+                        <Select v-if="userPermissions.can_view_ug && userPermissions.can_view_pg" v-model="selectedAcademicStream">
+                            <SelectTrigger class="w-[150px]">
+                                <SelectValue placeholder="All Streams" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL">All Streams</SelectItem>
+                                <SelectItem value="UG">Undergraduate (UG)</SelectItem>
+                                <SelectItem value="PG">Postgraduate (PG)</SelectItem>
+                            </SelectContent>
+                        </Select>
 
                         <!-- Session -->
                         <Select v-model="selectedSession">
